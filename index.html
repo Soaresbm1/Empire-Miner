@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>The_frame's_srs – Photographie Football & Futsal</title>
+  <meta name="description" content="Portfolio photo The_frame's_srs – un regard classique sur le football et le futsal." />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <header class="site-header">
+    <a class="brand" href="index.html" aria-current="page">The_frame's_srs</a>
+    <nav class="nav">
+      <a href="gallery.html">Galerie</a>
+      <a href="#video">Vidéo</a>
+      <a href="#licence">Licence</a>
+      <a href="#contact">Contact</a>
+    </nav>
+  </header>
+
+  <main>
+    <!-- HERO -->
+    <section class="hero">
+      <div class="frame frame--double">
+        <h1>THE_FRAME'S_SRS</h1>
+        <p>Un regard classique sur le football & le futsal. Téléchargez librement les images selon la licence.</p>
+        <div style="display:flex; gap:10px; justify-content:center; margin-top:8px">
+          <a class="btn" href="gallery.html">Voir la galerie</a>
+          <a class="btn btn--ghost" href="#licence">Licence</a>
+        </div>
+      </div>
+    </section>
+
+    <!-- VIDÉO EXPLICATIVE -->
+    <section id="video" class="card">
+      <div class="frame">
+        <h2>Vidéo explicative — comment utiliser le site</h2>
+
+        <figure class="video-card">
+          <video
+            class="video-player"
+            controls
+            preload="metadata"
+            playsinline
+            poster="img/posters/explain.jpg"
+          >
+            <source src="video/explain.mp4" type="video/mp4">
+            Votre navigateur ne supporte pas la vidéo. 
+            <a href="video/explain.mp4">Télécharger la vidéo</a>.
+          </video>
+          <figcaption class="video-caption">
+            <strong>Comment trouver et télécharger les photos</strong> — vue rapide des filtres
+            (club/équipe), du bouton “Télécharger”, et de la section favoris.
+          </figcaption>
+        </figure>
+
+      </div>
+    </section>
+
+    <!-- LICENCE -->
+    <section id="licence" class="card">
+      <div class="frame">
+        <h2>LICENCE D’UTILISATION</h2>
+        <p>CC BY 4.0 – mention « The_frame's_srs » et lien vers ce site.</p>
+        <ul>
+          <li>✅ Usage presse, réseaux sociaux, projets avec attribution.</li>
+          <li>🚫 Interdit : revente directe ou modification sans autorisation.</li>
+        </ul>
+      </div>
+    </section>
+
+    <!-- CONTACT -->
+    <section id="contact" class="card">
+      <div class="frame">
+        <h2>CONTACT</h2>
+        <ul class="contact-list">
+          <li>Email : <a href="mailto:soaresfrancisca2005@gmail.com">soaresfrancisca2005@gmail.com</a></li>
+          <li>Instagram : <a href="https://www.instagram.com/the_frame._srs" target="_blank">@the_frame._srs</a></li>
+        </ul>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <small>© <span id="year"></span> The_frame's_srs – Football & Futsal</small>
+  </footer>
+
+  <script>
+    document.getElementById('year').textContent = new Date().getFullYear();
+  </script>
+</body>
+</html>

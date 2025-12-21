@@ -1,0 +1,433 @@
+/* ========== BASE / THEME ========== */
+:root {
+  --bg:#f8f6f2;
+  --paper:#fffefc;
+  --ink:#333;
+  --line:#c0b28a;
+  --line-soft:#d9cfa9;
+  --accent:#e9e2d0;
+  --accent-2:#d6c9a9;
+  --gold:#b7a46a;
+  --shadow:0 2px 6px rgba(0,0,0,.08);
+}
+
+* { box-sizing:border-box; }
+html,body { margin:0; padding:0; }
+body {
+  font-family:"Georgia", serif;
+  background:var(--bg);
+  color:var(--ink);
+  line-height:1.45;
+}
+
+/* ========== HEADER ========== */
+.site-header {
+  display:flex;
+  gap:20px;
+  align-items:center;
+  justify-content:space-between;
+  padding:14px 20px;
+  border-bottom:2px solid var(--line);
+  background:var(--bg);
+}
+.brand {
+  font-weight:700;
+  text-transform:uppercase;
+  letter-spacing:1px;
+  color:#000;
+  text-decoration:none;
+}
+.nav a {
+  color:var(--ink);
+  text-decoration:none;
+  margin-left:16px;
+  font-weight:600;
+}
+.nav a:hover,
+.nav a.active {
+  border-bottom:2px solid var(--line);
+}
+
+/* ========== HERO (accueil) ========== */
+.hero {
+  display:flex;
+  justify-content:center;
+  padding:42px 14px;
+  text-align:center;
+}
+.frame {
+  border:3px double var(--line);
+  padding:28px 20px;
+  max-width:760px;
+  margin:auto;
+  background:#fdfbf7;
+}
+.frame--double { border-width:4px; }
+h1 {
+  margin:0 0 8px;
+  font-size:2rem;
+  letter-spacing:2px;
+}
+.hero p {
+  margin:8px 0 18px;
+  color:#4a4a4a;
+}
+
+.btn {
+  display:inline-block;
+  padding:8px 16px;
+  border:1px solid var(--line);
+  background:var(--accent);
+  color:#000;
+  text-decoration:none;
+  border-radius:8px;
+  transition:.2s;
+  font-weight:600;
+}
+.btn:hover { background:var(--accent-2); }
+.btn--ghost { background:transparent; }
+
+/* ========== CARTES (Licence / Contact) ========== */
+.card {
+  max-width:760px;
+  margin:36px auto;
+  border:2px solid var(--line-soft);
+  background:var(--paper);
+  padding:20px;
+  border-radius:8px;
+}
+.card h2 {
+  margin:0 0 10px;
+  font-size:1.25rem;
+  border-bottom:1px solid var(--line-soft);
+  padding-bottom:6px;
+}
+.card ul {
+  list-style:none;
+  margin:0;
+  padding:0;
+}
+.card li { margin:6px 0; }
+.contact-list a {
+  color:var(--ink);
+  text-decoration:none;
+}
+.contact-list a:hover { text-decoration:underline; }
+
+/* ========== LAYOUT GALERIE ========== */
+.gallery-layout {
+  display:flex;
+  align-items:flex-start;
+  gap:28px;
+  padding:22px;
+  max-width:1300px;
+  margin:auto;
+}
+.filters {
+  width:260px;
+  position:sticky;
+  top:18px;
+  background:transparent;
+  z-index:2;
+}
+
+/* Accordéon bouton */
+.accordion {
+  width:100%;
+  border:none;
+  cursor:pointer;
+  border-radius:12px;
+  background:var(--accent);
+  color:var(--ink);
+  font-weight:700;
+  padding:12px 16px;
+  text-align:left;
+  transition:.2s;
+}
+.accordion:hover { background:var(--accent-2); }
+
+/* Accordéon panneau */
+.filters .panel {
+  margin-top:8px;
+  border-left:3px solid var(--line);
+  border-radius:12px;
+  background:var(--bg);
+  padding:0 14px 14px;
+  display:none;
+}
+.filters.is-open .panel { display:block; }
+
+.panel label {
+  display:block;
+  margin-top:14px;
+  font-weight:700;
+  font-size:.95rem;
+}
+.panel select {
+  width:100%;
+  padding:8px 10px;
+  border:1px solid #aaa;
+  border-radius:8px;
+  background:#fff;
+  margin-top:6px;
+}
+
+/* Grille d’images */
+.gallery-grid {
+  flex:1;
+  display:grid;
+  gap:18px;
+  grid-template-columns:repeat(auto-fit, minmax(240px, 1fr));
+}
+.card.photo {
+  background:#fff;
+  border-radius:12px;
+  overflow:hidden;
+  box-shadow:var(--shadow);
+  transition:transform .2s ease, box-shadow .2s ease;
+}
+
+/* image de la carte */
+.card.photo img {
+  width:100%;
+  height:240px;
+  object-fit:cover;
+  display:block;
+  transition:transform .3s ease;  /* 👈 animation du zoom */
+}
+
+/* léger déplacement de la carte + zoom de l'image */
+.card.photo:hover {
+  transform:translateY(-4px);
+}
+
+.card.photo:hover img {
+  transform:scale(1.06);           /* 👈 zoom au survol */
+}
+
+figcaption {
+  padding:10px 12px;
+  text-align:center;
+  font-size:.95rem;
+}
+.btn-sm {
+  display:inline-block;
+  padding:6px 10px;
+  border:1px solid var(--line);
+  background:var(--accent);
+  border-radius:8px;
+  text-decoration:none;
+  color:var(--ink);
+  font-size:.85rem;
+}
+.btn-sm:hover { background:var(--accent-2); }
+
+/* ========== FOOTER ========== */
+.site-footer {
+  text-align:center;
+  padding:16px 10px;
+  border-top:2px solid var(--line);
+  margin-top:28px;
+}
+
+/* ========== VIDÉO EXPLICATIVE ========== */
+.video-card { margin:0; }
+.video-player {
+  width:100%;
+  height:auto;
+  display:block;
+  border-radius:8px;
+  background:#000;
+}
+
+/* Wrapper responsive 16/9 pour les iframes (YouTube) */
+.video-embed {
+  position:relative;
+  width:100%;
+  padding-top:56.25%; /* 16:9 */
+  overflow:hidden;
+  border-radius:8px;
+  background:#000;
+}
+.video-embed iframe {
+  position:absolute;
+  inset:0;
+  width:100%;
+  height:100%;
+  border:0;
+}
+.video-caption {
+  padding-top:8px;
+  font-size:.95rem;
+  text-align:center;
+  color:var(--ink);
+}
+
+/* ========== RESPONSIVE ========== */
+@media (max-width: 800px) {
+  .site-header {
+    flex-wrap:wrap;
+    row-gap:8px;
+  }
+
+  .gallery-layout {
+    flex-direction:column;
+    padding:16px;
+  }
+
+  .filters {
+    width:100%;
+    position:static;
+  }
+
+  .filters .panel {
+    border-left:none;
+    border-top:3px solid var(--line);
+  }
+
+  .accordion {
+    text-align:center;
+    font-size:1rem;
+  }
+
+  .gallery-grid {
+    grid-template-columns:repeat(auto-fit, minmax(160px, 1fr));
+  }
+
+  figcaption { font-size:.85rem; }
+}
+
+/* ==========================
+      LIGHTBOX FULLSCREEN
+========================== */
+.lightbox {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.85);
+  backdrop-filter: blur(3px);
+  justify-content: center;
+  align-items: center;
+  z-index: 9999;
+}
+
+.lightbox-img {
+  max-width: 85vw;
+  max-height: 85vh;
+  border-radius: 10px;
+  box-shadow: 0 0 25px rgba(0,0,0,0.5);
+}
+
+.lightbox-close {
+  position: absolute;
+  top: 20px;
+  right: 28px;
+  font-size: 40px;
+  color: #fff;
+  cursor: pointer;
+  font-weight: bold;
+}
+
+.lightbox-nav {
+  position: absolute;
+  width: 100%;
+  top: 50%;
+  display: flex;
+  justify-content: space-between;
+  padding: 0 30px;
+  transform: translateY(-50%);
+}
+
+.lightbox-btn {
+  font-size: 55px;
+  color: white;
+  cursor: pointer;
+  user-select: none;
+  font-weight: bold;
+  opacity: 0.8;
+  transition: .2s;
+}
+
+.lightbox-btn:hover {
+  opacity: 1;
+}
+
+/* Barre outils au-dessus de la galerie */
+.gallery-tools {
+  display:flex;
+  justify-content:flex-end;
+  align-items:center;
+  margin-bottom:4px;
+}
+
+.gallery-stats {
+  font-size:0.9rem;
+  color:#555;
+  opacity:0.9;
+  margin-right: 20px;
+}
+
+.gallery-actions {
+  display:flex;
+  gap:8px;
+}
+
+/* Bouton favoris utilisateur */
+.btn-toggle-favs-active {
+  background:#b71c1c;
+  color:#fff;
+}
+
+/* Bouton cœur sur les cartes */
+.photo-actions {
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  gap:8px;
+  margin-top:6px;
+}
+
+.fav-btn {
+  border:none;
+  background:transparent;
+  cursor:pointer;
+  font-size:1.1rem;
+  line-height:1;
+  padding:2px 4px;
+}
+
+.fav-btn.is-active {
+  transform:scale(1.05);
+}
+
+/* RECOMMANDATIONS (autres matchs / entraînements) */
+.recommendations {
+  max-width: 100%;
+  margin-top: 12px;
+}
+
+.recommendations h3 {
+  margin-top: 0;
+  font-size: 1rem;
+}
+
+.recommendation-list {
+  display:flex;
+  flex-wrap:wrap;
+  gap:8px;
+  margin-top:8px;
+}
+
+.reco-pill {
+  border-radius:999px;
+  border:1px solid var(--line);
+  background:#fff;
+  padding:4px 10px;
+  font-size:.85rem;
+  cursor:pointer;
+  transition:.2s;
+}
+
+.reco-pill:hover {
+  background:var(--accent);
+}
