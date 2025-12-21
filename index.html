@@ -71,14 +71,45 @@
 
     <!-- CONTACT -->
     <section id="contact" class="card">
-      <div class="frame">
-        <h2>CONTACT</h2>
-        <ul class="contact-list">
-          <li>Email : <a href="mailto:soaresfrancisca2005@gmail.com">soaresfrancisca2005@gmail.com</a></li>
-          <li>Instagram : <a href="https://www.instagram.com/the_frame._srs" target="_blank">@the_frame._srs</a></li>
-        </ul>
-      </div>
-    </section>
+  <div class="frame">
+    <h2>CONTACT / AVIS</h2>
+
+    <form 
+      action="https://formspree.io/f/xrezlede" 
+      method="POST"
+      class="contact-form"
+    >
+      <label>
+        Ton nom
+        <input type="text" name="name" required>
+      </label>
+
+      <label>
+        Ton email
+        <input type="email" name="email" required>
+      </label>
+
+      <label>
+        Type de message
+        <select name="type">
+          <option value="Avis">Avis</option>
+          <option value="Question">Question</option>
+          <option value="Demande photo">Demande photo</option>
+        </select>
+      </label>
+
+      <label>
+        Message
+        <textarea name="message" rows="5" required></textarea>
+      </label>
+
+      <button type="submit" class="btn">
+        Envoyer le message
+      </button>
+    </form>
+  </div>
+</section>
+
   </main>
 
   <footer class="site-footer">

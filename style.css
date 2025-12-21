@@ -431,3 +431,24 @@ figcaption {
 .reco-pill:hover {
   background:var(--accent);
 }
+
+.contact-form {
+  display:flex;
+  flex-direction:column;
+  gap:12px;
+}
+
+.contact-form label {
+  font-weight:600;
+  font-size:.9rem;
+}
+
+.contact-form input,
+.contact-form textarea,
+.contact-form select {
+  width:100%;
+  padding:8px 10px;
+  border-radius:8px;
+  border:1px solid #aaa;
+  font-family:inherit;
+}
