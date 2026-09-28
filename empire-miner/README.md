@@ -25,7 +25,8 @@ Version autonome en un seul fichier HTML (ouvrable sans serveur) : `npm run buil
 | Miner | maintenir le **clic gauche** sur une paroi proche, ou `Espace` pour frapper devant soi |
 | Interagir (comptoir, atelier, coffre, foreuse) | `E` |
 | Sac et carnet | `I` ou `Tab` |
-| Mode construction | `B` — clic gauche : poser (glisser pour tracer des convoyeurs), clic droit : démonter, `R` : tourner, `1-9` : choisir |
+| Mode construction | `B` — clic gauche : poser (glisser pour tracer convoyeurs et rails), clic droit : démonter, `R` : tourner, `1-9` : choisir |
+| Monter / descendre d'un wagonnet | `F` |
 | Zoom | molette |
 | Pause, sauvegarde, chargement, export | `Échap` |
 
@@ -51,6 +52,11 @@ Les touches sont lues par position physique : ZQSD et WASD fonctionnent sans ré
   reste part sur les côtés (à tour de rôle). Tri strict : si la sortie avant est pleine, le minerai choisi attend.
 - **Pont de convoyeur**, posé par paire dans la même direction (jusqu'à 5 cases d'écart) : le minerai passe
   au-dessus de ce qui se trouve entre les deux ponts, ce qui permet de croiser deux lignes. Pas à travers la roche.
+- **Wagonnets et rails** : rails posés en glissant (virages automatiques), **quai de chargement** (alimenté par le
+  sac du joueur, un convoyeur, une foreuse ou un coffre) et **quai de déchargement** (qui se vide dans ce qui est
+  collé : convoyeur, coffre, caisse d'expédition). Le wagonnet fait l'aller-retour tout seul et transporte par lots
+  de 100 kg ; il part quand il est plein ou quand il n'y a plus rien à charger. On peut monter dedans (`F`) pour
+  voyager : il attend au terminus que le joueur descende.
 - Un **coffre** se vide dans tout convoyeur collé qui ne pointe pas vers lui (tampon au milieu d'une chaîne,
   ou dépôt manuel qui repart sur les convoyeurs) ; une **foreuse** pousse sa production devant sa flèche en
   priorité, sinon dans n'importe quel convoyeur collé.

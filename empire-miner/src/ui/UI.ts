@@ -10,12 +10,13 @@ import { OBJECTIVES, currentObjective } from '../sim/objectives';
 import { Drill } from '../sim/structures/Drill';
 import { ShippingCrate } from '../sim/structures/ShippingCrate';
 import type { Sorter } from '../sim/structures/Sorter';
+import type { RailStation } from '../sim/structures/Rail';
 import { Storage } from '../sim/structures/Storage';
 import type { Structure } from '../sim/structures/Structure';
 import { esc, kg, money, resIcon } from './format';
-import { counterPanel, drillPanel, helpPanel, inventoryPanel, shippingPanel, sorterPanel, storagePanel, workshopPanel } from './panels';
+import { counterPanel, drillPanel, helpPanel, inventoryPanel, shippingPanel, sorterPanel, stationPanel, storagePanel, workshopPanel } from './panels';
 
-export type PanelKind = 'counter' | 'workshop' | 'inventory' | 'storage' | 'drill' | 'shipping' | 'sorter' | 'help';
+export type PanelKind = 'counter' | 'workshop' | 'inventory' | 'storage' | 'drill' | 'shipping' | 'sorter' | 'station' | 'help';
 
 export interface UIHost {
   onAction(action: string, arg: string): void;
@@ -214,6 +215,10 @@ export class UI {
       case 'sorter':
         title = getMachine('sorter').name;
         body = sorterPanel(g, target as Sorter);
+        break;
+      case 'station':
+        title = (target as RailStation).def.name;
+        body = stationPanel(g, target as RailStation);
         break;
       case 'help':
         title = 'Commandes';

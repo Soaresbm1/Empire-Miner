@@ -9,6 +9,8 @@ import { getMachine } from '../data/machines';
 import { getResource } from '../data/resources';
 import type { GameState } from '../sim/GameState';
 import { Bridge } from '../sim/structures/Bridge';
+import { Rail, RailStation } from '../sim/structures/Rail';
+import { Wagon } from '../sim/Wagons';
 import { Building } from '../sim/structures/Building';
 import { Conveyor } from '../sim/structures/Conveyor';
 import { Drill } from '../sim/structures/Drill';
@@ -206,6 +208,12 @@ export class Renderer {
     this.chunks.draw(ctx, x0, y0, x1, y1);
     this.drawCracks(state);
 
+    // Voie des wagonnets (rails et quais), au ras du sol.
+    for (const s of state.structures.list) {
+      if (!s.isTrack || !this.inView(s.x * TILE, s.y * TILE)) continue;
+      this.drawTrack(s, this.trackMask(state, s.x, s.y));
+    }
+
     // Convoyeurs, séparateurs et pieds de ponts (niveau du sol) puis objets transportés.
     const belts: Conveyor[] = [];
     const splitters: Splitter[] = [];
@@ -230,13 +238,18 @@ export class Renderer {
       list.push({ y: d.y, draw: () => this.drawDrop(d.res, d.count, d.x, d.y - d.z, d.z) });
     }
     for (const s of state.structures.list) {
-      if (s.isBelt || !this.inView(s.x * TILE, s.y * TILE, 64)) continue;
+      if (s.isBelt || s.isTrack || !this.inView(s.x * TILE, s.y * TILE, 64)) continue;
       list.push({ y: (s.y + s.h) * TILE - 1, draw: () => this.drawStructure(s) });
     }
     for (const l of state.layout.lamps)
       if (this.inView(l.x, l.y)) list.push({ y: l.y - 8, draw: () => ctx.drawImage(this.lantern, Math.round(l.x - this.lantern.width / 2), Math.round(l.y - 4)) });
     const ent = state.layout.entrance;
     list.push({ y: ent.y * TILE, draw: () => this.drawEntrance(ent.x, ent.y, ent.w) });
+    for (const w of state.wagons.list) {
+      if (!this.inView(w.px(), w.py())) continue;
+      // Trié juste devant le joueur à bord : le wagonnet cache ses jambes (il est assis dedans).
+      list.push({ y: w.py() + 6, draw: () => this.drawWagon(w, w.px(), w.py()) });
+    }
     if (showPlayer) list.push({ y: state.player.y, draw: () => this.drawPlayer() });
     list.sort((a, b) => a.y - b.y);
     for (const d of list) d.draw();
@@ -354,6 +367,120 @@ export class Renderer {
     ctx.fillRect(-8, -5, 1, 10);
     ctx.fillRect(7, -5, 1, 10);
     ctx.restore();
+  }
+
+  /** Côtés (bits 1 << dir) raccordés à une autre pièce de voie. */
+  private trackMask(state: GameState, x: number, y: number): number {
+    let m = 0;
+    for (let d = 0; d < 4; d++) if (state.structures.at(x + DX[d], y + DY[d])?.isTrack) m |= 1 << d;
+    return m;
+  }
+
+  /** Rails (traverses en bois, deux rails d'acier) raccordés à leurs voisins ; quai = plateforme colorée. */
+  private drawTrack(s: Structure, mask: number): void {
+    const ctx = this.ctx;
+    const x = s.x * TILE;
+    const y = s.y * TILE;
+    if (s instanceof RailStation) {
+      // Plateforme en planches, bordée de vert (chargement) ou d'orange (déchargement).
+      const color = s.mode === 'load' ? '#6fcf6a' : '#f0a33a';
+      ctx.fillStyle = '#6e4c2f';
+      ctx.fillRect(x, y, TILE, TILE);
+      ctx.fillStyle = '#8a5f38';
+      for (let k = 0; k < TILE; k += 4) ctx.fillRect(x, y + k, TILE, 3);
+      ctx.fillStyle = color;
+      ctx.fillRect(x, y, TILE, 1);
+      ctx.fillRect(x, y + TILE - 1, TILE, 1);
+      ctx.fillRect(x, y, 1, TILE);
+      ctx.fillRect(x + TILE - 1, y, 1, TILE);
+    }
+    const dirs = mask ? [0, 1, 2, 3].filter((d) => mask & (1 << d)) : [0, 2];
+    for (const d of dirs) {
+      ctx.save();
+      ctx.translate(x + 8, y + 8);
+      ctx.rotate((d * Math.PI) / 2);
+      // Traverses sombres, puis deux rails d'acier bien contrastés.
+      ctx.fillStyle = '#2e1f14';
+      ctx.fillRect(0, -6, 3, 12);
+      ctx.fillRect(5, -6, 3, 12);
+      ctx.fillStyle = '#4a3020';
+      ctx.fillRect(0, -6, 3, 1);
+      ctx.fillRect(5, -6, 3, 1);
+      ctx.fillStyle = '#1a1418';
+      ctx.fillRect(-2, -5, 10, 1);
+      ctx.fillRect(-2, 2, 10, 1);
+      ctx.fillStyle = '#d0d4dc';
+      ctx.fillRect(-2, -4, 10, 1);
+      ctx.fillRect(-2, 3, 10, 1);
+      ctx.fillStyle = '#7a808a';
+      ctx.fillRect(-2, -3, 10, 1);
+      ctx.fillRect(-2, 4, 10, 1);
+      ctx.restore();
+    }
+    if (s instanceof RailStation) {
+      // Pastille : flèche montante (charge) ou descendante (décharge) et jauge du tampon.
+      const color = s.mode === 'load' ? '#6fcf6a' : '#f0a33a';
+      ctx.fillStyle = '#1a1418';
+      ctx.fillRect(x + 10, y - 7, 7, 7);
+      ctx.fillStyle = color;
+      ctx.fillRect(x + 11, y - 6, 5, 5);
+      ctx.fillStyle = '#1a1418';
+      if (s.mode === 'load') {
+        ctx.fillRect(x + 13, y - 5, 1, 3);
+        ctx.fillRect(x + 12, y - 4, 3, 1);
+      } else {
+        ctx.fillRect(x + 13, y - 5, 1, 3);
+        ctx.fillRect(x + 12, y - 3, 3, 1);
+      }
+      const fill = s.weight() / s.capacity;
+      if (fill > 0) {
+        ctx.fillStyle = '#1a1418';
+        ctx.fillRect(x + 1, y + 13, 14, 2);
+        ctx.fillStyle = fill > 0.9 ? '#d0342c' : color;
+        ctx.fillRect(x + 1, y + 13, Math.max(1, Math.round(14 * Math.min(1, fill))), 2);
+      }
+    }
+  }
+
+  /** Wagonnet : caisse d'acier sur roues, avec un tas de minerai proportionnel au chargement. */
+  private drawWagon(w: Wagon | null, cx: number, cy: number): void {
+    const ctx = this.ctx;
+    const x = Math.round(cx - 7);
+    const y = Math.round(cy - 7);
+    ctx.fillStyle = 'rgba(0,0,0,0.35)';
+    ctx.fillRect(x, y + 12, 14, 3);
+    // Contour sombre (lisibilité sur les rails) et roues
+    ctx.fillStyle = '#120e10';
+    ctx.fillRect(x - 1, y + 1, 16, 11);
+    ctx.fillRect(x + 1, y + 10, 3, 3);
+    ctx.fillRect(x + 10, y + 10, 3, 3);
+    // Caisse
+    ctx.fillStyle = '#4a4f58';
+    ctx.fillRect(x, y + 2, 14, 9);
+    ctx.fillStyle = '#b8bec8';
+    ctx.fillRect(x, y + 2, 14, 2);
+    ctx.fillStyle = '#3a3e46';
+    ctx.fillRect(x, y + 9, 14, 2);
+    ctx.fillStyle = '#9aa0aa';
+    ctx.fillRect(x + 3, y + 5, 1, 4);
+    ctx.fillRect(x + 10, y + 5, 1, 4);
+    // Chargement
+    if (w && !w.isEmpty()) {
+      const entries = Object.entries(w.cargo).sort((a, b) => b[1] - a[1]);
+      const fill = Math.min(1, w.weight() / w.capacity);
+      const n = Math.max(1, Math.round(fill * 5));
+      const spots = [
+        [4, 0],
+        [7, -1],
+        [1, 1],
+        [9, 1],
+        [5, -3],
+      ];
+      for (let k = 0; k < n; k++) {
+        const res = entries[k % entries.length][0];
+        ctx.drawImage(this.nuggets.get(res)!, x + spots[k][0], y + spots[k][1]);
+      }
+    }
   }
 
   /** Séparateur : bande courte sous un carter jaune, flèches vers les trois sorties. */
@@ -917,8 +1044,8 @@ export class Renderer {
     const cached = this.icons.get(id);
     if (cached !== undefined) return cached;
     const factory = STRUCTURE_FACTORIES[id];
-    if (!factory) return '';
-    const s = factory.create(0, 0, 0);
+    if (!factory && id !== 'wagon') return '';
+    const s = factory ? factory.create(0, 0, 0) : null;
     const W = 28;
     const H = 40;
     const canvas = document.createElement('canvas');
@@ -930,9 +1057,11 @@ export class Renderer {
     const saved = this.ctx;
     this.ctx = ictx;
     try {
-      if (s instanceof Conveyor) this.drawConveyor(s);
+      if (!s) this.drawWagon(null, 8, 8);
+      else if (s instanceof Conveyor) this.drawConveyor(s);
       else if (s instanceof Splitter) this.drawSplitter(s);
       else if (s instanceof Bridge) this.drawBridgeFoot(s);
+      else if (s instanceof Rail || s instanceof RailStation) this.drawTrack(s, (1 << 0) | (1 << 2));
       else this.drawStructure(s);
     } finally {
       this.ctx = saved;

@@ -13,6 +13,7 @@ import { hasResource } from '../data/resources';
 import { BAGS, PICKAXES } from '../data/tools';
 import { GameState, Stats } from '../sim/GameState';
 import { STRUCTURE_FACTORIES } from '../sim/structures/registry';
+import { Wagon, type WagonSave } from '../sim/Wagons';
 import type { StructureSave } from '../sim/structures/Structure';
 import { rleDecode, rleEncode } from './codec';
 
@@ -45,6 +46,8 @@ export interface SaveData {
   };
   drops: [string, number, number, number][];
   structures: StructureSave[];
+  /** Absent des sauvegardes d'avant les wagonnets. */
+  wagons?: WagonSave[];
 }
 
 export function serialize(g: GameState): SaveData {
@@ -76,6 +79,7 @@ export function serialize(g: GameState): SaveData {
     },
     drops: g.drops.list.map((d) => [d.res, d.count, round2(d.x), round2(d.y)]),
     structures: g.structures.list.filter((s) => s.removable).map((s) => s.serialize()),
+    wagons: g.wagons.list.map((w) => w.serialize()),
   };
 }
 
@@ -119,6 +123,10 @@ export function deserialize(data: SaveData): GameState {
   for (const s of data.structures) {
     const f = STRUCTURE_FACTORIES[s.type];
     if (f) g.structures.add(f.load(s));
+  }
+  for (const ws of data.wagons ?? []) {
+    const w = g.wagons.add(Wagon.load(ws));
+    if (w.rider) g.riding = w;
   }
   return g;
 }

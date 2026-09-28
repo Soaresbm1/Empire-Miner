@@ -6,7 +6,7 @@
  * (trieurs, concasseurs, fonderies, générateurs…) s'intègrent sans changer l'UI.
  */
 
-export type MachineCategory = 'extraction' | 'logistique' | 'stockage' | 'vente';
+export type MachineCategory = 'extraction' | 'logistique' | 'rail' | 'stockage' | 'vente';
 
 export interface MachineStats {
   /** Extraction : unités/s. Convoyeur : tuiles/s. */
@@ -67,6 +67,14 @@ export interface MachineDef {
   accent?: string;
   /** Pont de convoyeur (se pose par paire). */
   bridge?: BridgeSpec;
+  /** Fait partie de la voie des wagonnets (rails et quais). */
+  track?: boolean;
+  /** Se pose en glissant, case après case (rails). */
+  dragPlace?: boolean;
+  /** Se pose sur des rails (wagonnet). */
+  onTrack?: boolean;
+  /** Quai : remplit ('load') ou vide ('unload') les wagonnets. */
+  station?: 'load' | 'unload';
 }
 
 export const MACHINES: MachineDef[] = [
@@ -161,6 +169,65 @@ export const MACHINES: MachineDef[] = [
     stats: { speed: 3, power: 0, capacity: 3, efficiency: 1, level: 1 },
     bridge: { range: 5 },
     unlock: { pickaxeTier: 2, text: 'Nécessite la Pioche améliorée' },
+  },
+  {
+    id: 'rail',
+    name: 'Rails',
+    summary: 'Voie des wagonnets. Se pose en glissant, les virages se font seuls.',
+    category: 'rail',
+    description: 'Rails pour wagonnets. Posez-les en glissant : ils se raccordent automatiquement (lignes droites et virages). Le joueur peut marcher dessus.',
+    price: 2,
+    w: 1,
+    h: 1,
+    solid: false,
+    rotatable: false,
+    stats: { speed: 0, power: 0, capacity: 0, efficiency: 1, level: 1 },
+    track: true,
+    dragPlace: true,
+  },
+  {
+    id: 'wagon',
+    name: 'Wagonnet',
+    summary: "Fait l'aller-retour sur les rails. On peut monter dedans (E).",
+    category: 'rail',
+    description: "Se pose sur des rails. Il roule jusqu'au bout de la ligne puis repart dans l'autre sens ; il s'arrête aux quais pour charger ou décharger. Montez dedans avec E pour voyager.",
+    price: 60,
+    w: 1,
+    h: 1,
+    solid: false,
+    rotatable: true,
+    stats: { speed: 6, power: 0, capacity: 100, efficiency: 1, level: 1 },
+    onTrack: true,
+  },
+  {
+    id: 'rail_load',
+    name: 'Quai de chargement',
+    summary: "Remplit les wagonnets. Alimentez-le par convoyeur, foreuse, coffre ou avec votre sac.",
+    category: 'rail',
+    description: "Fait partie de la voie (en général au bout de la ligne). Il reçoit le minerai des convoyeurs, foreuses et coffres collés, ou de votre sac (E), et le charge dans le wagonnet qui s'arrête. Le wagonnet repart quand il est plein, ou quand il n'y a plus rien à charger.",
+    price: 30,
+    w: 1,
+    h: 1,
+    solid: false,
+    rotatable: false,
+    stats: { speed: 20, power: 0, capacity: 60, efficiency: 1, level: 1 },
+    track: true,
+    station: 'load',
+  },
+  {
+    id: 'rail_unload',
+    name: 'Quai de déchargement',
+    summary: 'Vide les wagonnets et envoie le minerai dans ce qui est collé.',
+    category: 'rail',
+    description: "Fait partie de la voie (en général au bout de la ligne). Il vide le wagonnet qui s'arrête, puis envoie le minerai dans ce qui est collé : convoyeur, coffre ou caisse d'expédition.",
+    price: 30,
+    w: 1,
+    h: 1,
+    solid: false,
+    rotatable: false,
+    stats: { speed: 20, power: 0, capacity: 60, efficiency: 1, level: 1 },
+    track: true,
+    station: 'unload',
   },
   {
     id: 'drill',

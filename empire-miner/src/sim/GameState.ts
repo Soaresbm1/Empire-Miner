@@ -21,6 +21,7 @@ import { Player } from './Player';
 import { StructureManager } from './StructureManager';
 import { Building, BuildingType } from './structures/Building';
 import { Conveyor } from './structures/Conveyor';
+import type { RailStation } from './structures/Rail';
 import { Drill } from './structures/Drill';
 import { ShippingCrate } from './structures/ShippingCrate';
 import type { Sorter } from './structures/Sorter';
@@ -28,6 +29,7 @@ import { STRUCTURE_FACTORIES } from './structures/registry';
 import { Storage } from './structures/Storage';
 import type { Structure, StructureContext } from './structures/Structure';
 import { revealAround } from './visibility';
+import { Wagon, WagonSystem } from './Wagons';
 import type { World } from './World';
 
 export interface PlayerIntent {
@@ -73,6 +75,9 @@ export class GameState implements StructureContext {
   readonly inventory: Inventory;
   readonly drops = new DropSystem();
   readonly structures: StructureManager;
+  readonly wagons = new WagonSystem();
+  /** Wagonnet dans lequel le joueur est monté, ou null. */
+  riding: Wagon | null = null;
   money = 0;
   pickaxeLevel = 0;
   bagLevel = 0;
@@ -150,11 +155,15 @@ export class GameState implements StructureContext {
   update(dt: number, intent: PlayerIntent): void {
     this.time += dt;
     this.stats.playTime += dt;
-    this.updateMovement(dt, intent);
-    this.updateMining(dt, intent);
+    if (!this.riding) {
+      this.updateMovement(dt, intent);
+      this.updateMining(dt, intent);
+    }
     this.drops.update(dt, this.world);
     this.updatePickup(dt);
     this.structures.update(dt, this);
+    this.wagons.update(dt, this);
+    if (this.riding) this.followWagon(this.riding);
     this.updateExploration();
   }
 
@@ -505,6 +514,11 @@ export class GameState implements StructureContext {
     const def = getMachine(machineId);
     if (this.inventory.kitCount(machineId) <= 0) return { ok: false, reason: `Aucun ${def.name.toLowerCase()} en stock` };
     if (this.distanceToTile(tx, ty) > BUILD_RANGE) return { ok: false, reason: 'Trop loin' };
+    if (def.onTrack) {
+      if (!this.structures.at(tx, ty)?.isTrack) return { ok: false, reason: 'Se pose sur des rails' };
+      if (this.wagons.at(tx, ty)) return { ok: false, reason: 'Il y a déjà un wagonnet ici' };
+      return { ok: true };
+    }
     if (this.beltToReplace(machineId, tx, ty)) return { ok: true };
     for (let y = ty; y < ty + def.h; y++)
       for (let x = tx; x < tx + def.w; x++) {
@@ -533,9 +547,16 @@ export class GameState implements StructureContext {
    * Pose une machine. Un convoyeur posé sur un convoyeur d'un autre niveau le remplace :
    * les objets transportés sont conservés et l'ancien convoyeur revient dans le stock.
    */
-  place(machineId: string, tx: number, ty: number, dir: Dir): Structure | null {
+  place(machineId: string, tx: number, ty: number, dir: Dir): Structure | Wagon | null {
     if (!this.canPlace(machineId, tx, ty).ok) return null;
     const def = getMachine(machineId);
+    if (def.onTrack) {
+      this.inventory.removeKit(machineId);
+      const w = this.wagons.add(new Wagon(tx, ty, dir));
+      this.stats.structuresBuilt++;
+      this.emit({ t: 'placed', type: machineId, tx, ty });
+      return w;
+    }
     const factory = STRUCTURE_FACTORIES[machineId];
     if (!factory) return null;
     const replaced = this.beltToReplace(machineId, tx, ty);
@@ -562,8 +583,17 @@ export class GameState implements StructureContext {
     return s;
   }
 
-  /** Démonte la structure en (tx, ty). Son contenu tombe au sol. */
+  /** Démonte le wagonnet ou la structure en (tx, ty). Son contenu tombe au sol. */
   removeAt(tx: number, ty: number): boolean {
+    const w = this.wagons.at(tx, ty);
+    if (w && this.distanceToTile(tx, ty) <= BUILD_RANGE) {
+      if (w === this.riding) this.leaveWagon();
+      this.wagons.remove(w);
+      this.inventory.addKit('wagon');
+      for (const [res, n] of Object.entries(w.cargo)) this.drops.spawn(res, n, w.px(), w.py());
+      this.emit({ t: 'removed', type: 'wagon', tx, ty });
+      return true;
+    }
     const s = this.structures.at(tx, ty);
     if (!s || !s.removable) return false;
     if (this.distanceToTile(tx, ty) > BUILD_RANGE) return false;
@@ -580,6 +610,92 @@ export class GameState implements StructureContext {
     s.dir = ((s.dir + 1) % 4) as Dir;
     this.structures.invalidate();
     return true;
+  }
+
+  // ---------------------------------------------------------------- wagonnets
+
+  /** Wagonnet assez proche du joueur pour y monter. */
+  nearestWagon(): Wagon | null {
+    let best: Wagon | null = null;
+    let bestD = TILE * 1.6;
+    for (const w of this.wagons.list) {
+      const d = Math.hypot(w.px() - this.player.x, w.py() - this.player.y);
+      if (d < bestD) {
+        bestD = d;
+        best = w;
+      }
+    }
+    return best;
+  }
+
+  rideWagon(w: Wagon): void {
+    if (this.riding) this.leaveWagon();
+    this.riding = w;
+    w.rider = true;
+    w.hold = false;
+    w.boardWait = 0;
+    this.player.swingT = 0;
+    this.followWagon(w);
+  }
+
+  /** Descend du wagonnet sur une case libre à côté de lui. */
+  leaveWagon(): void {
+    const w = this.riding;
+    if (!w) return;
+    w.rider = false;
+    w.hold = false;
+    this.riding = null;
+    const cx = w.tileX();
+    const cy = w.tileY();
+    const p = this.player;
+    const spots: [number, number][] = [
+      [cx, cy + 1],
+      [cx, cy - 1],
+      [cx + 1, cy],
+      [cx - 1, cy],
+      [cx, cy],
+    ];
+    for (const [x, y] of spots) {
+      const px = (x + 0.5) * TILE;
+      const py = (y + 0.5) * TILE;
+      if (!this.isBlocked(px - p.halfW, py - p.halfH, px + p.halfW - 0.001, py + p.halfH - 0.001)) {
+        p.x = px;
+        p.y = py;
+        return;
+      }
+    }
+  }
+
+  private followWagon(w: Wagon): void {
+    this.player.x = w.px();
+    this.player.y = w.py() + 1;
+    this.player.moving = false;
+  }
+
+  // ---------------------------------------------------------------- quais
+
+  /** Vide le sac dans un quai (de chargement). */
+  stationDepositAll(st: RailStation): number {
+    let n = 0;
+    for (const [res, count] of Object.entries(this.inventory.items)) {
+      const k = st.put(res, count);
+      this.inventory.remove(res, k);
+      n += k;
+    }
+    return n;
+  }
+
+  /** Prend le contenu d'un quai (les minerais les plus précieux d'abord). */
+  stationTakeAll(st: RailStation): number {
+    let n = 0;
+    const order = Object.keys(st.items).sort((a, b) => getResource(b).value - getResource(a).value);
+    for (const res of order) {
+      const k = st.take(res, Math.min(st.items[res] ?? 0, this.inventory.room(res)));
+      this.inventory.add(res, k);
+      n += k;
+    }
+    if (Object.keys(st.items).length) this.emit({ t: 'invFull' });
+    return n;
   }
 
   // ---------------------------------------------------------------- machines

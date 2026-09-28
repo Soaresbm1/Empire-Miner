@@ -3,6 +3,7 @@ import type { Dir } from '../../core/dir';
 import { Conveyor } from './Conveyor';
 import { Bridge } from './Bridge';
 import { Drill } from './Drill';
+import { Rail, RailStation } from './Rail';
 import { ShippingCrate } from './ShippingCrate';
 import { Sorter } from './Sorter';
 import { Splitter } from './Splitter';
@@ -20,5 +21,8 @@ export const STRUCTURE_FACTORIES: Record<string, Factory> = {
   splitter: { create: (x, y, d) => new Splitter(x, y, d), load: (s) => Splitter.load(s) },
   sorter: { create: (x, y, d) => new Sorter(x, y, d), load: (s) => Sorter.load(s) },
   bridge: { create: (x, y, d) => new Bridge(x, y, d), load: (s) => Bridge.load(s) },
+  rail: { create: (x, y) => new Rail(x, y), load: (s) => new Rail(s.x, s.y) },
+  rail_load: { create: (x, y) => new RailStation(x, y, 'rail_load'), load: (s) => RailStation.load(s) },
+  rail_unload: { create: (x, y) => new RailStation(x, y, 'rail_unload'), load: (s) => RailStation.load(s) },
   shipping: { create: (x, y, d) => new ShippingCrate(x, y, d), load: (s) => ShippingCrate.load(s) },
 };

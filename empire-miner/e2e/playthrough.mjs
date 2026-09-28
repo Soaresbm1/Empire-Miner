@@ -637,6 +637,111 @@ try {
     return { front: { ...g.structures.at(39, 3).items }, side: { ...g.structures.at(37, 5).items } };
   });
   check(JSON.stringify(sorted.front) === '{"coal":10}' && JSON.stringify(sorted.side) === '{"copper":10}', `le trieur sépare le charbon du cuivre (${JSON.stringify(sorted)})`);
+
+  // Wagonnet et rails : de la galerie ouest jusqu'à la caisse d'expédition, en remontant le puits.
+  await ev(() => (window.__EM.state.money += 400));
+  await teleport(58, 8);
+  await page.waitForTimeout(300);
+  await pressE();
+  await page.click('.tab[data-arg="machines"]');
+  await page.waitForTimeout(150);
+  await page.click('[data-action="buyKit"][data-arg="rail:50"]');
+  await page.click('[data-action="buyKit"][data-arg="wagon:1"]');
+  await page.click('[data-action="buyKit"][data-arg="rail_load:1"]');
+  await page.click('[data-action="buyKit"][data-arg="rail_unload:1"]');
+  await page.waitForTimeout(100);
+  await shot('18-shop-rails');
+  await page.keyboard.press('Escape');
+  const kits3 = await ev(() => ({ ...window.__EM.state.inventory.kits }));
+  check(kits3.rail === 50 && kits3.wagon === 1 && kits3.rail_load === 1 && kits3.rail_unload === 1, 'rails, wagonnet et quais achetés');
+
+  const drag = async (path) => {
+    const q0 = await tileScreen(...path[0]);
+    await page.mouse.move(q0.x, q0.y);
+    await page.waitForTimeout(60);
+    await page.mouse.down();
+    for (const [x, y] of path.slice(1)) {
+      const q = await tileScreen(x, y);
+      await page.mouse.move(q.x, q.y, { steps: 2 });
+      await page.waitForTimeout(40);
+    }
+    await page.mouse.up();
+    await page.waitForTimeout(100);
+  };
+  await teleport(46, S + 6);
+  await page.waitForTimeout(400);
+  await page.keyboard.press('KeyB');
+  await page.waitForTimeout(100);
+  await placeAt('rail_load', 43, S + 5);
+  const railIdx = await ev(() => window.__EM.availableKits(window.__EM.state).indexOf('rail'));
+  await page.keyboard.press(`Digit${railIdx + 1}`);
+  const lower = [];
+  for (let x = 44; x <= 49; x++) lower.push([x, S + 5]);
+  for (let y = S + 4; y >= S; y--) lower.push([49, y]);
+  await drag(lower);
+  await placeAt('wagon', 45, S + 5, 2);
+  await page.keyboard.press('Escape');
+  await teleport(48, 9);
+  await page.waitForTimeout(400);
+  await page.keyboard.press('KeyB');
+  await page.waitForTimeout(100);
+  await placeAt('rail', 49, S - 1);
+  await placeAt('rail_unload', 49, S - 2);
+  await page.keyboard.press('Escape');
+  const track = await ev(() => {
+    const g = window.__EM.state;
+    let n = 0;
+    for (let x = 44; x <= 49; x++) if (g.structures.at(x, 17)?.isTrack) n++;
+    for (let y = 10; y <= 16; y++) if (g.structures.at(49, y)?.isTrack) n++;
+    return { n, load: g.structures.at(43, 17)?.type, unload: g.structures.at(49, 10)?.type, wagons: g.wagons.list.length };
+  });
+  check(track.n === 13 && track.load === 'rail_load' && track.unload === 'rail_unload' && track.wagons === 1, `ligne posée à la souris (${track.n} pièces de voie, 1 wagonnet)`);
+
+  // Le joueur vide son sac dans le quai de chargement.
+  await ev(() => (window.__EM.state.inventory.items = { silver: 8 }));
+  await teleport(43, S + 6);
+  await page.waitForTimeout(1500);
+  await pressE();
+  check(await page.isVisible('.panel-station'), 'le quai de chargement s’ouvre avec E');
+  await page.click('[data-action="stationDeposit"]');
+  await page.waitForTimeout(150);
+  await shot('18a-station-panel');
+  await page.keyboard.press('Escape');
+  await page.waitForTimeout(2600);
+  await teleport(47, 13);
+  await page.waitForTimeout(700);
+  await shot('18b-wagon-shaft');
+  let delivered = 0;
+  for (let i = 0; i < 20 && delivered < 8; i++) {
+    await page.waitForTimeout(500);
+    delivered = await ev(() => window.__EM.state.wagons.list[0].delivered);
+  }
+  check(delivered === 8, `le wagonnet remonte l'argent jusqu'au quai de déchargement (${delivered} livrés)`);
+  await page.waitForTimeout(3000);
+  await shot('18c-wagon-surface');
+
+  // Voyage : monter dans le wagonnet au fond de la galerie et remonter à la surface.
+  await page.waitForTimeout(3000); // retour du wagonnet au quai de chargement
+  await teleport(44, S + 6);
+  await page.waitForTimeout(300);
+  await page.keyboard.press('KeyF');
+  await page.waitForTimeout(100);
+  check((await ev(() => !!window.__EM.state.riding)), 'le joueur monte dans le wagonnet (F)');
+  let top = 99;
+  for (let i = 0; i < 20 && top > 10; i++) {
+    await page.waitForTimeout(300);
+    top = await ev(() => window.__EM.state.player.tileY);
+  }
+  await shot('18d-riding');
+  check(top <= 10 && (await ev(() => !!window.__EM.state.riding)), `le wagonnet emmène le joueur jusqu'à la surface (case y=${top})`);
+  await page.keyboard.press('KeyF');
+  await page.waitForTimeout(150);
+  const off = await ev(() => {
+    const g = window.__EM.state;
+    const p = g.player;
+    return { riding: !!g.riding, free: !g.isBlocked(p.x - p.halfW, p.y - p.halfH, p.x + p.halfW - 0.001, p.y + p.halfH - 0.001) };
+  });
+  check(!off.riding && off.free, 'le joueur descend sur une case libre (F)');
 } catch (e) {
   failures++;
   console.error(e);

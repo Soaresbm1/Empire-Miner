@@ -12,6 +12,7 @@ src/
     Inventory.ts         sac limité en poids + kits de construction
     StructureManager.ts  index spatial des structures et ordre de mise à jour
     structures/          Conveyor, Drill, Storage, ShippingCrate, Building (+ registre de fabrication)
+    Wagons.ts            wagonnets (véhicules qui roulent sur la voie : rails et quais)
     visibility.ts        exploration (révélation des galeries)
     objectives.ts        objectifs calculés depuis l'état réel
     events.ts            événements émis vers la présentation
@@ -71,6 +72,14 @@ devant lui, sans traverser la roche, le premier pont de même direction ; s'il e
 Chaque tuile de convoyeur a une capacité (objets) et un espacement minimal : si la sortie n'absorbe pas assez
 vite, les objets s'accumulent et le convoyeur sature. Les convoyeurs sont mis à jour de l'aval vers l'amont
 (ordre recalculé quand le réseau change) pour un débit régulier.
+
+## Wagonnets
+
+Les rails et les quais sont des structures fixes (`isTrack`). Les wagonnets, eux, se déplacent : ils vivent dans
+`WagonSystem` (comme les minerais au sol) et sont sauvegardés à part. À chaque case, un wagonnet continue tout
+droit si la voie le permet, sinon prend le virage ; au bout de la ligne il fait demi-tour. Sur un quai il
+s'arrête et transfère (chargement ou déchargement) à cadence fixe. Un quai de chargement est `feedable` : les
+coffres et foreuses collés l'alimentent comme un convoyeur.
 
 ## Étendre le jeu
 

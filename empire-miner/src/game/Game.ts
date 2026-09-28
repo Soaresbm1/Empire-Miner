@@ -17,6 +17,7 @@ import { Conveyor } from '../sim/structures/Conveyor';
 import { Drill } from '../sim/structures/Drill';
 import { ShippingCrate } from '../sim/structures/ShippingCrate';
 import { Sorter } from '../sim/structures/Sorter';
+import { Rail, RailStation } from '../sim/structures/Rail';
 import { Splitter } from '../sim/structures/Splitter';
 import { Storage } from '../sim/structures/Storage';
 import { Renderer, Overlay } from '../render/Renderer';
@@ -294,6 +295,12 @@ export class Game {
       case 'drillRotate':
         if (target) g.rotateAt(target.x, target.y);
         break;
+      case 'stationDeposit':
+        if (target instanceof RailStation) g.stationDepositAll(target);
+        break;
+      case 'stationTakeAll':
+        if (target instanceof RailStation) g.stationTakeAll(target);
+        break;
       case 'sorterFilter':
         if (target instanceof Sorter) g.setSorterFilter(target, arg || null);
         break;
@@ -351,7 +358,18 @@ export class Game {
     if (!paused) {
       if (inp.wasPressed('KeyE')) {
         if (this.ui.panel) this.ui.closePanel();
+        else if (g.riding) g.leaveWagon();
         else this.interact(g);
+      }
+      if (inp.wasPressed('KeyF') && !this.ui.panel) {
+        if (g.riding) g.leaveWagon();
+        else {
+          const w = g.nearestWagon();
+          if (w) {
+            this.setBuildMode(false);
+            g.rideWagon(w);
+          }
+        }
       }
       if (inp.wasPressed('KeyI', 'Tab')) this.togglePanel('inventory');
       if (inp.wasPressed('KeyH', 'F1')) this.togglePanel('help');
@@ -436,7 +454,7 @@ export class Game {
     this.renderer.draw(overlay);
     this.ui.setTooltip(tooltip, inp.mouseX, inp.mouseY);
     this.ui.updateHud(g, {
-      prompt: this.promptText(near),
+      prompt: this.promptText(g, near),
       build: this.buildBarHtml(g),
       hints: this.hintsHtml(),
       income: this.incomeHtml(g),
@@ -461,16 +479,28 @@ export class Game {
     else if (s instanceof ShippingCrate) this.ui.openPanel('shipping', s);
     else if (s instanceof Drill) this.ui.openPanel('drill', s);
     else if (s instanceof Sorter) this.ui.openPanel('sorter', s);
+    else if (s instanceof RailStation) this.ui.openPanel('station', s);
   }
 
-  private promptText(near: ReturnType<GameState['nearestInteractable']>): string {
-    if (!near || this.ui.blocking) return '';
+  /** Invite d'action : structure proche (E) et wagonnet (F). */
+  private promptText(g: GameState, near: ReturnType<GameState['nearestInteractable']>): string {
+    if (this.ui.blocking) return '';
+    const f = `<kbd>${this.input.label('KeyF')}</kbd>`;
+    if (g.riding) return `${f} Descendre du wagonnet`;
+    const main = this.structurePrompt(near);
+    const wagon = g.nearestWagon() ? `${f} Monter dans le wagonnet` : '';
+    return [main, wagon].filter(Boolean).join(' &nbsp;·&nbsp; ');
+  }
+
+  private structurePrompt(near: ReturnType<GameState['nearestInteractable']>): string {
+    if (!near) return '';
     const e = `<kbd>${this.input.label('KeyE')}</kbd>`;
     if (near instanceof Building) return `${e} ${BUILDING_INFO[near.type].name} — ${BUILDING_INFO[near.type].prompt}`;
     if (near instanceof Storage) return `${e} Ouvrir le coffre`;
     if (near instanceof ShippingCrate) return `${e} Caisse d'expédition — vente automatique`;
     if (near instanceof Drill) return `${e} Foreuse — charbon et production`;
     if (near instanceof Sorter) return `${e} Trieur — choisir le minerai trié`;
+    if (near instanceof RailStation) return `${e} ${near.def.name}`;
     return '';
   }
 
@@ -522,10 +552,14 @@ export class Game {
       this.dragLast = null;
       return;
     }
-    const isBelt = !!getMachine(machine).conveyor;
+    const mdef = getMachine(machine);
+    // Convoyeurs et rails se tracent en glissant.
+    const isBelt = !!mdef.conveyor || !!mdef.dragPlace;
     // Un convoyeur d'un autre niveau sous le curseur peut être remplacé (amélioration sur place).
     const upgrade = g.beltToReplace(machine, mtx, mty);
-    if (existing && existing.removable && !upgrade) overlay.removeHint = { tx: mtx, ty: mty };
+    // Un wagonnet se pose sur la voie.
+    const onRail = !!mdef.onTrack && !!existing?.isTrack;
+    if (existing && existing.removable && !upgrade && !onRail) overlay.removeHint = { tx: mtx, ty: mty };
     else {
       overlay.ghost = { machine, tx: mtx, ty: mty, dir: upgrade ? upgrade.dir : this.buildDir, ok: g.canPlace(machine, mtx, mty).ok };
       if (getMachine(machine).bridge) {
@@ -539,7 +573,7 @@ export class Game {
 
     // Pose.
     if (inp.consumeLeftPress()) {
-      if (!existing || upgrade) this.tryPlace(g, machine, mtx, mty, upgrade ? upgrade.dir : this.buildDir);
+      if (!existing || upgrade || onRail) this.tryPlace(g, machine, mtx, mty, upgrade ? upgrade.dir : this.buildDir);
       this.dragLast = isBelt ? { tx: mtx, ty: mty } : null;
     } else if (inp.left && this.dragLast && isBelt && (mtx !== this.dragLast.tx || mty !== this.dragLast.ty)) {
       // Tracé de convoyeurs en glissant : chaque tuile pointe vers la suivante.
@@ -612,7 +646,15 @@ export class Game {
   private describeTile(g: GameState, tx: number, ty: number): string | null {
     const w = g.world;
     if (!w.inBounds(tx, ty) || !w.explored[w.idx(tx, ty)]) return null;
+    const wagon = g.wagons.at(tx, ty);
+    if (wagon)
+      return `<b>Wagonnet</b> — ${wagon.stopped ? "à l'arrêt" : 'en route'}${wagon.rider ? ' · vous êtes à bord' : ''}<br>Chargement : ${kg(wagon.weight())} / ${kg(
+        wagon.capacity,
+      )} · ${wagon.delivered} minerai(s) livré(s)<br><span class="muted">[${this.input.label('KeyF')}] monter / descendre</span>`;
     const s = g.structures.at(tx, ty);
+    if (s instanceof RailStation)
+      return `<b>${s.def.name}</b><br>${kg(s.weight())} / ${kg(s.capacity)} en attente<br><span class="muted">[${this.input.label('KeyE')}] ouvrir</span>`;
+    if (s instanceof Rail) return `<b>Rails</b><br><span class="muted">Posez-y un wagonnet ; il fait l'aller-retour jusqu'aux bouts de la ligne.</span>`;
     if (s instanceof Conveyor) {
       const load = s.items.length;
       return `<b>${s.def.name}</b> ${['→', '↓', '←', '↑'][s.dir]}<br>${load}/${s.capacity} objets · ${s.speed.toLocaleString('fr-FR')} tuile/s${

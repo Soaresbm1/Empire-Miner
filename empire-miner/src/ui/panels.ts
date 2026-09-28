@@ -10,6 +10,7 @@ import type { GameState } from '../sim/GameState';
 import type { Drill } from '../sim/structures/Drill';
 import type { ShippingCrate } from '../sim/structures/ShippingCrate';
 import type { Sorter } from '../sim/structures/Sorter';
+import type { RailStation } from '../sim/structures/Rail';
 import type { Storage } from '../sim/structures/Storage';
 import { esc, kg, money, num, rarityTag, resIcon } from './format';
 
@@ -118,6 +119,9 @@ function machineSpecs(m: MachineDef): [string, string][] {
   if (m.bridge) return [['Portée', `jusqu'à ${m.bridge.range} cases`], ['Vendu', 'par paire']];
   if (m.shipping) return [['Vente', `toutes les ${m.shipping.interval} s`], ['Capacité', kg(s.capacity)], ['Pose', 'en surface']];
   if (m.id === 'storage') return [['Capacité', kg(s.capacity)]];
+  if (m.id === 'rail') return [['Pose', 'en glissant'], ['Virages', 'automatiques']];
+  if (m.onTrack) return [['Vitesse', `${num(s.speed)} cases/s`], ['Capacité', kg(s.capacity)], ['Passager', 'touche F']];
+  if (m.station) return [['Tampon', kg(s.capacity)], ['Transfert', `${num(s.speed)} /s`]];
   const out: [string, string][] = [];
   if (s.speed) out.push(['Cadence', `${num(s.speed * 60, 0)} /min`]);
   if (m.fuel) out.push(['Charbon', `1 unité / ${m.fuel.secondsPerUnit} s`], ['Réservoir', `${m.fuel.maxUnits} unités`]);
@@ -128,6 +132,7 @@ function machineSpecs(m: MachineDef): [string, string][] {
 const SHOP_GROUPS: { title: string; categories: MachineDef['category'][] }[] = [
   { title: 'Extraction', categories: ['extraction'] },
   { title: 'Transport', categories: ['logistique'] },
+  { title: 'Wagonnets et rails', categories: ['rail'] },
   { title: 'Stockage et vente', categories: ['stockage', 'vente'] },
 ];
 
@@ -136,7 +141,7 @@ function machineRow(g: GameState, m: MachineDef, icon: (id: string) => string): 
   const owned = g.inventory.kitCount(m.id);
   const placed = g.structures.list.filter((s) => s.type === m.id).length;
   // Les ponts se vendent par paire (une entrée + une sortie).
-  const qtys = m.conveyor ? [1, 10] : m.bridge ? [2] : [1];
+  const qtys = m.conveyor ? [1, 10] : m.bridge ? [2] : m.dragPlace ? [10, 50] : [1];
   const label = (q: number) => (m.bridge ? `Paire · ${money(m.price * q)}` : q > 1 ? `×${q} · ${money(m.price * q)}` : `Acheter · ${money(m.price)}`);
   const cheapest = m.price * qtys[0];
   const specs = machineSpecs(m)
@@ -241,6 +246,29 @@ export function shippingPanel(g: GameState, c: ShippingCrate): string {
     <p class="hint">Tout ce qui entre ici est vendu au prix du comptoir à chaque passage. Si la caisse est pleine, elle refuse les minerais et les convoyeurs s'arrêtent.</p>`;
 }
 
+// ------------------------------------------------------------------ quais
+
+export function stationPanel(g: GameState, st: RailStation): string {
+  const items = sortedItems(st.items);
+  const w = st.weight();
+  const docked = g.wagons.list.find((wg) => wg.stopped && wg.x === st.x && wg.y === st.y);
+  const rows = items
+    .map(([res, n]) => `<tr><td>${resIcon(res)} ${getResource(res).name}</td><td class="num">×${n}</td><td class="num">${kg(n * getResource(res).weight)}</td></tr>`)
+    .join('');
+  const load = st.mode === 'load';
+  return `
+    <div class="status ${load ? 'good' : 'warn'}">● ${load ? 'Remplit les wagonnets qui s\'arrêtent ici.' : 'Vide les wagonnets et envoie le minerai dans ce qui est collé.'}</div>
+    <div class="bar big"><div style="width:${Math.min(100, (w / st.capacity) * 100)}%"></div><span>${kg(w)} / ${kg(st.capacity)}</span></div>
+    ${items.length ? `<table class="table"><tbody>${rows}</tbody></table>` : `<p class="empty">${load ? 'Quai vide. Déposez votre sac, ou amenez le minerai par convoyeur, foreuse ou coffre.' : 'Quai vide.'}</p>`}
+    <div class="panel-footer"><span>${docked ? `Wagonnet à quai : <b>${kg(docked.weight())}</b> / ${kg(docked.capacity)}` : 'Aucun wagonnet à quai'}</span>
+    ${load ? btn('stationDeposit', `Déposer mon sac (${kg(g.inventory.weight())})`, { cls: 'primary', disabled: g.inventory.isEmpty() }) : btn('stationTakeAll', 'Tout prendre', { cls: 'primary', disabled: !items.length })}</div>
+    <p class="hint">${
+      load
+        ? 'Le wagonnet repart quand il est plein, ou 2 s après la fin du chargement.'
+        : "Collez un convoyeur, un coffre ou une caisse d'expédition au quai pour qu'il se vide tout seul."
+    } Montez dans un wagonnet avec <kbd>F</kbd>.</p>`;
+}
+
 // ------------------------------------------------------------------ trieur
 
 export function sorterPanel(g: GameState, s: Sorter): string {
@@ -321,6 +349,7 @@ export function helpPanel(keys: { move: string; label: (c: string) => string }):
     <div><h4>Sac</h4><p>${k('KeyI')} ou <kbd>Tab</kbd></p></div>
     <div><h4>Construire</h4><p>${k('KeyB')} : mode construction. <kbd>Clic gauche</kbd> poser (glisser pour tracer des convoyeurs), <kbd>clic droit</kbd> démonter, ${k('KeyR')} tourner, <kbd>1-9</kbd> choisir</p></div>
     <div><h4>Zoom</h4><p>Molette de la souris</p></div>
+    <div><h4>Wagonnet</h4><p>${k('KeyF')} : monter / descendre</p></div>
     <div><h4>Menu</h4><p><kbd>Échap</kbd> : pause, sauvegarde, chargement</p></div>
   </div>
   <p class="hint">Le jeu se sauvegarde automatiquement toutes les minutes dans ce navigateur.${

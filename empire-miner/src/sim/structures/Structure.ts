@@ -44,6 +44,10 @@ export abstract class Structure {
   readonly isBelt: boolean = false;
   /** Structure de transport qui a un panneau de réglage (touche E), ex. le trieur. */
   readonly configurable: boolean = false;
+  /** Fait partie de la voie des wagonnets (rails, quais). */
+  readonly isTrack: boolean = false;
+  /** Peut être alimentée par un coffre ou une foreuse collés, comme un convoyeur (ex. quai de chargement). */
+  feedable = false;
 
   /** Côté par lequel commencer la prochaine sortie (répartition équitable entre convoyeurs). */
   private outCursor = 0;
@@ -64,7 +68,7 @@ export abstract class Structure {
       const d = ((this.outCursor + k) % 4) as Dir;
       if (d === skip) continue;
       const next = ctx.structureAt(this.x + DX[d], this.y + DY[d]);
-      if (next?.isBelt && next.accept(res, d, ctx)) {
+      if ((next?.isBelt || next?.feedable) && next.accept(res, d, ctx)) {
         this.outCursor = (d + 1) % 4;
         return true;
       }
