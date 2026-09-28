@@ -21,6 +21,9 @@ export interface UIHost {
   moveKeys(): string;
 }
 
+/** Faux dans les hébergements qui bloquent les téléchargements (build « artifact »). */
+const CAN_DOWNLOAD = import.meta.env.MODE !== 'artifact';
+
 const $ = <T extends HTMLElement>(sel: string) => document.querySelector(sel) as T;
 
 export class UI {
@@ -214,7 +217,7 @@ export class UI {
         <button class="btn" data-action="import">Importer une sauvegarde…</button>
         <button class="btn" data-action="help">Commandes</button>
       </div>
-      <p class="credits">Prototype jouable · v0.1</p>
+      <p class="credits">Se joue au clavier et à la souris · prototype v0.1</p>
     </div>`;
   }
 
@@ -224,7 +227,7 @@ export class UI {
       <button class="btn primary big" data-action="resume">Reprendre</button>
       <button class="btn" data-action="save">Sauvegarder</button>
       <button class="btn" data-action="load">Charger la dernière sauvegarde</button>
-      <button class="btn" data-action="export">Exporter la sauvegarde (fichier)</button>
+      ${CAN_DOWNLOAD ? '<button class="btn" data-action="export">Exporter la sauvegarde (fichier)</button>' : ''}
       <button class="btn" data-action="import">Importer une sauvegarde…</button>
       <button class="btn" data-action="mute">Son : ${muted ? 'coupé' : 'activé'}</button>
       <button class="btn" data-action="help">Commandes</button>

@@ -225,5 +225,7 @@ export function helpPanel(keys: { move: string; label: (c: string) => string }):
     <div><h4>Zoom</h4><p>Molette de la souris</p></div>
     <div><h4>Menu</h4><p><kbd>Échap</kbd> : pause, sauvegarde, chargement</p></div>
   </div>
-  <p class="hint">Le jeu se sauvegarde automatiquement toutes les minutes dans ce navigateur. Exportez un fichier depuis le menu pour garder une copie.</p>`;
+  <p class="hint">Le jeu se sauvegarde automatiquement toutes les minutes dans ce navigateur.${
+    import.meta.env.MODE !== 'artifact' ? ' Exportez un fichier depuis le menu pour garder une copie.' : ''
+  }</p>`;
 }

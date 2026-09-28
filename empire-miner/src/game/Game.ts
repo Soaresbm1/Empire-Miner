@@ -124,7 +124,8 @@ export class Game {
   }
 
   private exportSave(): void {
-    if (!this.state) return;
+    // L'hébergement « artifact » interdit les téléchargements : l'export n'y est pas proposé.
+    if (import.meta.env.MODE === 'artifact' || !this.state) return;
     const blob = new Blob([JSON.stringify(serialize(this.state))], { type: 'application/json' });
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
