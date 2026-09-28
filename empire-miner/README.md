@@ -71,7 +71,9 @@ Les touches sont lues par position physique : ZQSD et WASD fonctionnent sans ré
   et à droite, niveau 3 (650 $, pioche en fer) = aussi la case derrière elle. La sortie reste devant la flèche.
   Chaque case couverte qui a un gisement produit à la cadence de base (jusqu'à ×4), pour le même charbon ; elle
   continue tant qu'une de ses cases a encore un gisement. Le panneau montre, niveau par niveau, les cases forées
-  à cet endroit ; démonter une foreuse améliorée rembourse ses améliorations.
+  à cet endroit. Démontée, une foreuse améliorée revient dans le stock avec son niveau (« Foreuse à charbon
+  niv. 3 » dans la barre de construction) et se repose ailleurs sans perdre son amélioration.
+- Le mode construction (`B`) s'ouvre même sans aucune machine en stock, pour démonter au clic droit.
 - Vente automatique : **caisse d'expédition** à poser en surface. Tout ce qui y arrive est vendu au prix du
   comptoir à chaque passage du transporteur (toutes les 15 s) ; sa capacité est limitée (120 kg), pleine elle
   bloque les convoyeurs. Le HUD affiche le revenu automatique par minute.

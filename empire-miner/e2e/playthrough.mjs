@@ -872,6 +872,31 @@ try {
   await shot('20c-drill-level3');
   await ev(() => window.__EM.renderer.adjustZoom(-2));
 
+  // Démontée (clic droit) puis reposée ailleurs, la foreuse garde son niveau. Le joueur n'a plus
+  // aucun kit en stock : le mode construction s'ouvre quand même pour démonter.
+  await ev(() => {
+    const g = window.__EM.state;
+    g.world.setDeposit(51, 26, 3, 500);
+    g.inventory.kits = {};
+    window.__EM.renderer.snapCamera(); // le zoom vient de changer : la caméra doit être en place
+  });
+  await page.waitForTimeout(300);
+  await page.keyboard.press('KeyB');
+  await page.waitForTimeout(150);
+  check(await ev(() => window.__EM.buildMode), 'sans aucun kit, le mode construction s’ouvre pour démonter');
+  const drillAt = await tileScreen(47, 26);
+  await page.mouse.move(drillAt.x, drillAt.y);
+  await page.mouse.down({ button: 'right' });
+  await page.mouse.up({ button: 'right' });
+  await page.waitForTimeout(150);
+  const kitsLvl = await ev(() => ({ kits: { ...window.__EM.state.inventory.kits }, gone: !window.__EM.state.structures.at(47, 26) }));
+  check(kitsLvl.gone && kitsLvl.kits['drill@3'] === 1, 'la foreuse niveau 3 démontée revient dans le stock avec son niveau');
+  check((await page.textContent('#hud-build')).includes('niv. 3'), 'la barre de construction propose la « Foreuse à charbon niv. 3 »');
+  await placeAt('drill@3', 51, 26, 0);
+  await shot('20d-drill-replaced');
+  await page.keyboard.press('Escape');
+  check((await ev(() => window.__EM.state.structures.at(51, 26)?.level)) === 3, 'reposée ailleurs, elle est toujours au niveau 3');
+
   // Pierres au sol : elles clignotent puis s'effritent ; le minerai posé à côté reste.
   await ev(() => {
     const g = window.__EM.state;

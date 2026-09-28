@@ -192,18 +192,51 @@ describe('achat des améliorations', () => {
     expect(g.upgradeDrill(d)).toBe(false);
   });
 
-  it('démonter une foreuse améliorée rend le kit et rembourse les améliorations', () => {
+  it('démontée puis reposée, une foreuse améliorée garde son niveau', () => {
     const g = new GameState(4);
     const { d } = setup(g);
     upgradeTo(g, d, 3);
     const before = g.money;
     teleport(g, 47, S + 13);
     expect(g.removeAt(X, Y)).toBe(true);
-    expect(g.money).toBe(before + LEVELS[1].price + LEVELS[2].price);
-    expect(g.inventory.kitCount('drill')).toBe(1);
-    // Reposée, c'est une foreuse de base.
-    const again = put(g, 'drill', X, Y, 0) as Drill;
-    expect(again.level).toBe(1);
+    // Pas de remboursement : l'amélioration reste dans le kit.
+    expect(g.money).toBe(before);
+    expect(g.inventory.kitCount('drill')).toBe(0);
+    expect(g.inventory.kitCount('drill@3')).toBe(1);
+    expect(g.inventory.kitTotal('drill')).toBe(1);
+    // Reposée ailleurs, dans une autre direction : toujours niveau 3.
+    g.world.setDeposit(X + 2, Y, resourceIndex('copper'), 1000);
+    teleport(g, 47, S + 13);
+    const again = g.place('drill@3', X + 2, Y, 3) as Drill;
+    expect(again).toBeInstanceOf(Drill);
+    expect(again.level).toBe(3);
+    expect(again.reach().length).toBe(4);
+    expect(g.inventory.kitTotal('drill')).toBe(0);
+  });
+
+  it('les kits de base et améliorés restent séparés', () => {
+    const g = new GameState(4);
+    const { d } = setup(g);
+    upgradeTo(g, d, 2);
+    teleport(g, 47, S + 13);
+    g.removeAt(X, Y);
+    const base = put(g, 'drill', X, Y, 0) as Drill; // une foreuse neuve achetée à l'atelier
+    expect(base.level).toBe(1);
+    expect(g.inventory.kitCount('drill@2')).toBe(1);
+    // Un kit qu'on n'a pas ne se pose pas.
+    expect(g.canPlace('drill@3', X, Y + 1).ok).toBe(false);
+  });
+
+  it('les kits améliorés sont sauvegardés', () => {
+    const g = new GameState(4);
+    const { d } = setup(g);
+    upgradeTo(g, d, 3);
+    teleport(g, 47, S + 13);
+    g.removeAt(X, Y);
+    const h = deserialize(JSON.parse(JSON.stringify(serialize(g))));
+    expect(h.inventory.kitCount('drill@3')).toBe(1);
+    teleport(h, 47, S + 13);
+    expect((h.place('drill@3', X, Y, 0) as Drill).level).toBe(3);
   });
 
   it('le niveau est sauvegardé', () => {

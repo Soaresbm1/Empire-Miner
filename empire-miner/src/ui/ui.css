@@ -110,6 +110,7 @@ kbd {
 .kit { display: flex; flex-direction: column; align-items: center; min-width: 110px; padding: 6px 8px; border: 2px solid var(--line); border-radius: 5px; background: #1c1518; cursor: pointer; font-size: 14px; }
 .kit.sel { border-color: var(--gold); background: #2e2318; }
 .kit span { color: var(--muted); font-size: 12px; }
+.kit.empty { cursor: default; color: var(--muted); }
 .build-help { margin-top: 6px; font-size: 12px; color: var(--muted); }
 
 #save-indicator { position: absolute; right: 16px; bottom: 44px; font-size: 13px; color: var(--good); opacity: 0; text-shadow: 1px 1px 0 #000; }

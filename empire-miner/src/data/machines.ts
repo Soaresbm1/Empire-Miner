@@ -328,6 +328,27 @@ export const MACHINES: MachineDef[] = [
 
 const byId = new Map(MACHINES.map((m) => [m.id, m]));
 
+/**
+ * Identifiant de kit de construction : la machine seule (« drill ») au niveau 1,
+ * ou la machine et son niveau (« drill@3 ») pour une machine améliorée qu'on a
+ * démontée : reposée, elle garde son niveau.
+ */
+export function kitId(machineId: string, level = 1): string {
+  return level > 1 ? `${machineId}@${level}` : machineId;
+}
+
+export function parseKit(kit: string): { machine: string; level: number } {
+  const [machine, lvl] = kit.split('@');
+  return { machine, level: lvl ? Math.max(1, Math.floor(Number(lvl)) || 1) : 1 };
+}
+
+/** Nom affiché d'un kit, avec son niveau s'il est amélioré. */
+export function kitName(kit: string): string {
+  const { machine, level } = parseKit(kit);
+  const def = MACHINES.find((m) => m.id === machine);
+  return `${def?.name ?? machine}${level > 1 ? ` niv. ${level}` : ''}`;
+}
+
 export function getMachine(id: string): MachineDef {
   const m = byId.get(id);
   if (!m) throw new Error(`Machine inconnue : ${id}`);

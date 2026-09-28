@@ -2,6 +2,7 @@
  * Sac du joueur : limité en poids (kg).
  * Les kits de construction (machines achetées) sont rangés à part et ne pèsent rien.
  */
+import { parseKit } from '../data/machines';
 import { getResource } from '../data/resources';
 
 export class Inventory {
@@ -50,8 +51,16 @@ export class Inventory {
     return Object.keys(this.items).length === 0;
   }
 
+  /** Kits en stock pour un identifiant de kit exact (« drill » ou « drill@3 »). */
   kitCount(id: string): number {
     return this.kits[id] ?? 0;
+  }
+
+  /** Kits en stock pour une machine, tous niveaux confondus. */
+  kitTotal(machineId: string): number {
+    let n = 0;
+    for (const [kit, k] of Object.entries(this.kits)) if (parseKit(kit).machine === machineId) n += k;
+    return n;
   }
 
   addKit(id: string, n = 1): void {

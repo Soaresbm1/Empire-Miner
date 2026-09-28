@@ -12,7 +12,7 @@ export interface Objective {
 }
 
 const hasStructure = (g: GameState, type: string) => g.structures.list.some((s) => s.type === type);
-const owns = (g: GameState, type: string) => hasStructure(g, type) || g.inventory.kitCount(type) > 0;
+const owns = (g: GameState, type: string) => hasStructure(g, type) || g.inventory.kitTotal(type) > 0;
 
 export const OBJECTIVES: Objective[] = [
   { id: 'enter', text: 'Entrez dans la mine : le puits au centre du camp', done: (g) => g.stats.maxDepth > 0 },

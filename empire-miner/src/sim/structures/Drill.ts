@@ -91,11 +91,6 @@ export class Drill extends Structure {
     return this.level < this.maxLevel ? this.levelDef(this.level + 1) : null;
   }
 
-  /** Argent investi dans les améliorations (remboursé au démontage). */
-  upgradeValue(): number {
-    return this.levels.slice(1, this.level).reduce((sum, l) => sum + l.price, 0);
-  }
-
   /** Cases couvertes au niveau `level` (par défaut : le niveau actuel). */
   reach(level = this.level): DrillTile[] {
     return reachTiles(this.x, this.y, this.dir, this.levelDef(level).reach);

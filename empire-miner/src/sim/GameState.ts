@@ -10,7 +10,7 @@ import { Dir, dirFromVector } from '../core/dir';
 import { Rng } from '../core/rng';
 import { AIR, getBlock } from '../data/blocks';
 import { zoneForDepth } from '../data/depth';
-import { getMachine, MACHINES } from '../data/machines';
+import { getMachine, kitId, kitName, MACHINES, parseKit } from '../data/machines';
 import { RESOURCES, getResource, hasResource, resourceIndex } from '../data/resources';
 import { BAGS, PICKAXES } from '../data/tools';
 import { DropSystem } from './Drops';
@@ -510,9 +510,11 @@ export class GameState implements StructureContext {
 
   // ---------------------------------------------------------------- construction
 
-  canPlace(machineId: string, tx: number, ty: number): { ok: boolean; reason?: string } {
+  /** `kit` : identifiant de kit (machine seule, ou machine améliorée « drill@3 »). */
+  canPlace(kit: string, tx: number, ty: number): { ok: boolean; reason?: string } {
+    const machineId = parseKit(kit).machine;
     const def = getMachine(machineId);
-    if (this.inventory.kitCount(machineId) <= 0) return { ok: false, reason: `Aucun ${def.name.toLowerCase()} en stock` };
+    if (this.inventory.kitCount(kit) <= 0) return { ok: false, reason: `Aucun ${kitName(kit).toLowerCase()} en stock` };
     if (this.distanceToTile(tx, ty) > BUILD_RANGE) return { ok: false, reason: 'Trop loin' };
     if (def.onTrack) {
       if (!this.structures.at(tx, ty)?.isTrack) return { ok: false, reason: 'Se pose sur des rails' };
@@ -550,14 +552,16 @@ export class GameState implements StructureContext {
   }
 
   /**
-   * Pose une machine. Un convoyeur posé sur un convoyeur d'un autre niveau le remplace :
-   * les objets transportés sont conservés et l'ancien convoyeur revient dans le stock.
+   * Pose une machine depuis un kit. Un convoyeur posé sur un convoyeur d'un autre niveau le remplace :
+   * les objets transportés sont conservés et l'ancien convoyeur revient dans le stock. Une foreuse
+   * améliorée (kit « drill@3 ») est reposée à son niveau.
    */
-  place(machineId: string, tx: number, ty: number, dir: Dir): Structure | Wagon | null {
-    if (!this.canPlace(machineId, tx, ty).ok) return null;
+  place(kit: string, tx: number, ty: number, dir: Dir): Structure | Wagon | null {
+    if (!this.canPlace(kit, tx, ty).ok) return null;
+    const { machine: machineId, level } = parseKit(kit);
     const def = getMachine(machineId);
     if (def.onTrack) {
-      this.inventory.removeKit(machineId);
+      this.inventory.removeKit(kit);
       const w = this.wagons.add(new Wagon(tx, ty, dir));
       this.stats.structuresBuilt++;
       this.emit({ t: 'placed', type: machineId, tx, ty });
@@ -575,8 +579,9 @@ export class GameState implements StructureContext {
       this.structures.remove(replacedRail);
       this.inventory.addKit('rail');
     }
-    this.inventory.removeKit(machineId);
+    this.inventory.removeKit(kit);
     const s = this.structures.add(factory.create(tx, ty, def.rotatable ? dir : 1));
+    if (s instanceof Drill) s.level = Math.min(level, s.maxLevel);
     if (replaced && s instanceof Conveyor) {
       s.items = replaced.items.slice(0, s.capacity);
       for (const extra of replaced.items.slice(s.capacity)) this.drops.spawn(extra.res, 1, (tx + 0.5) * TILE, (ty + 0.5) * TILE);
@@ -609,15 +614,9 @@ export class GameState implements StructureContext {
     if (!s || !s.removable) return false;
     if (this.distanceToTile(tx, ty) > BUILD_RANGE) return false;
     this.structures.remove(s);
-    this.inventory.addKit(s.type);
+    // Une foreuse améliorée revient dans le stock avec son niveau (kit « drill@3 »).
+    this.inventory.addKit(s instanceof Drill ? kitId(s.type, s.level) : s.type);
     for (const [res, n] of Object.entries(s.contents())) this.drops.spawn(res, n, (s.x + 0.5) * TILE, (s.y + 0.5) * TILE);
-    // Le kit rendu est une foreuse de base : les améliorations sont remboursées.
-    const refund = s instanceof Drill ? s.upgradeValue() : 0;
-    if (refund > 0) {
-      this.money += refund;
-      this.stats.spent -= refund;
-      this.emit({ t: 'message', text: `Améliorations de la foreuse remboursées : +${refund} $`, kind: 'good' });
-    }
     this.emit({ t: 'removed', type: s.type, tx, ty });
     return true;
   }

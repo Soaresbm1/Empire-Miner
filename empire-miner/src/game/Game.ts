@@ -7,14 +7,14 @@ import { DX, DY, Dir, opposite, rotateCW } from '../core/dir';
 import { Input } from '../core/Input';
 import { Sfx } from '../audio/Sfx';
 import { getBlock } from '../data/blocks';
-import { MACHINES, getMachine } from '../data/machines';
+import { MACHINES, getMachine, kitName, parseKit } from '../data/machines';
 import { getResource } from '../data/resources';
 import { deserialize, serialize, saveToBrowser, loadFromBrowser, browserSaveInfo, SaveData } from '../save/save';
 import { GameState, NO_INTENT, PlayerIntent } from '../sim/GameState';
 import { Bridge } from '../sim/structures/Bridge';
 import { Building, BUILDING_INFO } from '../sim/structures/Building';
 import { Conveyor } from '../sim/structures/Conveyor';
-import { Drill } from '../sim/structures/Drill';
+import { Drill, reachTiles } from '../sim/structures/Drill';
 import { ShippingCrate } from '../sim/structures/ShippingCrate';
 import { Sorter } from '../sim/structures/Sorter';
 import { Rail, RailStation, RailSwitch, type SwitchSetting } from '../sim/structures/Rail';
@@ -534,16 +534,21 @@ export class Game {
 
   // ------------------------------------------------------------------ construction
 
+  /** Kits en stock, dans l'ordre du magasin ; une machine améliorée suit sa version de base. */
   private availableKits(g: GameState): string[] {
-    return MACHINES.map((m) => m.id).filter((id) => g.inventory.kitCount(id) > 0);
+    const rank = (kit: string) => {
+      const { machine, level } = parseKit(kit);
+      return MACHINES.findIndex((m) => m.id === machine) * 10 + level;
+    };
+    return Object.keys(g.inventory.kits)
+      .filter((kit) => g.inventory.kitCount(kit) > 0 && MACHINES.some((m) => m.id === parseKit(kit).machine))
+      .sort((a, b) => rank(a) - rank(b));
   }
 
   private setBuildMode(on: boolean): void {
-    if (on && this.state && !this.availableKits(this.state).length) {
-      this.ui.toast("Vous n'avez aucune machine. Achetez-en à l'Atelier (surface).", 'warn');
-      this.sfx.error();
-      return;
-    }
+    // Sans kit en stock, le mode construction sert encore à démonter (clic droit) et à tourner.
+    if (on && this.state && !this.availableKits(this.state).length)
+      this.ui.toast("Aucune machine en stock : clic droit pour démonter. Achetez-en à l'Atelier (surface).", 'info');
     this.buildMode = on;
     this.dragLast = null;
   }
@@ -551,13 +556,8 @@ export class Game {
   private updateBuild(g: GameState, mtx: number, mty: number, mouseActive: boolean, overlay: Overlay): void {
     const inp = this.input;
     const kits = this.availableKits(g);
-    if (!kits.length) {
-      this.setBuildMode(false);
-      return;
-    }
     for (let i = 0; i < Math.min(9, kits.length); i++) if (inp.wasPressed(`Digit${i + 1}`)) this.buildIndex = i;
-    this.buildIndex = Math.min(this.buildIndex, kits.length - 1);
-    const machine = kits[this.buildIndex];
+    this.buildIndex = Math.max(0, Math.min(this.buildIndex, kits.length - 1));
     const existing = g.structures.at(mtx, mty);
     for (let k = inp.pressCount('KeyR'); k > 0; k--) {
       if (existing && existing.removable && getMachine(existing.type).rotatable) g.rotateAt(mtx, mty);
@@ -567,6 +567,16 @@ export class Game {
       this.dragLast = null;
       return;
     }
+    if (!kits.length) {
+      // Rien à poser : on peut seulement démonter.
+      if (existing && existing.removable) overlay.removeHint = { tx: mtx, ty: mty };
+      if ((inp.consumeRightPress() || inp.right) && existing && existing.removable) g.removeAt(mtx, mty);
+      inp.consumeLeftPress();
+      this.dragLast = null;
+      return;
+    }
+    const kit = kits[this.buildIndex];
+    const { machine, level } = parseKit(kit);
     const mdef = getMachine(machine);
     // Convoyeurs et rails se tracent en glissant.
     const isBelt = !!mdef.conveyor || !!mdef.dragPlace;
@@ -576,7 +586,9 @@ export class Game {
     const onRail = (!!mdef.onTrack && !!existing?.isTrack) || !!g.railToReplace(machine, mtx, mty);
     if (existing && existing.removable && !upgrade && !onRail) overlay.removeHint = { tx: mtx, ty: mty };
     else {
-      overlay.ghost = { machine, tx: mtx, ty: mty, dir: upgrade ? upgrade.dir : this.buildDir, ok: g.canPlace(machine, mtx, mty).ok };
+      overlay.ghost = { machine, tx: mtx, ty: mty, dir: upgrade ? upgrade.dir : this.buildDir, ok: g.canPlace(kit, mtx, mty).ok };
+      // Foreuse améliorée : cases qu'elle forera ici, dans la direction choisie.
+      if (mdef.levels && level > 1) overlay.ghost.reach = reachTiles(mtx, mty, this.buildDir, mdef.levels[level - 1].reach);
       if (getMachine(machine).bridge) {
         const entry = this.bridgeEntryFor(g, mtx, mty, this.buildDir);
         if (entry) overlay.ghost.link = { tx: entry.x, ty: entry.y };
@@ -588,7 +600,7 @@ export class Game {
 
     // Pose.
     if (inp.consumeLeftPress()) {
-      if (!existing || upgrade || onRail) this.tryPlace(g, machine, mtx, mty, upgrade ? upgrade.dir : this.buildDir);
+      if (!existing || upgrade || onRail) this.tryPlace(g, kit, mtx, mty, upgrade ? upgrade.dir : this.buildDir);
       this.dragLast = isBelt ? { tx: mtx, ty: mty } : null;
     } else if (inp.left && this.dragLast && isBelt && (mtx !== this.dragLast.tx || mty !== this.dragLast.ty)) {
       // Tracé de convoyeurs en glissant : chaque tuile pointe vers la suivante.
@@ -607,7 +619,7 @@ export class Game {
         ty += DY[dir];
         this.buildDir = dir;
         const occupant = g.structures.at(tx, ty);
-        if ((!occupant || g.beltToReplace(machine, tx, ty)) && !this.tryPlace(g, machine, tx, ty, dir, true)) break;
+        if ((!occupant || g.beltToReplace(machine, tx, ty)) && !this.tryPlace(g, kit, tx, ty, dir, true)) break;
       }
       this.dragLast = { tx, ty };
     } else if (!inp.left) this.dragLast = null;
@@ -627,8 +639,8 @@ export class Game {
     return null;
   }
 
-  private tryPlace(g: GameState, machine: string, tx: number, ty: number, dir: Dir, quiet = false): boolean {
-    const check = g.canPlace(machine, tx, ty);
+  private tryPlace(g: GameState, kit: string, tx: number, ty: number, dir: Dir, quiet = false): boolean {
+    const check = g.canPlace(kit, tx, ty);
     if (!check.ok) {
       if (!quiet) {
         this.ui.toast(check.reason ?? 'Impossible ici', 'warn');
@@ -636,8 +648,8 @@ export class Game {
       }
       return false;
     }
-    g.place(machine, tx, ty, dir);
-    if (!this.availableKits(g).includes(machine)) this.buildIndex = 0;
+    g.place(kit, tx, ty, dir);
+    if (!this.availableKits(g).includes(kit)) this.buildIndex = 0;
     return true;
   }
 
@@ -645,12 +657,14 @@ export class Game {
     if (!this.buildMode) return '';
     const kits = this.availableKits(g);
     const arrows = ['→', '↓', '←', '↑'];
-    const items = kits
-      .map((id, i) => {
-        const m = getMachine(id);
-        return `<div class="kit ${i === this.buildIndex ? 'sel' : ''}" data-action="selectKit" data-arg="${i}"><kbd>${i + 1}</kbd><b>${m.name}</b><span>×${g.inventory.kitCount(id)}</span></div>`;
-      })
-      .join('');
+    const items = kits.length
+      ? kits
+          .map(
+            (id, i) =>
+              `<div class="kit ${i === this.buildIndex ? 'sel' : ''}" data-action="selectKit" data-arg="${i}"><kbd>${i + 1}</kbd><b>${kitName(id)}</b><span>×${g.inventory.kitCount(id)}</span></div>`,
+          )
+          .join('')
+      : '<div class="kit empty">Aucune machine en stock : clic droit pour démonter, achats à l\'Atelier</div>';
     const l = (c: string) => this.input.label(c);
     return `<div class="buildbar hud-box"><div class="build-title">Construction · direction ${arrows[this.buildDir]}</div><div class="kits-row">${items}</div>
       <div class="build-help"><kbd>Clic</kbd> poser (glisser = ligne) · <kbd>Clic droit</kbd> démonter · <kbd>${l('KeyR')}</kbd> tourner · <kbd>${l('KeyB')}</kbd>/<kbd>Échap</kbd> quitter</div></div>`;

@@ -3,7 +3,7 @@
  * Chaque bouton porte un `data-action` traité par Game.
  */
 import { DIR_ARROWS, DX, DY } from '../core/dir';
-import { MACHINES, MachineDef, conveyorThroughput } from '../data/machines';
+import { MACHINES, MachineDef, conveyorThroughput, kitName, parseKit } from '../data/machines';
 import { RESOURCES, getResource } from '../data/resources';
 import { BAGS, PICKAXES } from '../data/tools';
 import type { GameState } from '../sim/GameState';
@@ -141,6 +141,11 @@ const SHOP_GROUPS: { title: string; categories: MachineDef['category'][] }[] = [
 function machineRow(g: GameState, m: MachineDef, icon: (id: string) => string): string {
   const unlocked = g.isUnlocked(m.id);
   const owned = g.inventory.kitCount(m.id);
+  // Machines améliorées démontées, rangées avec leur niveau.
+  const upgraded = Object.entries(g.inventory.kits)
+    .filter(([kit, n]) => n > 0 && parseKit(kit).machine === m.id && parseKit(kit).level > 1)
+    .map(([kit, n]) => `<b>${n}</b> niv. ${parseKit(kit).level}`)
+    .join(', ');
   const placed = g.structures.list.filter((s) => s.type === m.id).length;
   // Les ponts se vendent par paire (une entrée + une sortie).
   const qtys = m.conveyor ? [1, 10] : m.bridge ? [2] : m.dragPlace ? [10, 50] : [1];
@@ -163,7 +168,9 @@ function machineRow(g: GameState, m: MachineDef, icon: (id: string) => string): 
       <div class="specs">${specs}</div>
     </div>
     <div class="shop-side">
-      <div class="stock">${owned ? `<b>${owned}</b> en stock` : 'Aucun en stock'}${placed ? ` · <b>${placed}</b> posé${placed > 1 ? 's' : ''}` : ''}</div>
+      <div class="stock">${owned ? `<b>${owned}</b> en stock` : 'Aucun en stock'}${upgraded ? ` (+ ${upgraded})` : ''}${
+        placed ? ` · <b>${placed}</b> posé${placed > 1 ? 's' : ''}` : ''
+      }</div>
       ${side}
     </div>
   </div>`;
@@ -200,7 +207,7 @@ export function inventoryPanel(g: GameState): string {
       <td>${n > 0 ? btn('drop', 'Jeter', { arg: r.id, cls: 'small' }) : ''}</td></tr>`;
   }).join('');
   const kits = Object.entries(inv.kits)
-    .map(([id, n]) => `<li><b>${MACHINES.find((m) => m.id === id)?.name ?? id}</b> ×${n}</li>`)
+    .map(([id, n]) => `<li><b>${kitName(id)}</b> ×${n}</li>`)
     .join('');
   const st = g.stats;
   return `
@@ -401,7 +408,7 @@ function drillLevels(g: GameState, d: Drill): string {
     : 'Niveau maximal : elle fore sous elle, à gauche, à droite et derrière';
   return `<h4>Amélioration — niveau ${d.level} / ${d.maxLevel}</h4>
     <div class="drill-levels">${cols}</div>
-    <p class="hint">${tip} · démonter rembourse les améliorations.</p>`;
+    <p class="hint">${tip} · démontée, elle garde son niveau.</p>`;
 }
 
 export function drillPanel(g: GameState, d: Drill): string {

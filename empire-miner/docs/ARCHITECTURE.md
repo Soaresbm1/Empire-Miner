@@ -73,7 +73,10 @@ Foreuse et niveaux : `MachineDef.levels` décrit les améliorations d'une machin
 cases couvertes). Pour la foreuse, `reach` liste les cases forées relativement à sa flèche (`under`, `left`,
 `right`, `back`) ; `Drill.sources()` garde celles qui ont un gisement et ne sont pas sous une autre foreuse, et
 la foreuse avance à la cadence de base multipliée par ce nombre de têtes, en forant les cases à tour de rôle.
-Le niveau est sauvegardé avec la structure ; `GameState.upgradeDrill` le fait payer et `removeAt` le rembourse.
+Le niveau est sauvegardé avec la structure ; `GameState.upgradeDrill` le fait payer. Démontée, la foreuse
+revient dans le stock sous un identifiant de kit qui garde son niveau (`kitId('drill', 3)` = `drill@3`, voir
+`parseKit` / `kitName` dans `data/machines.ts`) : `canPlace` et `place` prennent un identifiant de kit et
+reposent la machine à ce niveau. Les kits sont sauvegardés tels quels.
 
 Chaque tuile de convoyeur a une capacité (objets) et un espacement minimal : si la sortie n'absorbe pas assez
 vite, les objets s'accumulent et le convoyeur sature. Les convoyeurs sont mis à jour de l'aval vers l'amont

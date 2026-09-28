@@ -40,7 +40,16 @@ export interface Overlay {
   /** Tuile visée par la pioche. */
   target: { tx: number; ty: number; ok: boolean } | null;
   /** Aperçu de construction. */
-  ghost: { machine: string; tx: number; ty: number; dir: Dir; ok: boolean; link?: { tx: number; ty: number } } | null;
+  ghost: {
+    machine: string;
+    tx: number;
+    ty: number;
+    dir: Dir;
+    ok: boolean;
+    link?: { tx: number; ty: number };
+    /** Foreuse améliorée : cases qu'elle forera une fois posée. */
+    reach?: { x: number; y: number }[];
+  } | null;
   /** Structure sous le curseur en mode construction (démontage). */
   removeHint: { tx: number; ty: number } | null;
   /** Structure avec laquelle le joueur peut interagir. */
@@ -767,20 +776,24 @@ export class Renderer {
 
   /** Cases forées par une foreuse : coins verts si elles ont un gisement, gris sinon. */
   private drawReach(d: Drill): void {
-    const ctx = this.ctx;
     const state = this.state;
-    if (!state) return;
+    if (state) this.drawReachTiles(d.reach(), (t) => d.canDrill(t, state));
+  }
+
+  /** Coins autour de chaque case ; `live` dit si la case a quelque chose à forer. */
+  private drawReachTiles<T extends { x: number; y: number }>(tiles: T[], live: (t: T) => boolean): void {
+    const ctx = this.ctx;
     const pulse = 0.6 + Math.sin(this.time * 5) * 0.25;
     const L = 4;
-    for (const t of d.reach()) {
-      const live = d.canDrill(t, state);
+    for (const t of tiles) {
+      const on = live(t);
       const x = t.x * TILE;
       const y = t.y * TILE;
-      if (live) {
+      if (on) {
         ctx.fillStyle = 'rgba(125,255,160,0.1)';
         ctx.fillRect(x + 1, y + 1, TILE - 2, TILE - 2);
       }
-      ctx.fillStyle = live ? `rgba(125,255,160,${pulse})` : `rgba(168,149,124,${pulse * 0.8})`;
+      ctx.fillStyle = on ? `rgba(125,255,160,${pulse})` : `rgba(168,149,124,${pulse * 0.8})`;
       for (const [cx, cy, sx, sy] of [
         [x, y, 1, 1],
         [x + TILE - 1, y, -1, 1],
@@ -1074,6 +1087,9 @@ export class Renderer {
       ctx.lineWidth = 1;
       ctx.strokeRect(x + 0.5, y + 0.5, def.w * TILE - 1, def.h * TILE - 1);
       if (def.rotatable) this.drawArrow(x + 8, y + 8, o.ghost.dir, o.ghost.ok ? '#7dffa0' : '#ff6b5b');
+      const state = this.state;
+      if (o.ghost.reach && state)
+        this.drawReachTiles(o.ghost.reach, (t) => !!state.world.depositAt(t.x, t.y) && !(state.structures.at(t.x, t.y) instanceof Drill));
       if (o.ghost.link) {
         // Pointillés vers le pont d'entrée auquel celui-ci se reliera.
         const lx = (o.ghost.link.tx + 0.5) * TILE;
