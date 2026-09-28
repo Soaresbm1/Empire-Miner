@@ -75,6 +75,8 @@ export interface MachineDef {
   onTrack?: boolean;
   /** Quai : remplit ('load') ou vide ('unload') les wagonnets. */
   station?: 'load' | 'unload';
+  /** Aiguillage : se pose sur un embranchement (remplace un rail simple). */
+  railSwitch?: boolean;
 }
 
 export const MACHINES: MachineDef[] = [
@@ -184,6 +186,22 @@ export const MACHINES: MachineDef[] = [
     stats: { speed: 0, power: 0, capacity: 0, efficiency: 1, level: 1 },
     track: true,
     dragPlace: true,
+  },
+  {
+    id: 'rail_switch',
+    name: 'Aiguillage',
+    summary: 'Choisit la branche que prennent les wagonnets à un embranchement.',
+    category: 'rail',
+    description:
+      "Se pose sur un embranchement (il remplace le rail qui s'y trouve). Les wagonnets qui arrivent par la pointe (flèche, tournée avec R) prennent la branche choisie avec E : tout droit, à gauche, à droite ou en alternance. Ceux qui reviennent par une branche repartent vers la pointe.",
+    price: 20,
+    w: 1,
+    h: 1,
+    solid: false,
+    rotatable: true,
+    stats: { speed: 0, power: 0, capacity: 0, efficiency: 1, level: 1 },
+    track: true,
+    railSwitch: true,
   },
   {
     id: 'wagon',

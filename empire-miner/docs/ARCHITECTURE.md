@@ -79,7 +79,9 @@ Les rails et les quais sont des structures fixes (`isTrack`). Les wagonnets, eux
 `WagonSystem` (comme les minerais au sol) et sont sauvegardés à part. À chaque case, un wagonnet continue tout
 droit si la voie le permet, sinon prend le virage ; au bout de la ligne il fait demi-tour. Sur un quai il
 s'arrête et transfère (chargement ou déchargement) à cadence fixe. Un quai de chargement est `feedable` : les
-coffres et foreuses collés l'alimentent comme un convoyeur.
+coffres et foreuses collés l'alimentent comme un convoyeur. Sur un aiguillage (`RailSwitch`), la direction de
+sortie vient de `route()` : branche choisie pour un wagonnet venu de la pointe, pointe pour un wagonnet venu
+d'une branche.
 
 ## Étendre le jeu
 

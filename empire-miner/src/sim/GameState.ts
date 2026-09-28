@@ -21,7 +21,7 @@ import { Player } from './Player';
 import { StructureManager } from './StructureManager';
 import { Building, BuildingType } from './structures/Building';
 import { Conveyor } from './structures/Conveyor';
-import type { RailStation } from './structures/Rail';
+import { Rail, type RailStation, type RailSwitch, type SwitchSetting } from './structures/Rail';
 import { Drill } from './structures/Drill';
 import { ShippingCrate } from './structures/ShippingCrate';
 import type { Sorter } from './structures/Sorter';
@@ -422,7 +422,7 @@ export class GameState implements StructureContext {
         if (s) seen.add(s);
       }
     for (const s of seen) {
-      if (s.isBelt && !s.configurable) continue;
+      if ((s.isBelt && !s.configurable) || s.inert) continue;
       const x0 = s.x * TILE;
       const y0 = s.y * TILE;
       const x1 = (s.x + s.w) * TILE;
@@ -519,7 +519,7 @@ export class GameState implements StructureContext {
       if (this.wagons.at(tx, ty)) return { ok: false, reason: 'Il y a déjà un wagonnet ici' };
       return { ok: true };
     }
-    if (this.beltToReplace(machineId, tx, ty)) return { ok: true };
+    if (this.beltToReplace(machineId, tx, ty) || this.railToReplace(machineId, tx, ty)) return { ok: true };
     for (let y = ty; y < ty + def.h; y++)
       for (let x = tx; x < tx + def.w; x++) {
         if (!this.world.isOpen(x, y)) return { ok: false, reason: 'Il faut un sol dégagé' };
@@ -535,6 +535,12 @@ export class GameState implements StructureContext {
       if (overlap) return { ok: false, reason: 'Vous êtes dans le passage' };
     }
     return { ok: true };
+  }
+
+  /** Rail simple qu'un aiguillage posé en (tx, ty) remplacerait, sinon null. */
+  railToReplace(machineId: string, tx: number, ty: number): Rail | null {
+    const existing = this.structures.at(tx, ty);
+    return getMachine(machineId).railSwitch && existing instanceof Rail ? existing : null;
   }
 
   /** Convoyeur d'un autre niveau que `machineId` pourrait remplacer en (tx, ty), sinon null. */
@@ -563,6 +569,11 @@ export class GameState implements StructureContext {
     if (replaced) {
       this.structures.remove(replaced);
       this.inventory.addKit(replaced.type);
+    }
+    const replacedRail = this.railToReplace(machineId, tx, ty);
+    if (replacedRail) {
+      this.structures.remove(replacedRail);
+      this.inventory.addKit('rail');
     }
     this.inventory.removeKit(machineId);
     const s = this.structures.add(factory.create(tx, ty, def.rotatable ? dir : 1));
@@ -670,6 +681,15 @@ export class GameState implements StructureContext {
     this.player.x = w.px();
     this.player.y = w.py() + 1;
     this.player.moving = false;
+  }
+
+  // ---------------------------------------------------------------- aiguillages
+
+  /** Règle la branche prise par les wagonnets venant de la pointe. */
+  setSwitch(sw: RailSwitch, setting: SwitchSetting): boolean {
+    if (!['straight', 'left', 'right', 'alt'].includes(setting)) return false;
+    sw.setting = setting;
+    return true;
   }
 
   // ---------------------------------------------------------------- quais

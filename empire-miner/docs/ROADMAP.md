@@ -17,7 +17,8 @@ profondeur et roches plus dures, sauvegarde/chargement, première automatisation
 
 ## v0.3 — Transport et profondeur
 - ✅ Wagonnets et rails : quais de chargement / déchargement, navette automatique, voyage à bord.
-- Aiguillages et plusieurs wagonnets par ligne avec signaux ; ascenseur de puits.
+- ✅ Aiguillages (branche fixe ou alternance).
+- Plusieurs wagonnets par ligne avec signaux ; ascenseur de puits.
 - Éclairage posable (lampes), obscurité plus contraignante en profondeur.
 - Marteau-piqueur, foreuse de percement (creuse des tunnels automatiquement).
 

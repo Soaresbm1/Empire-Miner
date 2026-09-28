@@ -3,7 +3,7 @@
  * voisins (lignes droites, virages). Les quais font partie de la voie : un wagonnet
  * s'y arrête pour être rempli (quai de chargement) ou vidé (quai de déchargement).
  */
-import { DX, DY, type Dir } from '../../core/dir';
+import { DX, DY, opposite, type Dir } from '../../core/dir';
 import { getMachine, MachineDef } from '../../data/machines';
 import { getResource } from '../../data/resources';
 import { Structure, StructureContext, StructureSave } from './Structure';
@@ -11,6 +11,7 @@ import { Structure, StructureContext, StructureSave } from './Structure';
 export class Rail extends Structure {
   readonly type = 'rail';
   readonly isTrack = true;
+  readonly inert = true;
 
   constructor(x: number, y: number) {
     super(x, y, 1);
@@ -111,5 +112,69 @@ export class RailStation extends Structure {
     const st = new RailStation(s.x, s.y, s.type as 'rail_load' | 'rail_unload');
     st.items = { ...((s.items as Record<string, number>) ?? {}) };
     return st;
+  }
+}
+
+/** Branche choisie par un aiguillage, relative à sa pointe. */
+export type SwitchSetting = 'straight' | 'left' | 'right' | 'alt';
+
+/**
+ * Aiguillage. `dir` est le sens de marche des wagonnets qui arrivent par la pointe
+ * (le côté opposé à `dir` est la pointe). Ils prennent la branche choisie ; ceux qui
+ * arrivent par une branche repartent vers la pointe.
+ */
+export class RailSwitch extends Structure {
+  readonly type = 'rail_switch';
+  readonly isTrack = true;
+  setting: SwitchSetting = 'straight';
+  /** Passages depuis la pointe (et prochaine branche en mode alterné). */
+  passes = 0;
+
+  constructor(x: number, y: number, dir: Dir) {
+    super(x, y, dir);
+    this.solid = false;
+  }
+
+  /** Côté (direction absolue) correspondant à une branche. */
+  side(branch: Exclude<SwitchSetting, 'alt'>): Dir {
+    if (branch === 'straight') return this.dir;
+    return (branch === 'right' ? (this.dir + 1) % 4 : (this.dir + 3) % 4) as Dir;
+  }
+
+  /** Branches raccordées à la voie, dans l'ordre tout droit, droite, gauche. */
+  branches(connected: (side: Dir) => boolean): Exclude<SwitchSetting, 'alt'>[] {
+    return (['straight', 'right', 'left'] as const).filter((b) => connected(this.side(b)));
+  }
+
+  /** Branche qu'emprunterait le prochain wagonnet venant de la pointe. */
+  nextBranch(connected: (side: Dir) => boolean): Exclude<SwitchSetting, 'alt'> | null {
+    const list = this.branches(connected);
+    if (!list.length) return null;
+    if (this.setting === 'alt') return list[this.passes % list.length];
+    return list.includes(this.setting) ? this.setting : list[0];
+  }
+
+  /** Direction de sortie d'un wagonnet qui entre en roulant vers `travel` ; null = règle par défaut. */
+  route(travel: Dir, connected: (side: Dir) => boolean): Dir | null {
+    if (travel === this.dir) {
+      const b = this.nextBranch(connected);
+      if (b === null) return null;
+      this.passes++;
+      return this.side(b);
+    }
+    const tip = opposite(this.dir);
+    return connected(tip) && tip !== opposite(travel) ? tip : null;
+  }
+
+  serialize(): StructureSave {
+    return { ...super.serialize(), setting: this.setting, passes: this.passes };
+  }
+
+  static load(s: StructureSave): RailSwitch {
+    const sw = new RailSwitch(s.x, s.y, s.dir);
+    const set = s.setting as SwitchSetting;
+    sw.setting = ['straight', 'left', 'right', 'alt'].includes(set) ? set : 'straight';
+    sw.passes = Number(s.passes ?? 0);
+    return sw;
   }
 }

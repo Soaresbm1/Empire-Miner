@@ -10,7 +10,7 @@ import { TILE } from '../core/constants';
 import { DX, DY, opposite, type Dir } from '../core/dir';
 import { getMachine } from '../data/machines';
 import { getResource } from '../data/resources';
-import { RailStation } from './structures/Rail';
+import { RailStation, RailSwitch } from './structures/Rail';
 import type { Structure } from './structures/Structure';
 
 export interface WagonContext {
@@ -212,9 +212,17 @@ export class Wagon {
     return false;
   }
 
-  /** Tout droit si possible, sinon le virage (droite puis gauche) ; null au bout de la ligne. */
+  /**
+   * Sur un aiguillage : la branche choisie. Sinon tout droit si possible, puis le virage
+   * (droite puis gauche) ; null au bout de la ligne.
+   */
   private nextDir(ctx: WagonContext): Dir | null {
     const isTrack = (d: Dir) => !!ctx.structureAt(this.x + DX[d], this.y + DY[d])?.isTrack;
+    const here = ctx.structureAt(this.x, this.y);
+    if (here instanceof RailSwitch) {
+      const d = here.route(this.dir, isTrack);
+      if (d !== null) return d;
+    }
     const right = ((this.dir + 1) % 4) as Dir;
     const left = ((this.dir + 3) % 4) as Dir;
     for (const d of [this.dir, right, left]) if (isTrack(d)) return d;

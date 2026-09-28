@@ -17,7 +17,7 @@ import { Conveyor } from '../sim/structures/Conveyor';
 import { Drill } from '../sim/structures/Drill';
 import { ShippingCrate } from '../sim/structures/ShippingCrate';
 import { Sorter } from '../sim/structures/Sorter';
-import { Rail, RailStation } from '../sim/structures/Rail';
+import { Rail, RailStation, RailSwitch, type SwitchSetting } from '../sim/structures/Rail';
 import { Splitter } from '../sim/structures/Splitter';
 import { Storage } from '../sim/structures/Storage';
 import { Renderer, Overlay } from '../render/Renderer';
@@ -301,6 +301,12 @@ export class Game {
       case 'stationTakeAll':
         if (target instanceof RailStation) g.stationTakeAll(target);
         break;
+      case 'switchSet':
+        if (target instanceof RailSwitch) g.setSwitch(target, arg as SwitchSetting);
+        break;
+      case 'switchRotate':
+        if (target) g.rotateAt(target.x, target.y);
+        break;
       case 'sorterFilter':
         if (target instanceof Sorter) g.setSorterFilter(target, arg || null);
         break;
@@ -480,6 +486,7 @@ export class Game {
     else if (s instanceof Drill) this.ui.openPanel('drill', s);
     else if (s instanceof Sorter) this.ui.openPanel('sorter', s);
     else if (s instanceof RailStation) this.ui.openPanel('station', s);
+    else if (s instanceof RailSwitch) this.ui.openPanel('switch', s);
   }
 
   /** Invite d'action : structure proche (E) et wagonnet (F). */
@@ -501,6 +508,7 @@ export class Game {
     if (near instanceof Drill) return `${e} Foreuse — charbon et production`;
     if (near instanceof Sorter) return `${e} Trieur — choisir le minerai trié`;
     if (near instanceof RailStation) return `${e} ${near.def.name}`;
+    if (near instanceof RailSwitch) return `${e} Aiguillage — choisir la branche`;
     return '';
   }
 
@@ -557,8 +565,8 @@ export class Game {
     const isBelt = !!mdef.conveyor || !!mdef.dragPlace;
     // Un convoyeur d'un autre niveau sous le curseur peut être remplacé (amélioration sur place).
     const upgrade = g.beltToReplace(machine, mtx, mty);
-    // Un wagonnet se pose sur la voie.
-    const onRail = !!mdef.onTrack && !!existing?.isTrack;
+    // Un wagonnet se pose sur la voie ; un aiguillage peut remplacer un rail simple.
+    const onRail = (!!mdef.onTrack && !!existing?.isTrack) || !!g.railToReplace(machine, mtx, mty);
     if (existing && existing.removable && !upgrade && !onRail) overlay.removeHint = { tx: mtx, ty: mty };
     else {
       overlay.ghost = { machine, tx: mtx, ty: mty, dir: upgrade ? upgrade.dir : this.buildDir, ok: g.canPlace(machine, mtx, mty).ok };
@@ -655,6 +663,14 @@ export class Game {
     if (s instanceof RailStation)
       return `<b>${s.def.name}</b><br>${kg(s.weight())} / ${kg(s.capacity)} en attente<br><span class="muted">[${this.input.label('KeyE')}] ouvrir</span>`;
     if (s instanceof Rail) return `<b>Rails</b><br><span class="muted">Posez-y un wagonnet ; il fait l'aller-retour jusqu'aux bouts de la ligne.</span>`;
+    if (s instanceof RailSwitch) {
+      const connected = (d: Dir) => !!g.structures.at(s.x + DX[d], s.y + DY[d])?.isTrack;
+      const next = s.nextBranch(connected);
+      const names = { straight: 'tout droit', left: 'à gauche', right: 'à droite' };
+      return `<b>Aiguillage</b> — pointe ${['→', '↓', '←', '↑'][(s.dir + 2) % 4]}<br>${
+        s.setting === 'alt' ? 'En alternance · ' : ''
+      }prochain wagonnet : ${next ? names[next] : '—'}<br><span class="muted">[${this.input.label('KeyE')}] régler · [${this.input.label('KeyR')}] tourner en construction</span>`;
+    }
     if (s instanceof Conveyor) {
       const load = s.items.length;
       return `<b>${s.def.name}</b> ${['→', '↓', '←', '↑'][s.dir]}<br>${load}/${s.capacity} objets · ${s.speed.toLocaleString('fr-FR')} tuile/s${

@@ -9,7 +9,7 @@ import { getMachine } from '../data/machines';
 import { getResource } from '../data/resources';
 import type { GameState } from '../sim/GameState';
 import { Bridge } from '../sim/structures/Bridge';
-import { Rail, RailStation } from '../sim/structures/Rail';
+import { Rail, RailStation, RailSwitch } from '../sim/structures/Rail';
 import { Wagon } from '../sim/Wagons';
 import { Building } from '../sim/structures/Building';
 import { Conveyor } from '../sim/structures/Conveyor';
@@ -417,6 +417,7 @@ export class Renderer {
       ctx.fillRect(-2, 4, 10, 1);
       ctx.restore();
     }
+    if (s instanceof RailSwitch) this.drawSwitchMarks(s, mask);
     if (s instanceof RailStation) {
       // Pastille : flèche montante (charge) ou descendante (décharge) et jauge du tampon.
       const color = s.mode === 'load' ? '#6fcf6a' : '#f0a33a';
@@ -440,6 +441,31 @@ export class Renderer {
         ctx.fillRect(x + 1, y + 13, Math.max(1, Math.round(14 * Math.min(1, fill))), 2);
       }
     }
+  }
+
+  /** Aiguillage : repère sur la pointe, levier et flèche vers la branche que prendra le prochain wagonnet. */
+  private drawSwitchMarks(s: RailSwitch, mask: number): void {
+    const ctx = this.ctx;
+    const cx = s.x * TILE + 8;
+    const cy = s.y * TILE + 8;
+    const connected = (d: Dir) => !!(mask & (1 << d));
+    // Pointe : petit triangle blanc côté arrivée.
+    const tip = ((s.dir + 2) % 4) as Dir;
+    ctx.fillStyle = '#f2e6c8';
+    ctx.save();
+    ctx.translate(cx + DX[tip] * 6, cy + DY[tip] * 6);
+    ctx.rotate((s.dir * Math.PI) / 2);
+    ctx.fillRect(-1, -2, 1, 5);
+    ctx.fillRect(0, -1, 1, 3);
+    ctx.fillRect(1, 0, 1, 1);
+    ctx.restore();
+    // Levier (boîtier) et flèche vers la branche active.
+    const next = s.nextBranch(connected);
+    ctx.fillStyle = '#1a1418';
+    ctx.fillRect(cx - 3, cy - 3, 6, 6);
+    ctx.fillStyle = s.setting === 'alt' ? (Math.floor(this.time * 2) % 2 ? '#f0a33a' : '#f2c230') : '#f2c230';
+    ctx.fillRect(cx - 2, cy - 2, 4, 4);
+    if (next) this.drawArrow(cx + DX[s.side(next)] * 5, cy + DY[s.side(next)] * 5, s.side(next), '#f2c230');
   }
 
   /** Wagonnet : caisse d'acier sur roues, avec un tas de minerai proportionnel au chargement. */
@@ -1061,6 +1087,7 @@ export class Renderer {
       else if (s instanceof Conveyor) this.drawConveyor(s);
       else if (s instanceof Splitter) this.drawSplitter(s);
       else if (s instanceof Bridge) this.drawBridgeFoot(s);
+      else if (s instanceof RailSwitch) this.drawTrack(s, (1 << 0) | (1 << 1) | (1 << 2));
       else if (s instanceof Rail || s instanceof RailStation) this.drawTrack(s, (1 << 0) | (1 << 2));
       else this.drawStructure(s);
     } finally {

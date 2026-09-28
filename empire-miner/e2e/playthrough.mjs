@@ -742,6 +742,62 @@ try {
     return { riding: !!g.riding, free: !g.isBlocked(p.x - p.halfW, p.y - p.halfH, p.x + p.halfW - 0.001, p.y + p.halfH - 0.001) };
   });
   check(!off.riding && off.free, 'le joueur descend sur une case libre (F)');
+
+  // Aiguillage en alternance : une ligne, deux quais de déchargement.
+  await ev(() => (window.__EM.state.money += 400));
+  await teleport(58, 8);
+  await page.waitForTimeout(300);
+  await pressE();
+  await page.click('.tab[data-arg="machines"]');
+  await page.waitForTimeout(150);
+  for (const arg of ['rail:10', 'rail_switch:1', 'rail_load:1', 'rail_unload:1', 'rail_unload:1', 'wagon:1', 'storage:1', 'storage:1']) {
+    await page.click(`[data-action="buyKit"][data-arg="${arg}"]`);
+  }
+  await page.waitForTimeout(100);
+  await page.keyboard.press('Escape');
+  await teleport(60, 7);
+  await page.waitForTimeout(400);
+  await page.keyboard.press('KeyB');
+  await page.waitForTimeout(100);
+  await placeAt('rail_load', 56, 3);
+  const rIdx = await ev(() => window.__EM.availableKits(window.__EM.state).indexOf('rail'));
+  await page.keyboard.press(`Digit${rIdx + 1}`);
+  await drag([[57, 3], [58, 3], [59, 3]]);
+  await placeAt('rail_switch', 60, 3, 0);
+  await page.keyboard.press(`Digit${(await ev(() => window.__EM.availableKits(window.__EM.state).indexOf('rail'))) + 1}`);
+  await drag([[61, 3], [62, 3]]);
+  await placeAt('rail_unload', 63, 3);
+  await placeAt('storage', 64, 3);
+  await placeAt('rail', 60, 4);
+  await placeAt('rail_unload', 60, 5);
+  await placeAt('storage', 61, 5);
+  await placeAt('wagon', 58, 3, 2);
+  await page.keyboard.press('Escape');
+  const sw = await ev(() => {
+    const g = window.__EM.state;
+    return { type: g.structures.at(60, 3)?.type, dir: g.structures.at(60, 3)?.dir, a: g.structures.at(63, 3)?.type, b: g.structures.at(60, 5)?.type };
+  });
+  check(sw.type === 'rail_switch' && sw.dir === 0 && sw.a === 'rail_unload' && sw.b === 'rail_unload', 'aiguillage et deux quais posés à la souris');
+  await teleport(60, 3); // debout sur l'aiguillage
+  await page.waitForTimeout(300);
+  await pressE();
+  check(await page.isVisible('.panel-switch'), 'le panneau de l’aiguillage s’ouvre avec E');
+  await page.click('[data-action="switchSet"][data-arg="alt"]');
+  await page.waitForTimeout(150);
+  await shot('19-switch-panel');
+  await page.keyboard.press('Escape');
+  await teleport(60, 7);
+  await ev(() => window.__EM.state.structures.at(56, 3).put('coal', 10));
+  await page.waitForTimeout(3200);
+  await shot('19a-switch');
+  await page.waitForTimeout(4000);
+  await ev(() => window.__EM.state.structures.at(56, 3).put('iron', 10));
+  await page.waitForTimeout(9000);
+  const split = await ev(() => {
+    const g = window.__EM.state;
+    return { A: { ...g.structures.at(64, 3).items }, B: { ...g.structures.at(61, 5).items } };
+  });
+  check(JSON.stringify(split.A) === '{"coal":10}' && JSON.stringify(split.B) === '{"iron":10}', `l'aiguillage alterne entre les deux quais (${JSON.stringify(split)})`);
 } catch (e) {
   failures++;
   console.error(e);

@@ -48,6 +48,8 @@ export abstract class Structure {
   readonly isTrack: boolean = false;
   /** Peut être alimentée par un coffre ou une foreuse collés, comme un convoyeur (ex. quai de chargement). */
   feedable = false;
+  /** Rien à régler ni à ouvrir avec E (ex. rail simple). */
+  readonly inert: boolean = false;
 
   /** Côté par lequel commencer la prochaine sortie (répartition équitable entre convoyeurs). */
   private outCursor = 0;

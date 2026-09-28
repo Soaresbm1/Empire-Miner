@@ -10,7 +10,7 @@ import type { GameState } from '../sim/GameState';
 import type { Drill } from '../sim/structures/Drill';
 import type { ShippingCrate } from '../sim/structures/ShippingCrate';
 import type { Sorter } from '../sim/structures/Sorter';
-import type { RailStation } from '../sim/structures/Rail';
+import type { RailStation, RailSwitch, SwitchSetting } from '../sim/structures/Rail';
 import type { Storage } from '../sim/structures/Storage';
 import { esc, kg, money, num, rarityTag, resIcon } from './format';
 
@@ -122,6 +122,7 @@ function machineSpecs(m: MachineDef): [string, string][] {
   if (m.id === 'rail') return [['Pose', 'en glissant'], ['Virages', 'automatiques']];
   if (m.onTrack) return [['Vitesse', `${num(s.speed)} cases/s`], ['Capacité', kg(s.capacity)], ['Passager', 'touche F']];
   if (m.station) return [['Tampon', kg(s.capacity)], ['Transfert', `${num(s.speed)} /s`]];
+  if (m.railSwitch) return [['Branches', 'tout droit, gauche, droite'], ['Mode', 'fixe ou alterné']];
   const out: [string, string][] = [];
   if (s.speed) out.push(['Cadence', `${num(s.speed * 60, 0)} /min`]);
   if (m.fuel) out.push(['Charbon', `1 unité / ${m.fuel.secondsPerUnit} s`], ['Réservoir', `${m.fuel.maxUnits} unités`]);
@@ -267,6 +268,30 @@ export function stationPanel(g: GameState, st: RailStation): string {
         ? 'Le wagonnet repart quand il est plein, ou 2 s après la fin du chargement.'
         : "Collez un convoyeur, un coffre ou une caisse d'expédition au quai pour qu'il se vide tout seul."
     } Montez dans un wagonnet avec <kbd>F</kbd>.</p>`;
+}
+
+// ------------------------------------------------------------------ aiguillage
+
+export function switchPanel(g: GameState, sw: RailSwitch): string {
+  const connected = (d: number) => !!g.structures.at(sw.x + [1, 0, -1, 0][d], sw.y + [0, 1, 0, -1][d])?.isTrack;
+  const arrows = ['→', '↓', '←', '↑'];
+  const labels: Record<Exclude<SwitchSetting, 'alt'>, string> = { straight: 'Tout droit', left: 'À gauche', right: 'À droite' };
+  const branches = sw.branches(connected);
+  const next = sw.nextBranch(connected);
+  const choice = (id: SwitchSetting, label: string) => btn('switchSet', label, { arg: id, cls: `small ${sw.setting === id ? 'on' : 'off'}` });
+  const tip = arrows[(sw.dir + 2) % 4];
+  return `
+    <div class="status good">● ${
+      next ? `Le prochain wagonnet venant de la pointe (${tip}) partira <b>${labels[next].toLowerCase()} ${arrows[sw.side(next)]}</b>.` : "Aucune branche raccordée : posez des rails autour de l'aiguillage."
+    }</div>
+    <h4>Branche prise en venant de la pointe</h4>
+    <div class="buy">${branches.map((b) => choice(b, `${labels[b]} ${arrows[sw.side(b)]}`)).join('')}${branches.length > 1 ? choice('alt', 'Alterner ⇄') : ''}</div>
+    <div class="cards" style="margin-top:12px"><div class="card">
+      ${stat('Pointe (arrivée de la ligne principale)', `côté ${tip}`)}
+      ${stat('Passages depuis la pointe', String(sw.passes))}
+      <div class="buy">${btn('switchRotate', 'Tourner la pointe ↻')}</div>
+    </div></div>
+    <p class="hint">Les wagonnets qui reviennent par une branche repartent toujours vers la pointe. En alternance, un wagonnet sur deux prend chaque branche : pratique pour desservir deux quais avec une seule ligne.</p>`;
 }
 
 // ------------------------------------------------------------------ trieur

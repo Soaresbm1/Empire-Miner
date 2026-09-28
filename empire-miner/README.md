@@ -57,6 +57,9 @@ Les touches sont lues par position physique : ZQSD et WASD fonctionnent sans ré
   collé : convoyeur, coffre, caisse d'expédition). Le wagonnet fait l'aller-retour tout seul et transporte par lots
   de 100 kg ; il part quand il est plein ou quand il n'y a plus rien à charger. On peut monter dedans (`F`) pour
   voyager : il attend au terminus que le joueur descende.
+- **Aiguillages** : posés sur un embranchement (ils remplacent le rail), ils envoient les wagonnets venus de la
+  pointe dans la branche choisie avec `E` (tout droit, à gauche, à droite ou en alternance) ; au retour, les
+  wagonnets repartent vers la pointe. Sans aiguillage, un embranchement fait aller tout droit.
 - Un **coffre** se vide dans tout convoyeur collé qui ne pointe pas vers lui (tampon au milieu d'une chaîne,
   ou dépôt manuel qui repart sur les convoyeurs) ; une **foreuse** pousse sa production devant sa flèche en
   priorité, sinon dans n'importe quel convoyeur collé.
