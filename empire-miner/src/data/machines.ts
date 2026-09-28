@@ -88,7 +88,7 @@ export const MACHINES: MachineDef[] = [
     id: 'storage',
     name: 'Coffre de stockage',
     category: 'stockage',
-    description: 'Reçoit les minerais des convoyeurs et des machines, et se vide dans les convoyeurs qui en partent. Vous pouvez aussi y déposer votre sac.',
+    description: 'Reçoit les minerais, se vide dans les convoyeurs qui en partent et recharge en charbon les foreuses collées. Vous pouvez y déposer votre sac.',
     price: 45,
     w: 1,
     h: 1,

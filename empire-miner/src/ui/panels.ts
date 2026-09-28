@@ -187,7 +187,7 @@ export function storagePanel(g: GameState, s: Storage): string {
   return `
     <div class="bar big"><div style="width:${Math.min(100, (w / s.capacity) * 100)}%"></div><span>${kg(w)} / ${kg(s.capacity)}</span></div>
     ${items.length ? `<table class="table"><tbody>${rows}</tbody></table>` : '<p class="empty">Coffre vide. Reliez-le à une foreuse avec des convoyeurs, ou déposez-y votre sac.</p>'}
-    <p class="hint">Un convoyeur collé au coffre qui ne pointe pas vers lui en sort les minerais automatiquement.</p>
+    <p class="hint">Un convoyeur collé au coffre qui ne pointe pas vers lui en sort les minerais automatiquement. Le charbon du coffre recharge aussi les foreuses collées.</p>
     <div class="panel-footer"><span>Votre sac : ${kg(g.inventory.weight())} / ${kg(g.inventory.capacity)}</span>
     <span>${btn('storageDeposit', 'Tout déposer', { disabled: g.inventory.isEmpty() })} ${btn('storageTakeAll', 'Tout prendre', { cls: 'primary', disabled: !items.length })}</span></div>`;
 }
@@ -229,6 +229,17 @@ export function drillPanel(g: GameState, d: Drill): string {
   const reserve = g.world.reserve[g.world.idx(d.x, d.y)];
   const coal = g.inventory.count('coal');
   const secs = d.fuelSeconds();
+  // Charbon disponible dans les coffres collés (recharge automatique).
+  const fuelRes = d.def.fuel?.res ?? 'coal';
+  let nearbyFuel = 0;
+  let chests = 0;
+  for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+    const s = g.structures.at(d.x + dx, d.y + dy);
+    if (s?.type === 'storage') {
+      chests++;
+      nearbyFuel += (s as Storage).items[fuelRes] ?? 0;
+    }
+  }
   const out = d.buffer.length;
   return `
     <div class="status ${cls}">● ${label}</div>
@@ -241,12 +252,13 @@ export function drillPanel(g: GameState, d: Drill): string {
     </div><div class="card">
       ${stat('Charbon chargé', `${d.fuelUnits} / ${d.fuelMax}`)}
       ${stat('Autonomie', `${Math.floor(secs / 60)} min ${Math.floor(secs % 60)} s`)}
+      ${chests ? stat('Recharge auto (coffre collé)', `${nearbyFuel} charbon en réserve`) : ''}
       ${stat('Production en attente', `${out} / ${d.def.stats.capacity}`)}
       <div class="buy">${btn('drillFuel', `Charger le charbon (${coal} dans le sac)`, { cls: 'primary', disabled: coal <= 0 || d.fuelUnits >= d.fuelMax })}
       ${btn('drillCollect', `Récupérer la production (${out})`, { disabled: out <= 0 })}
       ${btn('drillRotate', 'Tourner ↻')}</div>
     </div></div>
-    <p class="hint">Astuce : un convoyeur qui entre par l'arrière ou le côté peut aussi livrer du charbon à la foreuse.</p>`;
+    <p class="hint">Astuce : un coffre de charbon collé à la foreuse la recharge automatiquement. Un convoyeur qui pointe vers elle peut aussi lui livrer du charbon.</p>`;
 }
 
 // ------------------------------------------------------------------ aide

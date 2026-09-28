@@ -44,6 +44,8 @@ Les touches sont lues par position physique : ZQSD et WASD fonctionnent sans ré
 - Un **coffre** se vide dans tout convoyeur collé qui ne pointe pas vers lui (tampon au milieu d'une chaîne,
   ou dépôt manuel qui repart sur les convoyeurs) ; une **foreuse** pousse sa production devant sa flèche en
   priorité, sinon dans n'importe quel convoyeur collé.
+- Un **coffre de charbon collé à une foreuse** la recharge automatiquement (en priorité sur les convoyeurs).
+  Une foreuse posée sur du charbon qui remplit un coffre devant elle s'alimente donc toute seule.
 - Vente automatique : **caisse d'expédition** à poser en surface. Tout ce qui y arrive est vendu au prix du
   comptoir à chaque passage du transporteur (toutes les 15 s) ; sa capacité est limitée (120 kg), pleine elle
   bloque les convoyeurs. Le HUD affiche le revenu automatique par minute.

@@ -81,6 +81,11 @@ export abstract class Structure {
     return false;
   }
 
+  /** Ressource que la structure veut recevoir comme combustible maintenant, ou null. */
+  fuelWanted(): string | null {
+    return null;
+  }
+
   /** Contenu à restituer (au sol) quand la structure est démontée. */
   contents(): Record<string, number> {
     return {};

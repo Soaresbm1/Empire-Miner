@@ -49,7 +49,11 @@ via `StructureContext.autoSell` à chaque passage du transporteur.
 La sortie vers les convoyeurs collés (`Structure.pushToAdjacentConveyor`) essaie les côtés à tour de rôle.
 Un convoyeur qui pointe vers la structure refuse l'objet (arrivée de face) : c'est une entrée, rien ne repart
 en arrière. Les coffres ne se vident que dans des convoyeurs, jamais directement dans un autre coffre, ce qui
-évite les allers-retours entre deux coffres voisins. Un futur trieur, concasseur ou four
+évite les allers-retours entre deux coffres voisins.
+
+Combustible : une structure qui brûle quelque chose expose `fuelWanted()` (la ressource voulue tant que son
+réservoir n'est pas plein). Un coffre remplit d'abord le réservoir de ses voisins, puis se vide dans les
+convoyeurs. Un futur générateur ou four n'aura qu'à implémenter `fuelWanted()` pour être rechargé de la même façon. Un futur trieur, concasseur ou four
 n'a qu'à implémenter ces deux méthodes pour s'insérer dans les chaînes existantes.
 
 Chaque tuile de convoyeur a une capacité (objets) et un espacement minimal : si la sortie n'absorbe pas assez

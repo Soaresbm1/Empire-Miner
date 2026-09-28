@@ -135,3 +135,62 @@ describe('foreuse reliée à un convoyeur', () => {
     expect(end.items.copper ?? 0).toBeGreaterThan(0);
   });
 });
+
+describe('coffre de charbon collé à une foreuse', () => {
+  function bareDrill(g: GameState, x: number, res: string, dir: Dir) {
+    g.world.setDeposit(x, Y, resourceIndex(res), 1000);
+    return put(g, 'drill', x, Y, dir) as Drill;
+  }
+
+  it('recharge la foreuse en continu', () => {
+    const g = new GameState(4);
+    const d = bareDrill(g, 55, 'copper', 0);
+    const out = put(g, 'storage', 56, Y) as Storage; // sortie devant la flèche
+    const coal = put(g, 'storage', 55, Y + 1) as Storage; // coffre de charbon collé dessous
+    coal.put('coal', 20);
+    run(g, 2);
+    // Réservoir plein (10) pendant qu'une unité brûle.
+    expect(d.fuelUnits).toBe(d.fuelMax);
+    expect(d.burn).toBeGreaterThan(0);
+    expect(coal.items.coal).toBe(20 - d.fuelMax - 1);
+    run(g, 70);
+    expect(d.status).toBe('ok');
+    expect(d.fuelUnits).toBe(d.fuelMax); // toujours plein : le coffre compense ce qui brûle
+    expect(d.extracted).toBeGreaterThan(25);
+    expect(out.items.copper).toBe(d.extracted);
+    expect(coal.items.coal).toBeLessThan(10);
+  });
+
+  it('une foreuse à charbon qui remplit un coffre devant elle s’alimente toute seule', () => {
+    const g = new GameState(4);
+    const d = bareDrill(g, 55, 'coal', 0);
+    put(g, 'storage', 56, Y);
+    d.addFuel(1); // 30 s d'autonomie seulement
+    run(g, 200);
+    expect(d.extracted).toBeGreaterThan(60); // sans recharge : ~12 unités puis arrêt
+    expect(d.status).toBe('ok');
+  });
+
+  it('la foreuse est servie avant les convoyeurs qui partent du coffre', () => {
+    const g = new GameState(4);
+    const chest = put(g, 'storage', 52, Y) as Storage;
+    const belt = put(g, 'conveyor', 51, Y, 2) as Conveyor; // part du coffre vers l'ouest
+    g.world.setDeposit(53, Y, resourceIndex('copper'), 1000);
+    const d = put(g, 'drill', 53, Y, 0) as Drill;
+    chest.put('coal', 5);
+    run(g, 0.5);
+    expect(belt.items.length).toBe(0);
+    expect(d.fuelUnits + (d.burn > 0 ? 1 : 0)).toBe(5);
+    expect(chest.items.coal ?? 0).toBe(0);
+  });
+
+  it('un coffre sans charbon ne fait pas démarrer la foreuse', () => {
+    const g = new GameState(4);
+    const d = bareDrill(g, 55, 'copper', 0);
+    put(g, 'storage', 56, Y);
+    (put(g, 'storage', 55, Y + 1) as Storage).put('iron', 5);
+    run(g, 5);
+    expect(d.status).toBe('nofuel');
+    expect(d.extracted).toBe(0);
+  });
+});

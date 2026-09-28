@@ -398,6 +398,55 @@ try {
   check(await page.isVisible('.panel-shipping'), "le panneau de la caisse d'expédition s'ouvre");
   await shot('14-shipping-panel');
   await page.keyboard.press('Escape');
+
+  // Coffre de charbon collé à la foreuse : il la recharge.
+  await ev(() => (window.__EM.state.money += 100));
+  await teleport(58, 8);
+  await page.waitForTimeout(300);
+  await pressE();
+  await page.click('.tab[data-arg="machines"]');
+  await page.waitForTimeout(150);
+  await page.click('[data-action="buyKit"][data-arg="storage:1"]');
+  await page.waitForTimeout(100);
+  await page.keyboard.press('Escape');
+  await teleport(57, S + 11);
+  await page.waitForTimeout(300);
+  await page.keyboard.press('KeyB');
+  await page.waitForTimeout(100);
+  const chestIdx = await ev(() => ['conveyor', 'drill', 'storage', 'shipping'].filter((id) => window.__EM.state.inventory.kitCount(id) > 0).indexOf('storage'));
+  await page.keyboard.press(`Digit${chestIdx + 1}`);
+  await page.waitForTimeout(60);
+  p = await tileScreen(59, S + 11); // juste sous la foreuse
+  await page.mouse.move(p.x, p.y);
+  await page.waitForTimeout(60);
+  await page.mouse.down();
+  await page.mouse.up();
+  await page.waitForTimeout(150);
+  await page.keyboard.press('Escape');
+  check((await ev(() => window.__EM.state.structures.at(59, 23)?.type)) === 'storage', 'coffre posé contre la foreuse');
+  await ev(() => {
+    const g = window.__EM.state;
+    const d = g.structures.at(59, 22);
+    d.fuelUnits = 0;
+    d.burn = 0;
+    g.inventory.items = { coal: 8 };
+  });
+  await teleport(59, S + 12);
+  await page.waitForTimeout(300);
+  await pressE();
+  check(await page.isVisible('.panel-storage'), 'le coffre voisin de la foreuse s’ouvre');
+  await page.click('[data-action="storageDeposit"]');
+  await page.waitForTimeout(100);
+  await page.keyboard.press('Escape');
+  await page.waitForTimeout(800);
+  const fuel = await ev(() => {
+    const d = window.__EM.state.structures.at(59, 22);
+    return { units: d.fuelUnits, burning: d.burn > 0, status: d.status, left: window.__EM.state.structures.at(59, 23).items.coal ?? 0 };
+  });
+  check(fuel.units + (fuel.burning ? 1 : 0) === 8 && fuel.left === 0 && fuel.status === 'ok', `le charbon déposé dans le coffre recharge la foreuse (${fuel.units} en réserve, en marche)`);
+  await teleport(58, S + 12);
+  await page.waitForTimeout(400);
+  await shot('15-coal-chest');
 } catch (e) {
   failures++;
   console.error(e);

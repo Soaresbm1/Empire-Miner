@@ -2,8 +2,9 @@
  * Coffre de stockage : accepte n'importe quel minerai, limité en poids.
  * Si un convoyeur est collé au coffre (sans pointer vers lui), le coffre s'y vide :
  * il peut ainsi servir de tampon au milieu d'une chaîne.
+ * Il recharge aussi en combustible (charbon) les foreuses collées, en priorité.
  */
-import type { Dir } from '../../core/dir';
+import { DX, DY, type Dir } from '../../core/dir';
 import { getMachine } from '../../data/machines';
 import { getResource } from '../../data/resources';
 import { Structure, StructureContext, StructureSave } from './Structure';
@@ -36,6 +37,7 @@ export class Storage extends Structure {
   private resCursor = 0;
 
   update(_dt: number, ctx: StructureContext): void {
+    this.refuelNeighbors(ctx);
     // Au plus un objet par côté et par pas : le débit reste limité par les convoyeurs.
     for (let k = 0; k < 4; k++) {
       const keys = Object.keys(this.items);
@@ -52,6 +54,19 @@ export class Storage extends Structure {
     this.items[res] = (this.items[res] ?? 0) + 1;
     ctx.countDelivered(1);
     return true;
+  }
+
+  /** Remplit le réservoir des machines collées qui réclament un combustible présent dans le coffre. */
+  private refuelNeighbors(ctx: StructureContext): void {
+    for (let d = 0; d < 4; d++) {
+      const machine = ctx.structureAt(this.x + DX[d], this.y + DY[d]);
+      if (!machine) continue;
+      let res = machine.fuelWanted();
+      while (res && (this.items[res] ?? 0) > 0 && machine.accept(res, d as Dir, ctx)) {
+        this.take(res, 1);
+        res = machine.fuelWanted();
+      }
+    }
   }
 
   /** Ajout manuel (dépôt du joueur). Renvoie la quantité ajoutée. */

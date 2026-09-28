@@ -3,10 +3,11 @@
  * la tuile de devant (convoyeur, coffre…) ou, à défaut, dans n'importe quel
  * convoyeur collé à elle. Fonctionne au charbon.
  *
- * Elle accepte du charbon comme combustible depuis un convoyeur arrivant par
- * l'arrière ou les côtés : son alimentation peut donc elle-même être automatisée.
+ * Elle accepte du charbon comme combustible de tous les côtés (convoyeur qui
+ * pointe vers elle, coffre de charbon collé) : son alimentation peut donc
+ * elle-même être automatisée.
  */
-import { DX, DY, Dir, opposite } from '../../core/dir';
+import { DX, DY, type Dir } from '../../core/dir';
 import { getMachine, MachineDef } from '../../data/machines';
 import { Structure, StructureContext, StructureSave } from './Structure';
 
@@ -44,8 +45,13 @@ export class Drill extends Structure {
     return this.burn + this.fuelUnits * (this.def.fuel?.secondsPerUnit ?? 0);
   }
 
-  canAccept(res: string, travel: Dir): boolean {
-    return !!this.def.fuel && res === this.def.fuel.res && travel !== opposite(this.dir) && this.fuelUnits < this.fuelMax;
+  /** Accepte son combustible de tous les côtés (convoyeur qui pointe vers elle, coffre collé…). */
+  canAccept(res: string, _travel: Dir): boolean {
+    return !!this.def.fuel && res === this.def.fuel.res && this.fuelUnits < this.fuelMax;
+  }
+
+  fuelWanted(): string | null {
+    return this.def.fuel && this.fuelUnits < this.fuelMax ? this.def.fuel.res : null;
   }
 
   accept(res: string, travel: Dir): boolean {
