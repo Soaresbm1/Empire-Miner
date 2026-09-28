@@ -43,6 +43,8 @@ export interface MachineDef {
   name: string;
   category: MachineCategory;
   description: string;
+  /** Résumé d'une ligne affiché dans le magasin. */
+  summary: string;
   price: number;
   w: number;
   h: number;
@@ -71,6 +73,7 @@ export const MACHINES: MachineDef[] = [
   {
     id: 'conveyor',
     name: 'Convoyeur',
+    summary: "Transporte le minerai dans le sens de la flèche.",
     category: 'logistique',
     description: 'Transporte les minerais dans la direction de la flèche. Débit limité : il peut saturer.',
     price: 6,
@@ -85,6 +88,7 @@ export const MACHINES: MachineDef[] = [
   {
     id: 'conveyor_fast',
     name: 'Convoyeur rapide',
+    summary: "Deux fois plus rapide. Posez-le sur un convoyeur pour l'améliorer.",
     category: 'logistique',
     description: 'Deux fois plus rapide. Posez-le sur un convoyeur existant pour l\'améliorer sur place.',
     price: 15,
@@ -100,6 +104,7 @@ export const MACHINES: MachineDef[] = [
   {
     id: 'conveyor_express',
     name: 'Convoyeur express',
+    summary: "Quatre fois plus rapide que le convoyeur de base.",
     category: 'logistique',
     description: 'Quatre fois plus rapide que le convoyeur de base. Pour les grandes lignes principales.',
     price: 40,
@@ -115,6 +120,7 @@ export const MACHINES: MachineDef[] = [
   {
     id: 'splitter',
     name: 'Séparateur',
+    summary: "Partage une ligne entre l'avant, la gauche et la droite.",
     category: 'logistique',
     description: "Le minerai entre par l'arrière et ressort à tour de rôle devant, à gauche et à droite. Les sorties bloquées ou vides sont sautées.",
     price: 35,
@@ -129,6 +135,7 @@ export const MACHINES: MachineDef[] = [
   {
     id: 'sorter',
     name: 'Trieur',
+    summary: "Envoie le minerai choisi tout droit, le reste sur les côtés.",
     category: 'logistique',
     description: "Le minerai entre par l'arrière. Le minerai choisi (touche E) part tout droit, tout le reste part sur les côtés.",
     price: 60,
@@ -143,6 +150,7 @@ export const MACHINES: MachineDef[] = [
   {
     id: 'bridge',
     name: 'Pont de convoyeur',
+    summary: "Fait passer une ligne par-dessus une autre.",
     category: 'logistique',
     description: 'Se pose par paire, dans la même direction : le minerai passe au-dessus de ce qui se trouve entre les deux ponts. Idéal pour croiser deux lignes.',
     price: 25,
@@ -157,6 +165,7 @@ export const MACHINES: MachineDef[] = [
   {
     id: 'drill',
     name: 'Foreuse à charbon',
+    summary: "Extrait le gisement sous elle. Brûle du charbon.",
     category: 'extraction',
     description: 'Extrait le gisement sous elle et pousse le minerai vers l\'avant (ou dans un convoyeur collé). Brûle du charbon.',
     price: 220,
@@ -172,6 +181,7 @@ export const MACHINES: MachineDef[] = [
   {
     id: 'storage',
     name: 'Coffre de stockage',
+    summary: "Stocke le minerai, le renvoie sur les convoyeurs, recharge les foreuses.",
     category: 'stockage',
     description: 'Reçoit les minerais, se vide dans les convoyeurs qui en partent et recharge en charbon les foreuses collées. Vous pouvez y déposer votre sac.',
     price: 45,
@@ -184,6 +194,7 @@ export const MACHINES: MachineDef[] = [
   {
     id: 'shipping',
     name: "Caisse d'expédition",
+    summary: "Vend automatiquement tout ce qui y entre.",
     category: 'vente',
     description: 'Vend automatiquement tout ce qui y entre, au prix du comptoir. Un transporteur la vide régulièrement. Se pose en surface.',
     price: 180,

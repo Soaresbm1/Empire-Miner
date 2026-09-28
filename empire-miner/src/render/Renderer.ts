@@ -16,6 +16,7 @@ import { ShippingCrate } from '../sim/structures/ShippingCrate';
 import { Sorter } from '../sim/structures/Sorter';
 import { Splitter } from '../sim/structures/Splitter';
 import { Storage } from '../sim/structures/Storage';
+import { STRUCTURE_FACTORIES } from '../sim/structures/registry';
 import type { Structure } from '../sim/structures/Structure';
 import { ChunkCache } from './ChunkCache';
 import { Fx } from './fx';
@@ -50,7 +51,8 @@ interface Drawable {
 
 export class Renderer {
   readonly canvas: HTMLCanvasElement;
-  private readonly ctx: CanvasRenderingContext2D;
+  private ctx: CanvasRenderingContext2D;
+  private readonly icons = new Map<string, string>();
   private readonly light: HTMLCanvasElement;
   private readonly lctx: CanvasRenderingContext2D;
   zoom = 3;
@@ -905,6 +907,60 @@ export class Renderer {
       ctx.fillStyle = '#f2e6c8';
       ctx.fillText(s.name, x, y);
     }
+  }
+
+  /**
+   * Image d'une machine telle qu'elle apparaît dans le jeu (pour le magasin), en data URL.
+   * Le dessin est fait avec les mêmes fonctions que la mine, puis recadré au plus juste.
+   */
+  machineIcon(id: string): string {
+    const cached = this.icons.get(id);
+    if (cached !== undefined) return cached;
+    const factory = STRUCTURE_FACTORIES[id];
+    if (!factory) return '';
+    const s = factory.create(0, 0, 0);
+    const W = 28;
+    const H = 40;
+    const canvas = document.createElement('canvas');
+    canvas.width = W;
+    canvas.height = H;
+    const ictx = canvas.getContext('2d')!;
+    ictx.imageSmoothingEnabled = false;
+    ictx.translate(6, 20);
+    const saved = this.ctx;
+    this.ctx = ictx;
+    try {
+      if (s instanceof Conveyor) this.drawConveyor(s);
+      else if (s instanceof Splitter) this.drawSplitter(s);
+      else if (s instanceof Bridge) this.drawBridgeFoot(s);
+      else this.drawStructure(s);
+    } finally {
+      this.ctx = saved;
+    }
+    // Recadrage sur les pixels dessinés.
+    const data = ictx.getImageData(0, 0, W, H).data;
+    let x0 = W;
+    let y0 = H;
+    let x1 = -1;
+    let y1 = -1;
+    for (let y = 0; y < H; y++)
+      for (let x = 0; x < W; x++)
+        if (data[(y * W + x) * 4 + 3] > 0) {
+          x0 = Math.min(x0, x);
+          y0 = Math.min(y0, y);
+          x1 = Math.max(x1, x);
+          y1 = Math.max(y1, y);
+        }
+    let url = '';
+    if (x1 >= 0) {
+      const crop = document.createElement('canvas');
+      crop.width = x1 - x0 + 1;
+      crop.height = y1 - y0 + 1;
+      crop.getContext('2d')!.drawImage(canvas, -x0, -y0);
+      url = crop.toDataURL();
+    }
+    this.icons.set(id, url);
+    return url;
   }
 
   /** Effets associés aux événements de simulation. */

@@ -58,7 +58,7 @@ function ladder(names: string[], current: number): string {
     .join('<i>›</i>')}</div>`;
 }
 
-export function workshopPanel(g: GameState, tab: string): string {
+export function workshopPanel(g: GameState, tab: string, icon: (id: string) => string = () => ''): string {
   const tabs = [
     ['tools', 'Pioches'],
     ['transport', 'Transport'],
@@ -104,57 +104,70 @@ export function workshopPanel(g: GameState, tab: string): string {
     } else body += `<div class="card"><h3>Transport personnel au maximum</h3><p>Pour transporter davantage, automatisez : foreuses, convoyeurs et coffres.</p></div>`;
     body += `</div>`;
   } else {
-    body = `<div class="cards">${MACHINES.map((m) => machineCard(g, m)).join('')}</div>`;
+    body = `<p class="shop-hint">Survolez une machine pour lire sa description complète.</p>${machineShop(g, icon)}`;
   }
   return `<p class="sub">Outils, équipement et machines. Les machines achetées se posent avec <kbd>B</kbd>.</p><div class="tabs">${tabs}</div>${body}`;
 }
 
-function machineCard(g: GameState, m: MachineDef): string {
+/** Chiffres utiles d'une machine, en étiquettes courtes. */
+function machineSpecs(m: MachineDef): [string, string][] {
+  const s = m.stats;
+  if (m.conveyor) return [['Vitesse', `${num(s.speed, 2)} case/s`], ['Débit', `${num(conveyorThroughput(m))} /s`]];
+  if (m.id === 'splitter') return [['Sorties', '3, à tour de rôle'], ['Débit', `${num(s.speed * s.capacity)} /s`]];
+  if (m.id === 'sorter') return [['Tout droit', 'le minerai choisi'], ['Côtés', 'tout le reste']];
+  if (m.bridge) return [['Portée', `jusqu'à ${m.bridge.range} cases`], ['Vendu', 'par paire']];
+  if (m.shipping) return [['Vente', `toutes les ${m.shipping.interval} s`], ['Capacité', kg(s.capacity)], ['Pose', 'en surface']];
+  if (m.id === 'storage') return [['Capacité', kg(s.capacity)]];
+  const out: [string, string][] = [];
+  if (s.speed) out.push(['Cadence', `${num(s.speed * 60, 0)} /min`]);
+  if (m.fuel) out.push(['Charbon', `1 unité / ${m.fuel.secondsPerUnit} s`], ['Réservoir', `${m.fuel.maxUnits} unités`]);
+  if (s.power) out.push(['Consommation', `${s.power} kW`]);
+  return out;
+}
+
+const SHOP_GROUPS: { title: string; categories: MachineDef['category'][] }[] = [
+  { title: 'Extraction', categories: ['extraction'] },
+  { title: 'Transport', categories: ['logistique'] },
+  { title: 'Stockage et vente', categories: ['stockage', 'vente'] },
+];
+
+function machineRow(g: GameState, m: MachineDef, icon: (id: string) => string): string {
   const unlocked = g.isUnlocked(m.id);
   const owned = g.inventory.kitCount(m.id);
   const placed = g.structures.list.filter((s) => s.type === m.id).length;
-  const s = m.stats;
-  const speed =
-    m.conveyor || m.id === 'splitter' || m.id === 'sorter' || m.bridge
-      ? `${num(s.speed, 2)} tuile/s`
-      : m.id === 'drill'
-        ? `${num(s.speed * 60, 0)} unités/min`
-        : m.shipping
-          ? `1 passage / ${m.shipping.interval} s`
-          : '—';
-  const cap =
-    m.conveyor
-      ? `${s.capacity} objets/tuile (débit max ${num(conveyorThroughput(m))}/s)`
-      : m.id === 'storage' || m.shipping
-        ? kg(s.capacity)
-        : m.bridge
-          ? `Jusqu'à ${m.bridge.range} cases entre les deux ponts`
-          : m.id === 'splitter'
-            ? `3 sorties, ${s.capacity} objets à la fois`
-            : m.id === 'sorter'
-              ? '1 minerai tout droit, le reste sur les côtés'
-            : `${s.capacity} unités en attente`;
-  const power = m.fuel ? `Charbon : 1 unité / ${m.fuel.secondsPerUnit} s` : s.power ? `${s.power} kW` : 'Aucune';
   // Les ponts se vendent par paire (une entrée + une sortie).
-  const qtyButtons = m.conveyor ? [1, 10] : m.bridge ? [2] : [1];
-  const where = m.surfaceOnly ? `<div class="owned">Se pose en surface, au camp.</div>` : '';
-  return `<div class="card ${unlocked ? '' : 'locked'}"><h3>${m.name}</h3><p>${m.description}</p>
-    ${stat('Vitesse', speed)}${stat('Consommation', power)}${stat('Capacité', cap)}${stat('Efficacité', `${Math.round(s.efficiency * 100)} %`)}
-    ${stat('Niveau', String(s.level))}${stat('Coût', money(m.price))}
-    <div class="owned">En stock : <b>${owned}</b> · Posé(s) : <b>${placed}</b></div>${where}
-    <div class="buy">${
-      unlocked
-        ? qtyButtons
-            .map((q) =>
-              btn('buyKit', m.bridge && q === 2 ? `Acheter la paire — ${money(m.price * q)}` : q > 1 ? `×${q} — ${money(m.price * q)}` : `Acheter — ${money(m.price)}`, {
-                arg: `${m.id}:${q}`,
-                cls: 'primary',
-                disabled: g.money < m.price * q,
-              }),
-            )
-            .join('')
-        : `<small class="lock">🔒 ${m.unlock?.text}</small>`
-    }</div></div>`;
+  const qtys = m.conveyor ? [1, 10] : m.bridge ? [2] : [1];
+  const label = (q: number) => (m.bridge ? `Paire · ${money(m.price * q)}` : q > 1 ? `×${q} · ${money(m.price * q)}` : `Acheter · ${money(m.price)}`);
+  const cheapest = m.price * qtys[0];
+  const specs = machineSpecs(m)
+    .map(([k, v]) => `<span class="spec"><i>${k}</i>${v}</span>`)
+    .join('');
+  const level = m.conveyor ? `<span class="lvl">N${m.stats.level}</span>` : '';
+  const img = icon(m.id);
+  const side = unlocked
+    ? `<div class="buy-row">${qtys.map((q) => btn('buyKit', label(q), { arg: `${m.id}:${q}`, cls: 'primary', disabled: g.money < m.price * q })).join('')}</div>
+       ${g.money < cheapest ? `<small class="miss">Il manque ${money(cheapest - g.money)}</small>` : ''}`
+    : `<small class="lock">🔒 ${m.unlock?.text}</small>`;
+  return `<div class="shop-row ${unlocked ? '' : 'locked'}" title="${esc(m.description)}">
+    <div class="shop-icon">${img ? `<img src="${img}" alt="">` : ''}</div>
+    <div class="shop-main">
+      <div class="shop-title">${m.name}${level}</div>
+      <div class="shop-sum">${m.summary}</div>
+      <div class="specs">${specs}</div>
+    </div>
+    <div class="shop-side">
+      <div class="stock">${owned ? `<b>${owned}</b> en stock` : 'Aucun en stock'}${placed ? ` · <b>${placed}</b> posé${placed > 1 ? 's' : ''}` : ''}</div>
+      ${side}
+    </div>
+  </div>`;
+}
+
+function machineShop(g: GameState, icon: (id: string) => string): string {
+  return SHOP_GROUPS.map((grp) => {
+    const rows = MACHINES.filter((m) => grp.categories.includes(m.category));
+    if (!rows.length) return '';
+    return `<section class="shop-group"><h4>${grp.title}</h4>${rows.map((m) => machineRow(g, m, icon)).join('')}</section>`;
+  }).join('');
 }
 
 // ------------------------------------------------------------------ sac

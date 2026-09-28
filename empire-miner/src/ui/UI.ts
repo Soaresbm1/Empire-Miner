@@ -21,6 +21,8 @@ export interface UIHost {
   onAction(action: string, arg: string): void;
   keyLabel(code: string): string;
   moveKeys(): string;
+  /** Image d'une machine (data URL) pour le magasin. */
+  machineIcon(id: string): string;
 }
 
 /** Faux dans les hébergements qui bloquent les téléchargements (build « artifact »). */
@@ -153,12 +155,19 @@ export class UI {
   openPanel(kind: PanelKind, target: Structure | null = null, tab = 'tools'): void {
     this.panel = { kind, target, tab };
     this.panelSig = '';
+    this.syncOverlay();
   }
 
   closePanel(): void {
     this.panel = null;
     this.panelRoot.innerHTML = '';
     this.panelSig = '';
+    this.syncOverlay();
+  }
+
+  /** Quand un panneau ou un menu est ouvert, les messages passent en bas pour ne pas le masquer. */
+  private syncOverlay(): void {
+    document.getElementById('ui')?.classList.toggle('overlay-open', !!this.panel || !!this.menu);
   }
 
   setTab(tab: string): void {
@@ -184,7 +193,7 @@ export class UI {
         break;
       case 'workshop':
         title = 'Atelier';
-        body = workshopPanel(g, tab);
+        body = workshopPanel(g, tab, (id) => this.host.machineIcon(id));
         break;
       case 'inventory':
         title = 'Sac et carnet';
@@ -225,6 +234,7 @@ export class UI {
 
   showMainMenu(save: { savedAt: string; money: number; depth: number } | null, confirmNew = false): void {
     this.menu = 'main';
+    this.syncOverlay();
     const saveInfo = save
       ? `<small>${new Date(save.savedAt).toLocaleString('fr-FR')} · ${money(save.money)} · ${Math.floor(save.depth)} m</small>`
       : '';
@@ -243,6 +253,7 @@ export class UI {
 
   showPauseMenu(muted: boolean): void {
     this.menu = 'pause';
+    this.syncOverlay();
     this.menuRoot.innerHTML = `<div class="menu pause-menu"><h2>Pause</h2><div class="menu-buttons">
       <button class="btn primary big" data-action="resume">Reprendre</button>
       <button class="btn" data-action="save">Sauvegarder</button>
@@ -258,5 +269,6 @@ export class UI {
   hideMenu(): void {
     this.menu = null;
     this.menuRoot.innerHTML = '';
+    this.syncOverlay();
   }
 }

@@ -57,6 +57,7 @@ export class Game {
       onAction: (a, arg) => this.onAction(a, arg),
       keyLabel: (c) => this.input.label(c),
       moveKeys: () => this.input.moveKeys(),
+      machineIcon: (id) => this.renderer.machineIcon(id),
     });
     window.addEventListener('resize', () => this.renderer.resize());
     const unlock = () => this.sfx.unlock();
