@@ -8,7 +8,9 @@ profondeur et roches plus dures, sauvegarde/chargement, première automatisation
 ## v0.2 — Boucle d'automatisation complète (en cours)
 - ✅ Caisse d'expédition en surface : les convoyeurs qui y arrivent vendent automatiquement.
 - ✅ Convoyeurs rapides et express (niveaux 2 et 3), amélioration d'une ligne sur place.
-- Séparateurs et fusions, ponts (croisements).
+- ✅ Séparateurs (3 sorties à tour de rôle) et ponts de convoyeur (croisements) ; les fusions se font par
+  arrivée latérale sur un convoyeur.
+- Trieur (filtre par ressource sur une sortie de séparateur).
 - Chargeur/déchargeur : transfert coffre → convoyeur.
 - Indicateurs de débit (objets/min) sur les machines et convoyeurs.
 - Carte de la mine (minimap) et marqueurs.

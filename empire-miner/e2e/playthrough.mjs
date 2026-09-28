@@ -71,6 +71,25 @@ async function mineTile(tx, ty, maxMs = 12000) {
   return (Date.now() - t0) / 1000;
 }
 
+/** En mode construction : choisit le kit, oriente la pose puis clique sur la tuile. */
+async function placeAt(kit, tx, ty, dir = 0) {
+  const idx = await ev((k) => window.__EM.availableKits(window.__EM.state).indexOf(k), kit);
+  if (idx < 0) throw new Error(`kit ${kit} absent`);
+  await page.keyboard.press(`Digit${idx + 1}`);
+  await page.waitForTimeout(40);
+  const p = await tileScreen(tx, ty);
+  await page.mouse.move(p.x, p.y);
+  await page.waitForTimeout(40);
+  const cur = await ev(() => window.__EM.buildDir);
+  for (let i = 0; i < (dir - cur + 4) % 4; i++) {
+    await page.keyboard.press('KeyR');
+    await page.waitForTimeout(30);
+  }
+  await page.mouse.down();
+  await page.mouse.up();
+  await page.waitForTimeout(80);
+}
+
 async function pressE() {
   await page.keyboard.press('KeyE');
   await page.waitForTimeout(250);
@@ -498,6 +517,79 @@ try {
   await teleport(58, S + 12);
   await page.waitForTimeout(400);
   await shot('15-coal-chest');
+
+  // Séparateur et ponts, construits en surface.
+  await ev(() => (window.__EM.state.money += 600));
+  await teleport(58, 8);
+  await page.waitForTimeout(300);
+  await pressE();
+  await page.click('.tab[data-arg="machines"]');
+  await page.waitForTimeout(150);
+  await page.click('[data-action="buyKit"][data-arg="splitter:1"]');
+  await page.click('[data-action="buyKit"][data-arg="bridge:2"]');
+  for (let i = 0; i < 8; i++) await page.click('[data-action="buyKit"][data-arg="storage:1"]');
+  await page.waitForTimeout(100);
+  await shot('16-workshop-logistics');
+  await page.keyboard.press('Escape');
+  const kits2 = await ev(() => ({ ...window.__EM.state.inventory.kits }));
+  check(kits2.splitter === 1 && kits2.bridge === 2 && kits2.storage >= 8, 'séparateur et paire de ponts achetés');
+
+  await teleport(49, 7);
+  await page.waitForTimeout(400);
+  await page.keyboard.press('KeyB');
+  await page.waitForTimeout(100);
+  // Séparateur : coffre source → séparateur → avant / gauche / droite
+  await placeAt('storage', 44, 4);
+  await placeAt('splitter', 45, 4, 0);
+  await placeAt('conveyor', 46, 4, 0);
+  await placeAt('storage', 47, 4);
+  await placeAt('conveyor', 45, 3, 3);
+  await placeAt('storage', 45, 2);
+  await placeAt('conveyor', 45, 5, 1);
+  await placeAt('storage', 45, 6);
+  // Croisement : ligne est-ouest (cuivre) qui passe au-dessus d'une ligne nord-sud (fer)
+  await placeAt('storage', 49, 4);
+  await placeAt('conveyor', 50, 4, 0);
+  await placeAt('bridge', 51, 4, 0);
+  await placeAt('storage', 52, 2);
+  await placeAt('conveyor', 52, 3, 1);
+  await placeAt('conveyor', 52, 4, 1);
+  await placeAt('conveyor', 52, 5, 1);
+  await placeAt('storage', 52, 6);
+  // Aperçu de liaison avant de poser le second pont
+  const bidx = await ev(() => window.__EM.availableKits(window.__EM.state).indexOf('bridge'));
+  await page.keyboard.press(`Digit${bidx + 1}`);
+  p = await tileScreen(53, 4);
+  await page.mouse.move(p.x, p.y);
+  await page.waitForTimeout(200);
+  await shot('16a-bridge-preview');
+  await placeAt('bridge', 53, 4, 0);
+  await placeAt('conveyor', 54, 4, 0);
+  await placeAt('storage', 55, 4);
+  await page.keyboard.press('Escape');
+  const layout = await ev(() => {
+    const g = window.__EM.state;
+    const t = (x, y) => g.structures.at(x, y)?.type ?? null;
+    return [t(44, 4), t(45, 4), t(47, 4), t(45, 2), t(45, 6), t(51, 4), t(53, 4), t(52, 4), t(55, 4), t(52, 6)].join(',');
+  });
+  check(layout === 'storage,splitter,storage,storage,storage,bridge,bridge,conveyor,storage,storage', `démonstrations posées à la souris (${layout})`);
+  await ev(() => {
+    const g = window.__EM.state;
+    g.structures.at(44, 4).put('coal', 30);
+    g.structures.at(49, 4).put('copper', 20);
+    g.structures.at(52, 2).put('iron', 20);
+  });
+  await page.waitForTimeout(5000);
+  await shot('16b-splitter-bridge');
+  await page.waitForTimeout(15000);
+  const res = await ev(() => {
+    const g = window.__EM.state;
+    const items = (x, y) => ({ ...g.structures.at(x, y).items });
+    return { linked: g.structures.at(51, 4).target === g.structures.at(53, 4), F: items(47, 4), L: items(45, 2), R: items(45, 6), A2: items(55, 4), B2: items(52, 6) };
+  });
+  check(res.linked, 'les deux ponts se sont reliés');
+  check(res.F.coal === 10 && res.L.coal === 10 && res.R.coal === 10, `le séparateur répartit à parts égales (${res.F.coal ?? 0} / ${res.L.coal ?? 0} / ${res.R.coal ?? 0})`);
+  check(JSON.stringify(res.A2) === '{"copper":20}' && JSON.stringify(res.B2) === '{"iron":20}', 'le pont croise les deux lignes sans les mélanger');
 } catch (e) {
   failures++;
   console.error(e);

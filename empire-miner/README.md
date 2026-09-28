@@ -44,6 +44,11 @@ Les touches sont lues par position physique : ZQSD et WASD fonctionnent sans ré
 - Trois niveaux de **convoyeurs** : de base (2,25 objets/s), **rapide** (×2, pioche améliorée) et **express**
   (×4, pioche en fer). Poser un convoyeur sur un convoyeur d'un autre niveau le remplace sur place (direction et
   minerais conservés, ancien convoyeur rendu au stock) : on améliore une ligne entière en glissant dessus.
+- **Séparateur** : le minerai entre par l'arrière et ressort à tour de rôle devant, à gauche et à droite (les
+  sorties bloquées ou vides sont sautées). Pour fusionner deux lignes, il suffit de faire arriver un convoyeur
+  sur le côté d'un autre.
+- **Pont de convoyeur**, posé par paire dans la même direction (jusqu'à 5 cases d'écart) : le minerai passe
+  au-dessus de ce qui se trouve entre les deux ponts, ce qui permet de croiser deux lignes. Pas à travers la roche.
 - Un **coffre** se vide dans tout convoyeur collé qui ne pointe pas vers lui (tampon au milieu d'une chaîne,
   ou dépôt manuel qui repart sur les convoyeurs) ; une **foreuse** pousse sa production devant sa flèche en
   priorité, sinon dans n'importe quel convoyeur collé.

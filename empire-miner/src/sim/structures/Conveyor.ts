@@ -67,6 +67,11 @@ export class Conveyor extends Structure {
     }
   }
 
+  downstream(at: (x: number, y: number) => Structure | undefined): Structure[] {
+    const next = at(this.x + DX[this.dir], this.y + DY[this.dir]);
+    return next ? [next] : [];
+  }
+
   contents(): Record<string, number> {
     const out: Record<string, number> = {};
     for (const it of this.items) out[it.res] = (out[it.res] ?? 0) + 1;

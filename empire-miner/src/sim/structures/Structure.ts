@@ -83,6 +83,14 @@ export abstract class Structure {
     return false;
   }
 
+  /**
+   * Structures vers lesquelles celle-ci envoie ses objets (convoyeurs, séparateurs, ponts).
+   * Sert à ordonner la mise à jour des chaînes de l'aval vers l'amont.
+   */
+  downstream(_at: (x: number, y: number) => Structure | undefined): Structure[] {
+    return [];
+  }
+
   /** Ressource que la structure veut recevoir comme combustible maintenant, ou null. */
   fuelWanted(): string | null {
     return null;

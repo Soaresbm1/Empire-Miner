@@ -33,6 +33,11 @@ export interface ShippingSpec {
   interval: number;
 }
 
+export interface BridgeSpec {
+  /** Distance maximale (en cases) entre un pont d'entrée et son pont de sortie. */
+  range: number;
+}
+
 export interface MachineDef {
   id: string;
   name: string;
@@ -58,6 +63,8 @@ export interface MachineDef {
   conveyor?: boolean;
   /** Couleur d'accent (liseré des convoyeurs). */
   accent?: string;
+  /** Pont de convoyeur (se pose par paire). */
+  bridge?: BridgeSpec;
 }
 
 export const MACHINES: MachineDef[] = [
@@ -104,6 +111,34 @@ export const MACHINES: MachineDef[] = [
     conveyor: true,
     accent: '#4d8fe0',
     unlock: { pickaxeTier: 3, text: 'Nécessite la Pioche en fer' },
+  },
+  {
+    id: 'splitter',
+    name: 'Séparateur',
+    category: 'logistique',
+    description: "Le minerai entre par l'arrière et ressort à tour de rôle devant, à gauche et à droite. Les sorties bloquées ou vides sont sautées.",
+    price: 35,
+    w: 1,
+    h: 1,
+    solid: false,
+    rotatable: true,
+    stats: { speed: 3, power: 0, capacity: 3, efficiency: 1, level: 1 },
+    accent: '#e0b84a',
+    unlock: { pickaxeTier: 2, text: 'Nécessite la Pioche améliorée' },
+  },
+  {
+    id: 'bridge',
+    name: 'Pont de convoyeur',
+    category: 'logistique',
+    description: 'Se pose par paire, dans la même direction : le minerai passe au-dessus de ce qui se trouve entre les deux ponts. Idéal pour croiser deux lignes.',
+    price: 25,
+    w: 1,
+    h: 1,
+    solid: false,
+    rotatable: true,
+    stats: { speed: 3, power: 0, capacity: 3, efficiency: 1, level: 1 },
+    bridge: { range: 5 },
+    unlock: { pickaxeTier: 2, text: 'Nécessite la Pioche améliorée' },
   },
   {
     id: 'drill',

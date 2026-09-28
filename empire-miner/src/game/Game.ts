@@ -3,7 +3,7 @@
  * mode construction, événements → sons/effets/messages, menus et sauvegardes.
  */
 import { SIM_DT, SURFACE_ROWS, TILE } from '../core/constants';
-import { DX, DY, Dir, rotateCW } from '../core/dir';
+import { DX, DY, Dir, opposite, rotateCW } from '../core/dir';
 import { Input } from '../core/Input';
 import { Sfx } from '../audio/Sfx';
 import { getBlock } from '../data/blocks';
@@ -11,10 +11,12 @@ import { MACHINES, getMachine } from '../data/machines';
 import { getResource } from '../data/resources';
 import { deserialize, serialize, saveToBrowser, loadFromBrowser, browserSaveInfo, SaveData } from '../save/save';
 import { GameState, NO_INTENT, PlayerIntent } from '../sim/GameState';
+import { Bridge } from '../sim/structures/Bridge';
 import { Building, BUILDING_INFO } from '../sim/structures/Building';
 import { Conveyor } from '../sim/structures/Conveyor';
 import { Drill } from '../sim/structures/Drill';
 import { ShippingCrate } from '../sim/structures/ShippingCrate';
+import { Splitter } from '../sim/structures/Splitter';
 import { Storage } from '../sim/structures/Storage';
 import { Renderer, Overlay } from '../render/Renderer';
 import { UI, PanelKind } from '../ui/UI';
@@ -517,7 +519,13 @@ export class Game {
     // Un convoyeur d'un autre niveau sous le curseur peut être remplacé (amélioration sur place).
     const upgrade = g.beltToReplace(machine, mtx, mty);
     if (existing && existing.removable && !upgrade) overlay.removeHint = { tx: mtx, ty: mty };
-    else overlay.ghost = { machine, tx: mtx, ty: mty, dir: upgrade ? upgrade.dir : this.buildDir, ok: g.canPlace(machine, mtx, mty).ok };
+    else {
+      overlay.ghost = { machine, tx: mtx, ty: mty, dir: upgrade ? upgrade.dir : this.buildDir, ok: g.canPlace(machine, mtx, mty).ok };
+      if (getMachine(machine).bridge) {
+        const entry = this.bridgeEntryFor(g, mtx, mty, this.buildDir);
+        if (entry) overlay.ghost.link = { tx: entry.x, ty: entry.y };
+      }
+    }
 
     // Démontage : clic droit (maintenu, ou clic très bref entre deux images).
     if ((inp.consumeRightPress() || inp.right) && existing && existing.removable) g.removeAt(mtx, mty);
@@ -547,6 +555,20 @@ export class Game {
       }
       this.dragLast = { tx, ty };
     } else if (!inp.left) this.dragLast = null;
+  }
+
+  /** Pont d'entrée libre (derrière, même direction, à portée, sans roche) auquel un pont posé ici se relierait. */
+  private bridgeEntryFor(g: GameState, tx: number, ty: number, dir: Dir): Bridge | null {
+    const back = opposite(dir);
+    const range = getMachine('bridge').bridge?.range ?? 5;
+    for (let k = 1; k <= range; k++) {
+      const x = tx + DX[back] * k;
+      const y = ty + DY[back] * k;
+      if (!g.world.inBounds(x, y) || g.world.isSolid(x, y)) return null;
+      const s = g.structures.at(x, y);
+      if (s instanceof Bridge && s.dir === dir) return !s.target && !s.source ? s : null;
+    }
+    return null;
   }
 
   private tryPlace(g: GameState, machine: string, tx: number, ty: number, dir: Dir, quiet = false): boolean {
@@ -589,6 +611,16 @@ export class Game {
       return `<b>${s.def.name}</b> ${['→', '↓', '←', '↑'][s.dir]}<br>${load}/${s.capacity} objets · ${s.speed.toLocaleString('fr-FR')} tuile/s${
         s.blocked ? ' · <span class="bad">saturé</span>' : ''
       }`;
+    }
+    if (s instanceof Splitter)
+      return `<b>Séparateur</b> ${['→', '↓', '←', '↑'][s.dir]}<br>Entrée par l'arrière · sorties : devant, gauche, droite (à tour de rôle)${
+        s.blocked ? '<br><span class="bad">toutes les sorties sont bloquées</span>' : ''
+      }`;
+    if (s instanceof Bridge) {
+      const arrow = ['→', '↓', '←', '↑'][s.dir];
+      if (s.target) return `<b>Pont de convoyeur</b> ${arrow} — entrée<br>Relié à la sortie ${s.span()} cases plus loin · ${s.transit.length} objet(s) en l'air`;
+      if (s.source) return `<b>Pont de convoyeur</b> ${arrow} — sortie<br>Pose le minerai devant lui`;
+      return `<b>Pont de convoyeur</b> ${arrow} — non relié<br><span class="muted">Posez un second pont dans la même direction, jusqu'à ${s.range} cases devant</span>`;
     }
     if (s instanceof Drill) {
       const st = { ok: 'en marche', nofuel: 'sans charbon', full: 'sortie bloquée', depleted: 'gisement épuisé' }[s.status];

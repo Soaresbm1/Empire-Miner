@@ -114,7 +114,7 @@ function machineCard(g: GameState, m: MachineDef): string {
   const placed = g.structures.list.filter((s) => s.type === m.id).length;
   const s = m.stats;
   const speed =
-    m.conveyor
+    m.conveyor || m.id === 'splitter' || m.bridge
       ? `${num(s.speed, 2)} tuile/s`
       : m.id === 'drill'
         ? `${num(s.speed * 60, 0)} unités/min`
@@ -126,9 +126,14 @@ function machineCard(g: GameState, m: MachineDef): string {
       ? `${s.capacity} objets/tuile (débit max ${num(conveyorThroughput(m))}/s)`
       : m.id === 'storage' || m.shipping
         ? kg(s.capacity)
-        : `${s.capacity} unités en attente`;
+        : m.bridge
+          ? `Jusqu'à ${m.bridge.range} cases entre les deux ponts`
+          : m.id === 'splitter'
+            ? `3 sorties, ${s.capacity} objets à la fois`
+            : `${s.capacity} unités en attente`;
   const power = m.fuel ? `Charbon : 1 unité / ${m.fuel.secondsPerUnit} s` : s.power ? `${s.power} kW` : 'Aucune';
-  const qtyButtons = m.conveyor ? [1, 10] : [1];
+  // Les ponts se vendent par paire (une entrée + une sortie).
+  const qtyButtons = m.conveyor ? [1, 10] : m.bridge ? [2] : [1];
   const where = m.surfaceOnly ? `<div class="owned">Se pose en surface, au camp.</div>` : '';
   return `<div class="card ${unlocked ? '' : 'locked'}"><h3>${m.name}</h3><p>${m.description}</p>
     ${stat('Vitesse', speed)}${stat('Consommation', power)}${stat('Capacité', cap)}${stat('Efficacité', `${Math.round(s.efficiency * 100)} %`)}
@@ -137,7 +142,13 @@ function machineCard(g: GameState, m: MachineDef): string {
     <div class="buy">${
       unlocked
         ? qtyButtons
-            .map((q) => btn('buyKit', q > 1 ? `×${q} — ${money(m.price * q)}` : `Acheter — ${money(m.price)}`, { arg: `${m.id}:${q}`, cls: 'primary', disabled: g.money < m.price * q }))
+            .map((q) =>
+              btn('buyKit', m.bridge && q === 2 ? `Acheter la paire — ${money(m.price * q)}` : q > 1 ? `×${q} — ${money(m.price * q)}` : `Acheter — ${money(m.price)}`, {
+                arg: `${m.id}:${q}`,
+                cls: 'primary',
+                disabled: g.money < m.price * q,
+              }),
+            )
             .join('')
         : `<small class="lock">🔒 ${m.unlock?.text}</small>`
     }</div></div>`;

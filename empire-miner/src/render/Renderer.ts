@@ -8,10 +8,12 @@ import { getBlock } from '../data/blocks';
 import { getMachine } from '../data/machines';
 import { getResource } from '../data/resources';
 import type { GameState } from '../sim/GameState';
+import { Bridge } from '../sim/structures/Bridge';
 import { Building } from '../sim/structures/Building';
 import { Conveyor } from '../sim/structures/Conveyor';
 import { Drill } from '../sim/structures/Drill';
 import { ShippingCrate } from '../sim/structures/ShippingCrate';
+import { Splitter } from '../sim/structures/Splitter';
 import { Storage } from '../sim/structures/Storage';
 import type { Structure } from '../sim/structures/Structure';
 import { ChunkCache } from './ChunkCache';
@@ -33,7 +35,7 @@ export interface Overlay {
   /** Tuile visée par la pioche. */
   target: { tx: number; ty: number; ok: boolean } | null;
   /** Aperçu de construction. */
-  ghost: { machine: string; tx: number; ty: number; dir: Dir; ok: boolean } | null;
+  ghost: { machine: string; tx: number; ty: number; dir: Dir; ok: boolean; link?: { tx: number; ty: number } } | null;
   /** Structure sous le curseur en mode construction (démontage). */
   removeHint: { tx: number; ty: number } | null;
   /** Structure avec laquelle le joueur peut interagir. */
@@ -201,11 +203,22 @@ export class Renderer {
     this.chunks.draw(ctx, x0, y0, x1, y1);
     this.drawCracks(state);
 
-    // Convoyeurs (niveau du sol) puis objets transportés.
+    // Convoyeurs, séparateurs et pieds de ponts (niveau du sol) puis objets transportés.
     const belts: Conveyor[] = [];
-    for (const s of state.structures.list) if (s instanceof Conveyor && this.inView(s.x * TILE, s.y * TILE)) belts.push(s);
+    const splitters: Splitter[] = [];
+    const bridges: Bridge[] = [];
+    for (const s of state.structures.list) {
+      if (!s.isBelt || !this.inView(s.x * TILE, s.y * TILE)) continue;
+      if (s instanceof Conveyor) belts.push(s);
+      else if (s instanceof Splitter) splitters.push(s);
+      else if (s instanceof Bridge) bridges.push(s);
+    }
     for (const b of belts) this.drawConveyor(b);
+    for (const s of splitters) this.drawSplitter(s);
+    for (const b of bridges) this.drawBridgeFoot(b);
     for (const b of belts) this.drawBeltItems(b);
+    for (const s of splitters) this.drawSplitterItems(s);
+    for (const b of bridges) for (const res of b.out.slice(0, 2)) this.ctx.drawImage(this.nuggets.get(res)!, b.x * TILE + 4, b.y * TILE + 3);
 
     // Objets triés par profondeur (y).
     const list: Drawable[] = [];
@@ -214,7 +227,7 @@ export class Renderer {
       list.push({ y: d.y, draw: () => this.drawDrop(d.res, d.count, d.x, d.y - d.z, d.z) });
     }
     for (const s of state.structures.list) {
-      if (s instanceof Conveyor || !this.inView(s.x * TILE, s.y * TILE, 64)) continue;
+      if (s.isBelt || !this.inView(s.x * TILE, s.y * TILE, 64)) continue;
       list.push({ y: (s.y + s.h) * TILE - 1, draw: () => this.drawStructure(s) });
     }
     for (const l of state.layout.lamps)
@@ -224,6 +237,8 @@ export class Renderer {
     if (showPlayer) list.push({ y: state.player.y, draw: () => this.drawPlayer() });
     list.sort((a, b) => a.y - b.y);
     for (const d of list) d.draw();
+    // Travées des ponts : au-dessus de tout ce qui est au sol (on passe dessous).
+    for (const b of state.structures.list) if (b instanceof Bridge && b.target && this.inView(b.x * TILE, b.y * TILE, 6 * TILE)) this.drawBridgeSpan(b);
 
     this.drawParticles();
     this.drawLighting();
@@ -336,6 +351,122 @@ export class Renderer {
     ctx.fillRect(-8, -5, 1, 10);
     ctx.fillRect(7, -5, 1, 10);
     ctx.restore();
+  }
+
+  /** Séparateur : bande courte sous un carter jaune, flèches vers les trois sorties. */
+  private drawSplitter(s: Splitter): void {
+    const ctx = this.ctx;
+    ctx.save();
+    ctx.translate(s.x * TILE + 8, s.y * TILE + 8);
+    ctx.rotate((s.dir * Math.PI) / 2);
+    ctx.fillStyle = '#26262c';
+    ctx.fillRect(-8, -8, 16, 16);
+    ctx.fillStyle = '#3a3a42';
+    ctx.fillRect(-7, -7, 14, 14);
+    // Carter
+    ctx.fillStyle = s.def.accent ?? '#e0b84a';
+    ctx.fillRect(-3, -8, 6, 16);
+    ctx.fillStyle = '#8a6a1a';
+    ctx.fillRect(-3, -8, 1, 16);
+    ctx.fillStyle = '#26221e';
+    for (let k = -6; k <= 6; k += 4) ctx.fillRect(-1, k, 2, 2);
+    ctx.restore();
+    // Petites flèches sur les trois sorties
+    for (const d of s.outputs()) this.drawArrow(s.x * TILE + 8 + DX[d] * 6, s.y * TILE + 8 + DY[d] * 6, d, '#f2e6c8');
+  }
+
+  private drawSplitterItems(s: Splitter): void {
+    const cx = (s.x + 0.5) * TILE;
+    const cy = (s.y + 0.5) * TILE;
+    for (const it of s.items) {
+      let x: number;
+      let y: number;
+      if (it.p < 0.5) {
+        const t = 1 - it.p * 2;
+        x = cx - DX[s.dir] * 8 * t;
+        y = cy - DY[s.dir] * 8 * t;
+      } else {
+        const out = it.out === -1 ? s.dir : it.out;
+        const t = (it.p - 0.5) * 2;
+        x = cx + DX[out] * 8 * t;
+        y = cy + DY[out] * 8 * t;
+      }
+      this.ctx.drawImage(this.nuggets.get(it.res)!, Math.round(x - 3.5), Math.round(y - 4.5));
+    }
+  }
+
+  /** Pied de pont : rampe qui monte (entrée) ou descend (sortie) dans le sens du transport. */
+  private drawBridgeFoot(b: Bridge): void {
+    const ctx = this.ctx;
+    ctx.save();
+    ctx.translate(b.x * TILE + 8, b.y * TILE + 8);
+    ctx.rotate((b.dir * Math.PI) / 2);
+    ctx.fillStyle = '#26262c';
+    ctx.fillRect(-8, -7, 16, 14);
+    ctx.fillStyle = '#6a6b74';
+    ctx.fillRect(-8, -7, 16, 2);
+    ctx.fillRect(-8, 5, 16, 2);
+    // Rampe en planches, plus claire du côté haut
+    const up = b.source ? -1 : 1; // sortie : la rampe descend dans le sens du transport
+    for (let k = 0; k < 4; k++) {
+      const shade = up > 0 ? 0.6 + k * 0.13 : 1 - k * 0.13;
+      ctx.fillStyle = `rgb(${Math.round(138 * shade)},${Math.round(95 * shade)},${Math.round(56 * shade)})`;
+      ctx.fillRect(-7 + k * 4, -5, 3, 10);
+    }
+    ctx.fillStyle = '#4a3020';
+    ctx.fillRect(up > 0 ? 5 : -7, -7, 2, 14);
+    ctx.restore();
+    if (!b.target && !b.source) this.drawArrow(b.x * TILE + 8 + DX[b.dir] * 5, b.y * TILE + 8 + DY[b.dir] * 5, b.dir, '#f2e6c8');
+  }
+
+  /** Travée surélevée entre un pont d'entrée et sa sortie, avec le minerai qui la parcourt. */
+  private drawBridgeSpan(b: Bridge): void {
+    const t = b.target!;
+    const ctx = this.ctx;
+    const LIFT = 6;
+    const x0 = (b.x + 0.5) * TILE;
+    const y0 = (b.y + 0.5) * TILE;
+    const x1 = (t.x + 0.5) * TILE;
+    const y1 = (t.y + 0.5) * TILE;
+    const horiz = b.dir === 0 || b.dir === 2;
+    const minX = Math.min(x0, x1);
+    const minY = Math.min(y0, y1);
+    const len = horiz ? Math.abs(x1 - x0) : Math.abs(y1 - y0);
+    // Ombre au sol
+    ctx.fillStyle = 'rgba(0,0,0,0.28)';
+    if (horiz) ctx.fillRect(minX, y0 - 3, len, 7);
+    else ctx.fillRect(x0 - 3, minY, 7, len);
+    // Tablier
+    if (horiz) {
+      const y = y0 - LIFT;
+      ctx.fillStyle = '#4a3020';
+      ctx.fillRect(minX, y - 5, len, 10);
+      ctx.fillStyle = '#8a5f38';
+      for (let x = minX + 1; x < minX + len - 1; x += 3) ctx.fillRect(x, y - 4, 2, 8);
+      ctx.fillStyle = '#6a6b74';
+      ctx.fillRect(minX, y - 5, len, 1);
+      ctx.fillRect(minX, y + 4, len, 1);
+      ctx.fillStyle = '#2e1f14';
+      ctx.fillRect(minX, y + 5, len, 2);
+    } else {
+      ctx.fillStyle = '#4a3020';
+      ctx.fillRect(x0 - 5, minY - LIFT, 10, len);
+      ctx.fillStyle = '#8a5f38';
+      for (let y = minY - LIFT + 1; y < minY - LIFT + len - 1; y += 3) ctx.fillRect(x0 - 4, y, 8, 2);
+      ctx.fillStyle = '#6a6b74';
+      ctx.fillRect(x0 - 5, minY - LIFT, 1, len);
+      ctx.fillRect(x0 + 4, minY - LIFT, 1, len);
+      ctx.fillStyle = '#2e1f14';
+      ctx.fillRect(x0 - 5, minY - LIFT + len, 10, 2);
+    }
+    // Minerai en transit
+    const T = b.travelTime() || 1;
+    for (const it of b.transit) {
+      const k = Math.min(1, it.t / T);
+      const x = x0 + (x1 - x0) * k;
+      const y = y0 + (y1 - y0) * k - LIFT;
+      ctx.drawImage(this.nuggets.get(it.res)!, Math.round(x - 3.5), Math.round(y - 4.5));
+    }
   }
 
   private drawBeltItems(b: Conveyor): void {
@@ -692,6 +823,18 @@ export class Renderer {
       ctx.lineWidth = 1;
       ctx.strokeRect(x + 0.5, y + 0.5, def.w * TILE - 1, def.h * TILE - 1);
       if (def.rotatable) this.drawArrow(x + 8, y + 8, o.ghost.dir, o.ghost.ok ? '#7dffa0' : '#ff6b5b');
+      if (o.ghost.link) {
+        // Pointillés vers le pont d'entrée auquel celui-ci se reliera.
+        const lx = (o.ghost.link.tx + 0.5) * TILE;
+        const ly = (o.ghost.link.ty + 0.5) * TILE;
+        ctx.fillStyle = '#7dffa0';
+        const steps = Math.max(Math.abs(lx - (x + 8)), Math.abs(ly - (y + 8))) / 3;
+        for (let k = 0; k <= steps; k += 2) {
+          const px = lx + ((x + 8 - lx) * k) / steps;
+          const py = ly + ((y + 8 - ly) * k) / steps;
+          ctx.fillRect(Math.round(px) - 1, Math.round(py) - 1, 2, 2);
+        }
+      }
       ctx.globalAlpha = 1;
     }
     if (o.removeHint) {

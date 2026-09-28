@@ -61,6 +61,11 @@ Tous les niveaux de convoyeur partagent la classe `Conveyor`, paramétrée par l
 `conveyor: true` dans `data/machines.ts` et une ligne dans le registre. `GameState.place` remplace un convoyeur
 d'un autre niveau en conservant sa direction et ses objets.
 
+Séparateurs (`Splitter`) et ponts (`Bridge`) sont aussi des structures de transport (`isBelt`). Chacune
+indique vers où elle envoie ses objets (`downstream`), ce qui sert à ordonner la mise à jour de l'aval vers
+l'amont. Les ponts sont reliés par `StructureManager` à chaque modification du réseau : chaque pont cherche
+devant lui, sans traverser la roche, le premier pont de même direction ; s'il est libre il devient sa sortie.
+
 Chaque tuile de convoyeur a une capacité (objets) et un espacement minimal : si la sortie n'absorbe pas assez
 vite, les objets s'accumulent et le convoyeur sature. Les convoyeurs sont mis à jour de l'aval vers l'amont
 (ordre recalculé quand le réseau change) pour un débit régulier.
