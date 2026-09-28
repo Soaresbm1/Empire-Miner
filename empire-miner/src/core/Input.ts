@@ -1,11 +1,15 @@
 /**
  * Clavier et souris. Les touches sont identifiées par leur position physique
  * (`KeyboardEvent.code`) : ZQSD sur AZERTY et WASD sur QWERTY fonctionnent pareil.
+ * Les raccourcis mnémoniques dont la lettre change de place selon le clavier (M
+ * pour la carte) se lisent au caractère tapé (`wasTyped`).
  */
 export class Input {
   readonly down = new Set<string>();
   /** Nombre d'appuis depuis la dernière image (plusieurs appuis rapides ne sont pas perdus). */
   private readonly pressed = new Map<string, number>();
+  /** Caractères tapés depuis la dernière image (en minuscules). */
+  private readonly typed = new Set<string>();
   mouseX = 0;
   mouseY = 0;
   mouseInside = false;
@@ -24,7 +28,10 @@ export class Input {
     window.addEventListener('keydown', (e) => {
       if (e.target instanceof HTMLInputElement) return;
       if (prevent.has(e.code)) e.preventDefault();
-      if (!e.repeat) this.pressed.set(e.code, (this.pressed.get(e.code) ?? 0) + 1);
+      if (!e.repeat) {
+        this.pressed.set(e.code, (this.pressed.get(e.code) ?? 0) + 1);
+        if (e.key.length === 1) this.typed.add(e.key.toLowerCase());
+      }
       this.down.add(e.code);
     });
     window.addEventListener('keyup', (e) => this.down.delete(e.code));
@@ -77,6 +84,11 @@ export class Input {
     return codes.some((c) => this.pressed.has(c));
   }
 
+  /** Lettre tapée, quelle que soit sa place sur le clavier (ex. « m » sur AZERTY comme sur QWERTY). */
+  wasTyped(...chars: string[]): boolean {
+    return chars.some((c) => this.typed.has(c));
+  }
+
   pressCount(code: string): number {
     return this.pressed.get(code) ?? 0;
   }
@@ -96,6 +108,7 @@ export class Input {
   /** Fin d'image : oublie les appuis ponctuels. */
   endFrame(): void {
     this.pressed.clear();
+    this.typed.clear();
     this.leftPressed = false;
     this.rightPressed = false;
     this.wheel = 0;

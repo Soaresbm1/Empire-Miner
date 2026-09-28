@@ -27,10 +27,12 @@ Version autonome en un seul fichier HTML (ouvrable sans serveur) : `npm run buil
 | Sac et carnet | `I` ou `Tab` |
 | Mode construction | `B` — clic gauche : poser (glisser pour tracer convoyeurs et rails), clic droit : démonter, `R` : tourner, `1-9` : choisir |
 | Monter / descendre d'un wagonnet | `F` |
+| Carte de la mine | `M` (ou clic sur la mini-carte) |
 | Zoom | molette |
 | Pause, sauvegarde, chargement, export | `Échap` |
 
-Les touches sont lues par position physique : ZQSD et WASD fonctionnent sans réglage.
+Les touches sont lues par position physique : ZQSD et WASD fonctionnent sans réglage. Seule la carte se lit à la
+lettre tapée : c'est la touche marquée M, quel que soit le clavier.
 
 ## Contenu de la version 0.1 (tranche verticale)
 
@@ -77,6 +79,9 @@ Les touches sont lues par position physique : ZQSD et WASD fonctionnent sans ré
 - Vente automatique : **caisse d'expédition** à poser en surface. Tout ce qui y arrive est vendu au prix du
   comptoir à chaque passage du transporteur (toutes les 15 s) ; sa capacité est limitée (120 kg), pleine elle
   bloque les convoyeurs. Le HUD affiche le revenu automatique par minute.
+- **Mini-carte** en haut à droite (la mine autour du joueur) et **carte complète** avec `M` : galeries, roche,
+  filons et gisements repérés, machines, rails, wagonnets, position du joueur et zones de profondeur (100 m,
+  300 m). Seul ce que le joueur a déjà vu y apparaît.
 - Sauvegarde automatique (chaque minute), manuelle, export/import de fichier.
 - Sons synthétisés, éclairage de la mine, particules, objectifs guidant les premières minutes.
 

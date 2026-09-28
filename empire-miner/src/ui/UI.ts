@@ -14,9 +14,10 @@ import type { RailStation, RailSwitch } from '../sim/structures/Rail';
 import { Storage } from '../sim/structures/Storage';
 import type { Structure } from '../sim/structures/Structure';
 import { esc, kg, money, resIcon } from './format';
-import { counterPanel, drillPanel, helpPanel, inventoryPanel, shippingPanel, sorterPanel, stationPanel, storagePanel, switchPanel, workshopPanel } from './panels';
+import { MAP_COLORS } from '../render/MineMap';
+import { counterPanel, drillPanel, helpPanel, inventoryPanel, mapPanel, shippingPanel, sorterPanel, stationPanel, storagePanel, switchPanel, workshopPanel } from './panels';
 
-export type PanelKind = 'counter' | 'workshop' | 'inventory' | 'storage' | 'drill' | 'shipping' | 'sorter' | 'station' | 'switch' | 'help';
+export type PanelKind = 'counter' | 'workshop' | 'inventory' | 'storage' | 'drill' | 'shipping' | 'sorter' | 'station' | 'switch' | 'map' | 'help';
 
 export interface UIHost {
   onAction(action: string, arg: string): void;
@@ -226,6 +227,10 @@ export class UI {
       case 'switch':
         title = getMachine('rail_switch').name;
         body = switchPanel(g, target as RailSwitch);
+        break;
+      case 'map':
+        title = 'Carte de la mine';
+        body = mapPanel(g, MAP_COLORS);
         break;
       case 'help':
         title = 'Commandes';

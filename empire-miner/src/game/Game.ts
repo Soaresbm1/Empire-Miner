@@ -20,6 +20,7 @@ import { Sorter } from '../sim/structures/Sorter';
 import { Rail, RailStation, RailSwitch, type SwitchSetting } from '../sim/structures/Rail';
 import { Splitter } from '../sim/structures/Splitter';
 import { Storage } from '../sim/structures/Storage';
+import { MineMap } from '../render/MineMap';
 import { Renderer, Overlay } from '../render/Renderer';
 import { UI, PanelKind } from '../ui/UI';
 import { esc, kg, money, resIcon } from '../ui/format';
@@ -29,6 +30,8 @@ const MENU_SEED = 20260928;
 
 export class Game {
   readonly renderer: Renderer;
+  /** Mini-carte du HUD et carte complète (touche M). */
+  readonly map = new MineMap();
   readonly input: Input;
   readonly sfx = new Sfx();
   readonly ui: UI;
@@ -295,6 +298,9 @@ export class Game {
       case 'drillRotate':
         if (target) g.rotateAt(target.x, target.y);
         break;
+      case 'openMap':
+        this.togglePanel('map');
+        break;
       case 'drillUpgrade':
         if (target instanceof Drill) g.upgradeDrill(target);
         break;
@@ -382,6 +388,8 @@ export class Game {
       }
       if (inp.wasPressed('KeyI', 'Tab')) this.togglePanel('inventory');
       if (inp.wasPressed('KeyH', 'F1')) this.togglePanel('help');
+      // M : la lettre M du clavier, où qu'elle soit (AZERTY, QWERTY…).
+      if (inp.wasTyped('m')) this.togglePanel('map');
       if (inp.wasPressed('KeyB') && !this.ui.panel) this.setBuildMode(!this.buildMode);
     }
     if (inp.wheel && !this.ui.blocking) this.renderer.adjustZoom(-inp.wheel);
@@ -456,6 +464,14 @@ export class Game {
     if (panel?.target && (g.nearestInteractable() !== panel.target || !g.structures.list.includes(panel.target))) this.ui.closePanel();
     this.ui.renderPanel(g, dt);
 
+    // Cartes : mini-carte du HUD et, si elle est ouverte, carte complète.
+    const now = performance.now() / 1000;
+    this.map.update(g, dt);
+    const mini = document.getElementById('minimap');
+    if (mini instanceof HTMLCanvasElement) this.map.drawMini(mini, g, now);
+    const full = this.ui.panel?.kind === 'map' ? document.getElementById('map-canvas') : null;
+    if (full instanceof HTMLCanvasElement) this.map.drawFull(full, g, now);
+
     this.ambientTimer -= dt;
     if (this.ambientTimer <= 0) {
       this.ambientTimer = 0.25;
@@ -529,7 +545,7 @@ export class Game {
 
   private hintsHtml(): string {
     const l = (c: string) => this.input.label(c);
-    return `<span><kbd>${l('KeyB')}</kbd> Construire</span><span><kbd>${l('KeyI')}</kbd> Sac</span><span><kbd>${l('KeyH')}</kbd> Aide</span><span><kbd>Échap</kbd> Menu</span>`;
+    return `<span><kbd>${l('KeyB')}</kbd> Construire</span><span><kbd>${l('KeyI')}</kbd> Sac</span><span><kbd>M</kbd> Carte</span><span><kbd>${l('KeyH')}</kbd> Aide</span><span><kbd>Échap</kbd> Menu</span>`;
   }
 
   // ------------------------------------------------------------------ construction

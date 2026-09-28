@@ -18,7 +18,13 @@
           <div id="hud-income" class="income"></div>
           <div id="hud-depth" class="depth"></div>
         </div>
-        <div id="hud-objective" class="hud-tr hud-box objective"></div>
+        <div class="hud-tr">
+          <div id="hud-objective" class="hud-box objective"></div>
+          <div id="minimap-box" class="hud-box minimap" data-action="openMap" title="Carte de la mine (M)">
+            <canvas id="minimap"></canvas>
+            <div class="minimap-cap"><kbd>M</kbd> carte</div>
+          </div>
+        </div>
         <div id="hud-equip" class="hud-bl hud-box"></div>
         <div class="hud-bc">
           <div id="hud-prompt" class="prompt"></div>

@@ -17,7 +17,7 @@ src/
     objectives.ts        objectifs calculés depuis l'état réel
     events.ts            événements émis vers la présentation
   save/        sérialisation versionnée (RLE + base64 pour les grilles)
-  render/      rendu Canvas 2D : peintre de tuiles, cache par blocs, sprites, effets, éclairage
+  render/      rendu Canvas 2D : peintre de tuiles, cache par blocs, sprites, effets, éclairage, carte (MineMap)
   audio/       effets sonores synthétisés (Web Audio)
   ui/          HUD et panneaux HTML au-dessus du canvas
   game/        Game : boucle à pas fixe, entrées → intentions, construction, menus, sauvegardes

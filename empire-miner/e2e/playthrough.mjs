@@ -257,7 +257,9 @@ try {
   await page.waitForTimeout(300);
   check((await ev(([x, y]) => window.__EM.state.world.depositAt(x, y), [59, S + 10])) === 'copper', 'le filon miné a laissé un gisement de cuivre');
   await page.keyboard.press('KeyB');
+  await page.waitForTimeout(60);
   await page.keyboard.press('Digit2'); // foreuse (ordre : convoyeur, foreuse, coffre)
+  await page.waitForTimeout(60);
   await page.keyboard.press('KeyR');
   await page.keyboard.press('KeyR'); // direction ouest
   await page.waitForTimeout(100);
@@ -907,6 +909,34 @@ try {
   await page.waitForTimeout(3500);
   const left = await ev(() => window.__EM.state.drops.list.filter((d) => d.x > 52 * 16 && d.y > 27 * 16).map((d) => d.res));
   check(!left.includes('stone') && left.includes('copper'), `les pierres au sol s'effritent, pas le minerai (reste : ${left.join(', ')})`);
+
+  // Carte : mini-carte dans le HUD, carte complète avec M (ou clic sur la mini-carte).
+  const colorsIn = (sel) =>
+    ev((q) => {
+      const c = document.querySelector(q);
+      if (!c || !c.width) return 0;
+      const d = c.getContext('2d').getImageData(0, 0, c.width, c.height).data;
+      const seen = new Set();
+      for (let i = 0; i < d.length; i += 16) seen.add((d[i] << 16) | (d[i + 1] << 8) | d[i + 2]);
+      return seen.size;
+    }, sel);
+  await teleport(50, S + 10);
+  await page.waitForTimeout(600);
+  check((await page.isVisible('#minimap')) && (await colorsIn('#minimap')) > 6, `la mini-carte montre la mine autour du joueur (${await colorsIn('#minimap')} couleurs)`);
+  await page.keyboard.press('KeyM');
+  await page.waitForTimeout(400);
+  check(await page.isVisible('.panel-map'), 'la touche M ouvre la carte de la mine');
+  check((await colorsIn('#map-canvas')) > 10, `la carte dessine les galeries, les minerais et les machines (${await colorsIn('#map-canvas')} couleurs)`);
+  await shot('22-map');
+  await page.keyboard.press('KeyM');
+  await page.waitForTimeout(200);
+  check(!(await page.isVisible('.panel-map')), 'M referme la carte');
+  await page.click('#minimap-box');
+  await page.waitForTimeout(300);
+  check(await page.isVisible('.panel-map'), 'un clic sur la mini-carte ouvre la carte');
+  await page.keyboard.press('Escape');
+  await page.waitForTimeout(200);
+  await shot('22a-minimap');
 } catch (e) {
   failures++;
   console.error(e);

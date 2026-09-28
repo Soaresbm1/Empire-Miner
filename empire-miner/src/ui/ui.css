@@ -78,7 +78,12 @@ kbd {
 .depth { margin-top: 2px; font-size: 15px; color: var(--text); }
 .depth .zone { color: var(--muted); font-size: 13px; margin-left: 4px; }
 
-.hud-tr { position: absolute; top: 12px; right: 12px; max-width: 330px; font-size: 15px; line-height: 1.3; }
+.hud-tr { position: absolute; top: 12px; right: 12px; max-width: 330px; font-size: 15px; line-height: 1.3; display: flex; flex-direction: column; align-items: flex-end; gap: 8px; }
+/* Mini-carte : fenêtre de la mine autour du joueur ; un clic ouvre la carte complète. */
+.minimap { position: relative; padding: 4px; cursor: pointer; }
+.minimap canvas { display: block; width: 184px; height: 128px; border-radius: 3px; image-rendering: pixelated; }
+.minimap-cap { position: absolute; right: 8px; bottom: 6px; font-size: 11px; color: var(--muted); text-shadow: 1px 1px 0 #000; pointer-events: none; }
+.minimap-cap kbd { font-size: 10px; }
 .obj-title { color: var(--accent); font-size: 12px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase; margin-bottom: 2px; }
 
 .hud-bl { position: absolute; bottom: 12px; left: 12px; width: 280px; }
@@ -282,6 +287,20 @@ kbd {
 .drill-map span.me::after { content: ''; width: 12px; height: 12px; background: #d9a526; border: 2px solid #26221e; border-radius: 2px; }
 .drill-map span.out { color: #fff; font-weight: 700; text-shadow: 1px 1px 0 #000; }
 
+/* Carte complète (touche M). */
+.map-layout { display: grid; grid-template-columns: 1fr 210px; gap: 14px; align-items: start; }
+.map-canvas { display: block; width: 100%; height: min(calc(100vh - 205px), 600px); background: #0b0a0d; border: 2px solid var(--line); border-radius: 5px; image-rendering: pixelated; }
+.map-side h4 { margin-top: 0; }
+.map-note { margin: 0 0 10px; font-size: 12px; }
+.map-legend { list-style: none; margin: 0 0 10px; padding: 0; display: grid; gap: 4px; font-size: 14px; }
+.map-legend li { display: flex; align-items: center; gap: 8px; }
+.sw { display: inline-block; width: 12px; height: 12px; border-radius: 2px; box-shadow: 0 0 0 1.5px #120e10; flex: none; }
+.sw.dot { border-radius: 50%; }
+@media (max-width: 640px) {
+  .map-layout { grid-template-columns: 1fr; }
+  .map-canvas { height: 55vh; }
+}
+
 .help { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px; }
 .help h4 { margin: 0 0 4px; }
 .help p { margin: 0; font-size: 14px; line-height: 1.5; }
@@ -302,6 +321,7 @@ kbd {
 
 @media (max-width: 700px) {
   .hud-tr { max-width: 180px; font-size: 12px; }
+  .minimap canvas { width: 150px; height: 104px; }
   .hud-bl { width: 200px; }
   .hud-br { display: none; }
   .money { font-size: 20px; }

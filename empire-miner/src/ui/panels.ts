@@ -3,6 +3,7 @@
  * Chaque bouton porte un `data-action` traité par Game.
  */
 import { DIR_ARROWS, DX, DY } from '../core/dir';
+import { SURFACE_ROWS } from '../core/constants';
 import { MACHINES, MachineDef, conveyorThroughput, kitName, parseKit } from '../data/machines';
 import { RESOURCES, getResource } from '../data/resources';
 import { BAGS, PICKAXES } from '../data/tools';
@@ -458,6 +459,43 @@ export function drillPanel(g: GameState, d: Drill): string {
     <p class="hint">Sortie devant la flèche ${DIR_ARROWS[d.dir]}, sinon dans un convoyeur collé. Un coffre de charbon collé la recharge tout seul.</p>`;
 }
 
+// ------------------------------------------------------------------ carte
+
+/** Carte complète : le canvas est dessiné à chaque image par le jeu ; à droite, la légende. */
+export function mapPanel(g: GameState, colors: Record<string, string>): string {
+  const sw = (c: string, cls = '') => `<i class="sw ${cls}" style="background:${c}"></i>`;
+  const item = (icon: string, label: string) => `<li>${icon}<span>${label}</span></li>`;
+  const ores = RESOURCES.filter((r) => r.vein && (g.stats.discovered.includes(r.id) || (g.stats.collected[r.id] ?? 0) > 0));
+  const w = g.world;
+  let explored = 0;
+  for (let i = SURFACE_ROWS * w.w; i < w.explored.length; i++) explored += w.explored[i];
+  const total = w.explored.length - SURFACE_ROWS * w.w;
+  return `<div class="map-layout">
+    <canvas id="map-canvas" class="map-canvas"></canvas>
+    <div class="map-side">
+      <h4>Légende</h4>
+      <ul class="map-legend">
+        ${item(sw(colors.player, 'dot'), 'Vous')}
+        ${item(sw(colors.gallery), 'Galerie')}
+        ${item(sw(colors.rock), 'Roche')}
+        ${item(sw(colors.building), 'Comptoir, atelier')}
+        ${item(sw(colors.drill), 'Foreuse')}
+        ${item(sw(colors.belt), 'Convoyeur, séparateur, trieur, pont')}
+        ${item(sw(colors.storage), 'Coffre')}
+        ${item(sw(colors.shipping), "Caisse d'expédition")}
+        ${item(sw(colors.track), 'Rails et quais')}
+        ${item(sw(colors.wagon), 'Wagonnet')}
+      </ul>
+      <h4>Minerais repérés</h4>
+      <ul class="map-legend">${ores.length ? ores.map((r) => item(resIcon(r.id), r.name)).join('') : '<li class="muted">Aucun pour l’instant</li>'}</ul>
+      <p class="hint map-note">Couleur vive : filon dans la paroi. Plus clair : gisement au sol, pour les foreuses.</p>
+      ${stat('Profondeur max.', `${Math.floor(g.stats.maxDepth)} m`)}
+      ${stat('Mine explorée', `${Math.round((explored / total) * 100)} %`)}
+    </div>
+  </div>
+  <p class="hint">Seul ce que vous avez vu apparaît. Pointillés : roche dure (100 m) et basalte (300 m).</p>`;
+}
+
 // ------------------------------------------------------------------ aide
 
 export function helpPanel(keys: { move: string; label: (c: string) => string }): string {
@@ -470,6 +508,7 @@ export function helpPanel(keys: { move: string; label: (c: string) => string }):
     <div><h4>Construire</h4><p>${k('KeyB')} : mode construction. <kbd>Clic gauche</kbd> poser (glisser pour tracer des convoyeurs), <kbd>clic droit</kbd> démonter, ${k('KeyR')} tourner, <kbd>1-9</kbd> choisir</p></div>
     <div><h4>Zoom</h4><p>Molette de la souris</p></div>
     <div><h4>Wagonnet</h4><p>${k('KeyF')} : monter / descendre</p></div>
+    <div><h4>Carte</h4><p><kbd>M</kbd> : carte de la mine (ou clic sur la mini-carte)</p></div>
     <div><h4>Améliorer une foreuse</h4><p>${k('KeyE')} sur la foreuse : niveau 2 = cases gauche et droite, niveau 3 = aussi derrière</p></div>
     <div><h4>Menu</h4><p><kbd>Échap</kbd> : pause, sauvegarde, chargement</p></div>
   </div>

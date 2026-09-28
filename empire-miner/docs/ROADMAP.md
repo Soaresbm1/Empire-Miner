@@ -14,7 +14,8 @@ profondeur et roches plus dures, sauvegarde/chargement, première automatisation
 - ✅ Foreuse améliorable (niveaux 2 et 3 : cases gauche/droite, puis derrière).
 - Chargeur/déchargeur : transfert coffre → convoyeur.
 - Indicateurs de débit (objets/min) sur les machines et convoyeurs.
-- Carte de la mine (minimap) et marqueurs.
+- ✅ Carte de la mine : mini-carte dans le HUD et carte complète (touche M).
+- Marqueurs posés par le joueur sur la carte.
 
 ## v0.3 — Transport et profondeur
 - ✅ Wagonnets et rails : quais de chargement / déchargement, navette automatique, voyage à bord.
