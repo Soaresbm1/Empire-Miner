@@ -798,6 +798,79 @@ try {
     return { A: { ...g.structures.at(64, 3).items }, B: { ...g.structures.at(61, 5).items } };
   });
   check(JSON.stringify(split.A) === '{"coal":10}' && JSON.stringify(split.B) === '{"iron":10}', `l'aiguillage alterne entre les deux quais (${JSON.stringify(split)})`);
+
+  // Foreuse améliorée : niveau 2 (gauche + droite) puis niveau 3 (+ derrière), achetés sur la machine.
+  // Salle du fond : foreuse en (47,26) flèche vers l'est, coffre devant ; gisements de fer tout autour.
+  await ev(() => {
+    const g = window.__EM.state;
+    for (const [x, y] of [[47, 26], [47, 25], [47, 27], [46, 26]]) g.world.setDeposit(x, y, 3, 500); // 3 = fer
+    g.money += 1600;
+  });
+  await teleport(58, 8);
+  await page.waitForTimeout(300);
+  await pressE();
+  await page.click('.tab[data-arg="machines"]');
+  await page.waitForTimeout(150);
+  await page.click('[data-action="buyKit"][data-arg="drill:1"]');
+  await page.click('[data-action="buyKit"][data-arg="storage:1"]');
+  await page.keyboard.press('Escape');
+  await teleport(46, 26);
+  await page.waitForTimeout(400);
+  await page.keyboard.press('KeyB');
+  await page.waitForTimeout(100);
+  await placeAt('drill', 47, 26, 0);
+  await placeAt('storage', 48, 26);
+  await page.keyboard.press('Escape');
+  check((await ev(() => window.__EM.state.structures.at(47, 26)?.type)) === 'drill', 'foreuse posée dans la salle du fond');
+  await ev(() => window.__EM.state.structures.at(47, 26).addFuel(10));
+  const reserveAt = (x, y) => ev(([a, b]) => window.__EM.state.world.reserve[window.__EM.state.world.idx(a, b)], [x, y]);
+  await page.waitForTimeout(3000);
+  const l1 = { under: await reserveAt(47, 26), left: await reserveAt(47, 25), right: await reserveAt(47, 27) };
+  check(l1.under < 500 && l1.left === 500 && l1.right === 500, `niveau 1 : seule la case sous la foreuse est forée (${JSON.stringify(l1)})`);
+  await pressE();
+  check(await page.isVisible('.panel-drill .drill-levels'), 'le panneau de la foreuse montre ses niveaux');
+  const cols = await page.$$eval('.drill-levels .dl', (els) => els.map((e) => e.className.replace('dl ', '')));
+  check(cols.join(',') === 'current,next,later', `trois niveaux : actuel, suivant, plus tard (${cols.join(',')})`);
+  const moneyUp = await ev(() => window.__EM.state.money);
+  await page.click('[data-action="drillUpgrade"]');
+  await page.waitForTimeout(200);
+  const lvl2 = await ev(() => ({ level: window.__EM.state.structures.at(47, 26).level, money: window.__EM.state.money }));
+  check(lvl2.level === 2 && moneyUp - lvl2.money === 280, `foreuse améliorée au niveau 2 depuis son panneau (−${moneyUp - lvl2.money} $)`);
+  const lock = await page.$eval('.dl.next', (e) => ({ disabled: e.querySelector('button').disabled, text: e.textContent }));
+  check(lock.disabled && lock.text.includes('Pioche en fer'), 'le niveau 3 attend la pioche en fer');
+  await shot('20-drill-upgrade-panel');
+  await page.keyboard.press('Escape');
+  await page.waitForTimeout(4000);
+  const l2 = { left: await reserveAt(47, 25), right: await reserveAt(47, 27), back: await reserveAt(46, 26) };
+  check(l2.left < 500 && l2.right < 500 && l2.back === 500, `niveau 2 : les cases de gauche et de droite sont forées (${JSON.stringify(l2)})`);
+  await ev(() => window.__EM.renderer.adjustZoom(2));
+  await page.waitForTimeout(300);
+  await shot('20a-drill-level2');
+  // Pioche en fer à l'atelier, puis niveau 3.
+  await teleport(58, 8);
+  await page.waitForTimeout(300);
+  await pressE();
+  await page.click('.tab[data-arg="tools"]');
+  await page.waitForTimeout(100);
+  while ((await state()).pick < 2) {
+    await page.click('[data-action="buyPickaxe"]');
+    await page.waitForTimeout(150);
+  }
+  await page.keyboard.press('Escape');
+  await teleport(46, 26);
+  await page.waitForTimeout(400);
+  await pressE();
+  await page.click('[data-action="drillUpgrade"]');
+  await page.waitForTimeout(200);
+  check((await ev(() => window.__EM.state.structures.at(47, 26).level)) === 3, 'foreuse améliorée au niveau 3');
+  await shot('20b-drill-level3-panel');
+  await page.keyboard.press('Escape');
+  await teleport(49, 25);
+  await page.waitForTimeout(4000);
+  const l3 = await ev(() => ({ back: window.__EM.state.world.reserve[window.__EM.state.world.idx(46, 26)], heads: window.__EM.state.structures.at(47, 26).heads }));
+  check(l3.back < 500 && l3.heads === 4, `niveau 3 : la case derrière est forée aussi (${l3.heads} têtes actives)`);
+  await shot('20c-drill-level3');
+  await ev(() => window.__EM.renderer.adjustZoom(-2));
 } catch (e) {
   failures++;
   console.error(e);

@@ -3,13 +3,45 @@
  * la tuile de devant (convoyeur, coffre…) ou, à défaut, dans n'importe quel
  * convoyeur collé à elle. Fonctionne au charbon.
  *
+ * Améliorable sur place : le niveau 2 ajoute des têtes de forage à gauche et
+ * à droite, le niveau 3 aussi derrière (la sortie reste devant). Chaque case
+ * couverte qui a un gisement produit à la cadence de base ; la consommation
+ * de charbon, elle, ne change pas.
+ *
  * Elle accepte du charbon comme combustible de tous les côtés (convoyeur qui
  * pointe vers elle, coffre de charbon collé) : son alimentation peut donc
  * elle-même être automatisée.
  */
-import { DX, DY, type Dir } from '../../core/dir';
-import { getMachine, MachineDef } from '../../data/machines';
+import { DX, DY, opposite, rotateCW, type Dir } from '../../core/dir';
+import { getMachine, MachineDef, MachineLevel, ReachSide } from '../../data/machines';
+import type { World } from '../World';
 import { Structure, StructureContext, StructureSave } from './Structure';
+
+/** Case couverte par une tête de forage. */
+export interface DrillTile {
+  x: number;
+  y: number;
+  side: ReachSide;
+}
+
+/** Ce qu'il faut pour savoir quelles cases couvertes ont encore un gisement. */
+type DepositView = { world: World; structureAt(x: number, y: number): Structure | undefined };
+
+/** Direction de la case `side`, vue depuis une foreuse dont la flèche pointe vers `dir`. */
+function sideDir(dir: Dir, side: ReachSide): Dir | null {
+  if (side === 'under') return null;
+  if (side === 'right') return rotateCW(dir);
+  if (side === 'left') return rotateCW(opposite(dir));
+  return opposite(dir);
+}
+
+/** Cases couvertes par une foreuse posée en (x, y), flèche vers `dir`, pour la liste `reach`. */
+export function reachTiles(x: number, y: number, dir: Dir, reach: readonly ReachSide[]): DrillTile[] {
+  return reach.map((side) => {
+    const d = sideDir(dir, side);
+    return d === null ? { x, y, side } : { x: x + DX[d], y: y + DY[d], side };
+  });
+}
 
 export type DrillStatus = 'ok' | 'nofuel' | 'full' | 'depleted';
 
@@ -26,6 +58,12 @@ export class Drill extends Structure {
   /** Temps d'activité cumulé (animation). */
   activeTime = 0;
   extracted = 0;
+  /** Niveau d'amélioration (1 = de base). */
+  level = 1;
+  /** Têtes de forage en activité au dernier pas (cases couvertes avec un gisement). */
+  heads = 0;
+  /** Prochaine case à forer (répartition équitable entre les têtes). */
+  private cursor = 0;
 
   constructor(x: number, y: number, dir: Dir) {
     super(x, y, dir);
@@ -34,6 +72,45 @@ export class Drill extends Structure {
 
   get interval(): number {
     return 1 / this.def.stats.speed;
+  }
+
+  get levels(): MachineLevel[] {
+    return this.def.levels ?? [{ level: 1, price: 0, reach: ['under'], summary: '' }];
+  }
+
+  get maxLevel(): number {
+    return this.levels.length;
+  }
+
+  levelDef(level = this.level): MachineLevel {
+    return this.levels[Math.max(1, Math.min(level, this.maxLevel)) - 1];
+  }
+
+  /** Amélioration suivante, ou null au niveau maximal. */
+  nextLevel(): MachineLevel | null {
+    return this.level < this.maxLevel ? this.levelDef(this.level + 1) : null;
+  }
+
+  /** Argent investi dans les améliorations (remboursé au démontage). */
+  upgradeValue(): number {
+    return this.levels.slice(1, this.level).reduce((sum, l) => sum + l.price, 0);
+  }
+
+  /** Cases couvertes au niveau `level` (par défaut : le niveau actuel). */
+  reach(level = this.level): DrillTile[] {
+    return reachTiles(this.x, this.y, this.dir, this.levelDef(level).reach);
+  }
+
+  /** Une case est exploitable si elle a un gisement et qu'aucune autre foreuse n'est posée dessus. */
+  canDrill(t: DrillTile, v: DepositView): boolean {
+    if (!v.world.depositAt(t.x, t.y)) return false;
+    const other = v.structureAt(t.x, t.y);
+    return !(other instanceof Drill) || other === this;
+  }
+
+  /** Cases couvertes qui ont encore un gisement exploitable. */
+  sources(v: DepositView, level = this.level): DrillTile[] {
+    return this.reach(level).filter((t) => this.canDrill(t, v));
   }
 
   get fuelMax(): number {
@@ -70,7 +147,9 @@ export class Drill extends Structure {
 
   update(dt: number, ctx: StructureContext): void {
     this.tryOutput(ctx);
-    if (!ctx.world.depositAt(this.x, this.y)) {
+    const sources = this.sources(ctx);
+    this.heads = sources.length;
+    if (!sources.length) {
       this.status = 'depleted';
       return;
     }
@@ -90,14 +169,17 @@ export class Drill extends Structure {
     this.status = 'ok';
     this.burn -= dt;
     this.activeTime += dt;
-    this.progress += dt / this.interval;
+    this.progress += (dt / this.interval) * sources.length;
     if (this.progress >= 1) {
       this.progress -= 1;
-      const res = ctx.world.takeFromDeposit(this.x, this.y);
+      const k = this.cursor % sources.length;
+      this.cursor = k + 1;
+      const src = sources[k];
+      const res = ctx.world.takeFromDeposit(src.x, src.y);
       if (res) {
         this.buffer.push(res);
         this.extracted++;
-        ctx.emit({ t: 'extract', tx: this.x, ty: this.y, res });
+        ctx.emit({ t: 'extract', tx: src.x, ty: src.y, res });
         this.tryOutput(ctx);
       }
     }
@@ -126,6 +208,7 @@ export class Drill extends Structure {
       progress: this.progress,
       buffer: [...this.buffer],
       extracted: this.extracted,
+      level: this.level,
     };
   }
 
@@ -136,6 +219,7 @@ export class Drill extends Structure {
     d.progress = Number(s.progress ?? 0);
     d.buffer = [...((s.buffer as string[]) ?? [])];
     d.extracted = Number(s.extracted ?? 0);
+    d.level = Math.max(1, Math.min(d.maxLevel, Math.floor(Number(s.level ?? 1)) || 1));
     return d;
   }
 }

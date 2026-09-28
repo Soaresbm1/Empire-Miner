@@ -69,6 +69,12 @@ indique vers où elle envoie ses objets (`downstream`), ce qui sert à ordonner 
 l'amont. Les ponts sont reliés par `StructureManager` à chaque modification du réseau : chaque pont cherche
 devant lui, sans traverser la roche, le premier pont de même direction ; s'il est libre il devient sa sortie.
 
+Foreuse et niveaux : `MachineDef.levels` décrit les améliorations d'une machine posée (prix, condition,
+cases couvertes). Pour la foreuse, `reach` liste les cases forées relativement à sa flèche (`under`, `left`,
+`right`, `back`) ; `Drill.sources()` garde celles qui ont un gisement et ne sont pas sous une autre foreuse, et
+la foreuse avance à la cadence de base multipliée par ce nombre de têtes, en forant les cases à tour de rôle.
+Le niveau est sauvegardé avec la structure ; `GameState.upgradeDrill` le fait payer et `removeAt` le rembourse.
+
 Chaque tuile de convoyeur a une capacité (objets) et un espacement minimal : si la sortie n'absorbe pas assez
 vite, les objets s'accumulent et le convoyeur sature. Les convoyeurs sont mis à jour de l'aval vers l'amont
 (ordre recalculé quand le réseau change) pour un débit régulier.

@@ -65,6 +65,11 @@ Les touches sont lues par position physique : ZQSD et WASD fonctionnent sans ré
   priorité, sinon dans n'importe quel convoyeur collé.
 - Un **coffre de charbon collé à une foreuse** la recharge automatiquement (en priorité sur les convoyeurs).
   Une foreuse posée sur du charbon qui remplit un coffre devant elle s'alimente donc toute seule.
+- **Foreuse améliorable** sur place (`E` sur la foreuse) : niveau 2 (280 $) = elle fore aussi les cases à gauche
+  et à droite, niveau 3 (650 $, pioche en fer) = aussi la case derrière elle. La sortie reste devant la flèche.
+  Chaque case couverte qui a un gisement produit à la cadence de base (jusqu'à ×4), pour le même charbon ; elle
+  continue tant qu'une de ses cases a encore un gisement. Le panneau montre, niveau par niveau, les cases forées
+  à cet endroit ; démonter une foreuse améliorée rembourse ses améliorations.
 - Vente automatique : **caisse d'expédition** à poser en surface. Tout ce qui y arrive est vendu au prix du
   comptoir à chaque passage du transporteur (toutes les 15 s) ; sa capacité est limitée (120 kg), pleine elle
   bloque les convoyeurs. Le HUD affiche le revenu automatique par minute.
@@ -82,7 +87,8 @@ Le test de bout en bout rejoue la tranche verticale : lancer une partie, descend
 remplir le sac, vendre, acheter la pioche améliorée et mesurer qu'elle mine plus vite, sauvegarder,
 recharger, puis acheter et poser une foreuse, des convoyeurs et un coffre et vérifier que le minerai y arrive ;
 enfin prolonger la ligne dans le puits jusqu'à une caisse d'expédition en surface et vérifier que l'argent
-rentre pendant que le joueur reste au fond de la mine.
+rentre pendant que le joueur reste au fond de la mine. Il construit ensuite chaque machine (convoyeurs rapides,
+séparateur, pont, trieur, wagonnets, aiguillage) et améliore une foreuse jusqu'au niveau 3 depuis son panneau.
 
 ## Choix techniques
 

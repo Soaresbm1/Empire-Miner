@@ -611,6 +611,13 @@ export class GameState implements StructureContext {
     this.structures.remove(s);
     this.inventory.addKit(s.type);
     for (const [res, n] of Object.entries(s.contents())) this.drops.spawn(res, n, (s.x + 0.5) * TILE, (s.y + 0.5) * TILE);
+    // Le kit rendu est une foreuse de base : les améliorations sont remboursées.
+    const refund = s instanceof Drill ? s.upgradeValue() : 0;
+    if (refund > 0) {
+      this.money += refund;
+      this.stats.spent -= refund;
+      this.emit({ t: 'message', text: `Améliorations de la foreuse remboursées : +${refund} $`, kind: 'good' });
+    }
     this.emit({ t: 'removed', type: s.type, tx, ty });
     return true;
   }
@@ -734,6 +741,24 @@ export class GameState implements StructureContext {
     const k = d.addFuel(this.inventory.count(fuel.res));
     this.inventory.remove(fuel.res, k);
     return k;
+  }
+
+  /** Pourquoi l'amélioration suivante d'une foreuse est impossible, ou null si elle l'est. */
+  drillUpgradeBlocker(d: Drill): string | null {
+    const next = d.nextLevel();
+    if (!next) return 'Niveau maximal atteint';
+    if (next.unlock && this.pickaxe.tier < next.unlock.pickaxeTier) return next.unlock.text;
+    if (this.money < next.price) return 'Pas assez d\'argent';
+    return null;
+  }
+
+  /** Améliore une foreuse posée : elle couvre plus de cases. */
+  upgradeDrill(d: Drill): boolean {
+    const next = d.nextLevel();
+    if (!next || this.drillUpgradeBlocker(d) || !this.pay(next.price)) return false;
+    d.level = next.level;
+    this.emit({ t: 'bought', name: `${d.def.name} niveau ${next.level}` });
+    return true;
   }
 
   /** Récupère la production en attente dans une foreuse. */

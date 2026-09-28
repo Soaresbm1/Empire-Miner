@@ -2,7 +2,7 @@
  * Contenu HTML des panneaux (comptoir, atelier, sac, coffre, foreuse, aide).
  * Chaque bouton porte un `data-action` traité par Game.
  */
-import { DIR_ARROWS } from '../core/dir';
+import { DIR_ARROWS, DX, DY } from '../core/dir';
 import { MACHINES, MachineDef, conveyorThroughput } from '../data/machines';
 import { RESOURCES, getResource } from '../data/resources';
 import { BAGS, PICKAXES } from '../data/tools';
@@ -126,6 +126,7 @@ function machineSpecs(m: MachineDef): [string, string][] {
   const out: [string, string][] = [];
   if (s.speed) out.push(['Cadence', `${num(s.speed * 60, 0)} /min`]);
   if (m.fuel) out.push(['Charbon', `1 unité / ${m.fuel.secondsPerUnit} s`], ['Réservoir', `${m.fuel.maxUnits} unités`]);
+  if (m.levels && m.levels.length > 1) out.push(['Améliorable', `jusqu'au niveau ${m.levels.length} (touche E dessus)`]);
   if (s.power) out.push(['Consommation', `${s.power} kW`]);
   return out;
 }
@@ -325,10 +326,88 @@ const DRILL_STATUS: Record<string, [string, string]> = {
   depleted: ['Gisement épuisé', 'bad'],
 };
 
+/**
+ * Plan 3×3 autour de la foreuse, orienté comme dans le monde : cases forées au
+ * niveau `level` (couleur du gisement, ou hachures si elles n'ont rien à forer)
+ * et flèche de sortie.
+ */
+function drillMap(g: GameState, d: Drill, level: number): string {
+  const covered = d.reach(level);
+  const fx = d.x + DX[d.dir];
+  const fy = d.y + DY[d.dir];
+  let cells = '';
+  for (let dy = -1; dy <= 1; dy++)
+    for (let dx = -1; dx <= 1; dx++) {
+      const x = d.x + dx;
+      const y = d.y + dy;
+      const t = covered.find((c) => c.x === x && c.y === y);
+      const dep = t && d.canDrill(t, g) ? g.world.depositAt(x, y) : null;
+      let cls = t ? (dep ? 'on' : 'dry') : '';
+      let style = '';
+      let inner = '';
+      if (dep) {
+        const r = getResource(dep);
+        style = ` style="--c:${r.color};--l:${r.light};--d:${r.dark}"`;
+      }
+      if (dx === 0 && dy === 0) cls += ' me';
+      else if (x === fx && y === fy) {
+        cls += ' out';
+        inner = DIR_ARROWS[d.dir];
+      }
+      cells += `<span class="${cls.trim()}"${style}>${inner}</span>`;
+    }
+  return `<div class="drill-map">${cells}</div>`;
+}
+
+/** Colonnes « niveau 1 / 2 / 3 » : cases couvertes, cadence obtenue ici, achat du niveau suivant. */
+function drillLevels(g: GameState, d: Drill): string {
+  const next = d.nextLevel();
+  const blocker = g.drillUpgradeBlocker(d);
+  const cols = d.levels
+    .map((l) => {
+      const n = d.sources(g, l.level).length;
+      const state = l.level < d.level ? 'owned' : l.level === d.level ? 'current' : l.level === d.level + 1 ? 'next' : 'later';
+      let foot: string;
+      if (state === 'current') foot = '<span class="dl-tag">Niveau actuel</span>';
+      else if (state === 'owned') foot = '<span class="dl-done">✓ Installé</span>';
+      else if (state === 'next') {
+        const locked = l.unlock && g.pickaxe.tier < l.unlock.pickaxeTier;
+        const why = locked ? l.unlock!.text : g.money < l.price ? `Il vous manque ${money(l.price - g.money)}` : '';
+        foot = `${btn('drillUpgrade', `Améliorer — ${money(l.price)}`, { cls: 'primary small', disabled: !!blocker })}${
+          why ? `<span class="miss">${why}</span>` : ''
+        }`;
+      } else foot = `<span class="dl-later">${money(l.price)} · après le niveau ${l.level - 1}</span>`;
+      return `<div class="dl ${state}">
+        <div class="dl-title">Niveau ${l.level}</div>
+        ${drillMap(g, d, l.level)}
+        <div class="dl-sum">${l.summary}</div>
+        <div class="dl-rate">${n} case${n > 1 ? 's' : ''} à forer ici · <b>${num(d.def.stats.speed * n * 60, 0)}/min</b></div>
+        ${l.unlock && state === 'later' ? `<div class="dl-lock">${l.unlock.text}</div>` : ''}
+        <div class="dl-foot">${foot}</div>
+      </div>`;
+    })
+    .join('');
+  const tip = next
+    ? `Chaque case avec un gisement produit ${num(d.def.stats.speed * 60, 0)}/min, pour le même charbon`
+    : 'Niveau maximal : elle fore sous elle, à gauche, à droite et derrière';
+  return `<h4>Amélioration — niveau ${d.level} / ${d.maxLevel}</h4>
+    <div class="drill-levels">${cols}</div>
+    <p class="hint">${tip} · démonter rembourse les améliorations.</p>`;
+}
+
 export function drillPanel(g: GameState, d: Drill): string {
   const [label, cls] = DRILL_STATUS[d.status];
-  const dep = g.world.depositAt(d.x, d.y);
-  const reserve = g.world.reserve[g.world.idx(d.x, d.y)];
+  const sources = d.sources(g);
+  const deposits: Record<string, number> = {};
+  let reserve = 0;
+  for (const t of sources) {
+    const res = g.world.depositAt(t.x, t.y)!;
+    deposits[res] = (deposits[res] ?? 0) + 1;
+    reserve += g.world.reserve[g.world.idx(t.x, t.y)];
+  }
+  const depositList = Object.entries(deposits)
+    .map(([res, n]) => `${resIcon(res)} ${getResource(res).name}${n > 1 ? ` ×${n}` : ''}`)
+    .join(', ');
   const coal = g.inventory.count('coal');
   const secs = d.fuelSeconds();
   // Charbon disponible dans les coffres collés (recharge automatique).
@@ -346,21 +425,21 @@ export function drillPanel(g: GameState, d: Drill): string {
   return `
     <div class="status ${cls}">● ${label}</div>
     <div class="cards"><div class="card">
-      ${stat('Gisement', dep ? `${resIcon(dep)} ${getResource(dep).name}` : 'épuisé')}
-      ${stat('Réserve restante', dep ? `${reserve} unités` : '0')}
-      ${stat('Cadence', `${num(d.def.stats.speed * 60, 0)} unités/min`)}
+      ${stat('Gisements forés', depositList || 'épuisés')}
+      ${stat('Réserve restante', `${reserve} unités`)}
+      ${stat('Cadence', `${num(d.def.stats.speed * sources.length * 60, 0)} unités/min`)}
       ${stat('Extrait au total', String(d.extracted))}
-      ${stat('Sortie', `${DIR_ARROWS[d.dir]} en priorité, sinon tout convoyeur collé`)}
     </div><div class="card">
       ${stat('Charbon chargé', `${d.fuelUnits} / ${d.fuelMax}`)}
       ${stat('Autonomie', `${Math.floor(secs / 60)} min ${Math.floor(secs % 60)} s`)}
       ${chests ? stat('Recharge auto (coffre collé)', `${nearbyFuel} charbon en réserve`) : ''}
       ${stat('Production en attente', `${out} / ${d.def.stats.capacity}`)}
-      <div class="buy">${btn('drillFuel', `Charger le charbon (${coal} dans le sac)`, { cls: 'primary', disabled: coal <= 0 || d.fuelUnits >= d.fuelMax })}
+    </div></div>
+    <div class="buy">${btn('drillFuel', `Charger le charbon du sac (${coal})`, { cls: 'primary', disabled: coal <= 0 || d.fuelUnits >= d.fuelMax })}
       ${btn('drillCollect', `Récupérer la production (${out})`, { disabled: out <= 0 })}
       ${btn('drillRotate', 'Tourner ↻')}</div>
-    </div></div>
-    <p class="hint">Astuce : un coffre de charbon collé à la foreuse la recharge automatiquement. Un convoyeur qui pointe vers elle peut aussi lui livrer du charbon.</p>`;
+    ${drillLevels(g, d)}
+    <p class="hint">Sortie devant la flèche ${DIR_ARROWS[d.dir]}, sinon dans un convoyeur collé. Un coffre de charbon collé la recharge tout seul.</p>`;
 }
 
 // ------------------------------------------------------------------ aide
@@ -375,6 +454,7 @@ export function helpPanel(keys: { move: string; label: (c: string) => string }):
     <div><h4>Construire</h4><p>${k('KeyB')} : mode construction. <kbd>Clic gauche</kbd> poser (glisser pour tracer des convoyeurs), <kbd>clic droit</kbd> démonter, ${k('KeyR')} tourner, <kbd>1-9</kbd> choisir</p></div>
     <div><h4>Zoom</h4><p>Molette de la souris</p></div>
     <div><h4>Wagonnet</h4><p>${k('KeyF')} : monter / descendre</p></div>
+    <div><h4>Améliorer une foreuse</h4><p>${k('KeyE')} sur la foreuse : niveau 2 = cases gauche et droite, niveau 3 = aussi derrière</p></div>
     <div><h4>Menu</h4><p><kbd>Échap</kbd> : pause, sauvegarde, chargement</p></div>
   </div>
   <p class="hint">Le jeu se sauvegarde automatiquement toutes les minutes dans ce navigateur.${

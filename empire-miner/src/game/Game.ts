@@ -295,6 +295,9 @@ export class Game {
       case 'drillRotate':
         if (target) g.rotateAt(target.x, target.y);
         break;
+      case 'drillUpgrade':
+        if (target instanceof Drill) g.upgradeDrill(target);
+        break;
       case 'stationDeposit':
         if (target instanceof RailStation) g.stationDepositAll(target);
         break;
@@ -425,6 +428,10 @@ export class Game {
     }
     const near = g.nearestInteractable();
     if (!this.ui.blocking && near) overlay.interact = near;
+    // Cases forées par la foreuse proche, ou par celle que vise la souris en mode construction.
+    const hovered = this.buildMode && mouseActive ? g.structures.at(mtx, mty) : undefined;
+    const reach = hovered instanceof Drill ? hovered : near instanceof Drill ? near : null;
+    if (!this.ui.blocking && reach) overlay.reach = reach;
 
     // --- simulation (pas fixe)
     if (!paused) {
@@ -505,7 +512,7 @@ export class Game {
     if (near instanceof Building) return `${e} ${BUILDING_INFO[near.type].name} — ${BUILDING_INFO[near.type].prompt}`;
     if (near instanceof Storage) return `${e} Ouvrir le coffre`;
     if (near instanceof ShippingCrate) return `${e} Caisse d'expédition — vente automatique`;
-    if (near instanceof Drill) return `${e} Foreuse — charbon et production`;
+    if (near instanceof Drill) return `${e} Foreuse niv. ${near.level} — charbon, production, amélioration`;
     if (near instanceof Sorter) return `${e} Trieur — choisir le minerai trié`;
     if (near instanceof RailStation) return `${e} ${near.def.name}`;
     if (near instanceof RailSwitch) return `${e} Aiguillage — choisir la branche`;
@@ -693,7 +700,7 @@ export class Game {
     }
     if (s instanceof Drill) {
       const st = { ok: 'en marche', nofuel: 'sans charbon', full: 'sortie bloquée', depleted: 'gisement épuisé' }[s.status];
-      return `<b>Foreuse</b> — ${st}<br>Charbon : ${s.fuelUnits} · extrait : ${s.extracted}`;
+      return `<b>Foreuse</b> niveau ${s.level} — ${st}<br>${s.sources(g).length} case(s) forée(s) · charbon : ${s.fuelUnits} · extrait : ${s.extracted}`;
     }
     if (s instanceof Storage) return `<b>Coffre</b><br>${kg(s.weight())} / ${kg(s.capacity)}`;
     if (s instanceof ShippingCrate)

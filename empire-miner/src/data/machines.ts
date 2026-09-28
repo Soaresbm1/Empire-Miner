@@ -38,6 +38,22 @@ export interface BridgeSpec {
   range: number;
 }
 
+/** Case exploitée par une foreuse, relative à sa flèche de sortie (devant). */
+export type ReachSide = 'under' | 'left' | 'right' | 'back';
+
+/** Niveau d'amélioration d'une machine (acheté sur la machine posée). */
+export interface MachineLevel {
+  level: number;
+  /** Prix de l'amélioration vers ce niveau (0 pour le niveau de base). */
+  price: number;
+  /** Foreuse : cases exploitées. */
+  reach: ReachSide[];
+  /** Condition supplémentaire (niveau de pioche). */
+  unlock?: { pickaxeTier: number; text: string };
+  /** Résumé affiché dans le panneau de la machine. */
+  summary: string;
+}
+
 export interface MachineDef {
   id: string;
   name: string;
@@ -77,6 +93,8 @@ export interface MachineDef {
   station?: 'load' | 'unload';
   /** Aiguillage : se pose sur un embranchement (remplace un rail simple). */
   railSwitch?: boolean;
+  /** Niveaux d'amélioration, du niveau de base (1) au niveau maximal. */
+  levels?: MachineLevel[];
 }
 
 export const MACHINES: MachineDef[] = [
@@ -250,7 +268,7 @@ export const MACHINES: MachineDef[] = [
   {
     id: 'drill',
     name: 'Foreuse à charbon',
-    summary: "Extrait le gisement sous elle. Brûle du charbon.",
+    summary: "Extrait le gisement sous elle. Brûle du charbon. Améliorable : fore aussi les cases voisines.",
     category: 'extraction',
     description: 'Extrait le gisement sous elle et pousse le minerai vers l\'avant (ou dans un convoyeur collé). Brûle du charbon.',
     price: 220,
@@ -262,6 +280,19 @@ export const MACHINES: MachineDef[] = [
     fuel: { res: 'coal', secondsPerUnit: 30, maxUnits: 10 },
     unlock: { pickaxeTier: 2, text: 'Nécessite la Pioche améliorée' },
     needsDeposit: true,
+    // Chaque niveau ajoute des têtes de forage sur les cases voisines (la sortie reste devant) :
+    // chaque case couverte qui a un gisement produit à la cadence de base, pour le même charbon.
+    levels: [
+      { level: 1, price: 0, reach: ['under'], summary: 'Fore la case sous elle.' },
+      { level: 2, price: 280, reach: ['under', 'left', 'right'], summary: 'Fore aussi les cases à gauche et à droite.' },
+      {
+        level: 3,
+        price: 650,
+        reach: ['under', 'left', 'right', 'back'],
+        unlock: { pickaxeTier: 3, text: 'Nécessite la Pioche en fer' },
+        summary: 'Fore aussi la case derrière elle.',
+      },
+    ],
   },
   {
     id: 'storage',

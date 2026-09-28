@@ -44,6 +44,8 @@ export interface Overlay {
   removeHint: { tx: number; ty: number } | null;
   /** Structure avec laquelle le joueur peut interagir. */
   interact: Structure | null;
+  /** Foreuse dont on montre les cases forées (proche du joueur ou visée). */
+  reach?: Drill | null;
 }
 
 interface Drawable {
@@ -671,6 +673,7 @@ export class Renderer {
     const y = d.y * TILE;
     const active = d.status === 'ok';
     const jiggle = active ? Math.round(Math.sin(this.time * 40) * 0.5) : 0;
+    if (d.level > 1) this.drawDrillHeads(d);
     // Ombre et socle
     ctx.fillStyle = 'rgba(0,0,0,0.35)';
     ctx.fillRect(x + 1, y + 13, 15, 3);
@@ -711,6 +714,72 @@ export class Renderer {
     ctx.fillStyle = fuel > 0.2 ? '#f08a24' : '#d0342c';
     ctx.fillRect(x + 1, y + 15, Math.round(14 * Math.min(1, fuel)), 2);
     if (active && Math.random() < 0.15) this.fx.emit('dust', x + 8, y + 13, 'rgba(160,140,120,0.5)', 1, 10);
+  }
+
+  /**
+   * Têtes de forage des niveaux 2 et 3 : un bras et un foret qui mordent dans
+   * chaque case voisine couverte. Le foret tourne quand il a un gisement à forer.
+   */
+  private drawDrillHeads(d: Drill): void {
+    const ctx = this.ctx;
+    const state = this.state;
+    for (const t of d.reach()) {
+      if (t.side === 'under') continue;
+      const ddx = t.x - d.x;
+      const ddy = t.y - d.y;
+      const live = !!state && d.status === 'ok' && d.canDrill(t, state);
+      const phase = live ? Math.floor(d.activeTime * 14) : 0;
+      ctx.save();
+      // Dessiné vers l'est puis tourné d'un quart de tour : les pixels restent nets.
+      ctx.translate(d.x * TILE + 8, d.y * TILE + 8);
+      ctx.rotate(Math.atan2(ddy, ddx));
+      ctx.fillStyle = 'rgba(0,0,0,0.3)';
+      ctx.fillRect(6, 1, 9, 2);
+      ctx.fillStyle = '#4a4b52';
+      ctx.fillRect(5, -1, 5, 3);
+      ctx.fillStyle = '#6a6b72';
+      ctx.fillRect(5, -1, 5, 1);
+      ctx.fillStyle = '#1a1418';
+      ctx.fillRect(9, -4, 4, 8);
+      ctx.fillRect(12, -3, 3, 6);
+      ctx.fillRect(14, -2, 2, 4);
+      const cols: [number, number][] = [[-3, 6], [-3, 6], [-2, 4], [-2, 4], [-1, 2]];
+      cols.forEach(([y0, h], k) => {
+        ctx.fillStyle = (k + phase) % 2 ? '#c7ccd6' : live ? '#7a808c' : '#5f646e';
+        ctx.fillRect(10 + k, y0, 1, h);
+      });
+      ctx.restore();
+      if (live && Math.random() < 0.06)
+        this.fx.emit('dust', (d.x + 0.5 + ddx * 0.8) * TILE, (d.y + 0.5 + ddy * 0.8) * TILE, 'rgba(160,140,120,0.5)', 1, 10);
+    }
+  }
+
+  /** Cases forées par une foreuse : coins verts si elles ont un gisement, gris sinon. */
+  private drawReach(d: Drill): void {
+    const ctx = this.ctx;
+    const state = this.state;
+    if (!state) return;
+    const pulse = 0.6 + Math.sin(this.time * 5) * 0.25;
+    const L = 4;
+    for (const t of d.reach()) {
+      const live = d.canDrill(t, state);
+      const x = t.x * TILE;
+      const y = t.y * TILE;
+      if (live) {
+        ctx.fillStyle = 'rgba(125,255,160,0.1)';
+        ctx.fillRect(x + 1, y + 1, TILE - 2, TILE - 2);
+      }
+      ctx.fillStyle = live ? `rgba(125,255,160,${pulse})` : `rgba(168,149,124,${pulse * 0.8})`;
+      for (const [cx, cy, sx, sy] of [
+        [x, y, 1, 1],
+        [x + TILE - 1, y, -1, 1],
+        [x, y + TILE - 1, 1, -1],
+        [x + TILE - 1, y + TILE - 1, -1, -1],
+      ]) {
+        ctx.fillRect(sx > 0 ? cx : cx - L + 1, cy, L, 1);
+        ctx.fillRect(cx, sy > 0 ? cy : cy - L + 1, 1, L);
+      }
+    }
   }
 
   private drawArrow(x: number, y: number, dir: Dir, color: string): void {
@@ -1008,6 +1077,7 @@ export class Renderer {
       }
       ctx.globalAlpha = 1;
     }
+    if (o.reach) this.drawReach(o.reach);
     if (o.removeHint) {
       ctx.strokeStyle = `rgba(255,120,60,${0.6 + Math.sin(t * 8) * 0.3})`;
       ctx.lineWidth = 1;

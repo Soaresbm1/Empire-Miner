@@ -41,6 +41,8 @@ export class UI {
   private readonly tooltip = $('#tooltip');
   private readonly cache = new Map<string, string>();
   private panelSig = '';
+  /** Le prochain rendu du panneau est une ouverture (animation). */
+  private popNext = false;
   private refreshTimer = 0;
 
   constructor(private readonly host: UIHost) {
@@ -156,6 +158,7 @@ export class UI {
   openPanel(kind: PanelKind, target: Structure | null = null, tab = 'tools'): void {
     this.panel = { kind, target, tab };
     this.panelSig = '';
+    this.popNext = true;
     this.syncOverlay();
   }
 
@@ -230,11 +233,14 @@ export class UI {
         break;
     }
     const money$ = kind === 'counter' || kind === 'workshop' ? `<span class="panel-money"><span class="coin"></span>${money(g.money)}</span>` : '';
-    const html = `<div class="panel panel-${kind}"><header><h2>${title}</h2>${money$}<button class="close" data-action="close" title="Fermer">✕</button></header><div class="panel-body">${body}</div></div>`;
-    if (html === this.panelSig) return;
-    this.panelSig = html;
+    const inner = `<header><h2>${title}</h2>${money$}<button class="close" data-action="close" title="Fermer">✕</button></header><div class="panel-body">${body}</div>`;
+    const sig = `${kind}|${inner}`;
+    if (sig === this.panelSig) return;
+    this.panelSig = sig;
     const scroll = this.panelRoot.querySelector('.panel-body')?.scrollTop ?? 0;
-    this.panelRoot.innerHTML = html;
+    // L'animation d'ouverture ne joue qu'à l'ouverture, pas à chaque rafraîchissement du contenu.
+    this.panelRoot.innerHTML = `<div class="panel panel-${kind}${this.popNext ? ' pop' : ''}">${inner}</div>`;
+    this.popNext = false;
     const pb = this.panelRoot.querySelector('.panel-body');
     if (pb) pb.scrollTop = scroll;
   }
