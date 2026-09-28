@@ -1,6 +1,7 @@
 /**
  * Foreuse : extrait le gisement situé sous elle et pousse chaque unité vers
- * la tuile de devant (convoyeur, coffre…). Fonctionne au charbon.
+ * la tuile de devant (convoyeur, coffre…) ou, à défaut, dans n'importe quel
+ * convoyeur collé à elle. Fonctionne au charbon.
  *
  * Elle accepte du charbon comme combustible depuis un convoyeur arrivant par
  * l'arrière ou les côtés : son alimentation peut donc elle-même être automatisée.
@@ -96,10 +97,12 @@ export class Drill extends Structure {
     }
   }
 
+  /** Sortie : la tuile devant la flèche en priorité, sinon un convoyeur collé sur un autre côté. */
   private tryOutput(ctx: StructureContext): void {
     if (!this.buffer.length) return;
-    const next = ctx.structureAt(this.x + DX[this.dir], this.y + DY[this.dir]);
-    if (next && next.accept(this.buffer[0], this.dir, ctx)) this.buffer.shift();
+    const res = this.buffer[0];
+    const front = ctx.structureAt(this.x + DX[this.dir], this.y + DY[this.dir]);
+    if ((front && front.accept(res, this.dir, ctx)) || this.pushToAdjacentConveyor(res, ctx, this.dir)) this.buffer.shift();
   }
 
   contents(): Record<string, number> {

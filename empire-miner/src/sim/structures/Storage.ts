@@ -1,4 +1,8 @@
-/** Coffre de stockage : accepte n'importe quel minerai, limité en poids. */
+/**
+ * Coffre de stockage : accepte n'importe quel minerai, limité en poids.
+ * Si un convoyeur est collé au coffre (sans pointer vers lui), le coffre s'y vide :
+ * il peut ainsi servir de tampon au milieu d'une chaîne.
+ */
 import type { Dir } from '../../core/dir';
 import { getMachine } from '../../data/machines';
 import { getResource } from '../../data/resources';
@@ -26,6 +30,21 @@ export class Storage extends Structure {
 
   canAccept(res: string): boolean {
     return this.room(res) >= 1;
+  }
+
+  /** Ressource suivante à sortir (tour de rôle entre les types de minerai). */
+  private resCursor = 0;
+
+  update(_dt: number, ctx: StructureContext): void {
+    // Au plus un objet par côté et par pas : le débit reste limité par les convoyeurs.
+    for (let k = 0; k < 4; k++) {
+      const keys = Object.keys(this.items);
+      if (!keys.length) return;
+      const res = keys[this.resCursor % keys.length];
+      if (!this.pushToAdjacentConveyor(res, ctx)) return;
+      this.take(res, 1);
+      this.resCursor++;
+    }
   }
 
   accept(res: string, _travel: Dir, ctx: StructureContext): boolean {

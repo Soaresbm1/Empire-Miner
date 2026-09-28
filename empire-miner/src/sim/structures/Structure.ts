@@ -4,7 +4,7 @@
  * `canAccept` / `accept`. Toute nouvelle machine (trieur, four…) n'a qu'à
  * l'implémenter pour se connecter aux convoyeurs existants.
  */
-import type { Dir } from '../../core/dir';
+import { DX, DY, type Dir } from '../../core/dir';
 import type { World } from '../World';
 import type { SimEvent } from '../events';
 import type { DropSystem } from '../Drops';
@@ -41,10 +41,31 @@ export abstract class Structure {
   /** Peut être démontée par le joueur. */
   removable = true;
 
+  /** Côté par lequel commencer la prochaine sortie (répartition équitable entre convoyeurs). */
+  private outCursor = 0;
+
   constructor(x: number, y: number, dir: Dir) {
     this.x = x;
     this.y = y;
     this.dir = dir;
+  }
+
+  /**
+   * Pousse `res` sur un convoyeur collé (structure 1×1). Un convoyeur qui pointe vers
+   * cette structure est une entrée : il refuse l'objet (arrivée de face), rien ne repart
+   * donc en arrière. Les côtés sont essayés à tour de rôle. Renvoie vrai si l'objet est parti.
+   */
+  protected pushToAdjacentConveyor(res: string, ctx: StructureContext, skip?: Dir): boolean {
+    for (let k = 0; k < 4; k++) {
+      const d = ((this.outCursor + k) % 4) as Dir;
+      if (d === skip) continue;
+      const next = ctx.structureAt(this.x + DX[d], this.y + DY[d]);
+      if (next?.type === 'conveyor' && next.accept(res, d, ctx)) {
+        this.outCursor = (d + 1) % 4;
+        return true;
+      }
+    }
+    return false;
   }
 
   update(_dt: number, _ctx: StructureContext): void {}

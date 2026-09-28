@@ -42,8 +42,14 @@ accept(res, travelDir, ctx): boolean
 ```
 
 Un convoyeur pousse l'objet de tête vers la structure devant lui ; une foreuse pousse sa production
-de la même façon ; un coffre accepte tout ce qui rentre dans sa capacité ; une caisse d'expédition aussi,
-puis crédite l'argent via `StructureContext.autoSell` à chaque passage du transporteur. Un futur trieur, concasseur ou four
+de la même façon (devant sa flèche, sinon un convoyeur collé) ; un coffre accepte tout ce qui rentre dans sa
+capacité et se vide dans les convoyeurs collés ; une caisse d'expédition accepte aussi, puis crédite l'argent
+via `StructureContext.autoSell` à chaque passage du transporteur.
+
+La sortie vers les convoyeurs collés (`Structure.pushToAdjacentConveyor`) essaie les côtés à tour de rôle.
+Un convoyeur qui pointe vers la structure refuse l'objet (arrivée de face) : c'est une entrée, rien ne repart
+en arrière. Les coffres ne se vident que dans des convoyeurs, jamais directement dans un autre coffre, ce qui
+évite les allers-retours entre deux coffres voisins. Un futur trieur, concasseur ou four
 n'a qu'à implémenter ces deux méthodes pour s'insérer dans les chaînes existantes.
 
 Chaque tuile de convoyeur a une capacité (objets) et un espacement minimal : si la sortie n'absorbe pas assez

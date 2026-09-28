@@ -216,6 +216,7 @@ try {
   await ev(() => {
     const g = window.__EM.state;
     g.money += 600;
+    g.inventory.items = {}; // sac vidé : le charbon doit y tenir quel que soit le hasard des ramassages
     g.inventory.add('coal', 6);
   });
   await teleport(58, 8);
@@ -319,18 +320,21 @@ try {
   await page.waitForTimeout(300);
   await page.keyboard.press('KeyB');
   await page.waitForTimeout(100);
-  // Retire le coffre (clic droit) pour prolonger la ligne.
-  p = await tileScreen(53, S + 10);
-  await page.mouse.move(p.x, p.y);
-  await page.waitForTimeout(60);
-  await page.mouse.click(p.x, p.y, { button: 'right' });
-  await page.waitForTimeout(150);
-  check(!(await ev(() => window.__EM.state.structures.at(53, 22))), 'le coffre est démonté au clic droit');
-  // Trace les convoyeurs : ouest jusqu'au puits, puis nord jusqu'à la surface.
+  // Démontage au clic droit : pose un convoyeur de trop puis le retire.
   await page.keyboard.press('Digit1');
   await page.waitForTimeout(60);
+  p = await tileScreen(51, S + 11);
+  await page.mouse.move(p.x, p.y);
+  await page.waitForTimeout(60);
+  await page.mouse.down();
+  await page.mouse.up();
+  await page.waitForTimeout(150);
+  await page.mouse.click(p.x, p.y, { button: 'right' });
+  await page.waitForTimeout(150);
+  check(!(await ev(() => window.__EM.state.structures.at(51, 23))), 'un convoyeur est démonté au clic droit');
+  // Le coffre reste en place : les convoyeurs partent de lui (ouest jusqu'au puits, puis nord jusqu'à la surface).
   const path = [];
-  for (let x = 53; x >= 50; x--) path.push([x, S + 10]);
+  for (let x = 52; x >= 50; x--) path.push([x, S + 10]);
   for (let y = S + 9; y >= S - 1; y--) path.push([50, y]);
   p = await tileScreen(...path[0]);
   await page.mouse.move(p.x, p.y);
@@ -359,7 +363,21 @@ try {
     for (let y = 11; y <= 22; y++) belts.push(g.structures.at(50, y)?.type === 'conveyor' && g.structures.at(50, y).dir === 3);
     return { crate: g.structures.at(50, 10)?.type, shaft: belts.every(Boolean), turn: g.structures.at(51, 22)?.dir };
   });
-  check(line.crate === 'shipping' && line.shaft && line.turn === 2, 'convoyeurs tracés jusqu’à la caisse en surface');
+  check(line.crate === 'shipping' && line.shaft && line.turn === 2, 'convoyeurs tracés du coffre jusqu’à la caisse en surface');
+
+  // Ce qu'on dépose dans le coffre repart sur le convoyeur collé.
+  await teleport(53, S + 11);
+  await page.waitForTimeout(300);
+  await pressE();
+  check(await page.isVisible('.panel-storage'), 'le coffre s’ouvre');
+  const bag = await ev(() => Object.values(window.__EM.state.inventory.items).reduce((a, b) => a + b, 0));
+  await page.click('[data-action="storageDeposit"]');
+  await page.waitForTimeout(100);
+  await page.keyboard.press('Escape');
+  const inChest = await ev(() => Object.values(window.__EM.state.structures.at(53, 22).items).reduce((a, b) => a + b, 0));
+  await page.waitForTimeout(6000);
+  const leftInChest = await ev(() => Object.values(window.__EM.state.structures.at(53, 22).items).reduce((a, b) => a + b, 0));
+  check(bag > 0 && inChest > 0 && leftInChest < inChest, `le sac déposé dans le coffre part sur le convoyeur (${inChest} → ${leftInChest} dans le coffre)`);
 
   // Le joueur reste au fond de la mine : l'argent doit rentrer tout seul.
   await teleport(47, S + 14);

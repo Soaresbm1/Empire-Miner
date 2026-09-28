@@ -187,6 +187,7 @@ export function storagePanel(g: GameState, s: Storage): string {
   return `
     <div class="bar big"><div style="width:${Math.min(100, (w / s.capacity) * 100)}%"></div><span>${kg(w)} / ${kg(s.capacity)}</span></div>
     ${items.length ? `<table class="table"><tbody>${rows}</tbody></table>` : '<p class="empty">Coffre vide. Reliez-le à une foreuse avec des convoyeurs, ou déposez-y votre sac.</p>'}
+    <p class="hint">Un convoyeur collé au coffre qui ne pointe pas vers lui en sort les minerais automatiquement.</p>
     <div class="panel-footer"><span>Votre sac : ${kg(g.inventory.weight())} / ${kg(g.inventory.capacity)}</span>
     <span>${btn('storageDeposit', 'Tout déposer', { disabled: g.inventory.isEmpty() })} ${btn('storageTakeAll', 'Tout prendre', { cls: 'primary', disabled: !items.length })}</span></div>`;
 }
@@ -236,7 +237,7 @@ export function drillPanel(g: GameState, d: Drill): string {
       ${stat('Réserve restante', dep ? `${reserve} unités` : '0')}
       ${stat('Cadence', `${num(d.def.stats.speed * 60, 0)} unités/min`)}
       ${stat('Extrait au total', String(d.extracted))}
-      ${stat('Sortie', `${DIR_ARROWS[d.dir]} (vers la tuile devant la flèche)`)}
+      ${stat('Sortie', `${DIR_ARROWS[d.dir]} en priorité, sinon tout convoyeur collé`)}
     </div><div class="card">
       ${stat('Charbon chargé', `${d.fuelUnits} / ${d.fuelMax}`)}
       ${stat('Autonomie', `${Math.floor(secs / 60)} min ${Math.floor(secs % 60)} s`)}
