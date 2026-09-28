@@ -1,0 +1,71 @@
+# Architecture
+
+```
+src/
+  core/        constantes, aléatoire déterministe, directions, entrées clavier/souris
+  data/        données pures : ressources, blocs, outils, machines, zones de profondeur
+  sim/         simulation (aucune dépendance au DOM) — testable en Node
+    World.ts             grille de tuiles persistante (blocs, gisements, réserves, dégâts, exploration)
+    generator.ts         génération déterministe de la mine depuis une graine
+    GameState.ts         état complet + boucle update(dt, intention du joueur)
+    Drops.ts             minerais physiques au sol
+    Inventory.ts         sac limité en poids + kits de construction
+    StructureManager.ts  index spatial des structures et ordre de mise à jour
+    structures/          Conveyor, Drill, Storage, Building (+ registre de fabrication)
+    visibility.ts        exploration (révélation des galeries)
+    objectives.ts        objectifs calculés depuis l'état réel
+    events.ts            événements émis vers la présentation
+  save/        sérialisation versionnée (RLE + base64 pour les grilles)
+  render/      rendu Canvas 2D : peintre de tuiles, cache par blocs, sprites, effets, éclairage
+  audio/       effets sonores synthétisés (Web Audio)
+  ui/          HUD et panneaux HTML au-dessus du canvas
+  game/        Game : boucle à pas fixe, entrées → intentions, construction, menus, sauvegardes
+```
+
+## Principes
+
+1. **La simulation ne connaît pas la présentation.** `GameState.update(dt, intent)` fait avancer le monde ;
+   elle publie des `SimEvent` (coup, bloc détruit, vente…) que `Game` transforme en sons, particules et messages.
+2. **Pas fixe (1/60 s).** Le rendu interpole la caméra mais la logique reste déterministe à pas constant.
+3. **Données d'abord.** Les ressources, blocs, outils et machines sont des tables ; le code les lit.
+4. **Un seul monde persistant.** La mine du début n'est jamais remplacée : chaque tuile minée, chaque gisement
+   exploité et chaque machine posée sont sauvegardés.
+5. **Tout le monde simulé en permanence.** Les machines tournent même hors de l'écran.
+
+## Échanges de minerais
+
+Toutes les structures parlent la même interface :
+
+```ts
+canAccept(res, travelDir): boolean
+accept(res, travelDir, ctx): boolean
+```
+
+Un convoyeur pousse l'objet de tête vers la structure devant lui ; une foreuse pousse sa production
+de la même façon ; un coffre accepte tout ce qui rentre dans sa capacité. Un futur trieur, concasseur ou four
+n'a qu'à implémenter ces deux méthodes pour s'insérer dans les chaînes existantes.
+
+Chaque tuile de convoyeur a une capacité (objets) et un espacement minimal : si la sortie n'absorbe pas assez
+vite, les objets s'accumulent et le convoyeur sature. Les convoyeurs sont mis à jour de l'aval vers l'amont
+(ordre recalculé quand le réseau change) pour un débit régulier.
+
+## Étendre le jeu
+
+- **Nouveau minerai** : ajouter une entrée dans `src/data/resources.ts` (valeur, poids, rareté, résistance,
+  niveau, profondeurs, filons, réserves, couleurs). Le bloc de filon, la génération, l'économie, l'inventaire,
+  les foreuses et le rendu le prennent en compte automatiquement.
+- **Nouvelle roche hôte** : `HOST_ROCKS` dans `src/data/blocks.ts`.
+- **Nouvelle machine** : définition dans `src/data/machines.ts`, classe dans `src/sim/structures/`,
+  enregistrement dans `structures/registry.ts`, rendu dans `Renderer.drawStructure`, panneau éventuel dans `ui/panels.ts`.
+- **Contraintes de profondeur** (ventilation, eau, chaleur, stabilité, électricité) : ajouter des champs par
+  tuile dans `World` (comme `reserve`), un système appelé depuis `GameState.update`, et ses données dans
+  `data/depth.ts`. Le format de sauvegarde est versionné (`SAVE_VERSION`) pour migrer les anciennes parties.
+- **Plusieurs niveaux de mine** : `World` est une grille autonome ; un futur `GameState` pourra en posséder
+  plusieurs, reliés par des ascenseurs (structures qui transfèrent des objets d'une grille à l'autre).
+
+## Sauvegarde
+
+`save/save.ts` régénère le monde depuis la graine puis réapplique : blocs, gisements, réserves, dégâts partiels,
+exploration, objets au sol, structures (avec leur contenu : objets sur convoyeurs, charbon, tampons, coffres),
+joueur, argent, inventaire, kits, améliorations et statistiques. Stockage : `localStorage` (+ copie de secours)
+et export/import de fichier JSON.

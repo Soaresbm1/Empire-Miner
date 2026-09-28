@@ -1,0 +1,728 @@
+/**
+ * Rendu du monde sur un canvas 2D : terrain (cache par blocs), machines,
+ * objets, personnage, particules et éclairage. Lecture seule de l'état de jeu.
+ */
+import { SURFACE_ROWS, TILE, clamp } from '../core/constants';
+import { DX, DY, Dir } from '../core/dir';
+import { getBlock } from '../data/blocks';
+import { getMachine } from '../data/machines';
+import { getResource } from '../data/resources';
+import type { GameState } from '../sim/GameState';
+import { Building } from '../sim/structures/Building';
+import { Conveyor } from '../sim/structures/Conveyor';
+import { Drill } from '../sim/structures/Drill';
+import { Storage } from '../sim/structures/Storage';
+import type { Structure } from '../sim/structures/Structure';
+import { ChunkCache } from './ChunkCache';
+import { Fx } from './fx';
+import {
+  PICK_ANGLES,
+  PICK_SIZE,
+  PlayerSprites,
+  buildCounterSprite,
+  buildCrackSprites,
+  buildLanternSprite,
+  buildNuggetSprites,
+  buildPickaxeSprites,
+  buildPlayerSprites,
+  buildWorkshopSprite,
+} from './sprites';
+
+export interface Overlay {
+  /** Tuile visée par la pioche. */
+  target: { tx: number; ty: number; ok: boolean } | null;
+  /** Aperçu de construction. */
+  ghost: { machine: string; tx: number; ty: number; dir: Dir; ok: boolean } | null;
+  /** Structure sous le curseur en mode construction (démontage). */
+  removeHint: { tx: number; ty: number } | null;
+  /** Structure avec laquelle le joueur peut interagir. */
+  interact: Structure | null;
+}
+
+interface Drawable {
+  y: number;
+  draw: () => void;
+}
+
+export class Renderer {
+  readonly canvas: HTMLCanvasElement;
+  private readonly ctx: CanvasRenderingContext2D;
+  private readonly light: HTMLCanvasElement;
+  private readonly lctx: CanvasRenderingContext2D;
+  zoom = 3;
+  zoomBias = 0;
+  camX = 0;
+  camY = 0;
+  readonly fx = new Fx();
+  private chunks: ChunkCache | null = null;
+  private state: GameState | null = null;
+  private readonly player: PlayerSprites;
+  private readonly picks: HTMLCanvasElement[][];
+  private readonly nuggets: Map<string, HTMLCanvasElement>;
+  private readonly cracks: HTMLCanvasElement[];
+  private readonly counter: HTMLCanvasElement;
+  private readonly workshop: HTMLCanvasElement;
+  private readonly lantern: HTMLCanvasElement;
+  private time = 0;
+  private smokeTimer = 0;
+
+  constructor(canvas: HTMLCanvasElement) {
+    this.canvas = canvas;
+    this.ctx = canvas.getContext('2d')!;
+    this.light = document.createElement('canvas');
+    this.lctx = this.light.getContext('2d')!;
+    this.player = buildPlayerSprites();
+    this.picks = buildPickaxeSprites();
+    this.nuggets = buildNuggetSprites();
+    this.cracks = buildCrackSprites();
+    this.counter = buildCounterSprite();
+    this.workshop = buildWorkshopSprite();
+    this.lantern = buildLanternSprite();
+    this.resize();
+  }
+
+  setState(state: GameState): void {
+    this.state = state;
+    this.chunks = new ChunkCache(state.world);
+    this.fx.particles = [];
+    this.fx.texts = [];
+    this.snapCamera();
+  }
+
+  resize(): void {
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    const w = Math.floor(window.innerWidth * dpr);
+    const h = Math.floor(window.innerHeight * dpr);
+    if (this.canvas.width !== w || this.canvas.height !== h) {
+      this.canvas.width = w;
+      this.canvas.height = h;
+      this.light.width = Math.ceil(w / 2);
+      this.light.height = Math.ceil(h / 2);
+    }
+    const base = Math.round(h / (TILE * 16));
+    this.zoom = clamp(base + this.zoomBias, 2, 9);
+  }
+
+  adjustZoom(delta: number): void {
+    this.zoomBias = clamp(this.zoomBias + delta, -2, 3);
+    this.resize();
+  }
+
+  get viewW(): number {
+    return this.canvas.width / this.zoom;
+  }
+
+  get viewH(): number {
+    return this.canvas.height / this.zoom;
+  }
+
+  snapCamera(): void {
+    if (!this.state) return;
+    this.camX = this.state.player.x - this.viewW / 2;
+    this.camY = this.state.player.y - 8 - this.viewH / 2;
+    this.clampCamera();
+  }
+
+  private clampCamera(): void {
+    if (!this.state) return;
+    const ww = this.state.world.w * TILE;
+    const wh = this.state.world.h * TILE;
+    this.camX = this.viewW >= ww ? (ww - this.viewW) / 2 : clamp(this.camX, 0, ww - this.viewW);
+    this.camY = this.viewH >= wh ? (wh - this.viewH) / 2 : clamp(this.camY, 0, wh - this.viewH);
+  }
+
+  /** Caméra libre (menu principal) : centre la vue sur un point. */
+  lookAt(x: number, y: number): void {
+    this.camX = x - this.viewW / 2;
+    this.camY = y - this.viewH / 2;
+    this.clampCamera();
+  }
+
+  update(dt: number, follow = true): void {
+    this.time += dt;
+    this.fx.update(dt);
+    if (!this.state) return;
+    if (follow) {
+      const tx = this.state.player.x - this.viewW / 2;
+      const ty = this.state.player.y - 8 - this.viewH / 2;
+      const k = 1 - Math.exp(-8 * dt);
+      this.camX += (tx - this.camX) * k;
+      this.camY += (ty - this.camY) * k;
+      this.clampCamera();
+    }
+    // Fumée des foreuses actives.
+    this.smokeTimer -= dt;
+    if (this.smokeTimer <= 0) {
+      this.smokeTimer = 0.35;
+      for (const s of this.state.structures.list)
+        if (s instanceof Drill && s.status === 'ok' && this.inView(s.x * TILE, s.y * TILE, 64))
+          this.fx.emit('smoke', s.x * TILE + 11, s.y * TILE + 1, 'rgba(90,90,96,0.6)', 1, 6);
+    }
+  }
+
+  screenToWorld(sx: number, sy: number): { x: number; y: number } {
+    const dpr = this.canvas.width / window.innerWidth;
+    return { x: (sx * dpr) / this.zoom + this.camX, y: (sy * dpr) / this.zoom + this.camY };
+  }
+
+  worldToScreen(x: number, y: number): { x: number; y: number } {
+    const dpr = this.canvas.width / window.innerWidth;
+    return { x: ((x - this.camX) * this.zoom) / dpr, y: ((y - this.camY) * this.zoom) / dpr };
+  }
+
+  private inView(x: number, y: number, margin = 32): boolean {
+    return x > this.camX - margin && y > this.camY - margin && x < this.camX + this.viewW + margin && y < this.camY + this.viewH + margin;
+  }
+
+  // ------------------------------------------------------------------ rendu principal
+
+  draw(overlay: Overlay, showPlayer = true): void {
+    const { ctx, canvas } = this;
+    const state = this.state;
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.fillStyle = '#07060a';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    if (!state || !this.chunks) return;
+    ctx.imageSmoothingEnabled = false;
+
+    const shakeX = this.fx.shake > 0 ? (Math.random() - 0.5) * this.fx.shake : 0;
+    const shakeY = this.fx.shake > 0 ? (Math.random() - 0.5) * this.fx.shake : 0;
+    const ox = Math.round((-this.camX + shakeX) * this.zoom);
+    const oy = Math.round((-this.camY + shakeY) * this.zoom);
+    ctx.setTransform(this.zoom, 0, 0, this.zoom, ox, oy);
+
+    const x0 = this.camX - TILE;
+    const y0 = this.camY - TILE;
+    const x1 = this.camX + this.viewW + TILE;
+    const y1 = this.camY + this.viewH + TILE;
+
+    this.chunks.sync();
+    this.chunks.draw(ctx, x0, y0, x1, y1);
+    this.drawCracks(state);
+
+    // Convoyeurs (niveau du sol) puis objets transportés.
+    const belts: Conveyor[] = [];
+    for (const s of state.structures.list) if (s instanceof Conveyor && this.inView(s.x * TILE, s.y * TILE)) belts.push(s);
+    for (const b of belts) this.drawConveyor(b);
+    for (const b of belts) this.drawBeltItems(b);
+
+    // Objets triés par profondeur (y).
+    const list: Drawable[] = [];
+    for (const d of state.drops.list) {
+      if (!this.inView(d.x, d.y)) continue;
+      list.push({ y: d.y, draw: () => this.drawDrop(d.res, d.count, d.x, d.y - d.z, d.z) });
+    }
+    for (const s of state.structures.list) {
+      if (s instanceof Conveyor || !this.inView(s.x * TILE, s.y * TILE, 64)) continue;
+      list.push({ y: (s.y + s.h) * TILE - 1, draw: () => this.drawStructure(s) });
+    }
+    for (const l of state.layout.lamps)
+      if (this.inView(l.x, l.y)) list.push({ y: l.y - 8, draw: () => ctx.drawImage(this.lantern, Math.round(l.x - this.lantern.width / 2), Math.round(l.y - 4)) });
+    const ent = state.layout.entrance;
+    list.push({ y: ent.y * TILE, draw: () => this.drawEntrance(ent.x, ent.y, ent.w) });
+    if (showPlayer) list.push({ y: state.player.y, draw: () => this.drawPlayer() });
+    list.sort((a, b) => a.y - b.y);
+    for (const d of list) d.draw();
+
+    this.drawParticles();
+    this.drawLighting();
+
+    // Surcouches d'interface dans le monde (au-dessus de l'obscurité).
+    ctx.setTransform(this.zoom, 0, 0, this.zoom, ox, oy);
+    this.drawStatusIcons(state);
+    this.drawOverlay(overlay);
+    this.drawTexts(ox, oy);
+  }
+
+  // ------------------------------------------------------------------ terrain
+
+  private drawCracks(state: GameState): void {
+    const w = state.world;
+    for (const [i, dmg] of w.damage) {
+      const tx = i % w.w;
+      const ty = (i / w.w) | 0;
+      if (!this.inView(tx * TILE, ty * TILE)) continue;
+      const hp = getBlock(w.tiles[i]).hp || 1;
+      const stage = Math.min(3, Math.floor((dmg / hp) * 4));
+      this.ctx.drawImage(this.cracks[stage], tx * TILE, ty * TILE);
+    }
+  }
+
+  private drawEntrance(x: number, y: number, w: number): void {
+    const ctx = this.ctx;
+    const left = x * TILE - 3;
+    const right = (x + w) * TILE + 1;
+    const top = y * TILE - 14;
+    ctx.fillStyle = '#4a3020';
+    ctx.fillRect(left, top, 4, 16);
+    ctx.fillRect(right, top, 4, 16);
+    ctx.fillStyle = '#6e4a2c';
+    ctx.fillRect(left - 2, top - 3, right - left + 8, 5);
+    ctx.fillStyle = '#8a5f38';
+    ctx.fillRect(left - 2, top - 3, right - left + 8, 1);
+    // Panneau
+    ctx.fillStyle = '#3b2616';
+    ctx.fillRect(left + 6, top - 11, right - left - 8, 8);
+    ctx.fillStyle = '#d8b377';
+    ctx.font = '6px monospace';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('MINE', (left + right + 4) / 2, top - 6.5);
+  }
+
+  // ------------------------------------------------------------------ objets
+
+  private drawDrop(res: string, count: number, x: number, y: number, z: number): void {
+    const ctx = this.ctx;
+    const img = this.nuggets.get(res)!;
+    ctx.fillStyle = 'rgba(0,0,0,0.35)';
+    ctx.fillRect(Math.round(x - 3), Math.round(y + z + 1), 6, 2);
+    const bob = z === 0 ? Math.round(Math.sin(this.time * 3 + x) * 0.6) : 0;
+    const n = Math.min(3, count);
+    const offs = [
+      [0, 0],
+      [-3, 1],
+      [3, 1],
+    ];
+    for (let i = n - 1; i >= 0; i--) ctx.drawImage(img, Math.round(x - 3.5 + offs[i][0]), Math.round(y - 5 + offs[i][1] + bob));
+  }
+
+  private beltItemPos(b: Conveyor, p: number, from: Dir): { x: number; y: number } {
+    const cx = (b.x + 0.5) * TILE;
+    const cy = (b.y + 0.5) * TILE;
+    if (p >= 0.5) {
+      const t = (p - 0.5) * 2;
+      return { x: cx + DX[b.dir] * 8 * t, y: cy + DY[b.dir] * 8 * t };
+    }
+    const t = 1 - p * 2;
+    return { x: cx - DX[from] * 8 * t, y: cy - DY[from] * 8 * t };
+  }
+
+  private drawConveyor(b: Conveyor): void {
+    const ctx = this.ctx;
+    const x = b.x * TILE;
+    const y = b.y * TILE;
+    ctx.save();
+    ctx.translate(x + 8, y + 8);
+    ctx.rotate((b.dir * Math.PI) / 2);
+    // Châssis (orienté vers +x)
+    ctx.fillStyle = '#26262c';
+    ctx.fillRect(-8, -7, 16, 14);
+    ctx.fillStyle = '#6a6b74';
+    ctx.fillRect(-8, -7, 16, 2);
+    ctx.fillRect(-8, 5, 16, 2);
+    ctx.fillStyle = '#3a3a42';
+    ctx.fillRect(-8, -5, 16, 10);
+    // Lattes de la bande, animées dans le sens du transport.
+    const off = b.blocked && b.items.length >= b.capacity ? 0 : (this.time * b.speed * 16) % 4;
+    ctx.fillStyle = '#2f2f36';
+    for (let k = -3; k < 3; k++) {
+      const xx = Math.round(-8 + k * 4 + off);
+      if (xx >= -8 && xx < 8) ctx.fillRect(xx, -5, 1, 10);
+    }
+    // Chevron central indiquant la direction.
+    const chev = Math.round(((this.time * b.speed * 16) % 16) - 8);
+    ctx.fillStyle = b.blocked ? '#a8563c' : '#8d8e98';
+    for (let r = 0; r < 3; r++) {
+      const xx = (b.blocked && b.items.length >= b.capacity ? 0 : chev) + r - 1;
+      if (xx >= -8 && xx < 8) {
+        ctx.fillRect(xx, -3 + r, 1, 1);
+        ctx.fillRect(xx, 2 - r, 1, 1);
+      }
+    }
+    // Rouleaux aux extrémités.
+    ctx.fillStyle = '#8a8b94';
+    ctx.fillRect(-8, -5, 1, 10);
+    ctx.fillRect(7, -5, 1, 10);
+    ctx.restore();
+  }
+
+  private drawBeltItems(b: Conveyor): void {
+    for (const it of b.items) {
+      const pos = this.beltItemPos(b, it.p, it.from);
+      this.ctx.drawImage(this.nuggets.get(it.res)!, Math.round(pos.x - 3.5), Math.round(pos.y - 4.5));
+    }
+  }
+
+  private drawStructure(s: Structure): void {
+    if (s instanceof Drill) this.drawDrill(s);
+    else if (s instanceof Storage) this.drawStorage(s);
+    else if (s instanceof Building) this.drawBuilding(s);
+  }
+
+  private drawBuilding(b: Building): void {
+    const img = b.type === 'counter' ? this.counter : this.workshop;
+    const x = b.x * TILE;
+    const y = (b.y + b.h) * TILE - img.height;
+    this.ctx.fillStyle = 'rgba(0,0,0,0.25)';
+    this.ctx.fillRect(x + 2, (b.y + b.h) * TILE - 2, b.w * TILE - 2, 3);
+    this.ctx.drawImage(img, x, y);
+    if (b.type === 'workshop' && Math.random() < 0.04)
+      this.fx.emit('smoke', x + img.width - 9, y + 1, 'rgba(120,120,130,0.5)', 1, 4);
+  }
+
+  private drawDrill(d: Drill): void {
+    const ctx = this.ctx;
+    const x = d.x * TILE;
+    const y = d.y * TILE;
+    const active = d.status === 'ok';
+    const jiggle = active ? Math.round(Math.sin(this.time * 40) * 0.5) : 0;
+    // Ombre et socle
+    ctx.fillStyle = 'rgba(0,0,0,0.35)';
+    ctx.fillRect(x + 1, y + 13, 15, 3);
+    ctx.fillStyle = '#2d2e33';
+    ctx.fillRect(x + 1, y + 3, 14, 12);
+    // Carter jaune (face avant visible : relief)
+    ctx.fillStyle = '#d9a526';
+    ctx.fillRect(x + 2, y + jiggle, 12, 11);
+    ctx.fillStyle = '#f2c230';
+    ctx.fillRect(x + 2, y + jiggle, 12, 2);
+    ctx.fillStyle = '#a57a14';
+    ctx.fillRect(x + 2, y + 9 + jiggle, 12, 3);
+    // Bandes de danger
+    ctx.fillStyle = '#26221e';
+    for (let k = 0; k < 4; k++) ctx.fillRect(x + 3 + k * 3, y + 10 + jiggle, 1, 2);
+    // Engrenage rotatif
+    const a = d.activeTime * 7;
+    const cx = x + 8;
+    const cy = y + 5 + jiggle;
+    ctx.fillStyle = '#4a4b52';
+    ctx.fillRect(cx - 3, cy - 3, 6, 6);
+    ctx.fillStyle = '#9aa0aa';
+    for (let k = 0; k < 4; k++) {
+      const aa = a + (k * Math.PI) / 2;
+      ctx.fillRect(Math.round(cx + Math.cos(aa) * 2.5) - 1, Math.round(cy + Math.sin(aa) * 2.5) - 1, 2, 2);
+    }
+    ctx.fillStyle = '#2d2e33';
+    ctx.fillRect(cx - 1, cy - 1, 2, 2);
+    // Pot d'échappement
+    ctx.fillStyle = '#3a3a40';
+    ctx.fillRect(x + 11, y - 2 + jiggle, 2, 4);
+    // Flèche de sortie
+    this.drawArrow(x + 8 + DX[d.dir] * 6, y + 8 + DY[d.dir] * 6, d.dir, '#ffffff');
+    // Jauge de combustible
+    const fuel = d.fuelSeconds() / (d.fuelMax * (d.def.fuel?.secondsPerUnit ?? 1));
+    ctx.fillStyle = '#1a1418';
+    ctx.fillRect(x + 1, y + 15, 14, 2);
+    ctx.fillStyle = fuel > 0.2 ? '#f08a24' : '#d0342c';
+    ctx.fillRect(x + 1, y + 15, Math.round(14 * Math.min(1, fuel)), 2);
+    if (active && Math.random() < 0.15) this.fx.emit('dust', x + 8, y + 13, 'rgba(160,140,120,0.5)', 1, 10);
+  }
+
+  private drawArrow(x: number, y: number, dir: Dir, color: string): void {
+    const ctx = this.ctx;
+    ctx.save();
+    ctx.translate(Math.round(x), Math.round(y));
+    ctx.rotate((dir * Math.PI) / 2);
+    ctx.fillStyle = '#1a1418';
+    ctx.fillRect(-1, -3, 2, 6);
+    ctx.fillRect(1, -2, 1, 4);
+    ctx.fillRect(2, -1, 1, 2);
+    ctx.fillStyle = color;
+    ctx.fillRect(-1, -2, 1, 4);
+    ctx.fillRect(0, -1, 1, 2);
+    ctx.restore();
+  }
+
+  private drawStorage(s: Storage): void {
+    const ctx = this.ctx;
+    const x = s.x * TILE;
+    const y = s.y * TILE;
+    ctx.fillStyle = 'rgba(0,0,0,0.35)';
+    ctx.fillRect(x + 1, y + 13, 15, 3);
+    // Dessus
+    ctx.fillStyle = '#8a5f38';
+    ctx.fillRect(x + 1, y - 1, 14, 10);
+    ctx.fillStyle = '#a8764a';
+    ctx.fillRect(x + 1, y - 1, 14, 1);
+    // Face avant
+    ctx.fillStyle = '#6b4526';
+    ctx.fillRect(x + 1, y + 9, 14, 6);
+    ctx.fillStyle = '#4a2f1a';
+    for (let k = 0; k < 3; k++) ctx.fillRect(x + 1, y + 1 + k * 3, 14, 1);
+    // Ferrures
+    ctx.fillStyle = '#9aa0aa';
+    ctx.fillRect(x + 1, y - 1, 2, 16);
+    ctx.fillRect(x + 13, y - 1, 2, 16);
+    ctx.fillStyle = '#e0b84a';
+    ctx.fillRect(x + 7, y + 10, 2, 3);
+    // Aperçu du contenu (minerai dominant) + jauge
+    const entries = Object.entries(s.items).sort((a, b) => b[1] - a[1]);
+    if (entries.length) {
+      ctx.drawImage(this.nuggets.get(entries[0][0])!, x + 4, y + 1);
+      if (entries[1]) ctx.drawImage(this.nuggets.get(entries[1][0])!, x + 7, y + 2);
+    }
+    const fill = s.weight() / s.capacity;
+    ctx.fillStyle = '#1a1418';
+    ctx.fillRect(x + 1, y + 15, 14, 2);
+    ctx.fillStyle = fill > 0.9 ? '#d0342c' : '#6fcf6a';
+    ctx.fillRect(x + 1, y + 15, Math.round(14 * Math.min(1, fill)), 2);
+  }
+
+  private drawStatusIcons(state: GameState): void {
+    const ctx = this.ctx;
+    const blink = Math.floor(this.time * 2.5) % 2 === 0;
+    for (const s of state.structures.list) {
+      if (!(s instanceof Drill) || s.status === 'ok' || !this.inView(s.x * TILE, s.y * TILE)) continue;
+      const x = s.x * TILE + 8;
+      const y = s.y * TILE - 9 + (blink ? 0 : -1);
+      const color = s.status === 'nofuel' ? '#d0342c' : s.status === 'full' ? '#e0a020' : '#7a7a86';
+      ctx.fillStyle = '#1a1418';
+      ctx.fillRect(x - 4, y - 4, 9, 8);
+      ctx.fillStyle = color;
+      ctx.fillRect(x - 3, y - 3, 7, 6);
+      ctx.fillStyle = '#fff';
+      if (s.status === 'nofuel') {
+        ctx.fillStyle = '#1a1418';
+        ctx.fillRect(x - 1, y - 2, 3, 3); // charbon
+      } else if (s.status === 'full') {
+        ctx.fillRect(x - 2, y - 1, 5, 1);
+        ctx.fillRect(x - 2, y + 1, 5, 1);
+      } else {
+        ctx.fillRect(x - 2, y - 2, 1, 1);
+        ctx.fillRect(x + 2, y - 2, 1, 1);
+        ctx.fillRect(x, y, 1, 1);
+        ctx.fillRect(x - 2, y + 2, 1, 1);
+        ctx.fillRect(x + 2, y + 2, 1, 1);
+      }
+    }
+  }
+
+  // ------------------------------------------------------------------ personnage
+
+  private drawPlayer(): void {
+    const state = this.state!;
+    const p = state.player;
+    const ctx = this.ctx;
+    const frames = this.player.frames[p.facing];
+    const walking = p.moving && p.swingT <= 0;
+    const frame = walking ? 1 + (Math.floor(p.walkTime * 8) % 2) : 0;
+    const img = frames[frame];
+    const bob = walking && frame === 1 ? -1 : 0;
+    const x = Math.round(p.x - img.width / 2);
+    const y = Math.round(p.y - img.height + 3 + bob);
+    ctx.fillStyle = 'rgba(0,0,0,0.35)';
+    ctx.fillRect(Math.round(p.x - 5), Math.round(p.y + 1), 10, 3);
+    const pickBehind = p.facing === 3;
+    if (pickBehind) this.drawPickaxe();
+    ctx.drawImage(img, x, y);
+    if (!pickBehind) this.drawPickaxe();
+  }
+
+  private drawPickaxe(): void {
+    const state = this.state!;
+    const p = state.player;
+    let angle: number;
+    if (p.swingT > 0) {
+      const t = p.swingProgress();
+      // Levée (0 → 0.4) puis frappe rapide (0.4 → 0.5) et retour.
+      let off: number;
+      if (t < 0.4) off = -2.1 * (t / 0.4);
+      else if (t < 0.5) off = -2.1 + 2.6 * ((t - 0.4) / 0.1);
+      else off = 0.5 - 0.5 * ((t - 0.5) / 0.5);
+      const side = Math.cos(p.aim) < 0 ? -1 : 1;
+      angle = p.aim + off * side;
+    } else {
+      // Au repos : tenue le long du corps.
+      angle = p.facing === 2 ? Math.PI * 0.72 : p.facing === 0 ? Math.PI * 0.28 : p.facing === 3 ? -Math.PI * 0.3 : Math.PI * 0.62;
+    }
+    const idx = ((Math.round((angle / (Math.PI * 2)) * PICK_ANGLES) % PICK_ANGLES) + PICK_ANGLES) % PICK_ANGLES;
+    const img = this.picks[state.pickaxeLevel][idx];
+    const hx = p.x + (p.facing === 0 ? 3 : p.facing === 2 ? -3 : p.facing === 1 ? 4 : -4);
+    const hy = p.y - 7;
+    this.ctx.drawImage(img, Math.round(hx - PICK_SIZE / 2), Math.round(hy - PICK_SIZE / 2));
+  }
+
+  // ------------------------------------------------------------------ effets
+
+  private drawParticles(): void {
+    const ctx = this.ctx;
+    for (const p of this.fx.particles) {
+      const a = Math.min(1, p.life / p.max) * (p.kind === 'smoke' ? 0.8 : 1);
+      ctx.globalAlpha = p.kind === 'chip' ? 1 : a;
+      ctx.fillStyle = p.color;
+      const s = Math.max(1, Math.round(p.size));
+      ctx.fillRect(Math.round(p.x - s / 2), Math.round(p.y - p.z - s / 2), s, s);
+    }
+    ctx.globalAlpha = 1;
+  }
+
+  private drawLighting(): void {
+    const state = this.state!;
+    const L = this.lctx;
+    const W = this.light.width;
+    const H = this.light.height;
+    const k = W / this.viewW; // pixels d'éclairage par unité monde
+    L.globalCompositeOperation = 'source-over';
+    L.clearRect(0, 0, W, H);
+    // Obscurité croissante avec la profondeur.
+    const surfaceY = SURFACE_ROWS * TILE;
+    const toScreen = (wy: number) => (wy - this.camY) * k;
+    const g = L.createLinearGradient(0, toScreen(surfaceY - TILE), 0, toScreen(state.world.h * TILE));
+    const span = state.world.h * TILE - (surfaceY - TILE);
+    const stop = (wy: number) => clamp((wy - (surfaceY - TILE)) / span, 0, 1);
+    g.addColorStop(0, 'rgba(4,3,8,0)');
+    g.addColorStop(stop(surfaceY + TILE * 2), 'rgba(4,3,8,0.6)');
+    g.addColorStop(stop(surfaceY + TILE * 10), 'rgba(4,3,8,0.86)');
+    g.addColorStop(1, 'rgba(4,3,8,0.95)');
+    L.fillStyle = g;
+    L.fillRect(0, 0, W, H);
+    // Sources de lumière.
+    L.globalCompositeOperation = 'destination-out';
+    const punch = (wx: number, wy: number, radius: number, strength = 1) => {
+      const sx = (wx - this.camX) * k;
+      const sy = (wy - this.camY) * k;
+      const r = radius * TILE * k;
+      if (sx < -r || sy < -r || sx > W + r || sy > H + r) return;
+      const rg = L.createRadialGradient(sx, sy, r * 0.15, sx, sy, r);
+      rg.addColorStop(0, `rgba(0,0,0,${strength})`);
+      rg.addColorStop(0.55, `rgba(0,0,0,${strength * 0.7})`);
+      rg.addColorStop(1, 'rgba(0,0,0,0)');
+      L.fillStyle = rg;
+      L.fillRect(sx - r, sy - r, r * 2, r * 2);
+    };
+    const p = state.player;
+    const flicker = 1 + Math.sin(this.time * 13) * 0.015 + Math.sin(this.time * 7.3) * 0.02;
+    punch(p.x, p.y - 8, 6.5 * flicker, 1);
+    for (const l of state.layout.lamps) punch(l.x, l.y, 3.6 + Math.sin(this.time * 5 + l.x) * 0.08, 0.85);
+    for (const s of state.structures.list) {
+      if (s instanceof Drill) punch((s.x + 0.5) * TILE, (s.y + 0.5) * TILE, s.status === 'ok' ? 3.2 : 1.6, 0.8);
+      else if (s instanceof Storage) punch((s.x + 0.5) * TILE, (s.y + 0.5) * TILE, 1.3, 0.5);
+    }
+    L.globalCompositeOperation = 'source-over';
+
+    const ctx = this.ctx;
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.imageSmoothingEnabled = true;
+    ctx.drawImage(this.light, 0, 0, this.canvas.width, this.canvas.height);
+    ctx.imageSmoothingEnabled = false;
+    // Halo chaud des lanternes et des machines.
+    ctx.globalCompositeOperation = 'lighter';
+    const glow = (wx: number, wy: number, radius: number, a: number) => {
+      const sx = (wx - this.camX) * this.zoom;
+      const sy = (wy - this.camY) * this.zoom;
+      const r = radius * TILE * this.zoom;
+      if (sx < -r || sy < -r || sx > this.canvas.width + r || sy > this.canvas.height + r) return;
+      const rg = ctx.createRadialGradient(sx, sy, 0, sx, sy, r);
+      rg.addColorStop(0, `rgba(255,160,70,${a})`);
+      rg.addColorStop(1, 'rgba(255,160,70,0)');
+      ctx.fillStyle = rg;
+      ctx.fillRect(sx - r, sy - r, r * 2, r * 2);
+    };
+    for (const l of state.layout.lamps) glow(l.x, l.y, 2.2, 0.16);
+    for (const s of state.structures.list) if (s instanceof Drill && s.status === 'ok') glow((s.x + 0.5) * TILE, (s.y + 0.4) * TILE, 1.6, 0.12);
+    ctx.globalCompositeOperation = 'source-over';
+  }
+
+  private drawOverlay(o: Overlay): void {
+    const ctx = this.ctx;
+    const t = this.time;
+    if (o.target) {
+      const pulse = 0.55 + Math.sin(t * 8) * 0.25;
+      ctx.strokeStyle = o.target.ok ? `rgba(255,255,255,${pulse})` : `rgba(255,80,60,${pulse})`;
+      ctx.lineWidth = 1 / this.zoom;
+      ctx.strokeRect(o.target.tx * TILE + 0.5, o.target.ty * TILE + 0.5, TILE - 1, TILE - 1);
+      ctx.lineWidth = 1;
+      ctx.strokeRect(o.target.tx * TILE - 0.5, o.target.ty * TILE - 0.5, TILE + 1, TILE + 1);
+    }
+    if (o.ghost) {
+      const def = getMachine(o.ghost.machine);
+      const x = o.ghost.tx * TILE;
+      const y = o.ghost.ty * TILE;
+      ctx.globalAlpha = 0.75;
+      ctx.fillStyle = o.ghost.ok ? 'rgba(90,220,120,0.35)' : 'rgba(230,70,60,0.4)';
+      ctx.fillRect(x, y, def.w * TILE, def.h * TILE);
+      ctx.strokeStyle = o.ghost.ok ? '#7dffa0' : '#ff6b5b';
+      ctx.lineWidth = 1;
+      ctx.strokeRect(x + 0.5, y + 0.5, def.w * TILE - 1, def.h * TILE - 1);
+      if (def.rotatable) this.drawArrow(x + 8, y + 8, o.ghost.dir, o.ghost.ok ? '#7dffa0' : '#ff6b5b');
+      ctx.globalAlpha = 1;
+    }
+    if (o.removeHint) {
+      ctx.strokeStyle = `rgba(255,120,60,${0.6 + Math.sin(t * 8) * 0.3})`;
+      ctx.lineWidth = 1;
+      ctx.strokeRect(o.removeHint.tx * TILE + 0.5, o.removeHint.ty * TILE + 0.5, TILE - 1, TILE - 1);
+    }
+    if (o.interact) {
+      const s = o.interact;
+      const bx = (s.x + s.w / 2) * TILE;
+      const by = s.y * TILE - (s instanceof Building ? 16 : 10) + Math.sin(t * 4) * 1.5;
+      ctx.fillStyle = '#1a1418';
+      ctx.fillRect(Math.round(bx - 4), Math.round(by - 4), 9, 9);
+      ctx.fillStyle = '#f2c230';
+      ctx.fillRect(Math.round(bx - 3), Math.round(by - 3), 7, 7);
+      ctx.fillStyle = '#1a1418';
+      ctx.font = 'bold 6px monospace';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText('E', Math.round(bx) + 0.5, Math.round(by) + 0.5);
+    }
+  }
+
+  private drawTexts(ox: number, oy: number): void {
+    const ctx = this.ctx;
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    const size = Math.max(11, Math.round(this.zoom * 4.2));
+    ctx.font = `bold ${size}px "Pixelify Sans", monospace`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    for (const t of this.fx.texts) {
+      const a = Math.min(1, t.life / (t.max * 0.4));
+      const x = t.x * this.zoom + ox;
+      const y = t.y * this.zoom + oy;
+      ctx.globalAlpha = a;
+      ctx.fillStyle = '#120e10';
+      ctx.fillText(t.text, x + 2, y + 2);
+      ctx.fillStyle = t.color;
+      ctx.fillText(t.text, x, y);
+    }
+    ctx.globalAlpha = 1;
+    // Noms des bâtiments.
+    const state = this.state!;
+    ctx.font = `bold ${Math.max(10, Math.round(this.zoom * 3.4))}px "Pixelify Sans", monospace`;
+    for (const s of state.structures.list) {
+      if (!(s instanceof Building)) continue;
+      const x = (s.x + s.w / 2) * TILE * this.zoom + ox;
+      const y = ((s.y + s.h) * TILE + 6) * this.zoom + oy;
+      ctx.fillStyle = 'rgba(18,14,16,0.75)';
+      const w = ctx.measureText(s.name).width + 10;
+      ctx.fillRect(x - w / 2, y - 8 * (this.zoom / 3), w, 16 * (this.zoom / 3));
+      ctx.fillStyle = '#f2e6c8';
+      ctx.fillText(s.name, x, y);
+    }
+  }
+
+  /** Effets associés aux événements de simulation. */
+  onBreak(tx: number, ty: number, blockId: number): void {
+    const b = getBlock(blockId);
+    const cx = (tx + 0.5) * TILE;
+    const cy = (ty + 0.5) * TILE;
+    this.fx.emit('chip', cx, cy, b.top, 10, 55);
+    this.fx.emit('chip', cx, cy, b.side, 6, 45);
+    this.fx.emit('dust', cx, cy, 'rgba(150,135,120,0.55)', 6, 25);
+    this.fx.shake = Math.max(this.fx.shake, 2.2);
+  }
+
+  onHit(tx: number, ty: number, blockId: number, px: number, py: number): void {
+    const b = getBlock(blockId);
+    // Éclats côté joueur.
+    const cx = (tx + 0.5) * TILE;
+    const cy = (ty + 0.5) * TILE;
+    const ex = cx + clamp(px - cx, -7, 7);
+    const ey = cy + clamp(py - 6 - cy, -7, 7);
+    this.fx.emit('chip', ex, ey, b.top, 4, 35);
+    this.fx.emit('dust', ex, ey, 'rgba(150,135,120,0.45)', 2, 15);
+    this.fx.shake = Math.max(this.fx.shake, 1);
+  }
+
+  onDenied(tx: number, ty: number, px: number, py: number): void {
+    const cx = (tx + 0.5) * TILE;
+    const cy = (ty + 0.5) * TILE;
+    this.fx.emit('spark', cx + clamp(px - cx, -7, 7), cy + clamp(py - 6 - cy, -7, 7), '#ffe28a', 7, 70);
+  }
+
+  onPickup(res: string, n: number, x: number, y: number): void {
+    const r = getResource(res);
+    this.fx.text(`+${n} ${r.name}`, x, y - 10, r.light);
+  }
+}

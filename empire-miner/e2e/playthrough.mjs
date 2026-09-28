@@ -1,0 +1,310 @@
+/**
+ * Test de bout en bout : joue la tranche verticale dans un vrai navigateur
+ * avec de vraies entrées clavier/souris, et capture des images dans e2e/screenshots/.
+ *
+ *   npm run build && npm run e2e
+ *
+ * Variables : CHROME_PATH (exécutable Chromium), E2E_URL (sinon lance `vite preview`).
+ * Les téléportations (`__EM`, via ?debug) servent uniquement à raccourcir les trajets.
+ */
+import { chromium } from 'playwright-core';
+import { preview } from 'vite';
+import { mkdirSync } from 'node:fs';
+
+const SHOTS = new URL('./screenshots/', import.meta.url).pathname;
+mkdirSync(SHOTS, { recursive: true });
+const S = 12; // SURFACE_ROWS
+
+let server = null;
+let url = process.env.E2E_URL;
+if (!url) {
+  server = await preview({ preview: { port: 4174, strictPort: false }, logLevel: 'silent' });
+  url = server.resolvedUrls.local[0];
+}
+const browser = await chromium.launch({
+  executablePath: process.env.CHROME_PATH ?? '/opt/pw-browsers/chromium-1194/chrome-linux/chrome',
+  args: ['--no-sandbox', '--autoplay-policy=no-user-gesture-required'],
+});
+const page = await browser.newPage({ viewport: { width: 1280, height: 720 } });
+const errors = [];
+page.on('pageerror', (e) => errors.push(e.message));
+
+let failures = 0;
+const check = (cond, msg) => {
+  console.log(`${cond ? '✔' : '✘'} ${msg}`);
+  if (!cond) failures++;
+};
+const shot = (name) => page.screenshot({ path: `${SHOTS}${name}.png` });
+const ev = (fn, arg) => page.evaluate(fn, arg);
+const state = () =>
+  ev(() => {
+    const g = window.__EM.state;
+    return {
+      money: g.money,
+      pick: g.pickaxeLevel,
+      inv: { ...g.inventory.items },
+      weight: g.inventory.weight(),
+      cap: g.inventory.capacity,
+      tx: g.player.tileX,
+      ty: g.player.tileY,
+      depth: g.playerDepth(),
+    };
+  });
+const teleport = (tx, ty) =>
+  ev(([x, y]) => {
+    const g = window.__EM.state;
+    g.player.x = (x + 0.5) * 16;
+    g.player.y = (y + 0.5) * 16;
+    window.__EM.renderer.snapCamera();
+  }, [tx, ty]);
+const tileScreen = (tx, ty) => ev(([x, y]) => window.__EM.renderer.worldToScreen((x + 0.5) * 16, (y + 0.5) * 16), [tx, ty]);
+const isSolid = (tx, ty) => ev(([x, y]) => window.__EM.state.world.isSolid(x, y), [tx, ty]);
+
+/** Mine une tuile avec le clic gauche maintenu ; renvoie la durée en secondes. */
+async function mineTile(tx, ty, maxMs = 12000) {
+  const p = await tileScreen(tx, ty);
+  await page.mouse.move(p.x, p.y);
+  const t0 = Date.now();
+  await page.mouse.down();
+  while ((await isSolid(tx, ty)) && Date.now() - t0 < maxMs) await page.waitForTimeout(30);
+  await page.mouse.up();
+  return (Date.now() - t0) / 1000;
+}
+
+async function pressE() {
+  await page.keyboard.press('KeyE');
+  await page.waitForTimeout(250);
+}
+
+try {
+  await page.goto(`${url}?debug`);
+  await ev(() => localStorage.clear());
+  await page.reload();
+  await page.waitForTimeout(800);
+  await shot('01-menu');
+
+  // 1. Lancer une partie
+  await page.click('[data-action="new"]');
+  await page.waitForTimeout(600);
+  check((await ev(() => window.__EM.mode)) === 'playing', 'une nouvelle partie démarre');
+  await shot('02-camp');
+
+  // 2-3. Contrôler le personnage, explorer
+  const before = await state();
+  await page.keyboard.down('KeyS');
+  await page.waitForTimeout(1500);
+  await page.keyboard.up('KeyS');
+  const after = await state();
+  check(after.ty > before.ty && after.depth > 0, `le personnage descend dans la mine (${after.depth} m)`);
+
+  // 4-8. Miner le filon de cuivre de la galerie est, faire tomber et ramasser les ressources
+  await teleport(58, S + 10);
+  await page.waitForTimeout(300);
+  const slow = await mineTile(59, S + 10);
+  check(!(await isSolid(59, S + 10)), `la vieille pioche détruit le cuivre en ${slow.toFixed(2)} s`);
+  const dropped = await ev(() => window.__EM.state.drops.list.filter((d) => d.res === 'copper').length);
+  check(dropped > 0, 'des ressources tombent physiquement au sol');
+  await page.waitForTimeout(250);
+  await shot('03-mining');
+  await page.waitForTimeout(1500);
+  check(((await state()).inv.copper ?? 0) > 0, 'le joueur ramasse le cuivre en passant à proximité');
+
+  // Continue le filon jusqu'à remplir le sac (inventaire limité)
+  const vein = [[59, S + 11], [60, S + 10], [60, S + 11], [59, S + 12], [60, S + 9], [61, S + 11]];
+  for (const [x, y] of vein) {
+    if (!(await isSolid(x, y))) continue;
+    // Se place sur une case voisine ouverte
+    const spot = await ev(([tx, ty]) => {
+      const w = window.__EM.state.world;
+      for (const [dx, dy] of [[-1, 0], [0, -1], [0, 1], [1, 0]]) if (w.isOpen(tx + dx, ty + dy)) return [tx + dx, ty + dy];
+      return null;
+    }, [x, y]);
+    if (!spot) continue;
+    await teleport(spot[0], spot[1]);
+    await page.waitForTimeout(150);
+    await mineTile(x, y);
+    await page.waitForTimeout(1200);
+  }
+  const loaded = await state();
+  check(loaded.weight <= loaded.cap, `le sac respecte sa capacité (${loaded.weight} / ${loaded.cap} kg)`);
+  await shot('04-vein-mined');
+
+  // 9-11. Remonter vendre au comptoir
+  await teleport(41, 8);
+  await page.waitForTimeout(300);
+  await pressE();
+  check(await page.isVisible('.panel-counter'), 'le comptoir s’ouvre avec E');
+  await shot('05-counter');
+  await page.click('[data-action="sellAll"]');
+  await page.waitForTimeout(200);
+  const sold = await state();
+  check(sold.money > 0 && Object.keys(sold.inv).length === 0, `vente : ${sold.money} $ gagnés`);
+  await page.keyboard.press('Escape');
+
+  // Deuxième voyage si nécessaire : le filon de charbon de la galerie ouest
+  if (sold.money < 60) {
+    const coal = [[41, S + 5], [41, S + 6], [40, S + 5], [40, S + 6], [41, S + 4], [40, S + 4], [39, S + 6]];
+    for (const [x, y] of coal) {
+      if (!(await isSolid(x, y))) continue;
+      const spot = await ev(([tx, ty]) => {
+        const w = window.__EM.state.world;
+        for (const [dx, dy] of [[1, 0], [0, 1], [0, -1], [-1, 0]]) if (w.isOpen(tx + dx, ty + dy)) return [tx + dx, ty + dy];
+        return null;
+      }, [x, y]);
+      if (!spot) continue;
+      await teleport(spot[0], spot[1]);
+      await page.waitForTimeout(150);
+      await mineTile(x, y);
+      await page.waitForTimeout(1200);
+    }
+    await teleport(41, 8);
+    await page.waitForTimeout(300);
+    await pressE();
+    await page.click('[data-action="sellAll"]');
+    await page.keyboard.press('Escape');
+  }
+  const rich = await state();
+  check(rich.money >= 60, `assez d'argent pour la pioche améliorée (${rich.money} $)`);
+
+  // 12. Acheter une meilleure pioche
+  await teleport(58, 8);
+  await page.waitForTimeout(300);
+  await pressE();
+  check(await page.isVisible('.panel-workshop'), 'l’atelier s’ouvre avec E');
+  await shot('06-workshop');
+  await page.click('[data-action="buyPickaxe"]');
+  await page.waitForTimeout(200);
+  check((await state()).pick === 1, 'la pioche améliorée est achetée');
+  await page.keyboard.press('Escape');
+
+  // 13. Constater qu'elle mine plus vite (même type de bloc, même endroit)
+  await ev(() => {
+    const g = window.__EM.state;
+    const copper = g.world.tiles[g.world.idx(45, 12 + 14)]; // filon de la salle du fond
+    g.world.set(59, 12 + 10, copper);
+  });
+  await teleport(58, S + 10);
+  await page.waitForTimeout(300);
+  const fast = await mineTile(59, S + 10);
+  check(fast < slow * 0.65, `la pioche améliorée mine plus vite : ${slow.toFixed(2)} s → ${fast.toFixed(2)} s`);
+  // Et elle perce maintenant le fer
+  await teleport(51, S + 15);
+  await page.waitForTimeout(200);
+  const iron = await mineTile(51, S + 16, 8000);
+  check(!(await isSolid(51, S + 16)), `le fer devient minable (${iron.toFixed(2)} s)`);
+  await page.waitForTimeout(1200);
+
+  // 14. Sauvegarder et charger
+  await page.keyboard.press('Escape');
+  await page.click('[data-action="save"]');
+  await page.waitForTimeout(200);
+  const saved = await state();
+  const minedBefore = await isSolid(59, S + 10);
+  await page.reload();
+  await page.waitForTimeout(800);
+  await shot('07-menu-continue');
+  await page.click('[data-action="continue"]');
+  await page.waitForTimeout(500);
+  const restored = await state();
+  check(
+    restored.money === saved.money && restored.pick === saved.pick && restored.tx === saved.tx && restored.ty === saved.ty,
+    'la sauvegarde restaure argent, pioche et position',
+  );
+  check((await isSolid(59, S + 10)) === minedBefore && !(await isSolid(51, S + 16)), 'les roches détruites restent détruites après chargement');
+
+  // Automatisation : foreuse + convoyeurs + coffre, achetés à l'atelier
+  await ev(() => {
+    const g = window.__EM.state;
+    g.money += 600;
+    g.inventory.add('coal', 6);
+  });
+  await teleport(58, 8);
+  await page.waitForTimeout(300);
+  await pressE();
+  await page.click('.tab[data-arg="machines"]');
+  await page.waitForTimeout(150);
+  await page.click('[data-action="buyKit"][data-arg="drill:1"]');
+  await page.click('[data-action="buyKit"][data-arg="conveyor:10"]');
+  await page.click('[data-action="buyKit"][data-arg="storage:1"]');
+  await page.waitForTimeout(150);
+  await shot('08-workshop-machines');
+  await page.keyboard.press('Escape');
+  const kits = await ev(() => ({ ...window.__EM.state.inventory.kits }));
+  check(kits.drill === 1 && kits.conveyor === 10 && kits.storage === 1, 'kits achetés : foreuse, 10 convoyeurs, coffre');
+
+  // Pose dans la galerie est : foreuse sur le gisement (59, S+10) orientée vers l'ouest.
+  await teleport(56, S + 11);
+  await page.waitForTimeout(300);
+  check((await ev(([x, y]) => window.__EM.state.world.depositAt(x, y), [59, S + 10])) === 'copper', 'le filon miné a laissé un gisement de cuivre');
+  await page.keyboard.press('KeyB');
+  await page.keyboard.press('Digit2'); // foreuse (ordre : convoyeur, foreuse, coffre)
+  await page.keyboard.press('KeyR');
+  await page.keyboard.press('KeyR'); // direction ouest
+  await page.waitForTimeout(100);
+  let p = await tileScreen(59, S + 10);
+  await page.mouse.move(p.x, p.y);
+  await page.waitForTimeout(100);
+  await page.mouse.down();
+  await page.mouse.up();
+  // Convoyeurs tracés en glissant de x=58 à x=54
+  await page.keyboard.press('Digit1');
+  p = await tileScreen(58, S + 10);
+  await page.mouse.move(p.x, p.y);
+  await page.mouse.down();
+  for (let x = 57; x >= 54; x--) {
+    const q = await tileScreen(x, S + 10);
+    await page.mouse.move(q.x, q.y, { steps: 3 });
+    await page.waitForTimeout(40);
+  }
+  await page.mouse.up();
+  // Coffre au bout
+  await page.waitForTimeout(100);
+  const storageIdx = await ev(() => ['conveyor', 'drill', 'storage'].filter((id) => window.__EM.state.inventory.kitCount(id) > 0).indexOf('storage'));
+  await page.keyboard.press(`Digit${storageIdx + 1}`);
+  p = await tileScreen(53, S + 10);
+  await page.mouse.move(p.x, p.y);
+  await page.waitForTimeout(60);
+  await page.mouse.down();
+  await page.mouse.up();
+  await page.waitForTimeout(150);
+  await shot('09a-build-mode');
+  await page.keyboard.press('Escape');
+  const built = await ev(() => window.__EM.state.structures.list.filter((s) => s.removable).map((s) => `${s.type}@${s.x},${s.y}:${s.dir}`));
+  console.log('   structures :', built.join(' '));
+  check(built.includes('drill@59,22:2') && built.includes('storage@53,22:1') && built.filter((b) => b.startsWith('conveyor')).length === 5, 'foreuse, 5 convoyeurs et coffre posés');
+
+  // Charger la foreuse en charbon via son panneau
+  await teleport(58, S + 11);
+  await page.waitForTimeout(300);
+  await pressE();
+  check(await page.isVisible('.panel-drill'), 'le panneau de la foreuse s’ouvre');
+  await page.click('[data-action="drillFuel"]');
+  await page.waitForTimeout(100);
+  await shot('09-drill-panel');
+  await page.keyboard.press('Escape');
+  await teleport(55, S + 11);
+  await page.waitForTimeout(6000);
+  const onBelts = await ev(() => window.__EM.state.structures.list.filter((s) => s.type === 'conveyor').reduce((n, c) => n + c.items.length, 0));
+  check(onBelts > 0, `du minerai circule visiblement sur les convoyeurs (${onBelts} objets)`);
+  await shot('10-automation');
+  await page.waitForTimeout(12000);
+  const stored = await ev(() => ({ ...window.__EM.state.structures.at(53, 22).items }));
+  check((stored.copper ?? 0) > 0, `le minerai arrive dans le coffre (${stored.copper ?? 0} cuivre)`);
+  await shot('11-automation-later');
+  await teleport(54, S + 11);
+  await page.waitForTimeout(300);
+  await pressE();
+  await shot('12-storage-panel');
+  await page.click('[data-action="storageTakeAll"]');
+  check(((await state()).inv.copper ?? 0) > 0, 'le joueur récupère la production du coffre');
+  await page.keyboard.press('Escape');
+} catch (e) {
+  failures++;
+  console.error(e);
+}
+
+check(errors.length === 0, `aucune erreur JavaScript${errors.length ? ' : ' + errors.join(' | ') : ''}`);
+await browser.close();
+if (server) await server.close();
+console.log(failures ? `\n${failures} échec(s)` : '\nTranche verticale validée.');
+process.exit(failures ? 1 : 0);

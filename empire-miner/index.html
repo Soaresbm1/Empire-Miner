@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Empire Miner</title>
+    <meta name="description" content="Empire Miner — jeu de minage, progression et automatisation." />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Pixelify+Sans:wght@400;600;700&display=swap" rel="stylesheet" />
+  </head>
+  <body>
+    <canvas id="game"></canvas>
+    <div id="ui">
+      <div id="hud" class="hidden">
+        <div class="hud-tl hud-box">
+          <div id="hud-money" class="money"></div>
+          <div id="hud-depth" class="depth"></div>
+        </div>
+        <div id="hud-objective" class="hud-tr hud-box objective"></div>
+        <div id="hud-equip" class="hud-bl hud-box"></div>
+        <div class="hud-bc">
+          <div id="hud-prompt" class="prompt"></div>
+          <div id="hud-build"></div>
+        </div>
+        <div id="hud-hints" class="hud-br"></div>
+        <div id="save-indicator">Sauvegarde automatique ✓</div>
+      </div>
+      <div id="toasts"></div>
+      <div id="tooltip"></div>
+      <div id="panel-root"></div>
+      <div id="menu-root"></div>
+    </div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
