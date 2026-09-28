@@ -26,6 +26,7 @@ Version autonome en un seul fichier HTML (ouvrable sans serveur) : `npm run buil
 | Interagir (comptoir, atelier, coffre, foreuse) | `E` |
 | Sac et carnet | `I` ou `Tab` |
 | Mode construction | `B` — clic gauche : poser (glisser pour tracer convoyeurs et rails), clic droit : démonter, `R` : tourner, `1-9` : choisir |
+| Pioche ↔ marteau-piqueur | `T` (une fois le marteau-piqueur acheté) |
 | Monter / descendre d'un wagonnet | `F` |
 | Carte de la mine | `M` (ou clic sur la mini-carte) |
 | Zoom | molette |
@@ -44,6 +45,14 @@ lettre tapée : c'est la touche marquée M, quel que soit le clavier.
 - Profondeur réelle (2,5 m par rangée) : roche tendre → roche dure (100 m) → basalte (300 m).
 - Ressources : pierre, charbon, cuivre, fer, argent, or (valeur, poids, rareté, résistance, profondeur).
 - Comptoir de vente et atelier en surface ; 4 pioches, 3 moyens de transport (sac, grand sac, brouette).
+- **Marteau-piqueur** (900 $, pioche en fer) : attaque la paroi sur 3 cases de large (la case visée et ses voisines,
+  perpendiculairement au coup), très vite, en brûlant le charbon du sac (1 unité / 12 s de travail). `T` passe de la
+  pioche au marteau ; sans charbon, on repasse automatiquement à la pioche.
+- **Foreuse de percement** (1 200 $, pioche en fer) : véhicule qui creuse tout seul un tunnel droit devant sa flèche
+  (10, 25, 50 cases ou sans limite), jusqu'au basalte, en brûlant du charbon. Les minerais tombent derrière elle, les
+  filons percés laissent leur gisement, le tunnel apparaît sur la carte et son phare l'éclaire. Elle s'arrête au bout,
+  sans charbon ou devant un obstacle (roche indestructible, machine) et patiente si le joueur est sur son chemin ;
+  « Tourner » change son cap, même en marche.
 - Première automatisation : **foreuse à charbon → convoyeurs → coffre**, avec minerais visibles sur les
   convoyeurs, capacité et débit réels (saturation possible), alimentation en charbon manuelle ou par convoyeur.
 - Trois niveaux de **convoyeurs** : de base (2,25 objets/s), **rapide** (×2, pioche améliorée) et **express**
@@ -97,7 +106,8 @@ remplir le sac, vendre, acheter la pioche améliorée et mesurer qu'elle mine pl
 recharger, puis acheter et poser une foreuse, des convoyeurs et un coffre et vérifier que le minerai y arrive ;
 enfin prolonger la ligne dans le puits jusqu'à une caisse d'expédition en surface et vérifier que l'argent
 rentre pendant que le joueur reste au fond de la mine. Il construit ensuite chaque machine (convoyeurs rapides,
-séparateur, pont, trieur, wagonnets, aiguillage) et améliore une foreuse jusqu'au niveau 3 depuis son panneau.
+séparateur, pont, trieur, wagonnets, aiguillage), améliore une foreuse jusqu'au niveau 3 depuis son panneau,
+creuse au marteau-piqueur, lance une foreuse de percement sur 10 cases et ouvre la carte.
 
 ## Choix techniques
 

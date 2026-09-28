@@ -14,6 +14,7 @@ import { Rail, RailStation, RailSwitch } from '../sim/structures/Rail';
 import { Wagon } from '../sim/Wagons';
 import { Building } from '../sim/structures/Building';
 import { Conveyor } from '../sim/structures/Conveyor';
+import { TunnelBorer } from '../sim/structures/Borer';
 import { Drill } from '../sim/structures/Drill';
 import { ShippingCrate } from '../sim/structures/ShippingCrate';
 import { Sorter } from '../sim/structures/Sorter';
@@ -31,6 +32,7 @@ import {
   buildCrackSprites,
   buildLanternSprite,
   buildNuggetSprites,
+  buildJackhammerSprites,
   buildPickaxeSprites,
   buildPlayerSprites,
   buildWorkshopSprite,
@@ -78,6 +80,7 @@ export class Renderer {
   private state: GameState | null = null;
   private readonly player: PlayerSprites;
   private readonly picks: HTMLCanvasElement[][];
+  private readonly jacks: HTMLCanvasElement[];
   private readonly nuggets: Map<string, HTMLCanvasElement>;
   private readonly cracks: HTMLCanvasElement[];
   private readonly counter: HTMLCanvasElement;
@@ -93,6 +96,7 @@ export class Renderer {
     this.lctx = this.light.getContext('2d')!;
     this.player = buildPlayerSprites();
     this.picks = buildPickaxeSprites();
+    this.jacks = buildJackhammerSprites();
     this.nuggets = buildNuggetSprites();
     this.cracks = buildCrackSprites();
     this.counter = buildCounterSprite();
@@ -177,6 +181,8 @@ export class Renderer {
       for (const s of this.state.structures.list)
         if (s instanceof Drill && s.status === 'ok' && this.inView(s.x * TILE, s.y * TILE, 64))
           this.fx.emit('smoke', s.x * TILE + 11, s.y * TILE + 1, 'rgba(90,90,96,0.6)', 1, 6);
+        else if (s instanceof TunnelBorer && (s.status === 'digging' || s.status === 'moving') && this.inView(s.x * TILE, s.y * TILE, 64))
+          this.fx.emit('smoke', s.x * TILE + 8 - DX[s.dir] * 5, s.y * TILE + 2 - DY[s.dir] * 5, 'rgba(90,90,96,0.6)', 1, 6);
     }
   }
 
@@ -671,6 +677,7 @@ export class Renderer {
 
   private drawStructure(s: Structure): void {
     if (s instanceof Drill) this.drawDrill(s);
+    else if (s instanceof TunnelBorer) this.drawBorer(s);
     else if (s instanceof Storage) this.drawStorage(s);
     else if (s instanceof ShippingCrate) this.drawShipping(s);
     else if (s instanceof Building) this.drawBuilding(s);
@@ -734,6 +741,59 @@ export class Renderer {
     ctx.fillStyle = fuel > 0.2 ? '#f08a24' : '#d0342c';
     ctx.fillRect(x + 1, y + 15, Math.round(14 * Math.min(1, fuel)), 2);
     if (active && Math.random() < 0.15) this.fx.emit('dust', x + 8, y + 13, 'rgba(160,140,120,0.5)', 1, 10);
+  }
+
+  /** Foreuse de percement : caisson sur chenilles, tête de coupe rotative du côté de sa flèche. */
+  private drawBorer(b: TunnelBorer): void {
+    const ctx = this.ctx;
+    const x = b.x * TILE;
+    const y = b.y * TILE;
+    const digging = b.status === 'digging';
+    const working = digging || b.status === 'moving';
+    const jig = digging ? Math.round(Math.sin(this.time * 45) * 0.5) : 0;
+    // Ombre, chenilles (les maillons défilent quand elle avance).
+    ctx.fillStyle = 'rgba(0,0,0,0.35)';
+    ctx.fillRect(x + 1, y + 13, 15, 3);
+    ctx.fillStyle = '#1a1418';
+    ctx.fillRect(x + 1, y + 10, 14, 5);
+    ctx.fillStyle = '#5b5b63';
+    const roll = b.status === 'moving' ? Math.floor(this.time * 12) % 3 : 0;
+    for (let k = roll; k < 14; k += 3) ctx.fillRect(x + 1 + k, y + 13, 1, 1);
+    // Caisson.
+    ctx.fillStyle = '#c8472e';
+    ctx.fillRect(x + 2, y + 1 + jig, 12, 10);
+    ctx.fillStyle = '#e2603f';
+    ctx.fillRect(x + 2, y + 1 + jig, 12, 2);
+    ctx.fillStyle = '#8f2f1f';
+    ctx.fillRect(x + 2, y + 9 + jig, 12, 2);
+    // Cabine et bandes de danger.
+    ctx.fillStyle = '#26221e';
+    ctx.fillRect(x + 5, y + 3 + jig, 6, 4);
+    ctx.fillStyle = working ? '#ffe28a' : '#6a6048';
+    ctx.fillRect(x + 6, y + 4 + jig, 2, 1);
+    ctx.fillStyle = '#f2c230';
+    for (let k = 0; k < 3; k++) ctx.fillRect(x + 3 + k * 4, y + 9 + jig, 2, 1);
+    // Tête de coupe : dessinée vers l'est puis tournée d'un quart de tour (pixels nets).
+    ctx.save();
+    ctx.translate(x + 8, y + 8);
+    ctx.rotate((b.dir * Math.PI) / 2);
+    ctx.fillStyle = '#1a1418';
+    ctx.fillRect(4, -7, 6, 14);
+    ctx.fillStyle = '#4a4b52';
+    ctx.fillRect(4, -2, 2, 4);
+    const phase = working ? Math.floor(b.activeTime * 18) : 0;
+    for (let k = 0; k < 6; k++) {
+      ctx.fillStyle = (k + phase) % 2 ? '#c7ccd6' : '#6a6f78';
+      ctx.fillRect(6 + jig, -6 + k * 2, 3, 2);
+      if ((k + phase) % 2) ctx.fillRect(9 + jig, -6 + k * 2, 1, 1); // dents
+    }
+    ctx.restore();
+    if (digging && Math.random() < 0.3) {
+      const fx = x + 8 + DX[b.dir] * 10;
+      const fy = y + 8 + DY[b.dir] * 10;
+      this.fx.emit('dust', fx, fy, 'rgba(160,140,120,0.5)', 1, 14);
+      if (Math.random() < 0.3) this.fx.emit('spark', fx, fy, '#ffe28a', 1, 40);
+    }
   }
 
   /**
@@ -914,19 +974,24 @@ export class Renderer {
     const ctx = this.ctx;
     const blink = Math.floor(this.time * 2.5) % 2 === 0;
     for (const s of state.structures.list) {
-      if (!(s instanceof Drill) || s.status === 'ok' || !this.inView(s.x * TILE, s.y * TILE)) continue;
+      // Foreuses : plus de charbon, sortie saturée, ou arrêt (gisement épuisé, obstacle).
+      let icon: 'nofuel' | 'full' | 'stop' | null = null;
+      if (s instanceof Drill && s.status !== 'ok') icon = s.status === 'nofuel' ? 'nofuel' : s.status === 'full' ? 'full' : 'stop';
+      else if (s instanceof TunnelBorer && s.running)
+        icon = s.status === 'nofuel' ? 'nofuel' : s.status === 'waiting' ? 'full' : s.status === 'blocked' ? 'stop' : null;
+      if (!icon || !this.inView(s.x * TILE, s.y * TILE)) continue;
       const x = s.x * TILE + 8;
       const y = s.y * TILE - 9 + (blink ? 0 : -1);
-      const color = s.status === 'nofuel' ? '#d0342c' : s.status === 'full' ? '#e0a020' : '#7a7a86';
+      const color = icon === 'nofuel' ? '#d0342c' : icon === 'full' ? '#e0a020' : '#7a7a86';
       ctx.fillStyle = '#1a1418';
       ctx.fillRect(x - 4, y - 4, 9, 8);
       ctx.fillStyle = color;
       ctx.fillRect(x - 3, y - 3, 7, 6);
       ctx.fillStyle = '#fff';
-      if (s.status === 'nofuel') {
+      if (icon === 'nofuel') {
         ctx.fillStyle = '#1a1418';
         ctx.fillRect(x - 1, y - 2, 3, 3); // charbon
-      } else if (s.status === 'full') {
+      } else if (icon === 'full') {
         ctx.fillRect(x - 2, y - 1, 5, 1);
         ctx.fillRect(x - 2, y + 1, 5, 1);
       } else {
@@ -963,6 +1028,9 @@ export class Renderer {
   private drawPickaxe(): void {
     const state = this.state!;
     const p = state.player;
+    // Pendant un coup, l'outil réellement utilisé (pioche de secours si le marteau n'a plus de charbon).
+    const hammer = p.swingT > 0 ? p.swingTool === 'jackhammer' : state.activeTool.kind === 'jackhammer';
+    if (hammer) return this.drawJackhammer();
     let angle: number;
     if (p.swingT > 0) {
       const t = p.swingProgress();
@@ -982,6 +1050,18 @@ export class Renderer {
     const hx = p.x + (p.facing === 0 ? 3 : p.facing === 2 ? -3 : p.facing === 1 ? 4 : -4);
     const hy = p.y - 7;
     this.ctx.drawImage(img, Math.round(hx - PICK_SIZE / 2), Math.round(hy - PICK_SIZE / 2));
+  }
+
+  /** Marteau-piqueur : pointé vers la paroi et secoué pendant qu'il frappe, porté contre soi au repos. */
+  private drawJackhammer(): void {
+    const p = this.state!.player;
+    const working = p.swingT > 0;
+    const angle = working ? p.aim : p.facing === 2 ? Math.PI * 0.62 : p.facing === 0 ? Math.PI * 0.38 : p.facing === 3 ? -Math.PI * 0.5 : Math.PI * 0.5;
+    const idx = ((Math.round((angle / (Math.PI * 2)) * PICK_ANGLES) % PICK_ANGLES) + PICK_ANGLES) % PICK_ANGLES;
+    const jig = working ? (Math.floor(this.time * 40) % 2) * 1.2 : 0;
+    const hx = p.x + (p.facing === 0 ? 3 : p.facing === 2 ? -3 : p.facing === 1 ? 4 : -4) + Math.cos(angle) * jig;
+    const hy = p.y - 7 + Math.sin(angle) * jig;
+    this.ctx.drawImage(this.jacks[idx], Math.round(hx - PICK_SIZE / 2), Math.round(hy - PICK_SIZE / 2));
   }
 
   // ------------------------------------------------------------------ effets
@@ -1038,6 +1118,8 @@ export class Renderer {
     for (const l of state.layout.lamps) punch(l.x, l.y, 3.6 + Math.sin(this.time * 5 + l.x) * 0.08, 0.85);
     for (const s of state.structures.list) {
       if (s instanceof Drill) punch((s.x + 0.5) * TILE, (s.y + 0.5) * TILE, s.status === 'ok' ? 3.2 : 1.6, 0.8);
+      // Phare de la foreuse de percement : éclaire le front de taille.
+      else if (s instanceof TunnelBorer) punch((s.x + 0.5 + DX[s.dir] * 0.8) * TILE, (s.y + 0.5 + DY[s.dir] * 0.8) * TILE, s.running ? 3.6 : 2, 0.85);
       else if (s instanceof Storage) punch((s.x + 0.5) * TILE, (s.y + 0.5) * TILE, 1.3, 0.5);
     }
     L.globalCompositeOperation = 'source-over';
@@ -1237,6 +1319,13 @@ export class Renderer {
     this.fx.emit('chip', ex, ey, b.top, 4, 35);
     this.fx.emit('dust', ex, ey, 'rgba(150,135,120,0.45)', 2, 15);
     this.fx.shake = Math.max(this.fx.shake, 1);
+  }
+
+  /** Coup de marteau-piqueur : poussière sur la case visée et légère secousse. */
+  onHammer(): void {
+    const t = this.state?.player.swingTarget;
+    if (t) this.fx.emit('dust', (t.tx + 0.5) * TILE, (t.ty + 0.7) * TILE, 'rgba(150,135,120,0.45)', 2, 22);
+    this.fx.shake = Math.max(this.fx.shake, 0.9);
   }
 
   onDenied(tx: number, ty: number, px: number, py: number): void {

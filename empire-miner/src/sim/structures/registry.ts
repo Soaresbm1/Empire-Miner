@@ -1,5 +1,6 @@
 /** Fabrique de structures (création depuis l'id de machine ou une sauvegarde). */
 import type { Dir } from '../../core/dir';
+import { TunnelBorer } from './Borer';
 import { Conveyor } from './Conveyor';
 import { Bridge } from './Bridge';
 import { Drill } from './Drill';
@@ -17,6 +18,7 @@ export const STRUCTURE_FACTORIES: Record<string, Factory> = {
   conveyor_fast: { create: (x, y, d) => new Conveyor(x, y, d, 'conveyor_fast'), load: (s) => Conveyor.load(s) },
   conveyor_express: { create: (x, y, d) => new Conveyor(x, y, d, 'conveyor_express'), load: (s) => Conveyor.load(s) },
   drill: { create: (x, y, d) => new Drill(x, y, d), load: (s) => Drill.load(s) },
+  borer: { create: (x, y, d) => new TunnelBorer(x, y, d), load: (s) => TunnelBorer.load(s) },
   storage: { create: (x, y, d) => new Storage(x, y, d), load: (s) => Storage.load(s) },
   splitter: { create: (x, y, d) => new Splitter(x, y, d), load: (s) => Splitter.load(s) },
   sorter: { create: (x, y, d) => new Sorter(x, y, d), load: (s) => Sorter.load(s) },

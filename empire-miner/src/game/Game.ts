@@ -14,6 +14,7 @@ import { GameState, NO_INTENT, PlayerIntent } from '../sim/GameState';
 import { Bridge } from '../sim/structures/Bridge';
 import { Building, BUILDING_INFO } from '../sim/structures/Building';
 import { Conveyor } from '../sim/structures/Conveyor';
+import { TunnelBorer } from '../sim/structures/Borer';
 import { Drill, reachTiles } from '../sim/structures/Drill';
 import { ShippingCrate } from '../sim/structures/ShippingCrate';
 import { Sorter } from '../sim/structures/Sorter';
@@ -260,6 +261,9 @@ export class Game {
       case 'buyBag':
         g.buyNextBag();
         break;
+      case 'buyJackhammer':
+        g.buyJackhammer();
+        break;
       case 'buyKit': {
         const [id, q] = arg.split(':');
         g.buyKit(id, Number(q));
@@ -296,6 +300,24 @@ export class Game {
         if (target instanceof Drill) g.collectDrill(target);
         break;
       case 'drillRotate':
+        if (target) g.rotateAt(target.x, target.y);
+        break;
+      case 'borerFuel':
+        if (target instanceof TunnelBorer) {
+          const n = g.fuelBorer(target);
+          if (n) this.ui.toast(`${n} charbon chargé${n > 1 ? 's' : ''} dans la foreuse de percement.`, 'good');
+        }
+        break;
+      case 'borerStart':
+        if (target instanceof TunnelBorer) target.start();
+        break;
+      case 'borerStop':
+        if (target instanceof TunnelBorer) target.stop();
+        break;
+      case 'borerLength':
+        if (target instanceof TunnelBorer) g.setBorerLength(target, Number(arg));
+        break;
+      case 'borerRotate':
         if (target) g.rotateAt(target.x, target.y);
         break;
       case 'openMap':
@@ -391,6 +413,7 @@ export class Game {
       // M : la lettre M du clavier, où qu'elle soit (AZERTY, QWERTY…).
       if (inp.wasTyped('m')) this.togglePanel('map');
       if (inp.wasPressed('KeyB') && !this.ui.panel) this.setBuildMode(!this.buildMode);
+      if (inp.wasPressed('KeyT') && !this.ui.panel) g.toggleTool();
     }
     if (inp.wheel && !this.ui.blocking) this.renderer.adjustZoom(-inp.wheel);
 
@@ -507,6 +530,7 @@ export class Game {
     else if (s instanceof Storage) this.ui.openPanel('storage', s);
     else if (s instanceof ShippingCrate) this.ui.openPanel('shipping', s);
     else if (s instanceof Drill) this.ui.openPanel('drill', s);
+    else if (s instanceof TunnelBorer) this.ui.openPanel('borer', s);
     else if (s instanceof Sorter) this.ui.openPanel('sorter', s);
     else if (s instanceof RailStation) this.ui.openPanel('station', s);
     else if (s instanceof RailSwitch) this.ui.openPanel('switch', s);
@@ -529,6 +553,7 @@ export class Game {
     if (near instanceof Storage) return `${e} Ouvrir le coffre`;
     if (near instanceof ShippingCrate) return `${e} Caisse d'expédition — vente automatique`;
     if (near instanceof Drill) return `${e} Foreuse niv. ${near.level} — charbon, production, amélioration`;
+    if (near instanceof TunnelBorer) return `${e} Foreuse de percement — charbon, longueur, démarrage`;
     if (near instanceof Sorter) return `${e} Trieur — choisir le minerai trié`;
     if (near instanceof RailStation) return `${e} ${near.def.name}`;
     if (near instanceof RailSwitch) return `${e} Aiguillage — choisir la branche`;
@@ -616,8 +641,16 @@ export class Game {
 
     // Pose.
     if (inp.consumeLeftPress()) {
-      if (!existing || upgrade || onRail) this.tryPlace(g, kit, mtx, mty, upgrade ? upgrade.dir : this.buildDir);
-      this.dragLast = isBelt ? { tx: mtx, ty: mty } : null;
+      // Case cliquée : si l'image a tardé, la souris a pu glisser plus loin depuis le clic (le tracé
+      // reprend alors de cette case à l'image suivante, sans en sauter).
+      const pw = this.renderer.screenToWorld(inp.leftPressX, inp.leftPressY);
+      const ptx = Math.floor(pw.x / TILE);
+      const pty = Math.floor(pw.y / TILE);
+      const at = g.structures.at(ptx, pty);
+      const up = g.beltToReplace(machine, ptx, pty);
+      const rail = (!!mdef.onTrack && !!at?.isTrack) || !!g.railToReplace(machine, ptx, pty);
+      if (!at || up || rail) this.tryPlace(g, kit, ptx, pty, up ? up.dir : this.buildDir);
+      this.dragLast = isBelt ? { tx: ptx, ty: pty } : null;
     } else if (inp.left && this.dragLast && isBelt && (mtx !== this.dragLast.tx || mty !== this.dragLast.ty)) {
       // Tracé de convoyeurs en glissant : chaque tuile pointe vers la suivante.
       let { tx, ty } = this.dragLast;
@@ -732,6 +765,10 @@ export class Game {
       const st = { ok: 'en marche', nofuel: 'sans charbon', full: 'sortie bloquée', depleted: 'gisement épuisé' }[s.status];
       return `<b>Foreuse</b> niveau ${s.level} — ${st}<br>${s.sources(g).length} case(s) forée(s) · charbon : ${s.fuelUnits} · extrait : ${s.extracted}`;
     }
+    if (s instanceof TunnelBorer) {
+      const st = { idle: "à l'arrêt", digging: 'perce la roche', moving: 'avance', waiting: 'attend', nofuel: 'sans charbon', blocked: `bloquée (${s.blockReason})`, done: 'tunnel terminé' }[s.status];
+      return `<b>Foreuse de percement</b> ${['→', '↓', '←', '↑'][s.dir]} — ${st}<br>Charbon : ${s.fuelUnits} · creusé : ${s.totalDug} cases`;
+    }
     if (s instanceof Storage) return `<b>Coffre</b><br>${kg(s.weight())} / ${kg(s.capacity)}`;
     if (s instanceof ShippingCrate)
       return `<b>Caisse d'expédition</b><br>${kg(s.weight())} / ${kg(s.capacity)} · ${money(s.pendingValue())} en attente<br>Passage dans ${Math.ceil(s.timer)} s`;
@@ -761,14 +798,19 @@ export class Game {
     for (const e of g.events) {
       switch (e.t) {
         case 'swing':
-          this.sfx.swing();
+          if (e.tool === 'jackhammer') {
+            this.sfx.hammer();
+            r.onHammer();
+          } else this.sfx.swing();
           break;
         case 'hit':
-          this.sfx.hit(getBlock(e.block).tier);
+          // Le marteau-piqueur a son propre bruit (un par coup, pas un par case).
+          if (g.player.swingTool !== 'jackhammer') this.sfx.hit(getBlock(e.block).tier);
           r.onHit(e.tx, e.ty, e.block, g.player.x, g.player.y);
           break;
         case 'break':
-          this.sfx.break();
+          // Une foreuse de percement qui creuse loin du joueur ne s'entend pas.
+          if (Math.hypot((e.tx + 0.5) * TILE - g.player.x, (e.ty + 0.5) * TILE - g.player.y) < 18 * TILE) this.sfx.break();
           r.onBreak(e.tx, e.ty, e.block);
           break;
         case 'denied':

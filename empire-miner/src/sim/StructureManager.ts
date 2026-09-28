@@ -35,6 +35,15 @@ export class StructureManager {
     this.order = null;
   }
 
+  /** Déplace une structure (foreuse de percement) et met l'index à jour. */
+  move(s: Structure, x: number, y: number): void {
+    for (let yy = s.y; yy < s.y + s.h; yy++) for (let xx = s.x; xx < s.x + s.w; xx++) this.byTile.delete(yy * this.worldW + xx);
+    s.x = x;
+    s.y = y;
+    for (let yy = s.y; yy < s.y + s.h; yy++) for (let xx = s.x; xx < s.x + s.w; xx++) this.byTile.set(yy * this.worldW + xx, s);
+    this.order = null;
+  }
+
   /** Signale une modification (ex. rotation) qui change le graphe de transport. */
   invalidate(): void {
     this.order = null;

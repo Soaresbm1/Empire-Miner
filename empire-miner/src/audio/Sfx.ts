@@ -95,6 +95,15 @@ export class Sfx {
     this.noise(0.12, 900, 0.8, 0.05, 'bandpass');
   }
 
+  /** Marteau-piqueur : rafale de chocs secs et grondement du moteur. */
+  hammer(): void {
+    for (let i = 0; i < 3; i++) {
+      this.noise(0.035, 1500 + Math.random() * 600, 2, 0.16, 'bandpass', i * 0.045);
+      this.tone(120 + Math.random() * 30, 0.03, 'square', 0.05, 80, i * 0.045);
+    }
+    this.noise(0.15, 260, 0.8, 0.08, 'lowpass');
+  }
+
   /** Coup de pioche : plus aigu sur les roches dures. */
   hit(hardness: number): void {
     const f = 700 + hardness * 180 + Math.random() * 120;

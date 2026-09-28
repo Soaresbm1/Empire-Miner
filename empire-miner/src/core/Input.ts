@@ -16,6 +16,9 @@ export class Input {
   left = false;
   right = false;
   private leftPressed = false;
+  /** Position de la souris au moment du dernier clic gauche (elle a pu bouger avant l'image suivante). */
+  leftPressX = 0;
+  leftPressY = 0;
   private rightPressed = false;
   wheel = 0;
   /** Libellés de touches selon la disposition du clavier (si le navigateur le permet). */
@@ -51,6 +54,8 @@ export class Input {
       if (e.button === 0) {
         this.left = true;
         this.leftPressed = true;
+        this.leftPressX = e.clientX;
+        this.leftPressY = e.clientY;
       } else if (e.button === 2) {
         this.right = true;
         this.rightPressed = true;

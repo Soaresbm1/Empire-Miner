@@ -52,6 +52,15 @@ Un convoyeur qui pointe vers la structure refuse l'objet (arrivée de face) : c'
 en arrière. Les coffres ne se vident que dans des convoyeurs, jamais directement dans un autre coffre, ce qui
 évite les allers-retours entre deux coffres voisins.
 
+Outils : `GameState.activeTool` donne les caractéristiques de l'outil en main (pioche ou marteau-piqueur,
+`data/tools.ts`) ; un outil large frappe la case visée et ses voisines perpendiculaires (`strikeTiles`). Le
+marteau-piqueur brûle le charbon du sac à chaque coup.
+
+Structures mobiles : la foreuse de percement (`TunnelBorer`) se déplace d'une case avec
+`StructureContext.moveStructure` (qui met l'index `StructureManager` à jour), perce avec `digTile` (même effet
+qu'un bloc miné, morceaux lâchés derrière elle), attend si `occupied` (joueur, wagonnet) et révèle le tunnel avec
+`reveal`.
+
 Combustible : une structure qui brûle quelque chose expose `fuelWanted()` (la ressource voulue tant que son
 réservoir n'est pas plein). Un coffre remplit d'abord le réservoir de ses voisins, puis se vide dans les
 convoyeurs. Un futur générateur ou four n'aura qu'à implémenter `fuelWanted()` pour être rechargé de la même façon. Un futur trieur, concasseur ou four

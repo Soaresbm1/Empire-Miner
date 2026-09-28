@@ -6,15 +6,15 @@
  * (rendu, audio, interface) lit cet état et consomme `events`.
  */
 import { SURFACE_ROWS, TILE, depthAt } from '../core/constants';
-import { Dir, dirFromVector } from '../core/dir';
+import { DX, DY, Dir, dirFromVector, rotateCW } from '../core/dir';
 import { Rng } from '../core/rng';
 import { AIR, getBlock } from '../data/blocks';
 import { zoneForDepth } from '../data/depth';
 import { getMachine, kitId, kitName, MACHINES, parseKit } from '../data/machines';
 import { RESOURCES, getResource, hasResource, resourceIndex } from '../data/resources';
-import { BAGS, PICKAXES } from '../data/tools';
+import { BAGS, JACKHAMMER, PICKAXES } from '../data/tools';
 import { DropSystem } from './Drops';
-import type { SimEvent } from './events';
+import type { SimEvent, ToolKind } from './events';
 import { generateWorld, WorldLayout } from './generator';
 import { Inventory } from './Inventory';
 import { Player } from './Player';
@@ -22,6 +22,7 @@ import { StructureManager } from './StructureManager';
 import { Building, BuildingType } from './structures/Building';
 import { Conveyor } from './structures/Conveyor';
 import { Rail, type RailStation, type RailSwitch, type SwitchSetting } from './structures/Rail';
+import { TunnelBorer } from './structures/Borer';
 import { Drill } from './structures/Drill';
 import { ShippingCrate } from './structures/ShippingCrate';
 import type { Sorter } from './structures/Sorter';
@@ -43,6 +44,18 @@ export interface PlayerIntent {
 }
 
 export const NO_INTENT: PlayerIntent = { mx: 0, my: 0, mine: false, target: null };
+
+/** Caractéristiques de minage de l'outil en main (pioche ou marteau-piqueur). */
+export interface MiningTool {
+  kind: ToolKind;
+  name: string;
+  tier: number;
+  damage: number;
+  swingTime: number;
+  reach: number;
+  /** Nombre de cases frappées par coup (1 pour une pioche). */
+  width: number;
+}
 
 export interface Stats {
   tilesMined: number;
@@ -81,6 +94,11 @@ export class GameState implements StructureContext {
   money = 0;
   pickaxeLevel = 0;
   bagLevel = 0;
+  /** Marteau-piqueur acheté, outil en main, secondes de charbon restantes dans le marteau. */
+  hasJackhammer = false;
+  tool: ToolKind = 'pickaxe';
+  hammerFuel = 0;
+  private lastNoFuel = -99;
   time = 0;
   autoPickup: Record<string, boolean> = {};
   stats: Stats = {
@@ -148,6 +166,34 @@ export class GameState implements StructureContext {
     this.stats.earned += total;
     this.stats.autoSold += total;
     this.emit({ t: 'shipped', tx: from.x, ty: from.y, total, n });
+  }
+
+  digTile(tx: number, ty: number, from: { x: number; y: number }): void {
+    this.breakTile(tx, ty, from);
+  }
+
+  moveStructure(s: Structure, x: number, y: number): void {
+    const ox = s.x;
+    const oy = s.y;
+    this.structures.move(s, x, y);
+    // Ce qui traînait sur la nouvelle case est repoussé derrière la machine.
+    for (const d of this.drops.list)
+      if (Math.floor(d.x / TILE) === x && Math.floor(d.y / TILE) === y) {
+        d.x = (ox + 0.5) * TILE;
+        d.y = (oy + 0.5) * TILE;
+      }
+  }
+
+  occupied(x: number, y: number): boolean {
+    const p = this.player;
+    const x0 = x * TILE;
+    const y0 = y * TILE;
+    const onPlayer = p.x + p.halfW > x0 && p.x - p.halfW < x0 + TILE && p.y + p.halfH > y0 && p.y - p.halfH < y0 + TILE;
+    return onPlayer || !!this.wagons.at(x, y);
+  }
+
+  reveal(x: number, y: number): void {
+    for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) this.world.setExplored(x + dx, y + dy);
   }
 
   // ---------------------------------------------------------------- boucle
@@ -242,48 +288,113 @@ export class GameState implements StructureContext {
     return Math.hypot((tx + 0.5) * TILE - p.x, (ty + 0.5) * TILE - (p.y - 3)) / TILE;
   }
 
+  /** Caractéristiques de l'outil en main (le marteau-piqueur seulement s'il a été acheté). */
+  get activeTool(): MiningTool {
+    return this.toolStats(this.tool === 'jackhammer' && this.hasJackhammer ? 'jackhammer' : 'pickaxe');
+  }
+
+  toolStats(kind: ToolKind): MiningTool {
+    if (kind === 'jackhammer') return { kind, name: JACKHAMMER.name, tier: JACKHAMMER.tier, damage: JACKHAMMER.damage, swingTime: JACKHAMMER.swingTime, reach: JACKHAMMER.reach, width: JACKHAMMER.width };
+    const p = this.pickaxe;
+    return { kind, name: p.name, tier: p.tier, damage: p.damage, swingTime: p.swingTime, reach: p.reach, width: 1 };
+  }
+
   /** Une tuile peut-elle être frappée ? (portée et présence de roche) */
   canReach(tx: number, ty: number): boolean {
-    return this.world.isSolid(tx, ty) && this.distanceToTile(tx, ty) <= this.pickaxe.reach;
+    return this.world.isSolid(tx, ty) && this.distanceToTile(tx, ty) <= this.activeTool.reach;
+  }
+
+  /** Passe de la pioche au marteau-piqueur et inversement. */
+  toggleTool(): boolean {
+    if (!this.hasJackhammer) {
+      this.emit({ t: 'message', text: "Pas de marteau-piqueur : il s'achète à l'Atelier.", kind: 'warn' });
+      return false;
+    }
+    this.tool = this.tool === 'jackhammer' ? 'pickaxe' : 'jackhammer';
+    this.emit({ t: 'message', text: `En main : ${this.activeTool.name}`, kind: 'info' });
+    return true;
+  }
+
+  /** Brûle `seconds` de charbon dans le marteau-piqueur, en rechargeant depuis le sac. Faux s'il n'y en a plus. */
+  private burnHammerFuel(seconds: number): boolean {
+    const fuel = JACKHAMMER.fuel;
+    while (this.hammerFuel < seconds) {
+      if (this.inventory.remove(fuel.res, 1) < 1) return false;
+      this.hammerFuel += fuel.secondsPerUnit;
+    }
+    this.hammerFuel -= seconds;
+    return true;
   }
 
   private updateMining(dt: number, intent: PlayerIntent): void {
     const p = this.player;
-    const pick = this.pickaxe;
     if (p.swingT > 0) {
       p.swingT -= dt;
       const elapsed = p.swingDuration - p.swingT;
       if (p.swingHitPending && elapsed >= p.swingDuration * 0.45) {
         p.swingHitPending = false;
-        if (p.swingTarget) this.strike(p.swingTarget.tx, p.swingTarget.ty);
+        if (p.swingTarget) this.strikeWith(this.toolStats(p.swingTool), p.swingTarget.tx, p.swingTarget.ty);
       }
       if (p.swingT <= 0) p.swingT = 0;
     }
     if (intent.mine && intent.target && p.swingT <= 0 && this.canReach(intent.target.tx, intent.target.ty)) {
       const { tx, ty } = intent.target;
-      p.swingDuration = pick.swingTime;
-      p.swingT = pick.swingTime;
+      let tool = this.activeTool;
+      if (tool.kind === 'jackhammer' && !this.burnHammerFuel(tool.swingTime)) {
+        // Plus de charbon : on continue à la pioche plutôt que de rester les bras ballants.
+        tool = this.toolStats('pickaxe');
+        if (this.time - this.lastNoFuel > 4) {
+          this.lastNoFuel = this.time;
+          this.emit({ t: 'message', text: 'Marteau-piqueur sans charbon : vous piochez à la main.', kind: 'warn' });
+        }
+      }
+      p.swingTool = tool.kind;
+      p.swingDuration = tool.swingTime;
+      p.swingT = tool.swingTime;
       p.swingHitPending = true;
       p.swingTarget = { tx, ty };
       const ax = (tx + 0.5) * TILE - p.x;
       const ay = (ty + 0.5) * TILE - (p.y - 3);
       p.aim = Math.atan2(ay, ax);
       p.facing = dirFromVector(ax, ay);
-      this.emit({ t: 'swing', x: p.x, y: p.y });
+      this.emit({ t: 'swing', x: p.x, y: p.y, tool: tool.kind });
     }
   }
 
-  /** Un coup de pioche sur la tuile (tx, ty). */
-  strike(tx: number, ty: number): void {
+  /**
+   * Cases frappées par un coup visant (tx, ty) : la case visée puis, pour un outil large,
+   * ses voisines perpendiculairement à la direction du coup (front de 3 cases).
+   */
+  strikeTiles(tool: MiningTool, tx: number, ty: number): [number, number][] {
+    const out: [number, number][] = [[tx, ty]];
+    if (tool.width <= 1) return out;
+    const p = this.player;
+    const side = rotateCW(dirFromVector((tx + 0.5) * TILE - p.x, (ty + 0.5) * TILE - (p.y - 3)));
+    for (let k = 1; k <= (tool.width - 1) / 2; k++) out.push([tx + DX[side] * k, ty + DY[side] * k], [tx - DX[side] * k, ty - DY[side] * k]);
+    return out;
+  }
+
+  private strikeWith(tool: MiningTool, tx: number, ty: number): void {
+    const [first, ...sides] = this.strikeTiles(tool, tx, ty);
+    this.strike(first[0], first[1], tool);
+    // Les cases voisines trop dures sont ignorées sans alerte : seule la case visée compte.
+    for (const [x, y] of sides) {
+      const b = getBlock(this.world.get(x, y));
+      if (b.solid && b.breakable && b.tier <= tool.tier) this.strike(x, y, tool);
+    }
+  }
+
+  /** Un coup d'outil (la pioche par défaut) sur la tuile (tx, ty). */
+  strike(tx: number, ty: number, tool: MiningTool = this.toolStats('pickaxe')): void {
     const id = this.world.get(tx, ty);
     const block = getBlock(id);
     if (!block.solid) return;
-    if (!block.breakable || this.pickaxe.tier < block.tier) {
+    if (!block.breakable || tool.tier < block.tier) {
       this.emit({ t: 'denied', tx, ty, block: id, need: block.breakable ? block.tier : 99 });
       return;
     }
     const i = this.world.idx(tx, ty);
-    const dmg = (this.world.damage.get(i) ?? 0) + this.pickaxe.damage;
+    const dmg = (this.world.damage.get(i) ?? 0) + tool.damage;
     if (dmg >= block.hp) {
       this.breakTile(tx, ty);
     } else {
@@ -292,8 +403,11 @@ export class GameState implements StructureContext {
     }
   }
 
-  /** Détruit une tuile : elle devient praticable et lâche ses ressources. */
-  breakTile(tx: number, ty: number): void {
+  /**
+   * Détruit une tuile : elle devient praticable et lâche ses ressources. Les morceaux
+   * jaillissent vers le mineur, ou tombent en `from` (derrière une foreuse de percement).
+   */
+  breakTile(tx: number, ty: number, from?: { x: number; y: number }): void {
     const id = this.world.get(tx, ty);
     const block = getBlock(id);
     this.world.set(tx, ty, AIR);
@@ -305,10 +419,12 @@ export class GameState implements StructureContext {
       const n = this.rng.int(block.drop.min, block.drop.max);
       const cx = (tx + 0.5) * TILE;
       const cy = (ty + 0.5) * TILE;
-      // Les morceaux jaillissent plutôt du côté du mineur.
-      const toward = Math.atan2(this.player.y - 3 - cy, this.player.x - cx);
+      // Les morceaux jaillissent plutôt du côté du mineur (ou vers l'arrière de la machine).
+      const ox = from ? from.x : cx;
+      const oy = from ? from.y : cy;
+      const toward = from ? Math.atan2(from.y - cy, from.x - cx) : Math.atan2(this.player.y - 3 - cy, this.player.x - cx);
       for (let k = 0; k < n; k++) {
-        const d = this.drops.spawn(block.drop.res, 1, cx, cy);
+        const d = this.drops.spawn(block.drop.res, 1, ox, oy);
         const a = toward + (this.rng.float() - 0.5) * 1.6;
         const sp = 30 + this.rng.float() * 30;
         d.vx = Math.cos(a) * sp;
@@ -492,6 +608,16 @@ export class GameState implements StructureContext {
     if (!next || !this.isNear('workshop') || !this.pay(next.price)) return false;
     this.setBagLevel(this.bagLevel + 1);
     this.emit({ t: 'bought', name: next.name });
+    return true;
+  }
+
+  /** Achète le marteau-piqueur à l'Atelier ; il est aussitôt pris en main. */
+  buyJackhammer(): boolean {
+    if (this.hasJackhammer || !this.isNear('workshop') || this.pickaxe.tier < JACKHAMMER.unlock.pickaxeTier) return false;
+    if (!this.pay(JACKHAMMER.price)) return false;
+    this.hasJackhammer = true;
+    this.tool = 'jackhammer';
+    this.emit({ t: 'bought', name: JACKHAMMER.name });
     return true;
   }
 
@@ -757,6 +883,22 @@ export class GameState implements StructureContext {
     if (!next || this.drillUpgradeBlocker(d) || !this.pay(next.price)) return false;
     d.level = next.level;
     this.emit({ t: 'bought', name: `${d.def.name} niveau ${next.level}` });
+    return true;
+  }
+
+  /** Charge le charbon du sac dans une foreuse de percement. */
+  fuelBorer(b: TunnelBorer): number {
+    const fuel = b.def.fuel;
+    if (!fuel) return 0;
+    const k = b.addFuel(this.inventory.count(fuel.res));
+    this.inventory.remove(fuel.res, k);
+    return k;
+  }
+
+  /** Règle la longueur du prochain tunnel (0 = sans limite). */
+  setBorerLength(b: TunnelBorer, length: number): boolean {
+    if (!b.spec.lengths.includes(length)) return false;
+    b.length = length;
     return true;
   }
 

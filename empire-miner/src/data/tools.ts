@@ -40,3 +40,41 @@ export const BAGS: BagDef[] = [
   { id: 'large', name: 'Grand sac', capacity: 45, speedMul: 1, price: 90, description: 'Plus du double de place.' },
   { id: 'barrow', name: 'Brouette', capacity: 120, speedMul: 0.85, price: 450, description: 'Énorme capacité, mais ralentit un peu la marche.' },
 ];
+
+/**
+ * Outil mécanique : attaque plusieurs cases à la fois et brûle un combustible pris
+ * dans le sac. Il s'ajoute aux pioches (touche T pour passer de l'un à l'autre).
+ */
+export interface PowerToolDef {
+  id: string;
+  name: string;
+  /** Niveau : doit être >= au niveau du bloc pour pouvoir le miner. */
+  tier: number;
+  /** Dégâts par coup, sur chaque case du front d'attaque. */
+  damage: number;
+  /** Durée d'un coup (s). */
+  swingTime: number;
+  /** Portée (en tuiles, depuis le centre du joueur). */
+  reach: number;
+  /** Largeur du front d'attaque : la case visée et ses voisines, perpendiculairement au coup. */
+  width: number;
+  /** Combustible pris dans le sac : une unité donne `secondsPerUnit` secondes de marteau. */
+  fuel: { res: string; secondsPerUnit: number };
+  price: number;
+  unlock: { pickaxeTier: number; text: string };
+  description: string;
+}
+
+export const JACKHAMMER: PowerToolDef = {
+  id: 'jackhammer',
+  name: 'Marteau-piqueur',
+  tier: 3,
+  damage: 3,
+  swingTime: 0.16,
+  reach: 1.9,
+  width: 3,
+  fuel: { res: 'coal', secondsPerUnit: 12 },
+  price: 900,
+  unlock: { pickaxeTier: 3, text: 'Nécessite la Pioche en fer' },
+  description: "Attaque la paroi sur trois cases de large, très vite. Brûle le charbon de votre sac ; sans charbon, vous repassez à la pioche.",
+};

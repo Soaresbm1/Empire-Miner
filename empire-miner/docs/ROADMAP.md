@@ -22,7 +22,8 @@ profondeur et roches plus dures, sauvegarde/chargement, première automatisation
 - ✅ Aiguillages (branche fixe ou alternance).
 - Plusieurs wagonnets par ligne avec signaux ; ascenseur de puits.
 - Éclairage posable (lampes), obscurité plus contraignante en profondeur.
-- Marteau-piqueur, foreuse de percement (creuse des tunnels automatiquement).
+- ✅ Marteau-piqueur (front de 3 cases, au charbon) et foreuse de percement (tunnel automatique).
+- Électricité : générateurs, câbles, machines électriques plus puissantes.
 
 ## v0.4 — Traitement
 - Trieur (filtre par ressource), concasseur (pierre → gravier), four/fonderie (minerai → lingots, plus rentables).

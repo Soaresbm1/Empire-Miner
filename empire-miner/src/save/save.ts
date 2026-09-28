@@ -29,6 +29,8 @@ export interface SaveData {
   money: number;
   pickaxeLevel: number;
   bagLevel: number;
+  /** Outils mécaniques (absents des sauvegardes d'avant le marteau-piqueur). */
+  tools?: { jackhammer: boolean; inHand: string; hammerFuel: number };
   inventory: Record<string, number>;
   kits: Record<string, number>;
   autoPickup: Record<string, boolean>;
@@ -65,6 +67,7 @@ export function serialize(g: GameState): SaveData {
     money: g.money,
     pickaxeLevel: g.pickaxeLevel,
     bagLevel: g.bagLevel,
+    tools: { jackhammer: g.hasJackhammer, inHand: g.tool, hammerFuel: round2(g.hammerFuel) },
     inventory: { ...g.inventory.items },
     kits: { ...g.inventory.kits },
     autoPickup: { ...g.autoPickup },
@@ -107,6 +110,9 @@ export function deserialize(data: SaveData): GameState {
   g.money = data.money;
   g.pickaxeLevel = Math.min(Math.max(0, data.pickaxeLevel), PICKAXES.length - 1);
   g.setBagLevel(Math.min(Math.max(0, data.bagLevel), BAGS.length - 1));
+  g.hasJackhammer = !!data.tools?.jackhammer;
+  g.tool = g.hasJackhammer && data.tools?.inHand === 'jackhammer' ? 'jackhammer' : 'pickaxe';
+  g.hammerFuel = Math.max(0, Number(data.tools?.hammerFuel ?? 0) || 0);
   g.inventory.items = filterKnown(data.inventory);
   g.inventory.kits = { ...data.kits };
   g.autoPickup = { ...g.autoPickup, ...data.autoPickup };

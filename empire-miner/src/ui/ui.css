@@ -88,6 +88,8 @@ kbd {
 
 .hud-bl { position: absolute; bottom: 12px; left: 12px; width: 280px; }
 .equip { font-size: 15px; margin-bottom: 6px; }
+.fuel-line { font-size: 12px; color: var(--muted); margin-top: 2px; }
+.fuel-line kbd { font-size: 10px; }
 .tier { background: var(--accent); color: #1a1418; font-weight: 700; padding: 0 5px; border-radius: 3px; margin-right: 4px; }
 .bar { position: relative; height: 18px; background: #120e10; border: 1px solid var(--line); border-radius: 3px; overflow: hidden; }
 .bar > div { height: 100%; background: linear-gradient(#8fd66f, #4f9a3b); transition: width 0.15s; }

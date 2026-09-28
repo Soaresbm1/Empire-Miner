@@ -2,8 +2,11 @@
  * Événements émis par la simulation et consommés par la présentation
  * (sons, particules, messages). La simulation ne connaît ni le rendu ni l'audio.
  */
+/** Outil tenu par le joueur. */
+export type ToolKind = 'pickaxe' | 'jackhammer';
+
 export type SimEvent =
-  | { t: 'swing'; x: number; y: number }
+  | { t: 'swing'; x: number; y: number; tool: ToolKind }
   | { t: 'hit'; tx: number; ty: number; block: number; ratio: number }
   | { t: 'break'; tx: number; ty: number; block: number }
   | { t: 'denied'; tx: number; ty: number; block: number; need: number }

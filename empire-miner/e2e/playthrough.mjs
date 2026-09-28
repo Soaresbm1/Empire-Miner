@@ -71,11 +71,18 @@ async function mineTile(tx, ty, maxMs = 12000) {
   return (Date.now() - t0) / 1000;
 }
 
+/**
+ * Attend que le jeu ait traité deux images : une touche et un clic envoyés dans la même image
+ * seraient traités touche d'abord (sur une machine chargée, 40 ms ne suffisent pas toujours).
+ */
+const nextFrames = () => ev(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))));
+
 /** En mode construction : choisit le kit, oriente la pose puis clique sur la tuile. */
 async function placeAt(kit, tx, ty, dir = 0) {
   const idx = await ev((k) => window.__EM.availableKits(window.__EM.state).indexOf(k), kit);
   if (idx < 0) throw new Error(`kit ${kit} absent`);
   await page.keyboard.press(`Digit${idx + 1}`);
+  await nextFrames();
   await page.waitForTimeout(40);
   const p = await tileScreen(tx, ty);
   await page.mouse.move(p.x, p.y);
@@ -85,8 +92,10 @@ async function placeAt(kit, tx, ty, dir = 0) {
     await page.keyboard.press('KeyR');
     await page.waitForTimeout(30);
   }
+  await nextFrames();
   await page.mouse.down();
   await page.mouse.up();
+  await nextFrames();
   await page.waitForTimeout(80);
 }
 
@@ -268,6 +277,8 @@ try {
   await page.waitForTimeout(100);
   await page.mouse.down();
   await page.mouse.up();
+  // Laisse passer une image : un clic et une touche dans la même image seraient traités touche d'abord.
+  await page.waitForTimeout(100);
   // Convoyeurs tracés en glissant de x=58 à x=54
   await page.keyboard.press('Digit1');
   p = await tileScreen(58, S + 10);
@@ -779,7 +790,11 @@ try {
     const g = window.__EM.state;
     return { type: g.structures.at(60, 3)?.type, dir: g.structures.at(60, 3)?.dir, a: g.structures.at(63, 3)?.type, b: g.structures.at(60, 5)?.type };
   });
-  check(sw.type === 'rail_switch' && sw.dir === 0 && sw.a === 'rail_unload' && sw.b === 'rail_unload', 'aiguillage et deux quais posés à la souris');
+  const around = await ev(() => [[59, 3], [61, 3], [62, 3], [60, 4]].map(([x, y]) => window.__EM.state.structures.at(x, y)?.type ?? '-').join(','));
+  check(
+    sw.type === 'rail_switch' && sw.dir === 0 && sw.a === 'rail_unload' && sw.b === 'rail_unload' && around === 'rail,rail,rail,rail',
+    `aiguillage, rails et deux quais posés à la souris (voisins : ${around})`,
+  );
   await teleport(60, 3); // debout sur l'aiguillage
   await page.waitForTimeout(300);
   await pressE();
@@ -909,6 +924,92 @@ try {
   await page.waitForTimeout(3500);
   const left = await ev(() => window.__EM.state.drops.list.filter((d) => d.x > 52 * 16 && d.y > 27 * 16).map((d) => d.res));
   check(!left.includes('stone') && left.includes('copper'), `les pierres au sol s'effritent, pas le minerai (reste : ${left.join(', ')})`);
+
+  // Marteau-piqueur : acheté à l'Atelier (pioche en fer), il creuse un front de 3 cases ; T repasse à la pioche.
+  await ev(() => {
+    const g = window.__EM.state;
+    g.money += 2500;
+    g.inventory.items = {};
+  });
+  await teleport(58, 8);
+  await page.waitForTimeout(300);
+  await pressE();
+  await page.click('.tab[data-arg="tools"]');
+  await page.waitForTimeout(150);
+  await page.click('[data-action="buyJackhammer"]');
+  await page.waitForTimeout(150);
+  await page.click('.tab[data-arg="machines"]');
+  await page.waitForTimeout(150);
+  await page.click('[data-action="buyKit"][data-arg="borer:1"]');
+  await page.keyboard.press('Escape');
+  check((await ev(() => ({ j: window.__EM.state.hasJackhammer, t: window.__EM.state.tool }))).t === 'jackhammer', 'marteau-piqueur acheté et pris en main');
+  // Mur sud de la salle du fond : trois cases de roche tendre (bloc n° 4) sous le joueur.
+  await ev(() => {
+    const g = window.__EM.state;
+    for (const x of [47, 48, 49]) g.world.set(x, 28, 4);
+    g.inventory.add('coal', 20);
+  });
+  await teleport(48, 27);
+  await page.waitForTimeout(400);
+  const wallAt = await tileScreen(48, 28);
+  await page.mouse.move(wallAt.x, wallAt.y);
+  await page.mouse.down();
+  await page.waitForTimeout(250);
+  await shot('23-jackhammer');
+  await page.waitForTimeout(500);
+  await page.mouse.up();
+  const front = await ev(() => [47, 48, 49].map((x) => window.__EM.state.world.isSolid(x, 28)));
+  check(front.every((solid) => !solid), `le marteau-piqueur ouvre un front de 3 cases d'un coup (${front.join(',')})`);
+  check((await ev(() => window.__EM.state.inventory.count('coal'))) < 20, 'le marteau-piqueur brûle le charbon du sac');
+  await page.keyboard.press('KeyT');
+  await page.waitForTimeout(150);
+  check((await ev(() => window.__EM.state.tool)) === 'pickaxe' && (await page.textContent('#hud-equip')).includes('Pioche'), 'T repasse à la pioche');
+
+  // Foreuse de percement : posée dans la salle du fond vers l'est, 10 cases, démarrée depuis son panneau.
+  await ev(() => {
+    const g = window.__EM.state;
+    for (let x = 54; x <= 66; x++) g.world.set(x, 26, 4);
+  });
+  await teleport(51, 25);
+  await page.waitForTimeout(400);
+  await page.keyboard.press('KeyB');
+  await page.waitForTimeout(100);
+  await placeAt('borer', 53, 26, 0);
+  await page.keyboard.press('Escape');
+  check((await ev(() => window.__EM.state.structures.at(53, 26)?.type)) === 'borer', 'foreuse de percement posée face à la roche');
+  await teleport(52, 25);
+  await page.waitForTimeout(300);
+  await pressE();
+  check(await page.isVisible('.panel-borer'), 'le panneau de la foreuse de percement s’ouvre avec E');
+  await page.click('[data-action="borerFuel"]');
+  await page.click('[data-action="borerLength"][data-arg="10"]');
+  await page.waitForTimeout(100);
+  await page.click('[data-action="borerStart"]');
+  await page.waitForTimeout(200);
+  await shot('24-borer-panel');
+  await page.keyboard.press('Escape');
+  await page.waitForTimeout(4000);
+  await teleport(56, 25);
+  await ev(() => window.__EM.renderer.adjustZoom(2));
+  await page.waitForTimeout(1500);
+  await shot('24a-borer');
+  await ev(() => window.__EM.renderer.adjustZoom(-2));
+  let bore = null;
+  for (let i = 0; i < 40; i++) {
+    bore = await ev(() => {
+      const b = window.__EM.state.structures.list.find((s) => s.type === 'borer');
+      return { x: b.x, status: b.status, dug: b.totalDug };
+    });
+    if (bore.status === 'done') break;
+    await page.waitForTimeout(500);
+  }
+  const tunnel = await ev(() => {
+    const w = window.__EM.state.world;
+    let open = 0;
+    for (let x = 54; x <= 63; x++) if (!w.isSolid(x, 26) && w.explored[w.idx(x, 26)]) open++;
+    return open;
+  });
+  check(bore.status === 'done' && bore.x === 63 && tunnel === 10, `la foreuse creuse seule un tunnel de 10 cases puis s'arrête (${JSON.stringify(bore)}, ${tunnel} cases ouvertes et révélées)`);
 
   // Carte : mini-carte dans le HUD, carte complète avec M (ou clic sur la mini-carte).
   const colorsIn = (sel) =>

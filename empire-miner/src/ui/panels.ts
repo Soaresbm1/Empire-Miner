@@ -3,11 +3,12 @@
  * Chaque bouton porte un `data-action` traité par Game.
  */
 import { DIR_ARROWS, DX, DY } from '../core/dir';
-import { SURFACE_ROWS } from '../core/constants';
+import { SURFACE_ROWS, depthAt } from '../core/constants';
 import { MACHINES, MachineDef, conveyorThroughput, kitName, parseKit } from '../data/machines';
 import { RESOURCES, getResource } from '../data/resources';
-import { BAGS, PICKAXES } from '../data/tools';
+import { BAGS, JACKHAMMER, PICKAXES } from '../data/tools';
 import type { GameState } from '../sim/GameState';
+import type { TunnelBorer } from '../sim/structures/Borer';
 import type { Drill } from '../sim/structures/Drill';
 import type { ShippingCrate } from '../sim/structures/ShippingCrate';
 import type { Sorter } from '../sim/structures/Sorter';
@@ -60,9 +61,29 @@ function ladder(names: string[], current: number): string {
     .join('<i>›</i>')}</div>`;
 }
 
+/** Carte du marteau-piqueur dans l'onglet Outils de l'Atelier. */
+function jackhammerCard(g: GameState): string {
+  const j = JACKHAMMER;
+  const specs = `${stat('Niveau', String(j.tier))}${stat('Cases par coup', `${j.width} (la visée et ses voisines)`)}
+    ${stat("Durée d'un coup", `${num(j.swingTime, 2)} s`)}${stat('Puissance', `${num((j.damage * j.width) / j.swingTime, 0)} /s sur ${j.width} cases`)}
+    ${stat('Charbon', `1 unité / ${j.fuel.secondsPerUnit} s de travail, pris dans le sac`)}`;
+  if (g.hasJackhammer) {
+    const inHand = g.tool === 'jackhammer';
+    return `<h4>Outils mécaniques</h4><div class="cards"><div class="card ${inHand ? 'highlight' : ''}"><h3>${j.name} — acquis</h3>
+      <p>${inHand ? 'En main.' : 'Rangé : vous tenez la pioche.'} Touche <kbd>T</kbd> pour passer de la pioche au marteau-piqueur.</p>${specs}
+      ${stat('Charbon dans le sac', String(g.inventory.count(j.fuel.res)))}</div></div>`;
+  }
+  const locked = g.pickaxe.tier < j.unlock.pickaxeTier;
+  const can = !locked && g.money >= j.price;
+  return `<h4>Outils mécaniques</h4><div class="cards"><div class="card ${locked ? 'locked' : 'highlight'}"><h3>${j.name}</h3><p>${j.description}</p>${specs}
+    <div class="buy">${btn('buyJackhammer', `Acheter — ${money(j.price)}`, { cls: 'primary', disabled: !can })}${
+      locked ? `<small class="lock">🔒 ${j.unlock.text}</small>` : g.money < j.price ? `<small>Il vous manque ${money(j.price - g.money)}</small>` : ''
+    }</div></div></div>`;
+}
+
 export function workshopPanel(g: GameState, tab: string, icon: (id: string) => string = () => ''): string {
   const tabs = [
-    ['tools', 'Pioches'],
+    ['tools', 'Outils'],
     ['transport', 'Transport'],
     ['machines', 'Machines'],
   ]
@@ -89,6 +110,7 @@ export function workshopPanel(g: GameState, tab: string, icon: (id: string) => s
         <div class="buy">${btn('buyPickaxe', `Acheter — ${money(next.price)}`, { cls: 'primary', disabled: !can })}${can ? '' : `<small>Il vous manque ${money(next.price - g.money)}</small>`}</div></div>`;
     } else body += `<div class="card"><h3>Meilleure pioche atteinte</h3><p>Vous avez la meilleure pioche de cette version du jeu.</p></div>`;
     body += `</div>`;
+    body += jackhammerCard(g);
   } else if (tab === 'transport') {
     const cur = g.bag;
     const next = BAGS[g.bagLevel + 1];
@@ -124,6 +146,12 @@ function machineSpecs(m: MachineDef): [string, string][] {
   if (m.onTrack) return [['Vitesse', `${num(s.speed)} cases/s`], ['Capacité', kg(s.capacity)], ['Passager', 'touche F']];
   if (m.station) return [['Tampon', kg(s.capacity)], ['Transfert', `${num(s.speed)} /s`]];
   if (m.railSwitch) return [['Branches', 'tout droit, gauche, droite'], ['Mode', 'fixe ou alterné']];
+  if (m.borer && m.fuel)
+    return [
+      ['Tunnel', "jusqu'à 50 cases, ou sans limite"],
+      ['Roche', "jusqu'au basalte"],
+      ['Charbon', `1 unité / ${m.fuel.secondsPerUnit} s`],
+    ];
   const out: [string, string][] = [];
   if (s.speed) out.push(['Cadence', `${num(s.speed * 60, 0)} /min`]);
   if (m.fuel) out.push(['Charbon', `1 unité / ${m.fuel.secondsPerUnit} s`], ['Réservoir', `${m.fuel.maxUnits} unités`]);
@@ -459,6 +487,47 @@ export function drillPanel(g: GameState, d: Drill): string {
     <p class="hint">Sortie devant la flèche ${DIR_ARROWS[d.dir]}, sinon dans un convoyeur collé. Un coffre de charbon collé la recharge tout seul.</p>`;
 }
 
+// ------------------------------------------------------------------ foreuse de percement
+
+const BORER_STATUS: Record<string, [string, string]> = {
+  idle: ["À l'arrêt", 'warn'],
+  digging: ['Perce la roche', 'good'],
+  moving: ['Avance dans le tunnel', 'good'],
+  waiting: ['Attend : quelqu’un est sur son chemin', 'warn'],
+  nofuel: ['À l’arrêt : plus de charbon', 'bad'],
+  blocked: ['Bloquée', 'bad'],
+  done: ['Tunnel terminé', 'good'],
+};
+
+export function borerPanel(g: GameState, b: TunnelBorer): string {
+  const [label, cls] = BORER_STATUS[b.status];
+  const coal = g.inventory.count('coal');
+  const secs = b.fuelSeconds();
+  const lengthBtn = (n: number) =>
+    btn('borerLength', n ? `${n} cases` : 'Sans limite', { arg: String(n), cls: `small ${b.length === n ? 'on' : 'off'}` });
+  const left = b.length ? Math.max(0, b.length - b.dug) : null;
+  return `
+    <div class="status ${cls}">● ${label}${b.status === 'blocked' ? ` : ${b.blockReason}` : ''}</div>
+    <div class="cards"><div class="card">
+      ${stat('Direction', DIR_ARROWS[b.dir])}
+      ${stat('Tunnel en cours', b.running ? `${b.dug} case${b.dug > 1 ? 's' : ''}${left !== null ? ` · reste ${left}` : ''}` : '—')}
+      ${stat('Creusé au total', `${b.totalDug} cases`)}
+      ${stat('Profondeur de la machine', `${Math.floor(depthAt(b.y))} m`)}
+      <h4>Longueur du tunnel</h4>
+      <div class="buy">${b.spec.lengths.map(lengthBtn).join('')}</div>
+    </div><div class="card">
+      ${stat('Charbon chargé', `${b.fuelUnits} / ${b.fuelMax}`)}
+      ${stat('Autonomie', `${Math.floor(secs / 60)} min ${Math.floor(secs % 60)} s de travail`)}
+      <div class="buy">${btn('borerFuel', `Charger le charbon du sac (${coal})`, { disabled: coal <= 0 || b.fuelUnits >= b.fuelMax })}</div>
+      <div class="buy">${
+        b.running
+          ? btn('borerStop', 'Arrêter', { cls: 'primary' })
+          : btn('borerStart', b.status === 'done' ? 'Creuser un nouveau tunnel' : 'Démarrer', { cls: 'primary', disabled: b.fuelSeconds() <= 0 })
+      }${btn('borerRotate', 'Tourner ↻')}</div>
+    </div></div>
+    <p class="hint">Elle perce tout droit devant sa flèche, jusqu'au basalte ; « Tourner » change son cap, même en marche. Les minerais tombent derrière elle dans le tunnel (les pierres s'effritent), les filons percés laissent leur gisement pour vos foreuses, et le tunnel apparaît sur la carte. Récupérez-la au clic droit en mode construction.</p>`;
+}
+
 // ------------------------------------------------------------------ carte
 
 /** Carte complète : le canvas est dessiné à chaque image par le jeu ; à droite, la légende. */
@@ -480,6 +549,7 @@ export function mapPanel(g: GameState, colors: Record<string, string>): string {
         ${item(sw(colors.rock), 'Roche')}
         ${item(sw(colors.building), 'Comptoir, atelier')}
         ${item(sw(colors.drill), 'Foreuse')}
+        ${item(sw(colors.borer), 'Foreuse de percement')}
         ${item(sw(colors.belt), 'Convoyeur, séparateur, trieur, pont')}
         ${item(sw(colors.storage), 'Coffre')}
         ${item(sw(colors.shipping), "Caisse d'expédition")}
@@ -508,6 +578,7 @@ export function helpPanel(keys: { move: string; label: (c: string) => string }):
     <div><h4>Construire</h4><p>${k('KeyB')} : mode construction. <kbd>Clic gauche</kbd> poser (glisser pour tracer des convoyeurs), <kbd>clic droit</kbd> démonter, ${k('KeyR')} tourner, <kbd>1-9</kbd> choisir</p></div>
     <div><h4>Zoom</h4><p>Molette de la souris</p></div>
     <div><h4>Wagonnet</h4><p>${k('KeyF')} : monter / descendre</p></div>
+    <div><h4>Outil en main</h4><p>${k('KeyT')} : pioche ou marteau-piqueur (s'il est acheté)</p></div>
     <div><h4>Carte</h4><p><kbd>M</kbd> : carte de la mine (ou clic sur la mini-carte)</p></div>
     <div><h4>Améliorer une foreuse</h4><p>${k('KeyE')} sur la foreuse : niveau 2 = cases gauche et droite, niveau 3 = aussi derrière</p></div>
     <div><h4>Menu</h4><p><kbd>Échap</kbd> : pause, sauvegarde, chargement</p></div>

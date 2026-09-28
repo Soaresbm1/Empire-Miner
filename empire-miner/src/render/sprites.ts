@@ -135,6 +135,37 @@ function rotateNearest(src: HTMLCanvasElement, angle: number, pivotX: number, pi
   return c;
 }
 
+/** Marteau-piqueur pointant vers la droite, pivot (poignée) en (2, 8), comme les pioches. */
+function jackhammerArt(): HTMLCanvasElement {
+  const [c, ctx] = canvas(18, 18);
+  const px = (x: number, y: number, w: number, h: number, col: string) => {
+    ctx.fillStyle = col;
+    ctx.fillRect(x, y, w, h);
+  };
+  // Contour, puis poignée en T, corps jaune, foret d'acier.
+  px(1, 4, 3, 10, OUTLINE);
+  px(3, 5, 10, 8, OUTLINE);
+  px(12, 7, 6, 4, OUTLINE);
+  px(2, 5, 1, 8, '#3a3a40');
+  px(4, 6, 8, 6, '#d9a526');
+  px(4, 6, 8, 1, '#f2c230');
+  px(4, 10, 8, 2, '#a57a14');
+  px(6, 7, 1, 3, '#26221e');
+  px(9, 7, 1, 3, '#26221e');
+  px(12, 8, 4, 2, '#c7ccd6');
+  px(16, 8, 1, 1, '#e3e7f0');
+  px(12, 9, 4, 1, '#8c929c');
+  return c;
+}
+
+/** Marteau-piqueur pré-tourné : [angle], même pivot et même taille que les pioches. */
+export function buildJackhammerSprites(): HTMLCanvasElement[] {
+  const art = jackhammerArt();
+  const out: HTMLCanvasElement[] = [];
+  for (let i = 0; i < PICK_ANGLES; i++) out.push(rotateNearest(art, (i / PICK_ANGLES) * Math.PI * 2, 2, 8.5, PICK_SIZE));
+  return out;
+}
+
 export const PICK_ANGLES = 32;
 export const PICK_SIZE = 36;
 

@@ -22,6 +22,7 @@ export const MAP_BG = '#0b0a0d';
 export const MAP_COLORS = {
   player: '#ffffff',
   drill: '#f2c230',
+  borer: '#ff5a3c',
   belt: '#a9b0bc',
   storage: '#c08a4a',
   shipping: '#e8792a',
@@ -122,6 +123,7 @@ export function mapFrame(g: GameState): Bounds {
 function structureColor(s: Structure): string {
   if (s instanceof Building) return MAP_COLORS.building;
   if (s.type === 'drill') return MAP_COLORS.drill;
+  if (s.type === 'borer') return MAP_COLORS.borer;
   if (s.isTrack) return MAP_COLORS.track;
   if (s.isBelt) return MAP_COLORS.belt;
   if (s.type === 'shipping') return MAP_COLORS.shipping;

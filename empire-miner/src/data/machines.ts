@@ -33,6 +33,17 @@ export interface ShippingSpec {
   interval: number;
 }
 
+export interface BorerSpec {
+  /** Niveau de roche maximal qu'elle peut percer. */
+  tier: number;
+  /** Dégâts infligés par seconde à la case devant elle. */
+  damagePerSecond: number;
+  /** Temps pour avancer d'une case une fois la roche percée (s). */
+  moveTime: number;
+  /** Longueurs de tunnel proposées dans son panneau (0 = sans limite). */
+  lengths: number[];
+}
+
 export interface BridgeSpec {
   /** Distance maximale (en cases) entre un pont d'entrée et son pont de sortie. */
   range: number;
@@ -95,6 +106,8 @@ export interface MachineDef {
   railSwitch?: boolean;
   /** Niveaux d'amélioration, du niveau de base (1) au niveau maximal. */
   levels?: MachineLevel[];
+  /** Foreuse de percement : avance toute seule en creusant un tunnel droit. */
+  borer?: BorerSpec;
 }
 
 export const MACHINES: MachineDef[] = [
@@ -293,6 +306,23 @@ export const MACHINES: MachineDef[] = [
         summary: 'Fore aussi la case derrière elle.',
       },
     ],
+  },
+  {
+    id: 'borer',
+    name: 'Foreuse de percement',
+    summary: 'Creuse toute seule un tunnel droit devant elle et révèle ce qu’elle traverse. Brûle du charbon.',
+    category: 'extraction',
+    description:
+      "Véhicule à tête rotative : avance tout droit en perçant la roche, jusqu'au basalte. Les minerais tombent derrière elle, dans le tunnel. Réglez la longueur et démarrez-la avec E ; elle s'arrête d'elle-même au bout, sans charbon ou devant un obstacle.",
+    price: 1200,
+    w: 1,
+    h: 1,
+    solid: true,
+    rotatable: true,
+    stats: { speed: 6, power: 0, capacity: 0, efficiency: 1, level: 1 },
+    fuel: { res: 'coal', secondsPerUnit: 20, maxUnits: 20 },
+    unlock: { pickaxeTier: 3, text: 'Nécessite la Pioche en fer' },
+    borer: { tier: 3, damagePerSecond: 6, moveTime: 0.35, lengths: [10, 25, 50, 0] },
   },
   {
     id: 'storage',

@@ -7,6 +7,7 @@ import { zoneForDepth } from '../data/depth';
 import { getMachine } from '../data/machines';
 import type { GameState } from '../sim/GameState';
 import { OBJECTIVES, currentObjective } from '../sim/objectives';
+import type { TunnelBorer } from '../sim/structures/Borer';
 import { Drill } from '../sim/structures/Drill';
 import { ShippingCrate } from '../sim/structures/ShippingCrate';
 import type { Sorter } from '../sim/structures/Sorter';
@@ -15,9 +16,9 @@ import { Storage } from '../sim/structures/Storage';
 import type { Structure } from '../sim/structures/Structure';
 import { esc, kg, money, resIcon } from './format';
 import { MAP_COLORS } from '../render/MineMap';
-import { counterPanel, drillPanel, helpPanel, inventoryPanel, mapPanel, shippingPanel, sorterPanel, stationPanel, storagePanel, switchPanel, workshopPanel } from './panels';
+import { borerPanel, counterPanel, drillPanel, helpPanel, inventoryPanel, mapPanel, shippingPanel, sorterPanel, stationPanel, storagePanel, switchPanel, workshopPanel } from './panels';
 
-export type PanelKind = 'counter' | 'workshop' | 'inventory' | 'storage' | 'drill' | 'shipping' | 'sorter' | 'station' | 'switch' | 'map' | 'help';
+export type PanelKind = 'counter' | 'workshop' | 'inventory' | 'storage' | 'drill' | 'borer' | 'shipping' | 'sorter' | 'station' | 'switch' | 'map' | 'help';
 
 export interface UIHost {
   onAction(action: string, arg: string): void;
@@ -93,7 +94,13 @@ export class UI {
       .join('');
     this.set(
       'hud-equip',
-      `<div class="equip"><span class="tier">N${g.pickaxe.tier}</span> ${g.pickaxe.name}</div>
+      `<div class="equip"><span class="tier">N${g.activeTool.tier}</span> ${g.activeTool.name}${
+        g.hasJackhammer
+          ? `<div class="fuel-line"><kbd>${this.host.keyLabel('KeyT')}</kbd> ${g.tool === 'jackhammer' ? 'passer à la pioche' : 'passer au marteau-piqueur'}${
+              g.tool === 'jackhammer' ? ` · charbon dans le sac : ${g.inventory.count('coal')}` : ''
+            }</div>`
+          : ''
+      }</div>
        <div class="bar ${ratio >= 0.999 ? 'full' : ratio > 0.8 ? 'warn' : ''}"><div style="width:${Math.min(100, ratio * 100)}%"></div><span>${g.bag.name} ${kg(w)} / ${kg(inv.capacity)}</span></div>
        <div class="chips">${items || '<span class="muted">Sac vide</span>'}</div>`,
     );
@@ -211,6 +218,10 @@ export class UI {
       case 'drill':
         title = getMachine('drill').name;
         body = drillPanel(g, target as Drill);
+        break;
+      case 'borer':
+        title = getMachine('borer').name;
+        body = borerPanel(g, target as TunnelBorer);
         break;
       case 'shipping':
         title = getMachine('shipping').name;
