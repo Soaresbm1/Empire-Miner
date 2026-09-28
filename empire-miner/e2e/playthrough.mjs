@@ -871,6 +871,17 @@ try {
   check(l3.back < 500 && l3.heads === 4, `niveau 3 : la case derrière est forée aussi (${l3.heads} têtes actives)`);
   await shot('20c-drill-level3');
   await ev(() => window.__EM.renderer.adjustZoom(-2));
+
+  // Pierres au sol : elles clignotent puis s'effritent ; le minerai posé à côté reste.
+  await ev(() => {
+    const g = window.__EM.state;
+    for (const [res, x] of [['stone', 52.5], ['copper', 53.5]]) g.drops.spawn(res, 2, x * 16, 27.5 * 16, false).age = 57;
+  });
+  await page.waitForTimeout(500);
+  await shot('21-stone-crumbling');
+  await page.waitForTimeout(3500);
+  const left = await ev(() => window.__EM.state.drops.list.filter((d) => d.x > 52 * 16 && d.y > 27 * 16).map((d) => d.res));
+  check(!left.includes('stone') && left.includes('copper'), `les pierres au sol s'effritent, pas le minerai (reste : ${left.join(', ')})`);
 } catch (e) {
   failures++;
   console.error(e);

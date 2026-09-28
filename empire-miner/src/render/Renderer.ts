@@ -7,6 +7,7 @@ import { DX, DY, Dir } from '../core/dir';
 import { getBlock } from '../data/blocks';
 import { getMachine } from '../data/machines';
 import { getResource } from '../data/resources';
+import { FADE_TIME } from '../sim/Drops';
 import type { GameState } from '../sim/GameState';
 import { Bridge } from '../sim/structures/Bridge';
 import { Rail, RailStation, RailSwitch } from '../sim/structures/Rail';
@@ -237,7 +238,17 @@ export class Renderer {
     const list: Drawable[] = [];
     for (const d of state.drops.list) {
       if (!this.inView(d.x, d.y)) continue;
-      list.push({ y: d.y, draw: () => this.drawDrop(d.res, d.count, d.x, d.y - d.z, d.z) });
+      // Un tas de pierres sur le point de s'effriter clignote, de plus en plus vite.
+      const left = state.drops.lifeLeft(d);
+      const alpha = left < FADE_TIME && Math.floor(this.time * (left < 2 ? 12 : 6)) % 2 ? 0.3 : 1;
+      list.push({
+        y: d.y,
+        draw: () => {
+          ctx.globalAlpha = alpha;
+          this.drawDrop(d.res, d.count, d.x, d.y - d.z, d.z);
+          ctx.globalAlpha = 1;
+        },
+      });
     }
     for (const s of state.structures.list) {
       if (s.isBelt || s.isTrack || !this.inView(s.x * TILE, s.y * TILE, 64)) continue;

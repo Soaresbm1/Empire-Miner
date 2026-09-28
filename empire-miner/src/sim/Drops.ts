@@ -1,9 +1,16 @@
 /**
  * Ressources physiquement posées au sol. Elles rebondissent à l'apparition,
  * se regroupent en tas et sont aspirées par le joueur à proximité.
+ *
+ * Les ressources qui ont une durée de vie au sol (`groundLife`, la pierre)
+ * s'effritent au bout de ce délai ; les minerais, eux, restent indéfiniment.
  */
 import { TILE } from '../core/constants';
+import { getResource } from '../data/resources';
 import type { World } from './World';
+
+/** Durée (s) pendant laquelle un tas sur le point de s'effriter clignote. */
+export const FADE_TIME = 5;
 
 export interface Drop {
   id: number;
@@ -52,7 +59,14 @@ export class DropSystem {
     return d;
   }
 
-  update(dt: number, world: World): void {
+  /** Secondes avant que le tas s'effrite (Infinity pour les ressources qui restent au sol). */
+  lifeLeft(d: Drop): number {
+    const life = getResource(d.res).groundLife;
+    return life === undefined ? Infinity : life - d.age;
+  }
+
+  /** Fait avancer les tas ; renvoie ceux qui viennent de s'effriter. */
+  update(dt: number, world: World): Drop[] {
     for (const d of this.list) {
       d.age += dt;
       if (d.magnet) continue;
@@ -82,6 +96,10 @@ export class DropSystem {
       this.mergeTimer = 0.5;
       this.merge();
     }
+    // Un tas en train d'être aspiré par le joueur ne disparaît pas sous ses yeux.
+    const expired = this.list.filter((d) => !d.magnet && this.lifeLeft(d) <= 0);
+    if (expired.length) this.list = this.list.filter((d) => !expired.includes(d));
+    return expired;
   }
 
   /** Regroupe les tas identiques proches pour limiter le nombre d'entités. */
@@ -96,6 +114,8 @@ export class DropSystem {
         if (removed.has(b.id) || b.res !== a.res) continue;
         if (Math.abs(a.x - b.x) < 7 && Math.abs(a.y - b.y) < 7) {
           a.count += b.count;
+          // Le tas fusionné garde le temps restant du plus récent des deux.
+          a.age = Math.min(a.age, b.age);
           removed.add(b.id);
         }
       }

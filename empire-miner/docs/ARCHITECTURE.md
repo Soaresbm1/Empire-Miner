@@ -8,7 +8,7 @@ src/
     World.ts             grille de tuiles persistante (blocs, gisements, réserves, dégâts, exploration)
     generator.ts         génération déterministe de la mine depuis une graine
     GameState.ts         état complet + boucle update(dt, intention du joueur)
-    Drops.ts             minerais physiques au sol
+    Drops.ts             minerais physiques au sol (la pierre s'effrite après `groundLife` secondes)
     Inventory.ts         sac limité en poids + kits de construction
     StructureManager.ts  index spatial des structures et ordre de mise à jour
     structures/          Conveyor, Drill, Storage, ShippingCrate, Building (+ registre de fabrication)
@@ -92,7 +92,7 @@ d'une branche.
 ## Étendre le jeu
 
 - **Nouveau minerai** : ajouter une entrée dans `src/data/resources.ts` (valeur, poids, rareté, résistance,
-  niveau, profondeurs, filons, réserves, couleurs). Le bloc de filon, la génération, l'économie, l'inventaire,
+  niveau, profondeurs, filons, réserves, durée de vie au sol, couleurs). Le bloc de filon, la génération, l'économie, l'inventaire,
   les foreuses et le rendu le prennent en compte automatiquement.
 - **Nouvelle roche hôte** : `HOST_ROCKS` dans `src/data/blocks.ts`.
 - **Nouvelle machine** : définition dans `src/data/machines.ts`, classe dans `src/sim/structures/`,
@@ -106,6 +106,7 @@ d'une branche.
 ## Sauvegarde
 
 `save/save.ts` régénère le monde depuis la graine puis réapplique : blocs, gisements, réserves, dégâts partiels,
-exploration, objets au sol, structures (avec leur contenu : objets sur convoyeurs, charbon, tampons, coffres),
-joueur, argent, inventaire, kits, améliorations et statistiques. Stockage : `localStorage` (+ copie de secours)
+exploration, objets au sol (avec leur âge, pour que les pierres ne repartent pas pour un délai complet),
+structures (avec leur contenu : objets sur convoyeurs, charbon, tampons, coffres), joueur, argent, inventaire,
+kits, améliorations et statistiques. Stockage : `localStorage` (+ copie de secours)
 et export/import de fichier JSON.

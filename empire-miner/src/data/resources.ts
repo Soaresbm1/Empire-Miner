@@ -38,6 +38,8 @@ export interface ResourceDef {
   vein?: VeinSpec;
   /** Réserves laissées au sol une fois le filon ouvert (exploitables par une foreuse). */
   deposit?: [number, number];
+  /** Durée de vie d'un tas laissé par terre (s) avant qu'il s'effrite. Absent : il reste indéfiniment. */
+  groundLife?: number;
   /** Couleurs : base, reflet, ombre. */
   color: string;
   light: string;
@@ -59,6 +61,8 @@ export const RESOURCES: ResourceDef[] = [
     minDepth: 0,
     maxDepth: Infinity,
     drops: [1, 1],
+    // Les pierres abandonnées s'effritent : elles n'encombrent pas les galeries.
+    groundLife: 60,
     color: '#8d857c',
     light: '#b9b1a6',
     dark: '#5b544d',

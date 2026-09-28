@@ -37,6 +37,8 @@ Les touches sont lues par position physique : ZQSD et WASD fonctionnent sans ré
 - Mine explorable persistante générée à partir d'une graine, galeries de départ, cavernes à découvrir.
 - Minage physique : chaque coup inflige des dégâts, fissures visibles, la roche lâche des minerais au sol.
 - Ramassage physique, sac limité **en poids**, choix de ce que l'on ramasse, possibilité de jeter.
+- Les **pierres laissées par terre s'effritent** au bout de 60 s (elles clignotent les 5 dernières secondes) pour ne
+  pas encombrer les galeries ; les minerais, eux, restent au sol indéfiniment.
 - Profondeur réelle (2,5 m par rangée) : roche tendre → roche dure (100 m) → basalte (300 m).
 - Ressources : pierre, charbon, cuivre, fer, argent, or (valeur, poids, rareté, résistance, profondeur).
 - Comptoir de vente et atelier en surface ; 4 pioches, 3 moyens de transport (sac, grand sac, brouette).

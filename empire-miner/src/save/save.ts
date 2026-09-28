@@ -44,7 +44,8 @@ export interface SaveData {
     /** [indice, dégâts] des blocs entamés. */
     damage: [number, number][];
   };
-  drops: [string, number, number, number][];
+  /** res, quantité, x, y et âge du tas (s ; absent dans les anciennes sauvegardes). */
+  drops: [string, number, number, number, number?][];
   structures: StructureSave[];
   /** Absent des sauvegardes d'avant les wagonnets. */
   wagons?: WagonSave[];
@@ -77,7 +78,7 @@ export function serialize(g: GameState): SaveData {
       reserves,
       damage: Array.from(w.damage.entries()),
     },
-    drops: g.drops.list.map((d) => [d.res, d.count, round2(d.x), round2(d.y)]),
+    drops: g.drops.list.map((d) => [d.res, d.count, round2(d.x), round2(d.y), round2(d.age)]),
     structures: g.structures.list.filter((s) => s.removable).map((s) => s.serialize()),
     wagons: g.wagons.list.map((w) => w.serialize()),
   };
@@ -115,10 +116,11 @@ export function deserialize(data: SaveData): GameState {
     discovered: [...(data.stats?.discovered ?? [])],
     collected: { ...(data.stats?.collected ?? {}) },
   };
-  for (const [res, count, x, y] of data.drops) {
+  for (const [res, count, x, y, age] of data.drops) {
     if (!hasResource(res)) continue;
     const d = g.drops.spawn(res, count, x, y, false);
-    d.age = 1;
+    // L'âge compte le temps passé au sol : une pierre ne repart pas pour une minute complète au chargement.
+    d.age = Math.max(1, Number(age ?? 1) || 1);
   }
   for (const s of data.structures) {
     const f = STRUCTURE_FACTORIES[s.type];

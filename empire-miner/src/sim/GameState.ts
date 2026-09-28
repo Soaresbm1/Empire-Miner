@@ -159,7 +159,7 @@ export class GameState implements StructureContext {
       this.updateMovement(dt, intent);
       this.updateMining(dt, intent);
     }
-    this.drops.update(dt, this.world);
+    for (const d of this.drops.update(dt, this.world)) this.emit({ t: 'crumble', res: d.res, x: d.x, y: d.y });
     this.updatePickup(dt);
     this.structures.update(dt, this);
     this.wagons.update(dt, this);

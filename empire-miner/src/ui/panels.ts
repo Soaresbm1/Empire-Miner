@@ -179,6 +179,14 @@ function machineShop(g: GameState, icon: (id: string) => string): string {
 
 // ------------------------------------------------------------------ sac
 
+/** Rappelle quelles ressources s'effritent si on les laisse par terre (la pierre). */
+function crumbleHint(): string {
+  const brittle = RESOURCES.filter((r) => r.groundLife !== undefined);
+  return brittle
+    .map((r) => `<p class="hint">${resIcon(r.id)} ${r.name} laissée par terre : s'effrite au bout de ${r.groundLife} s. Les minerais, eux, restent au sol.</p>`)
+    .join('');
+}
+
 export function inventoryPanel(g: GameState): string {
   const inv = g.inventory;
   const w = inv.weight();
@@ -198,6 +206,7 @@ export function inventoryPanel(g: GameState): string {
   return `
     <div class="bar big"><div style="width:${Math.min(100, (w / inv.capacity) * 100)}%"></div><span>${g.bag.name} : ${kg(w)} / ${kg(inv.capacity)}</span></div>
     <table class="table"><thead><tr><th>Ressource</th><th>Qté</th><th>Poids</th><th>Valeur</th><th>Ramasser</th><th></th></tr></thead><tbody>${rows}</tbody></table>
+    ${crumbleHint()}
     <h4>Kits de construction</h4>${kits ? `<ul class="kits">${kits}</ul>` : '<p class="empty">Aucun. Achetez des machines à l\'Atelier.</p>'}
     <h4>Carnet du mineur</h4>
     <div class="stats-grid">

@@ -15,5 +15,6 @@ export type SimEvent =
   | { t: 'placed'; type: string; tx: number; ty: number }
   | { t: 'removed'; type: string; tx: number; ty: number }
   | { t: 'extract'; tx: number; ty: number; res: string }
+  | { t: 'crumble'; res: string; x: number; y: number }
   | { t: 'discover'; text: string }
   | { t: 'message'; text: string; kind: 'info' | 'warn' | 'good' };

@@ -782,6 +782,10 @@ export class Game {
         case 'removed':
           this.sfx.remove();
           break;
+        case 'crumble':
+          r.fx.emit('dust', e.x, e.y - 2, 'rgba(150,140,130,0.6)', 5, 16);
+          r.fx.emit('chip', e.x, e.y - 3, getResource(e.res).color, 3, 22);
+          break;
         case 'extract':
           r.fx.emit('chip', (e.tx + 0.5) * TILE, (e.ty + 0.5) * TILE, getResource(e.res).color, 2, 25);
           break;
