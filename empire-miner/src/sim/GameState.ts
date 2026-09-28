@@ -21,6 +21,7 @@ import { Player } from './Player';
 import { StructureManager } from './StructureManager';
 import { Building, BuildingType } from './structures/Building';
 import { Drill } from './structures/Drill';
+import { ShippingCrate } from './structures/ShippingCrate';
 import { STRUCTURE_FACTORIES } from './structures/registry';
 import { Storage } from './structures/Storage';
 import type { Structure, StructureContext } from './structures/Structure';
@@ -52,6 +53,8 @@ export interface Stats {
   discovered: string[];
   /** Unités ramassées par ressource. */
   collected: Record<string, number>;
+  /** Argent gagné par les caisses d'expédition. */
+  autoSold: number;
 }
 
 export const PLAYER_SPEED = 72; // unités monde / s
@@ -84,6 +87,7 @@ export class GameState implements StructureContext {
     playTime: 0,
     discovered: [],
     collected: {},
+    autoSold: 0,
   };
   events: SimEvent[] = [];
   private readonly rng: Rng;
@@ -130,6 +134,13 @@ export class GameState implements StructureContext {
 
   countDelivered(n: number): void {
     this.stats.delivered += n;
+  }
+
+  autoSell(total: number, n: number, from: Structure): void {
+    this.money += total;
+    this.stats.earned += total;
+    this.stats.autoSold += total;
+    this.emit({ t: 'shipped', tx: from.x, ty: from.y, total, n });
   }
 
   // ---------------------------------------------------------------- boucle
@@ -498,6 +509,7 @@ export class GameState implements StructureContext {
         if (this.structures.at(x, y)) return { ok: false, reason: 'Emplacement occupé' };
       }
     if (def.needsDeposit && !this.world.depositAt(tx, ty)) return { ok: false, reason: 'Doit être posée sur un gisement exposé' };
+    if (def.surfaceOnly && ty + def.h > SURFACE_ROWS) return { ok: false, reason: 'À poser en surface, au camp' };
     if (def.solid) {
       const p = this.player;
       const x0 = tx * TILE;
@@ -582,6 +594,17 @@ export class GameState implements StructureContext {
     const order = Object.keys(s.items).sort((a, b) => getResource(b).value - getResource(a).value);
     for (const res of order) n += this.storageTake(s, res, s.items[res] ?? 0);
     if (Object.keys(s.items).length) this.emit({ t: 'invFull' });
+    return n;
+  }
+
+  /** Vide le sac dans une caisse d'expédition (vendu au prochain passage). */
+  shipDepositAll(c: ShippingCrate): number {
+    let n = 0;
+    for (const [res, count] of Object.entries(this.inventory.items)) {
+      const k = c.put(res, count);
+      this.inventory.remove(res, k);
+      n += k;
+    }
     return n;
   }
 

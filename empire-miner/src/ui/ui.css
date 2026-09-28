@@ -72,6 +72,9 @@ kbd {
   background: radial-gradient(circle at 35% 35%, #fff1a0 0 20%, #f2c230 21% 60%, #a07410 61%);
   box-shadow: 0 0 0 2px #1a1418;
 }
+.money.pulse { animation: money-pulse 0.7s ease-out; }
+@keyframes money-pulse { 30% { transform: scale(1.12); color: #fff1a0; } }
+.income:not(:empty) { font-size: 13px; color: var(--good); margin-top: 1px; }
 .depth { margin-top: 2px; font-size: 15px; color: var(--text); }
 .depth .zone { color: var(--muted); font-size: 13px; margin-left: 4px; }
 

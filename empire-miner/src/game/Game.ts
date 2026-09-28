@@ -14,6 +14,7 @@ import { GameState, NO_INTENT, PlayerIntent } from '../sim/GameState';
 import { Building, BUILDING_INFO } from '../sim/structures/Building';
 import { Conveyor } from '../sim/structures/Conveyor';
 import { Drill } from '../sim/structures/Drill';
+import { ShippingCrate } from '../sim/structures/ShippingCrate';
 import { Storage } from '../sim/structures/Storage';
 import { Renderer, Overlay } from '../render/Renderer';
 import { UI, PanelKind } from '../ui/UI';
@@ -43,6 +44,8 @@ export class Game {
   private menuPan = 0;
   debug = false;
   private fps = 60;
+  /** Ventes automatiques récentes (temps de simulation, montant) pour le revenu par minute. */
+  private shipLog: { t: number; total: number }[] = [];
 
   constructor(canvas: HTMLCanvasElement) {
     this.renderer = new Renderer(canvas);
@@ -105,6 +108,7 @@ export class Game {
     this.autosave = AUTOSAVE_EVERY;
     this.buildMode = false;
     this.confirmNew = false;
+    this.shipLog = [];
     this.renderer.setState(state);
     this.ui.hideMenu();
     this.ui.closePanel();
@@ -268,6 +272,12 @@ export class Game {
       case 'storageDeposit':
         if (target instanceof Storage) g.storageDepositAll(target);
         break;
+      case 'shipDeposit':
+        if (target instanceof ShippingCrate) {
+          const n = g.shipDepositAll(target);
+          if (n) this.ui.toast(`${n} minerai${n > 1 ? 's' : ''} déposé${n > 1 ? 's' : ''} : vendu${n > 1 ? 's' : ''} au prochain passage.`, 'good');
+        }
+        break;
       case 'drillFuel':
         if (target instanceof Drill) {
           const n = g.fuelDrill(target);
@@ -422,6 +432,7 @@ export class Game {
       prompt: this.promptText(near),
       build: this.buildBarHtml(g),
       hints: this.hintsHtml(),
+      income: this.incomeHtml(g),
     });
     if (this.debug) this.drawDebug(g);
   }
@@ -440,6 +451,7 @@ export class Game {
     this.setBuildMode(false);
     if (s instanceof Building) this.ui.openPanel(s.type === 'counter' ? 'counter' : 'workshop', s, 'tools');
     else if (s instanceof Storage) this.ui.openPanel('storage', s);
+    else if (s instanceof ShippingCrate) this.ui.openPanel('shipping', s);
     else if (s instanceof Drill) this.ui.openPanel('drill', s);
   }
 
@@ -448,8 +460,17 @@ export class Game {
     const e = `<kbd>${this.input.label('KeyE')}</kbd>`;
     if (near instanceof Building) return `${e} ${BUILDING_INFO[near.type].name} — ${BUILDING_INFO[near.type].prompt}`;
     if (near instanceof Storage) return `${e} Ouvrir le coffre`;
+    if (near instanceof ShippingCrate) return `${e} Caisse d'expédition — vente automatique`;
     if (near instanceof Drill) return `${e} Foreuse — charbon et production`;
     return '';
+  }
+
+  /** Revenu des ventes automatiques sur la dernière minute. */
+  private incomeHtml(g: GameState): string {
+    if (g.stats.autoSold <= 0) return '';
+    this.shipLog = this.shipLog.filter((s) => s.t > g.time - 60);
+    const perMin = this.shipLog.reduce((sum, s) => sum + s.total, 0);
+    return `Vente auto : +${money(perMin)} / min`;
   }
 
   private hintsHtml(): string {
@@ -495,8 +516,8 @@ export class Game {
     if (existing && existing.removable) overlay.removeHint = { tx: mtx, ty: mty };
     else overlay.ghost = { machine, tx: mtx, ty: mty, dir: this.buildDir, ok: g.canPlace(machine, mtx, mty).ok };
 
-    // Démontage : clic droit (maintenu).
-    if (inp.right && existing && existing.removable) g.removeAt(mtx, mty);
+    // Démontage : clic droit (maintenu, ou clic très bref entre deux images).
+    if ((inp.consumeRightPress() || inp.right) && existing && existing.removable) g.removeAt(mtx, mty);
 
     // Pose.
     if (inp.consumeLeftPress()) {
@@ -568,6 +589,8 @@ export class Game {
       return `<b>Foreuse</b> — ${st}<br>Charbon : ${s.fuelUnits} · extrait : ${s.extracted}`;
     }
     if (s instanceof Storage) return `<b>Coffre</b><br>${kg(s.weight())} / ${kg(s.capacity)}`;
+    if (s instanceof ShippingCrate)
+      return `<b>Caisse d'expédition</b><br>${kg(s.weight())} / ${kg(s.capacity)} · ${money(s.pendingValue())} en attente<br>Passage dans ${Math.ceil(s.timer)} s`;
     if (s instanceof Building) return `<b>${s.name}</b>`;
     const id = w.get(tx, ty);
     const b = getBlock(id);
@@ -626,6 +649,13 @@ export class Game {
           r.fx.emit('spark', g.player.x, g.player.y - 12, '#f2c230', 12, 50);
           this.ui.toast(`Vendu ${e.n} minerai${e.n > 1 ? 's' : ''} pour ${money(e.total)}.`, 'good');
           break;
+        case 'shipped': {
+          this.shipLog.push({ t: g.time, total: e.total });
+          r.onShipped(e.tx, e.ty, `+${money(e.total)}`);
+          this.ui.pulseMoney();
+          if (g.distanceToTile(e.tx, e.ty) < 16) this.sfx.coins();
+          break;
+        }
         case 'bought':
           this.sfx.buy();
           this.ui.toast(`Acheté : ${e.name}`, 'good');

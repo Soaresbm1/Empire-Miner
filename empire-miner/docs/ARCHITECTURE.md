@@ -11,7 +11,7 @@ src/
     Drops.ts             minerais physiques au sol
     Inventory.ts         sac limité en poids + kits de construction
     StructureManager.ts  index spatial des structures et ordre de mise à jour
-    structures/          Conveyor, Drill, Storage, Building (+ registre de fabrication)
+    structures/          Conveyor, Drill, Storage, ShippingCrate, Building (+ registre de fabrication)
     visibility.ts        exploration (révélation des galeries)
     objectives.ts        objectifs calculés depuis l'état réel
     events.ts            événements émis vers la présentation
@@ -42,7 +42,8 @@ accept(res, travelDir, ctx): boolean
 ```
 
 Un convoyeur pousse l'objet de tête vers la structure devant lui ; une foreuse pousse sa production
-de la même façon ; un coffre accepte tout ce qui rentre dans sa capacité. Un futur trieur, concasseur ou four
+de la même façon ; un coffre accepte tout ce qui rentre dans sa capacité ; une caisse d'expédition aussi,
+puis crédite l'argent via `StructureContext.autoSell` à chaque passage du transporteur. Un futur trieur, concasseur ou four
 n'a qu'à implémenter ces deux méthodes pour s'insérer dans les chaînes existantes.
 
 Chaque tuile de convoyeur a une capacité (objets) et un espacement minimal : si la sortie n'absorbe pas assez

@@ -8,6 +8,7 @@ import { RESOURCES, getResource } from '../data/resources';
 import { BAGS, PICKAXES } from '../data/tools';
 import type { GameState } from '../sim/GameState';
 import type { Drill } from '../sim/structures/Drill';
+import type { ShippingCrate } from '../sim/structures/ShippingCrate';
 import type { Storage } from '../sim/structures/Storage';
 import { esc, kg, money, num, rarityTag, resIcon } from './format';
 
@@ -112,14 +113,27 @@ function machineCard(g: GameState, m: MachineDef): string {
   const owned = g.inventory.kitCount(m.id);
   const placed = g.structures.list.filter((s) => s.type === m.id).length;
   const s = m.stats;
-  const speed = m.id === 'conveyor' ? `${num(s.speed, 2)} tuile/s` : m.id === 'drill' ? `${num(s.speed * 60, 0)} unités/min` : '—';
-  const cap = m.id === 'conveyor' ? `${s.capacity} objets/tuile (débit max ${num(conveyorThroughput(m))}/s)` : m.id === 'storage' ? kg(s.capacity) : `${s.capacity} unités en attente`;
+  const speed =
+    m.id === 'conveyor'
+      ? `${num(s.speed, 2)} tuile/s`
+      : m.id === 'drill'
+        ? `${num(s.speed * 60, 0)} unités/min`
+        : m.shipping
+          ? `1 passage / ${m.shipping.interval} s`
+          : '—';
+  const cap =
+    m.id === 'conveyor'
+      ? `${s.capacity} objets/tuile (débit max ${num(conveyorThroughput(m))}/s)`
+      : m.id === 'storage' || m.shipping
+        ? kg(s.capacity)
+        : `${s.capacity} unités en attente`;
   const power = m.fuel ? `Charbon : 1 unité / ${m.fuel.secondsPerUnit} s` : s.power ? `${s.power} kW` : 'Aucune';
   const qtyButtons = m.id === 'conveyor' ? [1, 10] : [1];
+  const where = m.surfaceOnly ? `<div class="owned">Se pose en surface, au camp.</div>` : '';
   return `<div class="card ${unlocked ? '' : 'locked'}"><h3>${m.name}</h3><p>${m.description}</p>
     ${stat('Vitesse', speed)}${stat('Consommation', power)}${stat('Capacité', cap)}${stat('Efficacité', `${Math.round(s.efficiency * 100)} %`)}
     ${stat('Niveau', String(s.level))}${stat('Coût', money(m.price))}
-    <div class="owned">En stock : <b>${owned}</b> · Posé(s) : <b>${placed}</b></div>
+    <div class="owned">En stock : <b>${owned}</b> · Posé(s) : <b>${placed}</b></div>${where}
     <div class="buy">${
       unlocked
         ? qtyButtons
@@ -175,6 +189,28 @@ export function storagePanel(g: GameState, s: Storage): string {
     ${items.length ? `<table class="table"><tbody>${rows}</tbody></table>` : '<p class="empty">Coffre vide. Reliez-le à une foreuse avec des convoyeurs, ou déposez-y votre sac.</p>'}
     <div class="panel-footer"><span>Votre sac : ${kg(g.inventory.weight())} / ${kg(g.inventory.capacity)}</span>
     <span>${btn('storageDeposit', 'Tout déposer', { disabled: g.inventory.isEmpty() })} ${btn('storageTakeAll', 'Tout prendre', { cls: 'primary', disabled: !items.length })}</span></div>`;
+}
+
+// ------------------------------------------------------------------ caisse d'expédition
+
+export function shippingPanel(g: GameState, c: ShippingCrate): string {
+  const items = sortedItems(c.items);
+  const w = c.weight();
+  const rows = items
+    .map(([res, n]) => {
+      const r = getResource(res);
+      return `<tr><td>${resIcon(res)} ${r.name}</td><td class="num">×${n}</td><td class="num gold">${money(n * r.value)}</td></tr>`;
+    })
+    .join('');
+  const secs = Math.max(0, Math.ceil(c.timer));
+  const bag = g.inventory.weight();
+  return `
+    <div class="status good">● Prochain passage du transporteur dans ${secs} s</div>
+    <div class="bar big ${w / c.capacity > 0.9 ? 'full' : ''}"><div style="width:${Math.min(100, (w / c.capacity) * 100)}%"></div><span>${kg(w)} / ${kg(c.capacity)}</span></div>
+    ${items.length ? `<table class="table"><tbody>${rows}</tbody></table>` : '<p class="empty">Caisse vide. Amenez-y vos minerais avec des convoyeurs.</p>'}
+    <div class="panel-footer"><span>En attente : <b class="gold">${money(c.pendingValue())}</b> · Vendu par cette caisse : <b class="gold">${money(c.soldTotal)}</b></span>
+    ${btn('shipDeposit', `Déposer mon sac (${kg(bag)})`, { cls: 'primary', disabled: g.inventory.isEmpty() })}</div>
+    <p class="hint">Tout ce qui entre ici est vendu au prix du comptoir à chaque passage. Si la caisse est pleine, elle refuse les minerais et les convoyeurs s'arrêtent.</p>`;
 }
 
 // ------------------------------------------------------------------ foreuse

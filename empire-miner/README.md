@@ -41,6 +41,9 @@ Les touches sont lues par position physique : ZQSD et WASD fonctionnent sans ré
 - Comptoir de vente et atelier en surface ; 4 pioches, 3 moyens de transport (sac, grand sac, brouette).
 - Première automatisation : **foreuse à charbon → convoyeurs → coffre**, avec minerais visibles sur les
   convoyeurs, capacité et débit réels (saturation possible), alimentation en charbon manuelle ou par convoyeur.
+- Vente automatique : **caisse d'expédition** à poser en surface. Tout ce qui y arrive est vendu au prix du
+  comptoir à chaque passage du transporteur (toutes les 15 s) ; sa capacité est limitée (120 kg), pleine elle
+  bloque les convoyeurs. Le HUD affiche le revenu automatique par minute.
 - Sauvegarde automatique (chaque minute), manuelle, export/import de fichier.
 - Sons synthétisés, éclairage de la mine, particules, objectifs guidant les premières minutes.
 
@@ -53,7 +56,9 @@ npm run build && npm run e2e   # partie jouée dans Chromium avec clavier/souris
 
 Le test de bout en bout rejoue la tranche verticale : lancer une partie, descendre, miner, ramasser,
 remplir le sac, vendre, acheter la pioche améliorée et mesurer qu'elle mine plus vite, sauvegarder,
-recharger, puis acheter et poser une foreuse, des convoyeurs et un coffre et vérifier que le minerai y arrive.
+recharger, puis acheter et poser une foreuse, des convoyeurs et un coffre et vérifier que le minerai y arrive ;
+enfin prolonger la ligne dans le puits jusqu'à une caisse d'expédition en surface et vérifier que l'argent
+rentre pendant que le joueur reste au fond de la mine.
 
 ## Choix techniques
 

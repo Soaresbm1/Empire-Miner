@@ -1,12 +1,12 @@
 # Feuille de route
 
-## ✅ v0.1 — Tranche verticale (cette version)
+## ✅ v0.1 — Tranche verticale
 Minage manuel physique, ressources au sol, sac limité en poids, vente, pioches et sacs,
 profondeur et roches plus dures, sauvegarde/chargement, première automatisation
 (foreuse à charbon → convoyeurs → coffre).
 
-## v0.2 — Boucle d'automatisation complète
-- Caisse d'expédition en surface : les convoyeurs qui y arrivent vendent automatiquement.
+## v0.2 — Boucle d'automatisation complète (en cours)
+- ✅ Caisse d'expédition en surface : les convoyeurs qui y arrivent vendent automatiquement.
 - Convoyeurs rapides (niveau 2), séparateurs et fusions, ponts (croisements).
 - Chargeur/déchargeur : transfert coffre → convoyeur.
 - Indicateurs de débit (objets/min) sur les machines et convoyeurs.

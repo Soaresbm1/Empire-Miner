@@ -130,6 +130,11 @@ export class Sfx {
     this.noise(0.25, 6000, 2, 0.08, 'highpass', 0.05);
   }
 
+  /** Tintement discret de la vente automatique. */
+  coins(): void {
+    [1319, 1760].forEach((f, i) => this.tone(f, 0.12, 'triangle', 0.05, undefined, i * 0.06));
+  }
+
   buy(): void {
     [523, 659, 784, 1047].forEach((f, i) => this.tone(f, 0.22, 'triangle', 0.14, undefined, i * 0.08));
   }

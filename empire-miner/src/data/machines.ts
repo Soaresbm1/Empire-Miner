@@ -6,7 +6,7 @@
  * (trieurs, concasseurs, fonderies, générateurs…) s'intègrent sans changer l'UI.
  */
 
-export type MachineCategory = 'extraction' | 'logistique' | 'stockage';
+export type MachineCategory = 'extraction' | 'logistique' | 'stockage' | 'vente';
 
 export interface MachineStats {
   /** Extraction : unités/s. Convoyeur : tuiles/s. */
@@ -28,6 +28,11 @@ export interface FuelSpec {
   maxUnits: number;
 }
 
+export interface ShippingSpec {
+  /** Intervalle entre deux passages du transporteur (s). */
+  interval: number;
+}
+
 export interface MachineDef {
   id: string;
   name: string;
@@ -45,6 +50,10 @@ export interface MachineDef {
   unlock?: { pickaxeTier: number; text: string };
   /** Doit être posée sur un gisement exposé. */
   needsDeposit?: boolean;
+  /** Ne peut être posée qu'en surface (au camp). */
+  surfaceOnly?: boolean;
+  /** Vente automatique (caisse d'expédition). */
+  shipping?: ShippingSpec;
 }
 
 export const MACHINES: MachineDef[] = [
@@ -86,6 +95,22 @@ export const MACHINES: MachineDef[] = [
     solid: true,
     rotatable: false,
     stats: { speed: 0, power: 0, capacity: 150, efficiency: 1, level: 1 },
+  },
+  {
+    id: 'shipping',
+    name: "Caisse d'expédition",
+    category: 'vente',
+    description: 'Vend automatiquement tout ce qui y entre, au prix du comptoir. Un transporteur la vide régulièrement. Se pose en surface.',
+    price: 180,
+    w: 1,
+    h: 1,
+    solid: true,
+    rotatable: false,
+    // capacity : kg en attente du transporteur ; efficiency : part du prix du comptoir.
+    stats: { speed: 0, power: 0, capacity: 120, efficiency: 1, level: 1 },
+    shipping: { interval: 15 },
+    unlock: { pickaxeTier: 2, text: 'Nécessite la Pioche améliorée' },
+    surfaceOnly: true,
   },
 ];
 

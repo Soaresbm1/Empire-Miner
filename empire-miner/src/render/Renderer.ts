@@ -11,6 +11,7 @@ import type { GameState } from '../sim/GameState';
 import { Building } from '../sim/structures/Building';
 import { Conveyor } from '../sim/structures/Conveyor';
 import { Drill } from '../sim/structures/Drill';
+import { ShippingCrate } from '../sim/structures/ShippingCrate';
 import { Storage } from '../sim/structures/Storage';
 import type { Structure } from '../sim/structures/Structure';
 import { ChunkCache } from './ChunkCache';
@@ -347,6 +348,7 @@ export class Renderer {
   private drawStructure(s: Structure): void {
     if (s instanceof Drill) this.drawDrill(s);
     else if (s instanceof Storage) this.drawStorage(s);
+    else if (s instanceof ShippingCrate) this.drawShipping(s);
     else if (s instanceof Building) this.drawBuilding(s);
   }
 
@@ -457,6 +459,60 @@ export class Renderer {
     ctx.fillRect(x + 1, y + 15, 14, 2);
     ctx.fillStyle = fill > 0.9 ? '#d0342c' : '#6fcf6a';
     ctx.fillRect(x + 1, y + 15, Math.round(14 * Math.min(1, fill)), 2);
+  }
+
+  /** Caisse d'expédition : caisse verte ouverte, panneau à pièce et minuteur du transporteur. */
+  private drawShipping(c: ShippingCrate): void {
+    const ctx = this.ctx;
+    const x = c.x * TILE;
+    const y = c.y * TILE;
+    ctx.fillStyle = 'rgba(0,0,0,0.35)';
+    ctx.fillRect(x + 1, y + 13, 15, 3);
+    // Poteau et panneau « pièce »
+    ctx.fillStyle = '#4a3020';
+    ctx.fillRect(x + 12, y - 7, 2, 8);
+    ctx.fillStyle = '#1a1418';
+    ctx.fillRect(x + 9, y - 13, 8, 7);
+    ctx.fillStyle = '#f2c230';
+    ctx.fillRect(x + 10, y - 12, 6, 5);
+    ctx.fillStyle = '#a07410';
+    ctx.fillRect(x + 12, y - 11, 2, 3);
+    // Minuteur du transporteur (se remplit jusqu'au prochain passage)
+    const t = 1 - c.timer / c.interval;
+    ctx.fillStyle = '#1a1418';
+    ctx.fillRect(x + 9, y - 16, 8, 2);
+    ctx.fillStyle = '#6fb3ff';
+    ctx.fillRect(x + 9, y - 16, Math.round(8 * Math.min(1, Math.max(0, t))), 2);
+    // Caisse : dessus ouvert puis face avant
+    ctx.fillStyle = '#3f8a5e';
+    ctx.fillRect(x + 1, y + 1, 12, 8);
+    ctx.fillStyle = '#5fae7a';
+    ctx.fillRect(x + 1, y + 1, 12, 1);
+    ctx.fillStyle = '#16221b';
+    ctx.fillRect(x + 3, y + 3, 8, 5);
+    const entries = Object.entries(c.items).sort((a, b) => b[1] - a[1]);
+    entries.slice(0, 2).forEach(([res], i) => ctx.drawImage(this.nuggets.get(res)!, x + 3 + i * 3, y + 2 + i));
+    ctx.fillStyle = '#2f6b4a';
+    ctx.fillRect(x + 1, y + 9, 12, 6);
+    ctx.fillStyle = '#244f38';
+    ctx.fillRect(x + 1, y + 11, 12, 1);
+    ctx.fillRect(x + 1, y + 13, 12, 1);
+    ctx.fillStyle = '#f2c230';
+    ctx.fillRect(x + 6, y + 10, 2, 2);
+    // Jauge de remplissage
+    const fill = c.weight() / c.capacity;
+    ctx.fillStyle = '#1a1418';
+    ctx.fillRect(x + 1, y + 15, 14, 2);
+    ctx.fillStyle = fill > 0.9 ? '#d0342c' : '#6fcf6a';
+    ctx.fillRect(x + 1, y + 15, Math.round(14 * Math.min(1, fill)), 2);
+  }
+
+  /** Effet de vente automatique au-dessus d'une caisse. */
+  onShipped(tx: number, ty: number, text: string): void {
+    const cx = (tx + 0.5) * TILE;
+    const cy = ty * TILE;
+    this.fx.text(text, cx, cy - 18, '#f2c230');
+    this.fx.emit('spark', cx, cy - 4, '#f2c230', 14, 55);
   }
 
   private drawStatusIcons(state: GameState): void {

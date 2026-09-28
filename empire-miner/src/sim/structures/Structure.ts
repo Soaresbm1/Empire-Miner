@@ -17,6 +17,8 @@ export interface StructureContext {
   emit(e: SimEvent): void;
   /** Statistique : objets livrés dans un stockage par l'automatisation. */
   countDelivered(n: number): void;
+  /** Vente automatique (caisse d'expédition) : crédite l'argent du joueur. */
+  autoSell(total: number, n: number, from: Structure): void;
 }
 
 export interface StructureSave {

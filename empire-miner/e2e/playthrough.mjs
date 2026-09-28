@@ -298,6 +298,88 @@ try {
   await page.click('[data-action="storageTakeAll"]');
   check(((await state()).inv.copper ?? 0) > 0, 'le joueur récupère la production du coffre');
   await page.keyboard.press('Escape');
+
+  // Vente automatique : caisse d'expédition en surface, reliée par convoyeurs remontant le puits.
+  await ev(() => (window.__EM.state.money += 400));
+  await teleport(58, 8);
+  await page.waitForTimeout(300);
+  await pressE();
+  await page.click('.tab[data-arg="machines"]');
+  await page.waitForTimeout(150);
+  await page.click('[data-action="buyKit"][data-arg="shipping:1"]');
+  await page.click('[data-action="buyKit"][data-arg="conveyor:10"]');
+  await page.click('[data-action="buyKit"][data-arg="conveyor:10"]');
+  await page.waitForTimeout(150);
+  await page.keyboard.press('Escape');
+  check((await ev(() => window.__EM.state.inventory.kitCount('shipping'))) === 1, "caisse d'expédition achetée");
+
+  await teleport(49, 17);
+  await page.mouse.move(640, 360);
+  await page.mouse.wheel(0, 120); // dézoome pour voir le puits en entier
+  await page.waitForTimeout(300);
+  await page.keyboard.press('KeyB');
+  await page.waitForTimeout(100);
+  // Retire le coffre (clic droit) pour prolonger la ligne.
+  p = await tileScreen(53, S + 10);
+  await page.mouse.move(p.x, p.y);
+  await page.waitForTimeout(60);
+  await page.mouse.click(p.x, p.y, { button: 'right' });
+  await page.waitForTimeout(150);
+  check(!(await ev(() => window.__EM.state.structures.at(53, 22))), 'le coffre est démonté au clic droit');
+  // Trace les convoyeurs : ouest jusqu'au puits, puis nord jusqu'à la surface.
+  await page.keyboard.press('Digit1');
+  await page.waitForTimeout(60);
+  const path = [];
+  for (let x = 53; x >= 50; x--) path.push([x, S + 10]);
+  for (let y = S + 9; y >= S - 1; y--) path.push([50, y]);
+  p = await tileScreen(...path[0]);
+  await page.mouse.move(p.x, p.y);
+  await page.waitForTimeout(60);
+  await page.mouse.down();
+  for (const [x, y] of path.slice(1)) {
+    const q = await tileScreen(x, y);
+    await page.mouse.move(q.x, q.y, { steps: 2 });
+    await page.waitForTimeout(40);
+  }
+  await page.mouse.up();
+  await page.waitForTimeout(100);
+  const shipIdx = await ev(() => ['conveyor', 'drill', 'storage', 'shipping'].filter((id) => window.__EM.state.inventory.kitCount(id) > 0).indexOf('shipping'));
+  await page.keyboard.press(`Digit${shipIdx + 1}`);
+  await page.waitForTimeout(60);
+  p = await tileScreen(50, S - 2);
+  await page.mouse.move(p.x, p.y);
+  await page.waitForTimeout(60);
+  await page.mouse.down();
+  await page.mouse.up();
+  await page.waitForTimeout(150);
+  await page.keyboard.press('Escape');
+  const line = await ev(() => {
+    const g = window.__EM.state;
+    const belts = [];
+    for (let y = 11; y <= 22; y++) belts.push(g.structures.at(50, y)?.type === 'conveyor' && g.structures.at(50, y).dir === 3);
+    return { crate: g.structures.at(50, 10)?.type, shaft: belts.every(Boolean), turn: g.structures.at(51, 22)?.dir };
+  });
+  check(line.crate === 'shipping' && line.shaft && line.turn === 2, 'convoyeurs tracés jusqu’à la caisse en surface');
+
+  // Le joueur reste au fond de la mine : l'argent doit rentrer tout seul.
+  await teleport(47, S + 14);
+  const money0 = (await state()).money;
+  let autoSold = 0;
+  for (let i = 0; i < 60 && autoSold === 0; i++) {
+    await page.waitForTimeout(1000);
+    autoSold = await ev(() => window.__EM.state.stats.autoSold);
+  }
+  const money1 = (await state()).money;
+  check(autoSold > 0 && money1 - money0 === autoSold, `vente automatique pendant que le joueur est dans la mine (+${autoSold} $)`);
+  await teleport(48, 9);
+  await page.waitForTimeout(2500);
+  await shot('13-shipping-surface');
+  await teleport(49, 10);
+  await page.waitForTimeout(300);
+  await pressE();
+  check(await page.isVisible('.panel-shipping'), "le panneau de la caisse d'expédition s'ouvre");
+  await shot('14-shipping-panel');
+  await page.keyboard.press('Escape');
 } catch (e) {
   failures++;
   console.error(e);

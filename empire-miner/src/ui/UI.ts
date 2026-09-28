@@ -8,12 +8,13 @@ import { getMachine } from '../data/machines';
 import type { GameState } from '../sim/GameState';
 import { OBJECTIVES, currentObjective } from '../sim/objectives';
 import { Drill } from '../sim/structures/Drill';
+import { ShippingCrate } from '../sim/structures/ShippingCrate';
 import { Storage } from '../sim/structures/Storage';
 import type { Structure } from '../sim/structures/Structure';
 import { esc, kg, money, resIcon } from './format';
-import { counterPanel, drillPanel, helpPanel, inventoryPanel, storagePanel, workshopPanel } from './panels';
+import { counterPanel, drillPanel, helpPanel, inventoryPanel, shippingPanel, storagePanel, workshopPanel } from './panels';
 
-export type PanelKind = 'counter' | 'workshop' | 'inventory' | 'storage' | 'drill' | 'help';
+export type PanelKind = 'counter' | 'workshop' | 'inventory' | 'storage' | 'drill' | 'shipping' | 'help';
 
 export interface UIHost {
   onAction(action: string, arg: string): void;
@@ -71,10 +72,11 @@ export class UI {
     this.hud.classList.toggle('hidden', !v);
   }
 
-  updateHud(g: GameState, extra: { prompt: string; build: string; hints: string }): void {
+  updateHud(g: GameState, extra: { prompt: string; build: string; hints: string; income: string }): void {
     const depth = depthAt(g.player.tileY);
     const surface = g.player.tileY < 12;
     this.set('hud-money', `<span class="coin"></span>${money(g.money)}`);
+    this.set('hud-income', extra.income);
     this.set('hud-depth', surface ? `<span class="zone">Surface · Camp</span>` : `▼ <b>${Math.floor(depth)} m</b> <span class="zone" style="color:${zoneForDepth(depth).color}">${zoneForDepth(depth).name}</span>`);
     const inv = g.inventory;
     const w = inv.weight();
@@ -110,6 +112,15 @@ export class UI {
     while (this.toasts.children.length > 4) this.toasts.firstElementChild?.remove();
     setTimeout(() => el.classList.add('out'), 2600);
     setTimeout(() => el.remove(), 3100);
+  }
+
+  /** Fait briller le compteur d'argent (revenu automatique). */
+  pulseMoney(): void {
+    const el = document.getElementById('hud-money');
+    if (!el) return;
+    el.classList.remove('pulse');
+    void el.offsetWidth;
+    el.classList.add('pulse');
   }
 
   /** Indicateur discret de sauvegarde automatique. */
@@ -185,6 +196,10 @@ export class UI {
       case 'drill':
         title = getMachine('drill').name;
         body = drillPanel(g, target as Drill);
+        break;
+      case 'shipping':
+        title = getMachine('shipping').name;
+        body = shippingPanel(g, target as ShippingCrate);
         break;
       case 'help':
         title = 'Commandes';

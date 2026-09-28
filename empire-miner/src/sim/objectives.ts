@@ -34,6 +34,11 @@ export const OBJECTIVES: Objective[] = [
   },
   { id: 'chain', text: 'Reliez la foreuse à un coffre avec des convoyeurs', done: (g) => g.stats.delivered >= 1 },
   { id: 'deep', text: 'Descendez sous les 100 m', done: (g) => g.stats.maxDepth >= 100 },
+  {
+    id: 'ship',
+    text: "Vente automatique : amenez vos minerais par convoyeur jusqu'à une caisse d'expédition en surface",
+    done: (g) => g.stats.autoSold > 0,
+  },
 ];
 
 export function currentObjective(g: GameState): { objective: Objective | null; index: number } {

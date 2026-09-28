@@ -10,6 +10,7 @@ export type SimEvent =
   | { t: 'pickup'; res: string; n: number; x: number; y: number }
   | { t: 'invFull' }
   | { t: 'sold'; total: number; n: number }
+  | { t: 'shipped'; tx: number; ty: number; total: number; n: number }
   | { t: 'bought'; name: string }
   | { t: 'placed'; type: string; tx: number; ty: number }
   | { t: 'removed'; type: string; tx: number; ty: number }
