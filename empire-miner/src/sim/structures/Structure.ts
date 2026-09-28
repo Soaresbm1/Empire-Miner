@@ -42,6 +42,8 @@ export abstract class Structure {
   removable = true;
   /** Vrai pour les convoyeurs (tous niveaux). */
   readonly isBelt: boolean = false;
+  /** Structure de transport qui a un panneau de réglage (touche E), ex. le trieur. */
+  readonly configurable: boolean = false;
 
   /** Côté par lequel commencer la prochaine sortie (répartition équitable entre convoyeurs). */
   private outCursor = 0;

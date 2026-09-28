@@ -20,7 +20,7 @@ export interface SplitItem {
 }
 
 export class Splitter extends Structure {
-  readonly type = 'splitter';
+  readonly type: string;
   readonly isBelt = true;
   readonly def: MachineDef;
   items: SplitItem[] = [];
@@ -31,10 +31,11 @@ export class Splitter extends Structure {
   /** Prochaine sortie dans le tour de rôle (indice dans outputs()). */
   turn = 0;
 
-  constructor(x: number, y: number, dir: Dir) {
+  constructor(x: number, y: number, dir: Dir, machineId = 'splitter') {
     super(x, y, dir);
     this.solid = false;
-    this.def = getMachine('splitter');
+    this.type = machineId;
+    this.def = getMachine(machineId);
     this.speed = this.def.stats.speed;
     this.capacity = this.def.stats.capacity;
     this.spacing = 1 / this.capacity;
@@ -60,17 +61,24 @@ export class Splitter extends Structure {
     return true;
   }
 
-  /** Choisit la prochaine sortie branchée (tour de rôle). */
-  private plan(ctx: StructureContext): Dir {
+  /** Sorties permises pour ce minerai (le trieur les restreint). */
+  protected allowed(_res: string): Dir[] {
+    return this.outputs();
+  }
+
+  /** Choisit la prochaine sortie permise et branchée (tour de rôle). */
+  private plan(res: string, ctx: StructureContext): Dir {
     const outs = this.outputs();
+    const allowed = this.allowed(res);
     for (let k = 0; k < 3; k++) {
       const i = (this.turn + k) % 3;
+      if (!allowed.includes(outs[i])) continue;
       if (ctx.structureAt(this.x + DX[outs[i]], this.y + DY[outs[i]])) {
         this.turn = (i + 1) % 3;
         return outs[i];
       }
     }
-    return this.dir;
+    return allowed[0] ?? this.dir;
   }
 
   update(dt: number, ctx: StructureContext): void {
@@ -79,14 +87,15 @@ export class Splitter extends Structure {
       const it = this.items[i];
       const limit = i === 0 ? 1 : this.items[i - 1].p - this.spacing;
       it.p = Math.min(it.p + step, Math.max(it.p, limit));
-      if (it.out === -1 && it.p >= 0.5) it.out = this.plan(ctx);
+      if (it.out === -1 && it.p >= 0.5) it.out = this.plan(it.res, ctx);
     }
     const head = this.items[0];
     this.blocked = false;
     if (!head || head.p < 1) return;
-    const outs = this.outputs();
-    const first = head.out === -1 ? this.plan(ctx) : head.out;
-    const order = [first, ...outs.filter((d) => d !== first)];
+    // Sortie prévue d'abord, puis les autres sorties permises (le réglage a pu changer entre-temps).
+    const allowed = this.allowed(head.res);
+    const first = head.out !== -1 && allowed.includes(head.out) ? head.out : this.plan(head.res, ctx);
+    const order = [first, ...allowed.filter((d) => d !== first)];
     for (const d of order) {
       const next = ctx.structureAt(this.x + DX[d], this.y + DY[d]);
       if (next && next.accept(head.res, d, ctx)) {

@@ -11,7 +11,7 @@ import { Rng } from '../core/rng';
 import { AIR, getBlock } from '../data/blocks';
 import { zoneForDepth } from '../data/depth';
 import { getMachine, MACHINES } from '../data/machines';
-import { RESOURCES, getResource, resourceIndex } from '../data/resources';
+import { RESOURCES, getResource, hasResource, resourceIndex } from '../data/resources';
 import { BAGS, PICKAXES } from '../data/tools';
 import { DropSystem } from './Drops';
 import type { SimEvent } from './events';
@@ -23,6 +23,7 @@ import { Building, BuildingType } from './structures/Building';
 import { Conveyor } from './structures/Conveyor';
 import { Drill } from './structures/Drill';
 import { ShippingCrate } from './structures/ShippingCrate';
+import type { Sorter } from './structures/Sorter';
 import { STRUCTURE_FACTORIES } from './structures/registry';
 import { Storage } from './structures/Storage';
 import type { Structure, StructureContext } from './structures/Structure';
@@ -412,7 +413,7 @@ export class GameState implements StructureContext {
         if (s) seen.add(s);
       }
     for (const s of seen) {
-      if (s.isBelt) continue;
+      if (s.isBelt && !s.configurable) continue;
       const x0 = s.x * TILE;
       const y0 = s.y * TILE;
       const x1 = (s.x + s.w) * TILE;
@@ -582,6 +583,13 @@ export class GameState implements StructureContext {
   }
 
   // ---------------------------------------------------------------- machines
+
+  /** Choisit le minerai qu'un trieur envoie tout droit (null = tout va tout droit). */
+  setSorterFilter(s: Sorter, res: string | null): boolean {
+    if (res !== null && !hasResource(res)) return false;
+    s.filter = res;
+    return true;
+  }
 
   /** Charge le charbon du sac dans une foreuse. */
   fuelDrill(d: Drill): number {

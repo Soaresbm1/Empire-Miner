@@ -16,6 +16,7 @@ import { Building, BUILDING_INFO } from '../sim/structures/Building';
 import { Conveyor } from '../sim/structures/Conveyor';
 import { Drill } from '../sim/structures/Drill';
 import { ShippingCrate } from '../sim/structures/ShippingCrate';
+import { Sorter } from '../sim/structures/Sorter';
 import { Splitter } from '../sim/structures/Splitter';
 import { Storage } from '../sim/structures/Storage';
 import { Renderer, Overlay } from '../render/Renderer';
@@ -292,6 +293,9 @@ export class Game {
       case 'drillRotate':
         if (target) g.rotateAt(target.x, target.y);
         break;
+      case 'sorterFilter':
+        if (target instanceof Sorter) g.setSorterFilter(target, arg || null);
+        break;
     }
     this.flushEvents();
     this.ui.renderPanel(g, 0, true);
@@ -455,6 +459,7 @@ export class Game {
     else if (s instanceof Storage) this.ui.openPanel('storage', s);
     else if (s instanceof ShippingCrate) this.ui.openPanel('shipping', s);
     else if (s instanceof Drill) this.ui.openPanel('drill', s);
+    else if (s instanceof Sorter) this.ui.openPanel('sorter', s);
   }
 
   private promptText(near: ReturnType<GameState['nearestInteractable']>): string {
@@ -464,6 +469,7 @@ export class Game {
     if (near instanceof Storage) return `${e} Ouvrir le coffre`;
     if (near instanceof ShippingCrate) return `${e} Caisse d'expédition — vente automatique`;
     if (near instanceof Drill) return `${e} Foreuse — charbon et production`;
+    if (near instanceof Sorter) return `${e} Trieur — choisir le minerai trié`;
     return '';
   }
 
@@ -612,6 +618,10 @@ export class Game {
         s.blocked ? ' · <span class="bad">saturé</span>' : ''
       }`;
     }
+    if (s instanceof Sorter)
+      return `<b>Trieur</b> ${['→', '↓', '←', '↑'][s.dir]}<br>${
+        s.filter ? `${resIcon(s.filter)} ${getResource(s.filter).name} tout droit · le reste sur les côtés` : 'Aucun filtre : tout va tout droit'
+      }<br><span class="muted">[E] pour régler</span>`;
     if (s instanceof Splitter)
       return `<b>Séparateur</b> ${['→', '↓', '←', '↑'][s.dir]}<br>Entrée par l'arrière · sorties : devant, gauche, droite (à tour de rôle)${
         s.blocked ? '<br><span class="bad">toutes les sorties sont bloquées</span>' : ''

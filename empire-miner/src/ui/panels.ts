@@ -9,6 +9,7 @@ import { BAGS, PICKAXES } from '../data/tools';
 import type { GameState } from '../sim/GameState';
 import type { Drill } from '../sim/structures/Drill';
 import type { ShippingCrate } from '../sim/structures/ShippingCrate';
+import type { Sorter } from '../sim/structures/Sorter';
 import type { Storage } from '../sim/structures/Storage';
 import { esc, kg, money, num, rarityTag, resIcon } from './format';
 
@@ -114,7 +115,7 @@ function machineCard(g: GameState, m: MachineDef): string {
   const placed = g.structures.list.filter((s) => s.type === m.id).length;
   const s = m.stats;
   const speed =
-    m.conveyor || m.id === 'splitter' || m.bridge
+    m.conveyor || m.id === 'splitter' || m.id === 'sorter' || m.bridge
       ? `${num(s.speed, 2)} tuile/s`
       : m.id === 'drill'
         ? `${num(s.speed * 60, 0)} unités/min`
@@ -130,6 +131,8 @@ function machineCard(g: GameState, m: MachineDef): string {
           ? `Jusqu'à ${m.bridge.range} cases entre les deux ponts`
           : m.id === 'splitter'
             ? `3 sorties, ${s.capacity} objets à la fois`
+            : m.id === 'sorter'
+              ? '1 minerai tout droit, le reste sur les côtés'
             : `${s.capacity} unités en attente`;
   const power = m.fuel ? `Charbon : 1 unité / ${m.fuel.secondsPerUnit} s` : s.power ? `${s.power} kW` : 'Aucune';
   // Les ponts se vendent par paire (une entrée + une sortie).
@@ -223,6 +226,28 @@ export function shippingPanel(g: GameState, c: ShippingCrate): string {
     <div class="panel-footer"><span>En attente : <b class="gold">${money(c.pendingValue())}</b> · Vendu par cette caisse : <b class="gold">${money(c.soldTotal)}</b></span>
     ${btn('shipDeposit', `Déposer mon sac (${kg(bag)})`, { cls: 'primary', disabled: g.inventory.isEmpty() })}</div>
     <p class="hint">Tout ce qui entre ici est vendu au prix du comptoir à chaque passage. Si la caisse est pleine, elle refuse les minerais et les convoyeurs s'arrêtent.</p>`;
+}
+
+// ------------------------------------------------------------------ trieur
+
+export function sorterPanel(g: GameState, s: Sorter): string {
+  const known = RESOURCES.filter(
+    (r) => r.id === 'stone' || r.id === 'coal' || r.id === s.filter || g.stats.discovered.includes(r.id) || (g.stats.collected[r.id] ?? 0) > 0,
+  );
+  const choice = (id: string | null, label: string) =>
+    btn('sorterFilter', label, { arg: id ?? '', cls: `small ${s.filter === id ? 'on' : 'off'}` });
+  const status = s.filter
+    ? `${resIcon(s.filter)} <b>${getResource(s.filter).name}</b> part tout droit, tout le reste part sur les côtés.`
+    : 'Aucun minerai choisi : tout va tout droit.';
+  return `
+    <div class="status good">${status}</div>
+    <h4>Minerai envoyé tout droit</h4>
+    <div class="buy">${choice(null, 'Aucun')}${known.map((r) => choice(r.id, `${resIcon(r.id)} ${r.name}`)).join('')}</div>
+    <div class="cards" style="margin-top:12px"><div class="card">
+      ${stat('Triés tout droit', String(s.sortedFront))}${stat('Envoyés sur les côtés', String(s.sortedSides))}
+      ${stat('Entrée', "par l'arrière (face opposée à la flèche verte)")}
+    </div></div>
+    <p class="hint">Les côtés sont servis à tour de rôle ; un côté sans rien de branché est ignoré. Si la sortie avant est pleine, le minerai choisi attend : le tri reste fiable.</p>`;
 }
 
 // ------------------------------------------------------------------ foreuse

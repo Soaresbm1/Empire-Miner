@@ -4,6 +4,7 @@ import { Conveyor } from './Conveyor';
 import { Bridge } from './Bridge';
 import { Drill } from './Drill';
 import { ShippingCrate } from './ShippingCrate';
+import { Sorter } from './Sorter';
 import { Splitter } from './Splitter';
 import { Storage } from './Storage';
 import type { Structure, StructureSave } from './Structure';
@@ -17,6 +18,7 @@ export const STRUCTURE_FACTORIES: Record<string, Factory> = {
   drill: { create: (x, y, d) => new Drill(x, y, d), load: (s) => Drill.load(s) },
   storage: { create: (x, y, d) => new Storage(x, y, d), load: (s) => Storage.load(s) },
   splitter: { create: (x, y, d) => new Splitter(x, y, d), load: (s) => Splitter.load(s) },
+  sorter: { create: (x, y, d) => new Sorter(x, y, d), load: (s) => Sorter.load(s) },
   bridge: { create: (x, y, d) => new Bridge(x, y, d), load: (s) => Bridge.load(s) },
   shipping: { create: (x, y, d) => new ShippingCrate(x, y, d), load: (s) => ShippingCrate.load(s) },
 };

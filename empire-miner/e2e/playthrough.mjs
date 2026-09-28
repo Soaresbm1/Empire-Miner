@@ -590,6 +590,53 @@ try {
   check(res.linked, 'les deux ponts se sont reliés');
   check(res.F.coal === 10 && res.L.coal === 10 && res.R.coal === 10, `le séparateur répartit à parts égales (${res.F.coal ?? 0} / ${res.L.coal ?? 0} / ${res.R.coal ?? 0})`);
   check(JSON.stringify(res.A2) === '{"copper":20}' && JSON.stringify(res.B2) === '{"iron":20}', 'le pont croise les deux lignes sans les mélanger');
+
+  // Trieur : un coffre de charbon et de cuivre mélangés ; le charbon part tout droit, le cuivre sur le côté.
+  await ev(() => (window.__EM.state.money += 300));
+  await teleport(58, 8);
+  await page.waitForTimeout(300);
+  await pressE();
+  await page.click('.tab[data-arg="machines"]');
+  await page.waitForTimeout(150);
+  await page.click('[data-action="buyKit"][data-arg="sorter:1"]');
+  for (let i = 0; i < 3; i++) await page.click('[data-action="buyKit"][data-arg="storage:1"]');
+  await page.waitForTimeout(100);
+  await page.keyboard.press('Escape');
+  await teleport(38, 7);
+  await page.waitForTimeout(400);
+  await page.keyboard.press('KeyB');
+  await page.waitForTimeout(100);
+  await placeAt('storage', 36, 3);
+  await placeAt('sorter', 37, 3, 0);
+  await placeAt('conveyor', 38, 3, 0);
+  await placeAt('storage', 39, 3);
+  await placeAt('conveyor', 37, 4, 1);
+  await placeAt('storage', 37, 5);
+  await page.keyboard.press('Escape');
+  check((await ev(() => window.__EM.state.structures.at(37, 3)?.type)) === 'sorter', 'trieur posé');
+  await teleport(37, 3); // debout sur le trieur
+  await page.waitForTimeout(300);
+  await pressE();
+  check(await page.isVisible('.panel-sorter'), 'le panneau du trieur s’ouvre avec E');
+  await page.click('[data-action="sorterFilter"][data-arg="coal"]');
+  await page.waitForTimeout(150);
+  await shot('17-sorter-panel');
+  await page.keyboard.press('Escape');
+  check((await ev(() => window.__EM.state.structures.at(37, 3).filter)) === 'coal', 'filtre réglé sur le charbon');
+  await ev(() => {
+    const c = window.__EM.state.structures.at(36, 3);
+    c.put('coal', 10);
+    c.put('copper', 10);
+  });
+  await teleport(38, 7);
+  await page.waitForTimeout(4000);
+  await shot('17a-sorter');
+  await page.waitForTimeout(12000);
+  const sorted = await ev(() => {
+    const g = window.__EM.state;
+    return { front: { ...g.structures.at(39, 3).items }, side: { ...g.structures.at(37, 5).items } };
+  });
+  check(JSON.stringify(sorted.front) === '{"coal":10}' && JSON.stringify(sorted.side) === '{"copper":10}', `le trieur sépare le charbon du cuivre (${JSON.stringify(sorted)})`);
 } catch (e) {
   failures++;
   console.error(e);

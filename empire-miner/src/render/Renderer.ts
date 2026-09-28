@@ -13,6 +13,7 @@ import { Building } from '../sim/structures/Building';
 import { Conveyor } from '../sim/structures/Conveyor';
 import { Drill } from '../sim/structures/Drill';
 import { ShippingCrate } from '../sim/structures/ShippingCrate';
+import { Sorter } from '../sim/structures/Sorter';
 import { Splitter } from '../sim/structures/Splitter';
 import { Storage } from '../sim/structures/Storage';
 import type { Structure } from '../sim/structures/Structure';
@@ -371,6 +372,21 @@ export class Renderer {
     ctx.fillStyle = '#26221e';
     for (let k = -6; k <= 6; k += 4) ctx.fillRect(-1, k, 2, 2);
     ctx.restore();
+    if (s instanceof Sorter) {
+      // Trieur : le minerai choisi au centre, flèche verte vers l'avant, flèches grises sur les côtés.
+      const [front, left, right] = s.outputs();
+      this.drawArrow(s.x * TILE + 8 + DX[front] * 6, s.y * TILE + 8 + DY[front] * 6, front, s.filter ? '#7dffa0' : '#f2e6c8');
+      if (s.filter) for (const d of [left, right]) this.drawArrow(s.x * TILE + 8 + DX[d] * 6, s.y * TILE + 8 + DY[d] * 6, d, '#a8957c');
+      ctx.fillStyle = '#1a1418';
+      ctx.fillRect(s.x * TILE + 4, s.y * TILE + 4, 8, 8);
+      if (s.filter) ctx.drawImage(this.nuggets.get(s.filter)!, s.x * TILE + 4, s.y * TILE + 4);
+      else {
+        ctx.fillStyle = '#f2e6c8';
+        ctx.fillRect(s.x * TILE + 7, s.y * TILE + 6, 2, 3);
+        ctx.fillRect(s.x * TILE + 7, s.y * TILE + 10, 2, 1);
+      }
+      return;
+    }
     // Petites flèches sur les trois sorties
     for (const d of s.outputs()) this.drawArrow(s.x * TILE + 8 + DX[d] * 6, s.y * TILE + 8 + DY[d] * 6, d, '#f2e6c8');
   }

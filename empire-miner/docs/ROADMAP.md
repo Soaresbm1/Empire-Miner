@@ -10,7 +10,7 @@ profondeur et roches plus dures, sauvegarde/chargement, première automatisation
 - ✅ Convoyeurs rapides et express (niveaux 2 et 3), amélioration d'une ligne sur place.
 - ✅ Séparateurs (3 sorties à tour de rôle) et ponts de convoyeur (croisements) ; les fusions se font par
   arrivée latérale sur un convoyeur.
-- Trieur (filtre par ressource sur une sortie de séparateur).
+- ✅ Trieur (un minerai tout droit, le reste sur les côtés), réglable avec `E`.
 - Chargeur/déchargeur : transfert coffre → convoyeur.
 - Indicateurs de débit (objets/min) sur les machines et convoyeurs.
 - Carte de la mine (minimap) et marqueurs.
