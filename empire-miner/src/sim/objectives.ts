@@ -24,7 +24,7 @@ export const OBJECTIVES: Objective[] = [
   {
     id: 'kits',
     text: "Achetez une foreuse, des convoyeurs et un coffre à l'Atelier",
-    done: (g) => owns(g, 'drill') && owns(g, 'conveyor') && owns(g, 'storage'),
+    done: (g) => owns(g, 'drill') && (owns(g, 'conveyor') || owns(g, 'conveyor_fast') || owns(g, 'conveyor_express')) && owns(g, 'storage'),
   },
   { id: 'drill', text: "Posez la foreuse [B] sur un gisement (le sol d'un filon miné)", done: (g) => hasStructure(g, 'drill') },
   {

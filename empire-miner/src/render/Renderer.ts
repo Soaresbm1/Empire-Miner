@@ -309,7 +309,7 @@ export class Renderer {
     // Châssis (orienté vers +x)
     ctx.fillStyle = '#26262c';
     ctx.fillRect(-8, -7, 16, 14);
-    ctx.fillStyle = '#6a6b74';
+    ctx.fillStyle = b.def.accent ?? '#6a6b74';
     ctx.fillRect(-8, -7, 16, 2);
     ctx.fillRect(-8, 5, 16, 2);
     ctx.fillStyle = '#3a3a42';

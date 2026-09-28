@@ -40,6 +40,8 @@ export abstract class Structure {
   solid = true;
   /** Peut être démontée par le joueur. */
   removable = true;
+  /** Vrai pour les convoyeurs (tous niveaux). */
+  readonly isBelt: boolean = false;
 
   /** Côté par lequel commencer la prochaine sortie (répartition équitable entre convoyeurs). */
   private outCursor = 0;
@@ -60,7 +62,7 @@ export abstract class Structure {
       const d = ((this.outCursor + k) % 4) as Dir;
       if (d === skip) continue;
       const next = ctx.structureAt(this.x + DX[d], this.y + DY[d]);
-      if (next?.type === 'conveyor' && next.accept(res, d, ctx)) {
+      if (next?.isBelt && next.accept(res, d, ctx)) {
         this.outCursor = (d + 1) % 4;
         return true;
       }

@@ -513,17 +513,20 @@ export class Game {
       this.dragLast = null;
       return;
     }
-    if (existing && existing.removable) overlay.removeHint = { tx: mtx, ty: mty };
-    else overlay.ghost = { machine, tx: mtx, ty: mty, dir: this.buildDir, ok: g.canPlace(machine, mtx, mty).ok };
+    const isBelt = !!getMachine(machine).conveyor;
+    // Un convoyeur d'un autre niveau sous le curseur peut être remplacé (amélioration sur place).
+    const upgrade = g.beltToReplace(machine, mtx, mty);
+    if (existing && existing.removable && !upgrade) overlay.removeHint = { tx: mtx, ty: mty };
+    else overlay.ghost = { machine, tx: mtx, ty: mty, dir: upgrade ? upgrade.dir : this.buildDir, ok: g.canPlace(machine, mtx, mty).ok };
 
     // Démontage : clic droit (maintenu, ou clic très bref entre deux images).
     if ((inp.consumeRightPress() || inp.right) && existing && existing.removable) g.removeAt(mtx, mty);
 
     // Pose.
     if (inp.consumeLeftPress()) {
-      if (!existing) this.tryPlace(g, machine, mtx, mty, this.buildDir);
-      this.dragLast = machine === 'conveyor' ? { tx: mtx, ty: mty } : null;
-    } else if (inp.left && this.dragLast && machine === 'conveyor' && (mtx !== this.dragLast.tx || mty !== this.dragLast.ty)) {
+      if (!existing || upgrade) this.tryPlace(g, machine, mtx, mty, upgrade ? upgrade.dir : this.buildDir);
+      this.dragLast = isBelt ? { tx: mtx, ty: mty } : null;
+    } else if (inp.left && this.dragLast && isBelt && (mtx !== this.dragLast.tx || mty !== this.dragLast.ty)) {
       // Tracé de convoyeurs en glissant : chaque tuile pointe vers la suivante.
       let { tx, ty } = this.dragLast;
       let guard = 0;
@@ -539,7 +542,8 @@ export class Game {
         tx += DX[dir];
         ty += DY[dir];
         this.buildDir = dir;
-        if (!g.structures.at(tx, ty) && !this.tryPlace(g, 'conveyor', tx, ty, dir, true)) break;
+        const occupant = g.structures.at(tx, ty);
+        if ((!occupant || g.beltToReplace(machine, tx, ty)) && !this.tryPlace(g, machine, tx, ty, dir, true)) break;
       }
       this.dragLast = { tx, ty };
     } else if (!inp.left) this.dragLast = null;
@@ -582,7 +586,9 @@ export class Game {
     const s = g.structures.at(tx, ty);
     if (s instanceof Conveyor) {
       const load = s.items.length;
-      return `<b>Convoyeur</b> ${['→', '↓', '←', '↑'][s.dir]}<br>${load}/${s.capacity} objets${s.blocked ? ' · <span class="bad">saturé</span>' : ''}`;
+      return `<b>${s.def.name}</b> ${['→', '↓', '←', '↑'][s.dir]}<br>${load}/${s.capacity} objets · ${s.speed.toLocaleString('fr-FR')} tuile/s${
+        s.blocked ? ' · <span class="bad">saturé</span>' : ''
+      }`;
     }
     if (s instanceof Drill) {
       const st = { ok: 'en marche', nofuel: 'sans charbon', full: 'sortie bloquée', depleted: 'gisement épuisé' }[s.status];

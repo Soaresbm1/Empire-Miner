@@ -20,6 +20,7 @@ import { Inventory } from './Inventory';
 import { Player } from './Player';
 import { StructureManager } from './StructureManager';
 import { Building, BuildingType } from './structures/Building';
+import { Conveyor } from './structures/Conveyor';
 import { Drill } from './structures/Drill';
 import { ShippingCrate } from './structures/ShippingCrate';
 import { STRUCTURE_FACTORIES } from './structures/registry';
@@ -411,7 +412,7 @@ export class GameState implements StructureContext {
         if (s) seen.add(s);
       }
     for (const s of seen) {
-      if (s.type === 'conveyor') continue;
+      if (s.isBelt) continue;
       const x0 = s.x * TILE;
       const y0 = s.y * TILE;
       const x1 = (s.x + s.w) * TILE;
@@ -503,6 +504,7 @@ export class GameState implements StructureContext {
     const def = getMachine(machineId);
     if (this.inventory.kitCount(machineId) <= 0) return { ok: false, reason: `Aucun ${def.name.toLowerCase()} en stock` };
     if (this.distanceToTile(tx, ty) > BUILD_RANGE) return { ok: false, reason: 'Trop loin' };
+    if (this.beltToReplace(machineId, tx, ty)) return { ok: true };
     for (let y = ty; y < ty + def.h; y++)
       for (let x = tx; x < tx + def.w; x++) {
         if (!this.world.isOpen(x, y)) return { ok: false, reason: 'Il faut un sol dégagé' };
@@ -520,13 +522,32 @@ export class GameState implements StructureContext {
     return { ok: true };
   }
 
+  /** Convoyeur d'un autre niveau que `machineId` pourrait remplacer en (tx, ty), sinon null. */
+  beltToReplace(machineId: string, tx: number, ty: number): Conveyor | null {
+    const existing = this.structures.at(tx, ty);
+    return getMachine(machineId).conveyor && existing instanceof Conveyor && existing.type !== machineId ? existing : null;
+  }
+
+  /**
+   * Pose une machine. Un convoyeur posé sur un convoyeur d'un autre niveau le remplace :
+   * les objets transportés sont conservés et l'ancien convoyeur revient dans le stock.
+   */
   place(machineId: string, tx: number, ty: number, dir: Dir): Structure | null {
     if (!this.canPlace(machineId, tx, ty).ok) return null;
     const def = getMachine(machineId);
     const factory = STRUCTURE_FACTORIES[machineId];
     if (!factory) return null;
+    const replaced = this.beltToReplace(machineId, tx, ty);
+    if (replaced) {
+      this.structures.remove(replaced);
+      this.inventory.addKit(replaced.type);
+    }
     this.inventory.removeKit(machineId);
     const s = this.structures.add(factory.create(tx, ty, def.rotatable ? dir : 1));
+    if (replaced && s instanceof Conveyor) {
+      s.items = replaced.items.slice(0, s.capacity);
+      for (const extra of replaced.items.slice(s.capacity)) this.drops.spawn(extra.res, 1, (tx + 0.5) * TILE, (ty + 0.5) * TILE);
+    }
     this.stats.structuresBuilt++;
     if (def.solid) {
       // Les objets au sol sous une machine pleine sont repoussés vers le joueur.

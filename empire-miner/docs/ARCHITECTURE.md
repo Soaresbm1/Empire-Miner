@@ -56,6 +56,11 @@ réservoir n'est pas plein). Un coffre remplit d'abord le réservoir de ses vois
 convoyeurs. Un futur générateur ou four n'aura qu'à implémenter `fuelWanted()` pour être rechargé de la même façon. Un futur trieur, concasseur ou four
 n'a qu'à implémenter ces deux méthodes pour s'insérer dans les chaînes existantes.
 
+Tous les niveaux de convoyeur partagent la classe `Conveyor`, paramétrée par l'identifiant de machine
+(`conveyor`, `conveyor_fast`, `conveyor_express`) : ajouter un niveau revient à ajouter une entrée
+`conveyor: true` dans `data/machines.ts` et une ligne dans le registre. `GameState.place` remplace un convoyeur
+d'un autre niveau en conservant sa direction et ses objets.
+
 Chaque tuile de convoyeur a une capacité (objets) et un espacement minimal : si la sortie n'absorbe pas assez
 vite, les objets s'accumulent et le convoyeur sature. Les convoyeurs sont mis à jour de l'aval vers l'amont
 (ordre recalculé quand le réseau change) pour un débit régulier.

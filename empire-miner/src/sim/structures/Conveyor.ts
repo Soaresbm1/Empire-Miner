@@ -5,7 +5,7 @@
  * Si la sortie est bloquée ou trop lente, les objets s'accumulent : le convoyeur sature.
  */
 import { DX, DY, Dir, opposite } from '../../core/dir';
-import { getMachine } from '../../data/machines';
+import { getMachine, MachineDef } from '../../data/machines';
 import { Structure, StructureContext, StructureSave } from './Structure';
 
 export interface BeltItem {
@@ -17,7 +17,10 @@ export interface BeltItem {
 }
 
 export class Conveyor extends Structure {
-  readonly type = 'conveyor';
+  /** Identifiant de machine : 'conveyor', 'conveyor_fast', 'conveyor_express'… */
+  readonly type: string;
+  readonly isBelt = true;
+  readonly def: MachineDef;
   items: BeltItem[] = [];
   /** Vrai si l'objet de tête attend faute de place en sortie. */
   blocked = false;
@@ -25,12 +28,13 @@ export class Conveyor extends Structure {
   readonly capacity: number;
   readonly spacing: number;
 
-  constructor(x: number, y: number, dir: Dir) {
+  constructor(x: number, y: number, dir: Dir, machineId = 'conveyor') {
     super(x, y, dir);
     this.solid = false;
-    const def = getMachine('conveyor');
-    this.speed = def.stats.speed;
-    this.capacity = def.stats.capacity;
+    this.type = machineId;
+    this.def = getMachine(machineId);
+    this.speed = this.def.stats.speed;
+    this.capacity = this.def.stats.capacity;
     this.spacing = 1 / this.capacity;
   }
 
@@ -74,7 +78,7 @@ export class Conveyor extends Structure {
   }
 
   static load(s: StructureSave): Conveyor {
-    const c = new Conveyor(s.x, s.y, s.dir);
+    const c = new Conveyor(s.x, s.y, s.dir, s.type);
     const items = (s.items as [string, number, Dir][] | undefined) ?? [];
     c.items = items.map(([res, p, from]) => ({ res, p, from }));
     return c;

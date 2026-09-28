@@ -54,6 +54,10 @@ export interface MachineDef {
   surfaceOnly?: boolean;
   /** Vente automatique (caisse d'expédition). */
   shipping?: ShippingSpec;
+  /** Convoyeur (tous niveaux) : se trace en glissant et peut remplacer un autre convoyeur. */
+  conveyor?: boolean;
+  /** Couleur d'accent (liseré des convoyeurs). */
+  accent?: string;
 }
 
 export const MACHINES: MachineDef[] = [
@@ -68,6 +72,38 @@ export const MACHINES: MachineDef[] = [
     solid: false,
     rotatable: true,
     stats: { speed: 0.75, power: 0, capacity: 3, efficiency: 1, level: 1 },
+    conveyor: true,
+    accent: '#6a6b74',
+  },
+  {
+    id: 'conveyor_fast',
+    name: 'Convoyeur rapide',
+    category: 'logistique',
+    description: 'Deux fois plus rapide. Posez-le sur un convoyeur existant pour l\'améliorer sur place.',
+    price: 15,
+    w: 1,
+    h: 1,
+    solid: false,
+    rotatable: true,
+    stats: { speed: 1.5, power: 0, capacity: 3, efficiency: 1, level: 2 },
+    conveyor: true,
+    accent: '#d0503a',
+    unlock: { pickaxeTier: 2, text: 'Nécessite la Pioche améliorée' },
+  },
+  {
+    id: 'conveyor_express',
+    name: 'Convoyeur express',
+    category: 'logistique',
+    description: 'Quatre fois plus rapide que le convoyeur de base. Pour les grandes lignes principales.',
+    price: 40,
+    w: 1,
+    h: 1,
+    solid: false,
+    rotatable: true,
+    stats: { speed: 3, power: 0, capacity: 3, efficiency: 1, level: 3 },
+    conveyor: true,
+    accent: '#4d8fe0',
+    unlock: { pickaxeTier: 3, text: 'Nécessite la Pioche en fer' },
   },
   {
     id: 'drill',

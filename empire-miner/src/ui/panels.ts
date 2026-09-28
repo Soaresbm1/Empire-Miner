@@ -114,7 +114,7 @@ function machineCard(g: GameState, m: MachineDef): string {
   const placed = g.structures.list.filter((s) => s.type === m.id).length;
   const s = m.stats;
   const speed =
-    m.id === 'conveyor'
+    m.conveyor
       ? `${num(s.speed, 2)} tuile/s`
       : m.id === 'drill'
         ? `${num(s.speed * 60, 0)} unités/min`
@@ -122,13 +122,13 @@ function machineCard(g: GameState, m: MachineDef): string {
           ? `1 passage / ${m.shipping.interval} s`
           : '—';
   const cap =
-    m.id === 'conveyor'
+    m.conveyor
       ? `${s.capacity} objets/tuile (débit max ${num(conveyorThroughput(m))}/s)`
       : m.id === 'storage' || m.shipping
         ? kg(s.capacity)
         : `${s.capacity} unités en attente`;
   const power = m.fuel ? `Charbon : 1 unité / ${m.fuel.secondsPerUnit} s` : s.power ? `${s.power} kW` : 'Aucune';
-  const qtyButtons = m.id === 'conveyor' ? [1, 10] : [1];
+  const qtyButtons = m.conveyor ? [1, 10] : [1];
   const where = m.surfaceOnly ? `<div class="owned">Se pose en surface, au camp.</div>` : '';
   return `<div class="card ${unlocked ? '' : 'locked'}"><h3>${m.name}</h3><p>${m.description}</p>
     ${stat('Vitesse', speed)}${stat('Consommation', power)}${stat('Capacité', cap)}${stat('Efficacité', `${Math.round(s.efficiency * 100)} %`)}

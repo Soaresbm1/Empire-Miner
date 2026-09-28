@@ -41,6 +41,9 @@ Les touches sont lues par position physique : ZQSD et WASD fonctionnent sans ré
 - Comptoir de vente et atelier en surface ; 4 pioches, 3 moyens de transport (sac, grand sac, brouette).
 - Première automatisation : **foreuse à charbon → convoyeurs → coffre**, avec minerais visibles sur les
   convoyeurs, capacité et débit réels (saturation possible), alimentation en charbon manuelle ou par convoyeur.
+- Trois niveaux de **convoyeurs** : de base (2,25 objets/s), **rapide** (×2, pioche améliorée) et **express**
+  (×4, pioche en fer). Poser un convoyeur sur un convoyeur d'un autre niveau le remplace sur place (direction et
+  minerais conservés, ancien convoyeur rendu au stock) : on améliore une ligne entière en glissant dessus.
 - Un **coffre** se vide dans tout convoyeur collé qui ne pointe pas vers lui (tampon au milieu d'une chaîne,
   ou dépôt manuel qui repart sur les convoyeurs) ; une **foreuse** pousse sa production devant sa flèche en
   priorité, sinon dans n'importe quel convoyeur collé.

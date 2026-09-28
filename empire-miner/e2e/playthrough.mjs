@@ -260,7 +260,7 @@ try {
   await page.mouse.up();
   // Coffre au bout
   await page.waitForTimeout(100);
-  const storageIdx = await ev(() => ['conveyor', 'drill', 'storage'].filter((id) => window.__EM.state.inventory.kitCount(id) > 0).indexOf('storage'));
+  const storageIdx = await ev(() => window.__EM.availableKits(window.__EM.state).indexOf('storage'));
   await page.keyboard.press(`Digit${storageIdx + 1}`);
   p = await tileScreen(53, S + 10);
   await page.mouse.move(p.x, p.y);
@@ -285,7 +285,7 @@ try {
   await page.keyboard.press('Escape');
   await teleport(55, S + 11);
   await page.waitForTimeout(6000);
-  const onBelts = await ev(() => window.__EM.state.structures.list.filter((s) => s.type === 'conveyor').reduce((n, c) => n + c.items.length, 0));
+  const onBelts = await ev(() => window.__EM.state.structures.list.filter((s) => s.isBelt).reduce((n, c) => n + c.items.length, 0));
   check(onBelts > 0, `du minerai circule visiblement sur les convoyeurs (${onBelts} objets)`);
   await shot('10-automation');
   await page.waitForTimeout(12000);
@@ -347,7 +347,7 @@ try {
   }
   await page.mouse.up();
   await page.waitForTimeout(100);
-  const shipIdx = await ev(() => ['conveyor', 'drill', 'storage', 'shipping'].filter((id) => window.__EM.state.inventory.kitCount(id) > 0).indexOf('shipping'));
+  const shipIdx = await ev(() => window.__EM.availableKits(window.__EM.state).indexOf('shipping'));
   await page.keyboard.press(`Digit${shipIdx + 1}`);
   await page.waitForTimeout(60);
   p = await tileScreen(50, S - 2);
@@ -399,6 +399,57 @@ try {
   await shot('14-shipping-panel');
   await page.keyboard.press('Escape');
 
+  // Convoyeurs rapides : on améliore toute la ligne du puits en glissant dessus.
+  await ev(() => (window.__EM.state.money += 400));
+  await teleport(58, 8);
+  await page.waitForTimeout(300);
+  await pressE();
+  await page.click('.tab[data-arg="machines"]');
+  await page.waitForTimeout(150);
+  await page.click('[data-action="buyKit"][data-arg="conveyor_fast:10"]');
+  await page.click('[data-action="buyKit"][data-arg="conveyor_fast:10"]');
+  await page.waitForTimeout(100);
+  await shot('15a-fast-belts-shop');
+  await page.keyboard.press('Escape');
+  check((await ev(() => window.__EM.state.inventory.kitCount('conveyor_fast'))) === 20, 'convoyeurs rapides achetés');
+  const basicKits = await ev(() => window.__EM.state.inventory.kitCount('conveyor'));
+  await teleport(49, 17);
+  await page.waitForTimeout(300);
+  await page.keyboard.press('KeyB');
+  await page.waitForTimeout(100);
+  const fastIdx = await ev(() => window.__EM.availableKits(window.__EM.state).indexOf('conveyor_fast'));
+  await page.keyboard.press(`Digit${fastIdx + 1}`);
+  await page.waitForTimeout(60);
+  p = await tileScreen(50, S + 10);
+  await page.mouse.move(p.x, p.y);
+  await page.waitForTimeout(60);
+  await page.mouse.down();
+  for (let y = S + 9; y >= S - 1; y--) {
+    const q = await tileScreen(50, y);
+    await page.mouse.move(q.x, q.y, { steps: 2 });
+    await page.waitForTimeout(40);
+  }
+  await page.mouse.up();
+  await page.waitForTimeout(150);
+  await page.keyboard.press('Escape');
+  const upgraded = await ev(() => {
+    const g = window.__EM.state;
+    let ok = 0;
+    for (let y = 11; y <= 22; y++) if (g.structures.at(50, y)?.type === 'conveyor_fast' && g.structures.at(50, y).dir === 3) ok++;
+    return { ok, kits: g.inventory.kitCount('conveyor') };
+  });
+  check(upgraded.ok === 12 && upgraded.kits === basicKits + 12, `ligne du puits améliorée sur place (${upgraded.ok} convoyeurs rapides, anciens rendus au stock)`);
+  const soldBefore = await ev(() => window.__EM.state.stats.autoSold);
+  let soldAfter = soldBefore;
+  for (let i = 0; i < 40 && soldAfter === soldBefore; i++) {
+    await page.waitForTimeout(1000);
+    soldAfter = await ev(() => window.__EM.state.stats.autoSold);
+  }
+  check(soldAfter > soldBefore, `le minerai circule sur les convoyeurs rapides jusqu'à la vente (+${soldAfter - soldBefore} $)`);
+  await teleport(49, 18);
+  await page.waitForTimeout(600);
+  await shot('15b-fast-belts');
+
   // Coffre de charbon collé à la foreuse : il la recharge.
   await ev(() => (window.__EM.state.money += 100));
   await teleport(58, 8);
@@ -413,7 +464,7 @@ try {
   await page.waitForTimeout(300);
   await page.keyboard.press('KeyB');
   await page.waitForTimeout(100);
-  const chestIdx = await ev(() => ['conveyor', 'drill', 'storage', 'shipping'].filter((id) => window.__EM.state.inventory.kitCount(id) > 0).indexOf('storage'));
+  const chestIdx = await ev(() => window.__EM.availableKits(window.__EM.state).indexOf('storage'));
   await page.keyboard.press(`Digit${chestIdx + 1}`);
   await page.waitForTimeout(60);
   p = await tileScreen(59, S + 11); // juste sous la foreuse
