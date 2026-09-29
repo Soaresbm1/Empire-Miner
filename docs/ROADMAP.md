@@ -22,7 +22,8 @@ profondeur et roches plus dures, sauvegarde/chargement, première automatisation
 - ✅ Aiguillages (branche fixe ou alternance).
 - Plusieurs wagonnets par ligne avec signaux ; ascenseur de puits.
 - Éclairage posable (lampes), obscurité plus contraignante en profondeur.
-- ✅ Marteau-piqueur (front de 3 cases, au charbon) et foreuse de percement (tunnel automatique).
+- ✅ Marteau-piqueur (front de 3 cases, au charbon) et foreuse de percement (base fixe, la foreuse sort percer
+  le tunnel et revient faire le plein ; améliorations : moteur, tête large, benne à minerai).
 - Électricité : générateurs, câbles, machines électriques plus puissantes.
 
 ## v0.4 — Traitement

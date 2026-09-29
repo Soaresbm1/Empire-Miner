@@ -93,7 +93,7 @@ export class Drill extends Structure {
 
   /** Cases couvertes au niveau `level` (par défaut : le niveau actuel). */
   reach(level = this.level): DrillTile[] {
-    return reachTiles(this.x, this.y, this.dir, this.levelDef(level).reach);
+    return reachTiles(this.x, this.y, this.dir, this.levelDef(level).reach ?? ['under']);
   }
 
   /** Une case est exploitable si elle a un gisement et qu'aucune autre foreuse n'est posée dessus. */

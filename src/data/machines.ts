@@ -36,12 +36,24 @@ export interface ShippingSpec {
 export interface BorerSpec {
   /** Niveau de roche maximal qu'elle peut percer. */
   tier: number;
-  /** Dégâts infligés par seconde à la case devant elle. */
-  damagePerSecond: number;
-  /** Temps pour avancer d'une case une fois la roche percée (s). */
-  moveTime: number;
   /** Longueurs de tunnel proposées dans son panneau (0 = sans limite). */
   lengths: number[];
+  /** Minerai que la base peut garder (benne vidée au retour), en morceaux. */
+  store: number;
+}
+
+/** Foreuse de percement : ce que change chaque niveau d'amélioration. */
+export interface BorerLevelSpec {
+  /** Dégâts infligés par seconde à la case percée. */
+  damagePerSecond: number;
+  /** Temps pour rouler d'une case dans le tunnel, à l'aller comme au retour (s). */
+  moveTime: number;
+  /** Charbon emporté par la foreuse à chaque sortie (unités prises dans la base). */
+  tankUnits: number;
+  /** Largeur du tunnel : 1, ou 3 (la tête perce aussi la case à gauche et à droite). */
+  width: 1 | 3;
+  /** Benne : morceaux de minerai ramassés et ramenés à la base (0 = pas de benne). */
+  hopper: number;
 }
 
 export interface BridgeSpec {
@@ -55,10 +67,14 @@ export type ReachSide = 'under' | 'left' | 'right' | 'back';
 /** Niveau d'amélioration d'une machine (acheté sur la machine posée). */
 export interface MachineLevel {
   level: number;
+  /** Nom de l'amélioration (foreuse de percement). */
+  name?: string;
   /** Prix de l'amélioration vers ce niveau (0 pour le niveau de base). */
   price: number;
-  /** Foreuse : cases exploitées. */
-  reach: ReachSide[];
+  /** Foreuse à charbon : cases exploitées. */
+  reach?: ReachSide[];
+  /** Foreuse de percement : caractéristiques à ce niveau. */
+  borer?: BorerLevelSpec;
   /** Condition supplémentaire (niveau de pioche). */
   unlock?: { pickaxeTier: number; text: string };
   /** Résumé affiché dans le panneau de la machine. */
@@ -106,7 +122,7 @@ export interface MachineDef {
   railSwitch?: boolean;
   /** Niveaux d'amélioration, du niveau de base (1) au niveau maximal. */
   levels?: MachineLevel[];
-  /** Foreuse de percement : avance toute seule en creusant un tunnel droit. */
+  /** Foreuse de percement : base fixe d'où sort une foreuse qui perce un tunnel droit. */
   borer?: BorerSpec;
 }
 
@@ -310,10 +326,10 @@ export const MACHINES: MachineDef[] = [
   {
     id: 'borer',
     name: 'Foreuse de percement',
-    summary: 'Creuse toute seule un tunnel droit devant elle et révèle ce qu’elle traverse. Brûle du charbon.',
+    summary: 'Base fixe d’où sort une foreuse qui perce seule un tunnel droit, puis revient faire le plein. Brûle du charbon.',
     category: 'extraction',
     description:
-      "Véhicule à tête rotative : avance tout droit en perçant la roche, jusqu'au basalte. Les minerais tombent derrière elle, dans le tunnel. Réglez la longueur et démarrez-la avec E ; elle s'arrête d'elle-même au bout, sans charbon ou devant un obstacle.",
+      "La base reste où vous la posez ; la foreuse en sort pour percer tout droit devant la flèche, jusqu'au basalte, et y revient quand elle n'a plus de charbon ou ne peut plus percer. Les minerais tombent derrière elle, dans le tunnel. Chargez la base en charbon, réglez la longueur et démarrez-la avec E.",
     price: 1200,
     w: 1,
     h: 1,
@@ -322,7 +338,37 @@ export const MACHINES: MachineDef[] = [
     stats: { speed: 6, power: 0, capacity: 0, efficiency: 1, level: 1 },
     fuel: { res: 'coal', secondsPerUnit: 20, maxUnits: 20 },
     unlock: { pickaxeTier: 3, text: 'Nécessite la Pioche en fer' },
-    borer: { tier: 3, damagePerSecond: 6, moveTime: 0.35, lengths: [10, 25, 50, 0] },
+    borer: { tier: 3, lengths: [10, 25, 50, 0], store: 120 },
+    // Améliorations achetées sur la base (foreuse rangée) ; chaque niveau garde les précédents.
+    levels: [
+      {
+        level: 1,
+        price: 0,
+        summary: "Tunnel d'une case de large, 2 unités de charbon par sortie.",
+        borer: { damagePerSecond: 6, moveTime: 0.35, tankUnits: 2, width: 1, hopper: 0 },
+      },
+      {
+        level: 2,
+        name: 'Moteur renforcé',
+        price: 600,
+        summary: 'Perce 2 fois plus vite, roule plus vite et emporte 4 unités de charbon.',
+        borer: { damagePerSecond: 12, moveTime: 0.22, tankUnits: 4, width: 1, hopper: 0 },
+      },
+      {
+        level: 3,
+        name: 'Tête large',
+        price: 1100,
+        summary: 'Tunnel de 3 cases de large : la tête perce aussi à gauche et à droite.',
+        borer: { damagePerSecond: 12, moveTime: 0.22, tankUnits: 4, width: 3, hopper: 0 },
+      },
+      {
+        level: 4,
+        name: 'Benne à minerai',
+        price: 1800,
+        summary: 'Ramasse le minerai percé (30 morceaux) et le ramène à la base, qui le pousse dans un convoyeur ou un coffre collé.',
+        borer: { damagePerSecond: 12, moveTime: 0.22, tankUnits: 4, width: 3, hopper: 30 },
+      },
+    ],
   },
   {
     id: 'storage',
