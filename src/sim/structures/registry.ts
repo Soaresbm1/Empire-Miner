@@ -34,5 +34,5 @@ export const STRUCTURE_FACTORIES: Record<string, Factory> = {
   foundry: { create: (x, y, d) => new Smelter('foundry', x, y, d), load: (s) => Smelter.load('foundry', s) },
   prop: { create: (x, y) => new Prop(x, y), load: (s) => new Prop(s.x, s.y) },
   fan: { create: (x, y) => new Fan(x, y, 0), load: (s) => new Fan(s.x, s.y, 0) },
-  pump: { create: (x, y) => new Pump(x, y), load: (s) => Pump.load(s) },
+  pump: { create: (x, y) => new Pump(x, y, 0), load: (s) => new Pump(s.x, s.y, 0) },
 };

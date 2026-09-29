@@ -2,7 +2,7 @@
  * Couche d'interface HTML au-dessus du canvas : HUD, messages, panneaux, menus.
  * Les actions des boutons sont relayées à l'hôte (Game) via `onAction`.
  */
-import { depthAt } from '../core/constants';
+import { METERS_PER_TILE, TILE, depthAt } from '../core/constants';
 import { zoneForDepth } from '../data/depth';
 import { getMachine } from '../data/machines';
 import type { GameState } from '../sim/GameState';
@@ -10,7 +10,7 @@ import { OBJECTIVES, currentObjective } from '../sim/objectives';
 import type { TunnelBorer } from '../sim/structures/Borer';
 import type { Smelter } from '../sim/structures/Smelter';
 import { GAS, HEALTH, WATER } from '../data/hazards';
-import type { Pump } from '../sim/structures/Safety';
+import { MARKER_KINDS } from '../sim/Markers';
 import { Drill } from '../sim/structures/Drill';
 import { ShippingCrate } from '../sim/structures/ShippingCrate';
 import type { Sorter } from '../sim/structures/Sorter';
@@ -19,9 +19,12 @@ import { Storage } from '../sim/structures/Storage';
 import type { Structure } from '../sim/structures/Structure';
 import { esc, kg, money, resIcon } from './format';
 import { MAP_COLORS } from '../render/MineMap';
-import { borerPanel, counterPanel, pumpPanel, smelterPanel, drillPanel, helpPanel, inventoryPanel, mapPanel, shippingPanel, sorterPanel, stationPanel, storagePanel, switchPanel, workshopPanel } from './panels';
+import { boardPanel, borerPanel, counterPanel, smelterPanel, drillPanel, helpPanel, inventoryPanel, mapPanel, shippingPanel, sorterPanel, stationPanel, storagePanel, switchPanel, workshopPanel } from './panels';
 
-export type PanelKind = 'counter' | 'workshop' | 'inventory' | 'storage' | 'drill' | 'borer' | 'furnace' | 'pump' | 'shipping' | 'sorter' | 'station' | 'switch' | 'map' | 'help';
+/** Flèches dans les 8 directions, dans l'ordre des angles (est, sud-est, sud…). */
+const ARROWS8 = ['→', '↘', '↓', '↙', '←', '↖', '↑', '↗'];
+
+export type PanelKind = 'counter' | 'workshop' | 'board' | 'inventory' | 'storage' | 'drill' | 'borer' | 'furnace' | 'shipping' | 'sorter' | 'station' | 'switch' | 'map' | 'help';
 
 export interface UIHost {
   onAction(action: string, arg: string): void;
@@ -55,6 +58,14 @@ export class UI {
       const el = (e.target as HTMLElement).closest<HTMLElement>('[data-action]');
       if (!el || (el as HTMLButtonElement).disabled || e.button !== 0) return;
       e.preventDefault();
+      // Un canvas cliquable (carte) reçoit la position du clic, en pixels du canvas.
+      if (el instanceof HTMLCanvasElement) {
+        const r = el.getBoundingClientRect();
+        const px = ((e.clientX - r.left) * el.width) / Math.max(1, r.width);
+        const py = ((e.clientY - r.top) * el.height) / Math.max(1, r.height);
+        this.host.onAction(el.dataset.action!, `${Math.round(px)},${Math.round(py)}`);
+        return;
+      }
       this.host.onAction(el.dataset.action!, el.dataset.arg ?? '');
     };
     for (const root of [this.panelRoot, this.menuRoot, this.hud]) root.addEventListener('pointerdown', onPointer);
@@ -72,11 +83,16 @@ export class UI {
 
   // ------------------------------------------------------------------ HUD
 
-  private set(id: string, html: string): void {
-    if (this.cache.get(id) === html) return;
+  /** Hauteur de la barre de construction (px CSS, 0 hors construction). */
+  buildBarHeight = 0;
+
+  /** Remplace le contenu d'un élément s'il a changé (vrai dans ce cas). */
+  private set(id: string, html: string): boolean {
+    if (this.cache.get(id) === html) return false;
     this.cache.set(id, html);
     const el = document.getElementById(id);
     if (el) el.innerHTML = html;
+    return true;
   }
 
   showHud(v: boolean): void {
@@ -88,7 +104,16 @@ export class UI {
     const surface = g.player.tileY < 12;
     this.set('hud-money', `<span class="coin"></span>${money(g.money)}`);
     this.set('hud-income', extra.income);
-    this.set('hud-depth', surface ? `<span class="zone">Surface · Camp</span>` : `▼ <b>${Math.floor(depth)} m</b> <span class="zone" style="color:${zoneForDepth(depth).color}">${zoneForDepth(depth).name}</span>`);
+    // Fournaise : température, qui ralentit les machines.
+    const temp = surface ? null : g.hazards.temperature(g.player.tileY);
+    this.set(
+      'hud-depth',
+      surface
+        ? `<span class="zone">Surface · Camp</span>`
+        : `▼ <b>${Math.floor(depth)} m</b> <span class="zone" style="color:${zoneForDepth(depth).color}">${zoneForDepth(depth).name}</span>${
+            temp !== null ? `<div class="heat">Chaleur ${temp} °C : machines ralenties</div>` : ''
+          }`,
+    );
     const inv = g.inventory;
     const w = inv.weight();
     const ratio = w / inv.capacity;
@@ -130,8 +155,26 @@ export class UI {
         ? `<div class="obj-title">Objectif ${index + 1}/${OBJECTIVES.length}</div><div>${esc(objective.text)}</div>`
         : `<div class="obj-title">Objectif libre</div><div>Agrandissez votre exploitation et descendez toujours plus bas.</div>`,
     );
+    // Repère suivi : nom, distance et direction.
+    const t = g.markers.trackedMarker;
+    let track = '';
+    if (t) {
+      const dx = t.x + 0.5 - p.x / TILE;
+      const dy = t.y + 0.5 - p.y / TILE;
+      const d = Math.hypot(dx, dy) * METERS_PER_TILE;
+      const arrow = d < 2 ? '●' : ARROWS8[(Math.round(Math.atan2(dy, dx) / (Math.PI / 4)) + 8) % 8];
+      const k = MARKER_KINDS[t.kind];
+      track = `<span style="color:${k.color}">${k.symbol}</span> ${esc(t.label)} <b>${arrow} ${Math.round(d)} m</b>`;
+    }
+    this.set('hud-track', track);
     this.set('hud-prompt', extra.prompt);
-    this.set('hud-build', extra.build);
+    if (this.set('hud-build', extra.build)) {
+      // Hauteur de la barre de construction : sur un écran étroit, l'équipement passe au-dessus.
+      this.hud.classList.toggle('building', !!extra.build);
+      const h = document.getElementById('hud-build')?.offsetHeight ?? 0;
+      this.buildBarHeight = h;
+      if (h) this.hud.style.setProperty('--build-h', `${h}px`);
+    }
     this.set('hud-hints', extra.hints);
   }
 
@@ -222,6 +265,10 @@ export class UI {
         title = 'Comptoir de vente';
         body = counterPanel(g);
         break;
+      case 'board':
+        title = "Tableau d'affichage";
+        body = boardPanel(g);
+        break;
       case 'workshop':
         title = 'Atelier';
         body = workshopPanel(g, tab, (id) => this.host.machineIcon(id));
@@ -245,10 +292,6 @@ export class UI {
       case 'furnace':
         title = (target as Smelter).def.name;
         body = smelterPanel(g, target as Smelter);
-        break;
-      case 'pump':
-        title = getMachine('pump').name;
-        body = pumpPanel(g, target as Pump);
         break;
       case 'shipping':
         title = getMachine('shipping').name;

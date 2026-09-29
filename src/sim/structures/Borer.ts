@@ -73,6 +73,8 @@ export class TunnelBorer extends Structure {
   moveT = 0;
   /** Temps de travail cumulé (animation). */
   activeTime = 0;
+  /** Cadence de perçage due à la chaleur, là où perce la foreuse (1 = normale). */
+  heat = 1;
   /** Benne de la foreuse (niveau 4) et minerai gardé dans la base. */
   load: Record<string, number> = {};
   store: Record<string, number> = {};
@@ -360,7 +362,8 @@ export class TunnelBorer extends Structure {
     this.status = 'digging';
     this.burn -= dt;
     this.activeTime += dt;
-    this.work += this.stats.damagePerSecond * dt;
+    this.heat = ctx.hazards.heatFactor(tx, ty);
+    this.work += this.stats.damagePerSecond * dt * this.heat;
     if (this.work < block.hp) {
       ctx.world.damage.set(i, this.work); // fissures visibles sur la paroi attaquée
       return;

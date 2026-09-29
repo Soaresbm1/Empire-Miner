@@ -2,7 +2,7 @@
  * Rendu du monde sur un canvas 2D : terrain (cache par blocs), machines,
  * objets, personnage, particules et éclairage. Lecture seule de l'état de jeu.
  */
-import { SURFACE_ROWS, TILE, clamp } from '../core/constants';
+import { METERS_PER_TILE, SURFACE_ROWS, TILE, clamp } from '../core/constants';
 import { DX, DY, Dir } from '../core/dir';
 import { AIR, getBlock } from '../data/blocks';
 import { CAVE_IN, GAS, HEALTH, POCKET_WATER } from '../data/hazards';
@@ -18,6 +18,8 @@ import { Conveyor } from '../sim/structures/Conveyor';
 import { TunnelBorer } from '../sim/structures/Borer';
 import { Smelter } from '../sim/structures/Smelter';
 import { Fan, Prop, Pump } from '../sim/structures/Safety';
+import { MARKER_KINDS, type Marker } from '../sim/Markers';
+import { markerShape } from './MineMap';
 import { Drill } from '../sim/structures/Drill';
 import { ShippingCrate } from '../sim/structures/ShippingCrate';
 import { Sorter } from '../sim/structures/Sorter';
@@ -31,6 +33,7 @@ import {
   PICK_ANGLES,
   PICK_SIZE,
   PlayerSprites,
+  buildBoardSprite,
   buildCounterSprite,
   buildCrackSprites,
   buildLanternSprite,
@@ -78,6 +81,8 @@ export class Renderer {
   zoomBias = 0;
   camX = 0;
   camY = 0;
+  /** Bas de l'écran caché par l'interface (px CSS) : le joueur reste centré dans ce qui reste visible. */
+  bottomInset = 0;
   readonly fx = new Fx();
   private chunks: ChunkCache | null = null;
   private state: GameState | null = null;
@@ -88,6 +93,7 @@ export class Renderer {
   private readonly cracks: HTMLCanvasElement[];
   private readonly counter: HTMLCanvasElement;
   private readonly workshop: HTMLCanvasElement;
+  private readonly board: HTMLCanvasElement;
   private readonly lantern: HTMLCanvasElement;
   private time = 0;
   private smokeTimer = 0;
@@ -106,6 +112,7 @@ export class Renderer {
     this.cracks = buildCrackSprites();
     this.counter = buildCounterSprite();
     this.workshop = buildWorkshopSprite();
+    this.board = buildBoardSprite();
     this.lantern = buildLanternSprite();
     this.resize();
   }
@@ -180,8 +187,9 @@ export class Renderer {
         this.fx.emit('dust', (p.x + 0.5 + (Math.random() - 0.5) * 5) * TILE, (p.y + 0.5 + (Math.random() - 0.5) * 5) * TILE, 'rgba(150,130,110,0.7)', 1, 10);
     }
     if (follow) {
+      const inset = (this.bottomInset * (this.canvas.width / window.innerWidth)) / this.zoom;
       const tx = this.state.player.x - this.viewW / 2;
-      const ty = this.state.player.y - 8 - this.viewH / 2;
+      const ty = this.state.player.y - 8 - (this.viewH - inset) / 2;
       const k = 1 - Math.exp(-8 * dt);
       this.camX += (tx - this.camX) * k;
       this.camY += (ty - this.camY) * k;
@@ -303,6 +311,11 @@ export class Renderer {
       if (!this.inView(w.px(), w.py())) continue;
       // Trié juste devant le joueur à bord : le wagonnet cache ses jambes (il est assis dedans).
       list.push({ y: w.py() + 6, draw: () => this.drawWagon(w, w.px(), w.py()) });
+    }
+    // Repères du joueur : un petit fanion planté au milieu de la case.
+    for (const m of state.markers.list) {
+      if (!this.inView((m.x + 0.5) * TILE, (m.y + 0.5) * TILE, 24)) continue;
+      list.push({ y: (m.y + 0.5) * TILE + 5, draw: () => this.drawMarkerFlag(m, state.markers.tracked === m.id) });
     }
     if (showPlayer) list.push({ y: state.player.y, draw: () => this.drawPlayer() });
     list.sort((a, b) => a.y - b.y);
@@ -720,7 +733,7 @@ export class Renderer {
   }
 
   private drawBuilding(b: Building): void {
-    const img = b.type === 'counter' ? this.counter : this.workshop;
+    const img = b.type === 'counter' ? this.counter : b.type === 'workshop' ? this.workshop : this.board;
     const x = b.x * TILE;
     const y = (b.y + b.h) * TILE - img.height;
     this.ctx.fillStyle = 'rgba(0,0,0,0.25)';
@@ -1230,6 +1243,34 @@ export class Renderer {
     }
   }
 
+  /** Fanion d'un repère : mât, drapeau de la couleur du type, et son symbole. */
+  private drawMarkerFlag(m: Marker, tracked: boolean): void {
+    const ctx = this.ctx;
+    const x = Math.round((m.x + 0.5) * TILE);
+    const y = Math.round((m.y + 0.5) * TILE) + 4;
+    const wave = Math.round(Math.sin(this.time * 4 + m.x) * 0.8);
+    ctx.fillStyle = 'rgba(0,0,0,0.35)';
+    ctx.fillRect(x - 2, y, 5, 2);
+    ctx.fillStyle = '#1a1418';
+    ctx.fillRect(x - 1, y - 16, 2, 17);
+    ctx.fillStyle = '#c7ccd6';
+    ctx.fillRect(x - 1, y - 16, 1, 17);
+    const color = MARKER_KINDS[m.kind].color;
+    ctx.fillStyle = '#1a1418';
+    ctx.fillRect(x + 1, y - 16 + wave, 9, 7);
+    ctx.fillStyle = color;
+    ctx.fillRect(x + 1, y - 15 + wave, 8, 5);
+    markerShape(ctx, m.kind, x + 5, y - 12.5 + wave, 1.8, '#1a1418');
+    if (tracked) {
+      const pulse = (this.time * 1.2) % 1;
+      ctx.strokeStyle = `rgba(255,255,255,${0.8 * (1 - pulse)})`;
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.arc(x, y, 3 + pulse * 10, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+  }
+
   /** Étai : deux poteaux et une poutre de bois (on passe dessous). */
   private drawProp(s: Prop): void {
     const ctx = this.ctx;
@@ -1313,12 +1354,6 @@ export class Renderer {
     ctx.fillRect(x + 5, y - 6 + stroke, 2, 6);
     ctx.fillStyle = '#6a4424';
     ctx.fillRect(x + 2, y - 7 + stroke, 12, 2);
-    // Jauge de charbon.
-    const fuel = s.fuelMax ? (s.fuelUnits + (s.burn > 0 ? 1 : 0)) / s.fuelMax : 0;
-    ctx.fillStyle = '#1a1418';
-    ctx.fillRect(x + 1, y + 15, 14, 2);
-    ctx.fillStyle = fuel > 0.2 ? '#f08a24' : '#d0342c';
-    ctx.fillRect(x + 1, y + 15, Math.round(14 * Math.min(1, fuel)), 2);
     if (on && Math.random() < 0.25) this.fx.emit('dust', x + 12, y + 14, 'rgba(120,180,240,0.6)', 1, 18);
   }
 
@@ -1417,23 +1452,23 @@ export class Renderer {
     for (const s of state.structures.list) {
       // Foreuses : plus de charbon, sortie saturée, ou arrêt (gisement épuisé, obstacle).
       // Foreuse de percement : sur sa base (sans charbon, rentrée bloquée) ou sur la foreuse qui attend.
-      let icon: 'nofuel' | 'full' | 'stop' | null = null;
+      // Dans la Fournaise, une machine qui tourne mais que la chaleur ralentit porte un thermomètre.
+      let icon: 'nofuel' | 'full' | 'stop' | 'hot' | null = null;
       let at = { x: s.x * TILE, y: s.y * TILE };
-      if (s instanceof Drill && s.status !== 'ok') icon = s.status === 'nofuel' ? 'nofuel' : s.status === 'full' ? 'full' : 'stop';
-      else if (s instanceof Pump && s.status === 'nofuel') icon = 'nofuel';
+      if (s instanceof Drill) icon = s.status !== 'ok' ? (s.status === 'nofuel' ? 'nofuel' : s.status === 'full' ? 'full' : 'stop') : s.heat < 1 ? 'hot' : null;
       else if (s instanceof Smelter) {
         // Four sans charbon alors qu'il a du minerai, ou sortie saturée.
-        icon = s.status === 'nofuel' ? 'nofuel' : s.status === 'full' ? 'full' : null;
+        icon = s.status === 'nofuel' ? 'nofuel' : s.status === 'full' ? 'full' : s.status === 'ok' && s.heat < 1 ? 'hot' : null;
         at = { x: s.x * TILE + (s.w - 1) * 8, y: s.y * TILE - (s.w > 1 ? 14 : 8) };
       }
       else if (s instanceof TunnelBorer) {
-        icon = s.status === 'nofuel' ? 'nofuel' : s.status === 'waiting' ? 'full' : s.status === 'blocked' ? 'stop' : null;
-        if (icon === 'full') at = this.borerVehicleXY(s);
+        icon = s.status === 'nofuel' ? 'nofuel' : s.status === 'waiting' ? 'full' : s.status === 'blocked' ? 'stop' : s.status === 'digging' && s.heat < 1 ? 'hot' : null;
+        if (icon === 'full' || icon === 'hot') at = this.borerVehicleXY(s);
       }
       if (!icon || !this.inView(at.x, at.y)) continue;
       const x = at.x + 8;
-      const y = at.y - (s instanceof TunnelBorer && icon !== 'full' ? 14 : 9) + (blink ? 0 : -1);
-      const color = icon === 'nofuel' ? '#d0342c' : icon === 'full' ? '#e0a020' : '#7a7a86';
+      const y = at.y - (s instanceof TunnelBorer && icon !== 'full' && icon !== 'hot' ? 14 : 9) + (blink ? 0 : -1);
+      const color = icon === 'nofuel' ? '#d0342c' : icon === 'full' ? '#e0a020' : icon === 'hot' ? '#e8601c' : '#7a7a86';
       ctx.fillStyle = '#1a1418';
       ctx.fillRect(x - 4, y - 4, 9, 8);
       ctx.fillStyle = color;
@@ -1445,6 +1480,10 @@ export class Renderer {
       } else if (icon === 'full') {
         ctx.fillRect(x - 2, y - 1, 5, 1);
         ctx.fillRect(x - 2, y + 1, 5, 1);
+      } else if (icon === 'hot') {
+        // Thermomètre : tige et bulbe.
+        ctx.fillRect(x, y - 2, 1, 3);
+        ctx.fillRect(x - 1, y + 1, 3, 2);
       } else {
         ctx.fillRect(x - 2, y - 2, 1, 1);
         ctx.fillRect(x + 2, y - 2, 1, 1);
@@ -1696,6 +1735,78 @@ export class Renderer {
       ctx.fillStyle = '#f2e6c8';
       ctx.fillText(s.name, x, y);
     }
+    this.drawMarkerTexts(ox, oy);
+  }
+
+  /**
+   * Noms des repères visibles, et flèche au bord de l'écran vers le repère suivi quand il est
+   * hors de vue (avec sa distance en mètres).
+   */
+  private drawMarkerTexts(ox: number, oy: number): void {
+    const ctx = this.ctx;
+    const state = this.state!;
+    const z = this.zoom;
+    ctx.font = `bold ${Math.max(10, Math.round(z * 3))}px "Pixelify Sans", monospace`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    const W = this.canvas.width;
+    const H = this.canvas.height;
+    for (const m of state.markers.list) {
+      const x = (m.x + 0.5) * TILE * z + ox;
+      const y = ((m.y + 0.5) * TILE - 16) * z + oy;
+      if (x < -60 || y < -20 || x > W + 60 || y > H + 20) continue;
+      const w = ctx.measureText(m.label).width + 8;
+      ctx.fillStyle = 'rgba(18,14,16,0.7)';
+      ctx.fillRect(x - w / 2, y - 7 * (z / 3) - 4, w, 14 * (z / 3));
+      ctx.fillStyle = MARKER_KINDS[m.kind].color;
+      ctx.fillText(m.label, x, y - 4);
+    }
+    const t = state.markers.trackedMarker;
+    if (!t) return;
+    const tx = (t.x + 0.5) * TILE * z + ox;
+    const ty = (t.y + 0.5) * TILE * z + oy;
+    const margin = 46;
+    if (tx > margin && ty > margin && tx < W - margin && ty < H - margin) return;
+    // Point du bord de l'écran sur la droite joueur → repère.
+    const cx = W / 2;
+    const cy = H / 2;
+    const dx = tx - cx;
+    const dy = ty - cy;
+    const k = Math.min((cx - margin) / Math.max(1e-6, Math.abs(dx)), (cy - margin) / Math.max(1e-6, Math.abs(dy)));
+    const ex = cx + dx * k;
+    const ey = cy + dy * k;
+    const a = Math.atan2(dy, dx);
+    const color = MARKER_KINDS[t.kind].color;
+    ctx.save();
+    ctx.translate(ex, ey);
+    ctx.rotate(a);
+    ctx.fillStyle = '#1a1418';
+    ctx.beginPath();
+    ctx.moveTo(18, 0);
+    ctx.lineTo(-10, -13);
+    ctx.lineTo(-4, 0);
+    ctx.lineTo(-10, 13);
+    ctx.closePath();
+    ctx.fill();
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    ctx.moveTo(14, 0);
+    ctx.lineTo(-7, -9);
+    ctx.lineTo(-2, 0);
+    ctx.lineTo(-7, 9);
+    ctx.closePath();
+    ctx.fill();
+    ctx.restore();
+    const dist = Math.round((Math.hypot(t.x + 0.5 - state.player.x / TILE, t.y + 0.5 - state.player.y / TILE)) * METERS_PER_TILE);
+    const label = `${t.label} · ${dist} m`;
+    ctx.font = `bold ${Math.max(11, Math.round(z * 3.4))}px "Pixelify Sans", monospace`;
+    const lw = ctx.measureText(label).width + 10;
+    const lx = Math.min(W - lw / 2 - 4, Math.max(lw / 2 + 4, ex - Math.cos(a) * 36));
+    const ly = Math.min(H - 14, Math.max(14, ey - Math.sin(a) * 30));
+    ctx.fillStyle = 'rgba(18,14,16,0.8)';
+    ctx.fillRect(lx - lw / 2, ly - 10, lw, 20);
+    ctx.fillStyle = color;
+    ctx.fillText(label, lx, ly);
   }
 
   /**

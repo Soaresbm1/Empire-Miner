@@ -42,6 +42,27 @@ export interface BorerSpec {
   store: number;
 }
 
+export interface MachineGroup {
+  id: string;
+  /** Titre dans le magasin. */
+  title: string;
+  /** Nom court de l'onglet de la barre de construction. */
+  tab: string;
+  /** Machine dont l'icône illustre l'onglet. */
+  icon: string;
+  categories: MachineCategory[];
+}
+
+/** Groupes de machines, dans l'ordre du magasin et de la barre de construction. */
+export const MACHINE_GROUPS: MachineGroup[] = [
+  { id: 'extraction', title: 'Extraction', tab: 'Extraction', icon: 'drill', categories: ['extraction'] },
+  { id: 'traitement', title: 'Traitement', tab: 'Fonte', icon: 'furnace', categories: ['traitement'] },
+  { id: 'transport', title: 'Transport', tab: 'Transport', icon: 'conveyor', categories: ['logistique'] },
+  { id: 'rail', title: 'Wagonnets et rails', tab: 'Rails', icon: 'wagon', categories: ['rail'] },
+  { id: 'stockage', title: 'Stockage et vente', tab: 'Stockage', icon: 'storage', categories: ['stockage', 'vente'] },
+  { id: 'securite', title: 'Sécurité', tab: 'Sécurité', icon: 'prop', categories: ['securite'] },
+];
+
 /** Four et fonderie : minerai → lingot, au charbon. */
 export interface SmelterSpec {
   /** Temps pour fondre un minerai en lingot (s). */
@@ -341,7 +362,7 @@ export const MACHINES: MachineDef[] = [
     summary: 'Base fixe d’où sort une foreuse qui perce seule un tunnel droit, puis revient faire le plein. Brûle du charbon.',
     category: 'extraction',
     description:
-      "La base reste où vous la posez ; la foreuse en sort pour percer tout droit devant la flèche, jusqu'au basalte, et y revient quand elle n'a plus de charbon ou ne peut plus percer. Les minerais tombent derrière elle, dans le tunnel. Chargez la base en charbon, réglez la longueur et démarrez-la avec E.",
+      "La base reste où vous la posez ; la foreuse en sort pour percer tout droit devant la flèche, jusque dans la roche volcanique, et y revient quand elle n'a plus de charbon ou ne peut plus percer. Les minerais tombent derrière elle, dans le tunnel. Chargez la base en charbon, réglez la longueur et démarrez-la avec E.",
     price: 1200,
     w: 1,
     h: 1,
@@ -433,9 +454,9 @@ export const MACHINES: MachineDef[] = [
   {
     id: 'fan',
     name: 'Ventilateur',
-    summary: 'Chasse le grisou à 6 cases autour de lui, en quelques secondes. Tourne tout seul.',
+    summary: 'Chasse le grisou à 6 cases autour de lui. Dans la Fournaise, rafraîchit les machines à 4 cases. Tourne tout seul.',
     category: 'securite',
-    description: "Grande hélice qui aspire le grisou libéré par une poche percée (dès 120 m). Posé près d'un front de taille, il garde la galerie respirable.",
+    description: "Grande hélice qui aspire le grisou libéré par une poche percée (dès 120 m). Posé près d'un front de taille, il garde la galerie respirable. Dans la Fournaise (sous 450 m), son souffle rafraîchit les foreuses et les fours proches, qui retrouvent leur cadence.",
     price: 180,
     w: 1,
     h: 1,
@@ -447,16 +468,15 @@ export const MACHINES: MachineDef[] = [
   {
     id: 'pump',
     name: 'Pompe',
-    summary: "Assèche les galeries inondées à 5 cases autour d'elle. Brûle du charbon quand elle pompe.",
+    summary: "Assèche les galeries inondées à 5 cases autour d'elle. Tourne toute seule, sans charbon.",
     category: 'securite',
-    description: "Pompe à vapeur pour les poches d'eau (dès 70 m). Elle ne consomme que lorsqu'il y a de l'eau à retirer ; un coffre de charbon collé la recharge.",
+    description: "Pompe pour les poches d'eau (dès 70 m). Posée près d'une galerie inondée, elle se met en marche toute seule et l'assèche en quelques secondes.",
     price: 240,
     w: 1,
     h: 1,
     solid: true,
     rotatable: false,
     stats: { speed: 0, power: 0, capacity: 0, efficiency: 1, level: 1 },
-    fuel: { res: 'coal', secondsPerUnit: 30, maxUnits: 10 },
     unlock: { pickaxeTier: 2, text: 'Nécessite la Pioche améliorée' },
   },
   {

@@ -25,11 +25,12 @@ Version autonome en un seul fichier HTML (ouvrable sans serveur) : `npm run buil
 | Se déplacer | `ZQSD` (AZERTY) / `WASD` (QWERTY) ou flèches |
 | Miner | maintenir le **clic gauche** sur une paroi proche, ou `Espace` pour frapper devant soi |
 | Interagir (comptoir, atelier, coffre, foreuse) | `E` |
-| Sac et carnet | `I` ou `Tab` |
-| Mode construction | `B` — clic gauche : poser (glisser pour tracer convoyeurs et rails), clic droit : démonter, `R` : tourner, `1-9` : choisir |
+| Sac et carnet | `I` ou `Tab` (hors construction) |
+| Mode construction | `B` — machines rangées par onglets : `Tab` (ou clic) change d'onglet, `1-9` (ou clic) choisit la machine ; clic gauche : poser (glisser pour tracer convoyeurs et rails), clic droit : démonter, `R` : tourner. Une ligne d'état dit si la pose est possible, et pourquoi sinon |
 | Pioche ↔ marteau-piqueur | `T` (une fois le marteau-piqueur acheté) |
 | Monter / descendre d'un wagonnet | `F` |
 | Carte de la mine | `M` (ou clic sur la mini-carte) |
+| Poser un repère là où on est | `N` (sur la carte : clic) |
 | Zoom | molette |
 | Pause, sauvegarde, chargement, export | `Échap` |
 
@@ -43,8 +44,9 @@ lettre tapée : c'est la touche marquée M, quel que soit le clavier.
 - Ramassage physique, sac limité **en poids**, choix de ce que l'on ramasse, possibilité de jeter.
 - Les **pierres laissées par terre s'effritent** au bout de 60 s (elles clignotent les 5 dernières secondes) pour ne
   pas encombrer les galeries ; les minerais, eux, restent au sol indéfiniment.
-- Profondeur réelle (2,5 m par rangée) : roche tendre → roche dure (100 m) → basalte (300 m).
-- Ressources : pierre, charbon, cuivre, fer, argent, or (valeur, poids, rareté, résistance, profondeur).
+- Profondeur réelle (2,5 m par rangée), jusqu'à 607 m : roche tendre → roche dure (100 m) → basalte (300 m) →
+  roche volcanique (450 m, la Fournaise).
+- Ressources : pierre, charbon, cuivre, fer, argent, or, diamant (valeur, poids, rareté, résistance, profondeur).
 - Comptoir de vente et atelier en surface ; 4 pioches, 3 moyens de transport (sac, grand sac, brouette).
 - **Marteau-piqueur** (900 $, pioche en fer) : attaque la paroi sur 3 cases de large (la case visée et ses voisines,
   perpendiculairement au coup), très vite, en brûlant le charbon du sac (1 unité / 12 s de travail). `T` passe de la
@@ -112,15 +114,36 @@ lettre tapée : c'est la touche marquée M, quel que soit le clavier.
     galerie quand on les perce ; le gaz blesse, se dissipe lentement, et un **ventilateur** (180 $) le chasse en
     quelques secondes ;
   - **eau** (dès 70 m) : des poches (suintements bleus) inondent la galerie ; l'eau ralentit, profonde elle épuise ;
-    une **pompe** (240 $, au charbon, seulement quand elle pompe) l'assèche.
+    une **pompe** (240 $, sans charbon : elle tourne toute seule) l'assèche.
   Le HUD affiche la santé et le danger du moment, la carte montre les galeries inondées ou envahies de grisou.
-- Le mode construction (`B`) s'ouvre même sans aucune machine en stock, pour démonter au clic droit.
+- Le mode construction (`B`) range les machines en stock par onglets (extraction, fonte, transport, rails,
+  stockage, sécurité), chacune avec son icône et son stock. La fiche de la machine choisie rappelle ses règles de
+  pose (sur un gisement, en surface…), et une ligne d'état dit en direct si la pose est possible là où vise la
+  souris, et pourquoi sinon. La caméra remonte pour que la barre ne cache pas le joueur. Le mode s'ouvre même
+  sans aucune machine en stock, pour démonter au clic droit.
 - Vente automatique : **caisse d'expédition** à poser en surface. Tout ce qui y arrive est vendu au prix du
   comptoir à chaque passage du transporteur (toutes les 15 s) ; sa capacité est limitée (120 kg), pleine elle
   bloque les convoyeurs. Le HUD affiche le revenu automatique par minute.
+- **La Fournaise** (sous 450 m) : roche volcanique aux fissures rougeoyantes, or plus abondant et, sous 500 m, des
+  **filons de diamant** (la ressource la plus précieuse, taillée seulement par la Pioche pro en acier, qui ne se
+  fond pas). La chaleur y ralentit les foreuses, la foreuse de percement et les fours, de 85 % de leur cadence à
+  450 m jusqu'à 50 % au fond (la température s'affiche sous la profondeur, un thermomètre signale les machines
+  ralenties). Un **ventilateur** à 4 cases les rafraîchit et leur rend leur cadence normale. Les anciennes
+  sauvegardes se chargent et la mine se prolonge simplement par le bas.
+- **Tableau d'affichage** : un panneau de bois au milieu du camp, entre le Comptoir et l'Atelier (`E` devant lui).
+  Il affiche les **statistiques de production** : trois chiffres (ventes, minerai extrait, lingots fondus par
+  minute, moyennés sur les 5 dernières minutes), un histogramme des gains des 10 dernières minutes (comptoir et
+  caisses d'expédition), un tableau par ressource (extrait, fondu, vendu) et la liste des machines à surveiller
+  (sans charbon, sortie bloquée, coffre plein, ralenties par la chaleur…). Les mesures sont sauvegardées ; les
+  anciennes sauvegardes trouvent le tableau au camp, avec des mesures à zéro.
 - **Mini-carte** en haut à droite (la mine autour du joueur) et **carte complète** avec `M` : galeries, roche,
   filons et gisements repérés, machines, rails, wagonnets, position du joueur et zones de profondeur (100 m,
-  300 m). Seul ce que le joueur a déjà vu y apparaît.
+  300 m, 450 m). Seul ce que le joueur a déjà vu y apparaît.
+- **Repères** : `N` marque l'endroit où l'on se trouve, et un clic sur la carte complète pose un repère ailleurs.
+  Quatre types (repère, filon, base, danger), chacun avec sa couleur et son symbole, jusqu'à 24 repères. Le nom est
+  donné d'après ce qu'il y a à cet endroit (« Filon d'or », « Gisement de fer », « Fonderie », « Grisou »…), sinon
+  « Repère 3 ». Les repères apparaissent sur la carte, la mini-carte et dans la mine (fanion et nom). Un repère
+  « suivi » s'affiche sous la mini-carte avec sa distance, et une flèche au bord de l'écran montre sa direction.
 - Sauvegarde automatique (chaque minute), manuelle, export/import de fichier.
 - Sons synthétisés, éclairage de la mine, particules, objectifs guidant les premières minutes.
 
@@ -140,7 +163,7 @@ séparateur, pont, trieur, wagonnets, aiguillage), améliore une foreuse jusqu'a
 creuse au marteau-piqueur, lance une foreuse de percement sur 10 cases (elle sort de sa base, perce le tunnel
 puis y revient), l'améliore depuis son panneau, pose un four, le charge depuis son panneau et récupère les
 lingots, fait craquer un plafond à 100 m et le retient avec un étai posé à temps, perce une poche de grisou,
-et ouvre la carte.
+ouvre la carte, pose des repères (touche N et clic sur la carte) et en suit un.
 
 ## Choix techniques
 

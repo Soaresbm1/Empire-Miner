@@ -16,6 +16,8 @@ import { RESOURCES, getResource, hasResource, resourceIndex } from '../data/reso
 import { BAGS, JACKHAMMER, PICKAXES } from '../data/tools';
 import { Drop, DropSystem } from './Drops';
 import { HazardSystem } from './Hazards';
+import { MARKER_KINDS, Marker, MarkerBook, MarkerKind } from './Markers';
+import { ProductionLog } from './Production';
 import type { SimEvent, ToolKind } from './events';
 import { generateWorld, WorldLayout } from './generator';
 import { Inventory } from './Inventory';
@@ -93,6 +95,12 @@ export class GameState implements StructureContext {
   readonly layout: WorldLayout;
   /** Éboulements, grisou et eau. */
   readonly hazards: HazardSystem;
+  /** Repères posés sur la carte. */
+  readonly markers = new MarkerBook();
+  /** Extraction, fonte et ventes minute après minute (panneau Statistiques). */
+  readonly production = new ProductionLog(() => this.time);
+  /** Type de repère choisi dans le panneau de la carte (pour le prochain repère posé). */
+  markerKind: MarkerKind = 'point';
   readonly player: Player;
   readonly inventory: Inventory;
   readonly drops = new DropSystem();
@@ -173,8 +181,13 @@ export class GameState implements StructureContext {
     this.events.push(e);
   }
 
+  countExtracted(res: string, _from: Structure): void {
+    this.production.addOre(res, 1, true);
+  }
+
   countSmelted(res: string, from: Structure): void {
     this.stats.smelted++;
+    this.production.addIngot(res);
     // Premier lingot d'un métal : il rejoint le carnet (inventaire, trieur).
     if (!this.stats.discovered.includes(res)) {
       this.stats.discovered.push(res);
@@ -186,10 +199,11 @@ export class GameState implements StructureContext {
     this.stats.delivered += n;
   }
 
-  autoSell(total: number, n: number, from: Structure): void {
+  autoSell(total: number, n: number, from: Structure, items: Record<string, number> = {}): void {
     this.money += total;
     this.stats.earned += total;
     this.stats.autoSold += total;
+    this.production.addSale(items, total, true);
     this.emit({ t: 'shipped', tx: from.x, ty: from.y, total, n });
   }
 
@@ -232,6 +246,59 @@ export class GameState implements StructureContext {
     this.hazards.update(dt);
     this.updateHealth(dt);
     this.updateExploration();
+  }
+
+  // ---------------------------------------------------------------- repères
+
+  /**
+   * Pose un repère en (x, y), nommé d'après ce qui s'y trouve. Renvoie null hors de la carte
+   * ou si la liste est pleine ; sur une case déjà marquée, le repère est mis à jour.
+   */
+  addMarker(kind: MarkerKind, x: number, y: number): Marker | null {
+    if (!this.world.inBounds(x, y)) return null;
+    return this.markers.add(kind, x, y, this.markerLabel(kind, x, y));
+  }
+
+  /** Nom d'un repère : filon, gisement, machine ou danger à cet endroit, sinon « Repère 3 ». */
+  markerLabel(kind: MarkerKind, x: number, y: number): string {
+    const w = this.world;
+    const ore = (): string | null => {
+      // Filon dans la paroi ou gisement au sol, parmi les cases vues à 2 cases au plus.
+      let best: string | null = null;
+      let bestD = 99;
+      for (let dy = -2; dy <= 2; dy++)
+        for (let dx = -2; dx <= 2; dx++) {
+          const nx = x + dx;
+          const ny = y + dy;
+          if (!w.inBounds(nx, ny) || !w.explored[w.idx(nx, ny)]) continue;
+          const d = Math.max(Math.abs(dx), Math.abs(dy));
+          if (d >= bestD) continue;
+          const b = getBlock(w.get(nx, ny));
+          const dep = w.depositAt(nx, ny);
+          if (b.ore) best = b.name;
+          else if (dep) best = `Gisement de ${getResource(dep).name.toLowerCase()}`;
+          else continue;
+          bestD = d;
+        }
+      return best;
+    };
+    const machine = (): string | null => {
+      for (let dy = -1; dy <= 1; dy++)
+        for (let dx = -1; dx <= 1; dx++) {
+          const s = this.structures.at(x + dx, y + dy);
+          if (!s || s.isBelt || s.isTrack || s.type === 'prop') continue;
+          return s instanceof Building ? s.name : getMachine(s.type).name;
+        }
+      return null;
+    };
+    const danger = (): string | null => {
+      if (w.inBounds(x, y) && w.gas[w.idx(x, y)] > 0) return 'Grisou';
+      if (w.inBounds(x, y) && w.water[w.idx(x, y)] > 0) return 'Galerie inondée';
+      if (this.hazards.pendingNear(x, y)) return 'Plafond qui craque';
+      return null;
+    };
+    const found = kind === 'ore' ? ore() : kind === 'base' ? machine() : kind === 'danger' ? danger() : (machine() ?? ore());
+    return found ?? `${MARKER_KINDS[kind].name} ${this.markers.count(kind) + 1}`;
   }
 
   // ---------------------------------------------------------------- santé
@@ -489,6 +556,7 @@ export class GameState implements StructureContext {
     }
     if (block.drop && this.rng.chance(block.drop.chance)) {
       const n = this.rng.int(block.drop.min, block.drop.max);
+      this.production.addOre(block.drop.res, n, !!from);
       const cx = (tx + 0.5) * TILE;
       const cy = (ty + 0.5) * TILE;
       // Les morceaux jaillissent plutôt du côté du mineur (ou vers l'arrière de la machine).
@@ -593,7 +661,11 @@ export class GameState implements StructureContext {
     if (p.tileY >= SURFACE_ROWS) {
       const zone = zoneForDepth(depth).name;
       if (zone !== this.lastZone) {
-        if (this.lastZone) this.emit({ t: 'discover', text: `${zone} — ${Math.floor(depth)} m` });
+        if (this.lastZone) {
+          this.emit({ t: 'discover', text: `${zone} — ${Math.floor(depth)} m` });
+          if (this.hazards.heatAt(p.tileY) !== null)
+            this.emit({ t: 'message', text: 'Il fait très chaud : ici, foreuses et fours ralentissent. Un ventilateur tout proche les rafraîchit.', kind: 'warn' });
+        }
         this.lastZone = zone;
       }
     }
@@ -650,6 +722,7 @@ export class GameState implements StructureContext {
     const total = k * getResource(res).value;
     this.money += total;
     this.stats.earned += total;
+    this.production.addSale({ [res]: k }, total, false);
     this.emit({ t: 'sold', total, n: k });
     return total;
   }
@@ -658,14 +731,17 @@ export class GameState implements StructureContext {
     if (!this.isNear('counter')) return 0;
     let total = 0;
     let n = 0;
+    const sold: Record<string, number> = {};
     for (const [res, count] of Object.entries(this.inventory.items)) {
       this.inventory.remove(res, count);
       total += count * getResource(res).value;
       n += count;
+      sold[res] = count;
     }
     if (n > 0) {
       this.money += total;
       this.stats.earned += total;
+      this.production.addSale(sold, total, false);
       this.emit({ t: 'sold', total, n });
     }
     return total;
@@ -724,7 +800,7 @@ export class GameState implements StructureContext {
     const machineId = parseKit(kit).machine;
     const def = getMachine(machineId);
     if (this.inventory.kitCount(kit) <= 0) return { ok: false, reason: `Aucun ${kitName(kit).toLowerCase()} en stock` };
-    if (this.distanceToTile(tx, ty) > BUILD_RANGE) return { ok: false, reason: 'Trop loin' };
+    if (this.distanceToTile(tx, ty) > BUILD_RANGE) return { ok: false, reason: `Trop loin : approchez-vous (${BUILD_RANGE} cases au plus)` };
     if (def.onTrack) {
       if (!this.structures.at(tx, ty)?.isTrack) return { ok: false, reason: 'Se pose sur des rails' };
       if (this.wagons.at(tx, ty)) return { ok: false, reason: 'Il y a déjà un wagonnet ici' };
@@ -733,7 +809,7 @@ export class GameState implements StructureContext {
     if (this.beltToReplace(machineId, tx, ty) || this.railToReplace(machineId, tx, ty)) return { ok: true };
     for (let y = ty; y < ty + def.h; y++)
       for (let x = tx; x < tx + def.w; x++) {
-        if (!this.world.isOpen(x, y)) return { ok: false, reason: 'Il faut un sol dégagé' };
+        if (!this.world.isOpen(x, y)) return { ok: false, reason: 'Il faut un sol dégagé : creusez d’abord la roche' };
         if (this.structures.at(x, y)) return { ok: false, reason: 'Emplacement occupé' };
         if (this.borerAt(x, y)) return { ok: false, reason: 'La foreuse de percement passe ici' };
       }

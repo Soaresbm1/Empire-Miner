@@ -57,7 +57,19 @@ const teleport = (tx, ty) =>
     g.player.y = (y + 0.5) * 16;
     window.__EM.renderer.snapCamera();
   }, [tx, ty]);
-const tileScreen = (tx, ty) => ev(([x, y]) => window.__EM.renderer.worldToScreen((x + 0.5) * 16, (y + 0.5) * 16), [tx, ty]);
+/** Attend que la caméra soit immobile (elle glisse, par exemple, quand la barre de construction s'ouvre). */
+async function settleCamera() {
+  let prev = null;
+  for (let i = 0; i < 40; i++) {
+    const c = await ev(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(() => r([window.__EM.renderer.camX, window.__EM.renderer.camY])))));
+    if (prev && Math.abs(c[0] - prev[0]) < 0.2 && Math.abs(c[1] - prev[1]) < 0.2) return;
+    prev = c;
+  }
+}
+const tileScreen = async (tx, ty) => {
+  await settleCamera();
+  return ev(([x, y]) => window.__EM.renderer.worldToScreen((x + 0.5) * 16, (y + 0.5) * 16), [tx, ty]);
+};
 const isSolid = (tx, ty) => ev(([x, y]) => window.__EM.state.world.isSolid(x, y), [tx, ty]);
 
 /** Mine une tuile avec le clic gauche maintenu ; renvoie la durée en secondes. */
@@ -77,12 +89,22 @@ async function mineTile(tx, ty, maxMs = 12000) {
  */
 const nextFrames = () => ev(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))));
 
+/** En mode construction : ouvre l'onglet du kit (Tab) puis le choisit (touche 1 à 9). */
+async function chooseKit(kit) {
+  const slot = await ev((k) => window.__EM.kitSlot(window.__EM.state, k), kit);
+  if (!slot) throw new Error(`kit ${kit} absent`);
+  for (let i = 0; i < 8 && (await ev(() => window.__EM.buildCat)) !== slot.cat; i++) {
+    await page.keyboard.press('Tab');
+    await nextFrames();
+  }
+  await page.keyboard.press(`Digit${slot.index + 1}`);
+  await nextFrames();
+  if ((await ev(() => window.__EM.buildKit)) !== kit) throw new Error(`kit ${kit} non choisi`);
+}
+
 /** En mode construction : choisit le kit, oriente la pose puis clique sur la tuile. */
 async function placeAt(kit, tx, ty, dir = 0) {
-  const idx = await ev((k) => window.__EM.availableKits(window.__EM.state).indexOf(k), kit);
-  if (idx < 0) throw new Error(`kit ${kit} absent`);
-  await page.keyboard.press(`Digit${idx + 1}`);
-  await nextFrames();
+  await chooseKit(kit);
   await page.waitForTimeout(40);
   const p = await tileScreen(tx, ty);
   await page.mouse.move(p.x, p.y);
@@ -267,20 +289,33 @@ try {
   check((await ev(([x, y]) => window.__EM.state.world.depositAt(x, y), [59, S + 10])) === 'copper', 'le filon miné a laissé un gisement de cuivre');
   await page.keyboard.press('KeyB');
   await page.waitForTimeout(60);
-  await page.keyboard.press('Digit2'); // foreuse (ordre : convoyeur, foreuse, coffre)
+  // Barre de construction : un onglet par catégorie, les machines de l'onglet, une ligne d'état.
+  const tabs = await ev(() => [...document.querySelectorAll('.bb-tab')].map((t) => t.dataset.arg));
+  check(tabs.join() === 'extraction,transport,stockage', `barre de construction : onglets ${tabs.join(', ')}`);
+  await page.click('[data-action="buildCat"][data-arg="stockage"]');
+  await nextFrames();
+  check((await ev(() => window.__EM.buildKit)) === 'storage', 'clic sur un onglet : le coffre est choisi');
+  await chooseKit('drill');
+  check(!(await ev(() => window.__EM.ui.panel)), 'Tab change d’onglet sans ouvrir le sac');
   await page.waitForTimeout(60);
   await page.keyboard.press('KeyR');
   await page.keyboard.press('KeyR'); // direction ouest
   await page.waitForTimeout(100);
-  let p = await tileScreen(59, S + 10);
+  let p = await tileScreen(57, S + 10);
+  await page.mouse.move(p.x, p.y);
+  await nextFrames();
+  const badStatus = await ev(() => document.querySelector('.bb-status')?.className + ' ' + document.querySelector('.bb-status')?.textContent);
+  check(/bad/.test(badStatus) && /gisement/.test(badStatus), `ligne d'état : pose refusée expliquée (${badStatus.trim()})`);
+  p = await tileScreen(59, S + 10);
   await page.mouse.move(p.x, p.y);
   await page.waitForTimeout(100);
+  check(!!(await ev(() => document.querySelector('.bb-status.ok'))), "ligne d'état : pose possible sur le gisement");
   await page.mouse.down();
   await page.mouse.up();
   // Laisse passer une image : un clic et une touche dans la même image seraient traités touche d'abord.
   await page.waitForTimeout(100);
   // Convoyeurs tracés en glissant de x=58 à x=54
-  await page.keyboard.press('Digit1');
+  await chooseKit('conveyor');
   p = await tileScreen(58, S + 10);
   await page.mouse.move(p.x, p.y);
   await page.mouse.down();
@@ -292,8 +327,7 @@ try {
   await page.mouse.up();
   // Coffre au bout
   await page.waitForTimeout(100);
-  const storageIdx = await ev(() => window.__EM.availableKits(window.__EM.state).indexOf('storage'));
-  await page.keyboard.press(`Digit${storageIdx + 1}`);
+  await chooseKit('storage');
   p = await tileScreen(53, S + 10);
   await page.mouse.move(p.x, p.y);
   await page.waitForTimeout(60);
@@ -353,7 +387,7 @@ try {
   await page.keyboard.press('KeyB');
   await page.waitForTimeout(100);
   // Démontage au clic droit : pose un convoyeur de trop puis le retire.
-  await page.keyboard.press('Digit1');
+  await chooseKit('conveyor');
   await page.waitForTimeout(60);
   p = await tileScreen(51, S + 11);
   await page.mouse.move(p.x, p.y);
@@ -379,8 +413,7 @@ try {
   }
   await page.mouse.up();
   await page.waitForTimeout(100);
-  const shipIdx = await ev(() => window.__EM.availableKits(window.__EM.state).indexOf('shipping'));
-  await page.keyboard.press(`Digit${shipIdx + 1}`);
+  await chooseKit('shipping');
   await page.waitForTimeout(60);
   p = await tileScreen(50, S - 2);
   await page.mouse.move(p.x, p.y);
@@ -449,8 +482,7 @@ try {
   await page.waitForTimeout(300);
   await page.keyboard.press('KeyB');
   await page.waitForTimeout(100);
-  const fastIdx = await ev(() => window.__EM.availableKits(window.__EM.state).indexOf('conveyor_fast'));
-  await page.keyboard.press(`Digit${fastIdx + 1}`);
+  await chooseKit('conveyor_fast');
   await page.waitForTimeout(60);
   p = await tileScreen(50, S + 10);
   await page.mouse.move(p.x, p.y);
@@ -496,8 +528,7 @@ try {
   await page.waitForTimeout(300);
   await page.keyboard.press('KeyB');
   await page.waitForTimeout(100);
-  const chestIdx = await ev(() => window.__EM.availableKits(window.__EM.state).indexOf('storage'));
-  await page.keyboard.press(`Digit${chestIdx + 1}`);
+  await chooseKit('storage');
   await page.waitForTimeout(60);
   p = await tileScreen(59, S + 11); // juste sous la foreuse
   await page.mouse.move(p.x, p.y);
@@ -570,8 +601,7 @@ try {
   await placeAt('conveyor', 52, 5, 1);
   await placeAt('storage', 52, 6);
   // Aperçu de liaison avant de poser le second pont
-  const bidx = await ev(() => window.__EM.availableKits(window.__EM.state).indexOf('bridge'));
-  await page.keyboard.press(`Digit${bidx + 1}`);
+  await chooseKit('bridge');
   p = await tileScreen(53, 4);
   await page.mouse.move(p.x, p.y);
   await page.waitForTimeout(200);
@@ -686,8 +716,7 @@ try {
   await page.keyboard.press('KeyB');
   await page.waitForTimeout(100);
   await placeAt('rail_load', 43, S + 5);
-  const railIdx = await ev(() => window.__EM.availableKits(window.__EM.state).indexOf('rail'));
-  await page.keyboard.press(`Digit${railIdx + 1}`);
+  await chooseKit('rail');
   const lower = [];
   for (let x = 44; x <= 49; x++) lower.push([x, S + 5]);
   for (let y = S + 4; y >= S; y--) lower.push([49, y]);
@@ -773,11 +802,10 @@ try {
   await page.keyboard.press('KeyB');
   await page.waitForTimeout(100);
   await placeAt('rail_load', 56, 3);
-  const rIdx = await ev(() => window.__EM.availableKits(window.__EM.state).indexOf('rail'));
-  await page.keyboard.press(`Digit${rIdx + 1}`);
+  await chooseKit('rail');
   await drag([[57, 3], [58, 3], [59, 3]]);
   await placeAt('rail_switch', 60, 3, 0);
-  await page.keyboard.press(`Digit${(await ev(() => window.__EM.availableKits(window.__EM.state).indexOf('rail'))) + 1}`);
+  await chooseKit('rail');
   await drag([[61, 3], [62, 3]]);
   await placeAt('rail_unload', 63, 3);
   await placeAt('storage', 64, 3);
@@ -1167,6 +1195,39 @@ try {
   await page.keyboard.press('Escape');
   await page.waitForTimeout(200);
   await shot('22a-minimap');
+
+  // Repères : N marque la position du joueur ; sur la carte, un clic pose un repère du type choisi ;
+  // « Suivre » affiche le repère sous la mini-carte et une flèche au bord de l'écran.
+  await teleport(50, S + 14);
+  await page.waitForTimeout(300);
+  await page.keyboard.press('KeyN');
+  await page.waitForTimeout(200);
+  const here = await ev(() => window.__EM.state.markers.list.map((m) => ({ x: m.x, y: m.y, label: m.label })));
+  check(here.length === 1 && here[0].x === 50 && here[0].y === S + 14, `N pose un repère là où se trouve le joueur (${JSON.stringify(here)})`);
+  await page.keyboard.press('KeyM');
+  await page.waitForTimeout(400);
+  await page.click('[data-action="markerKind"][data-arg="ore"]');
+  await page.waitForTimeout(150);
+  const target = await ev(() => {
+    // Un point du canvas de la carte qui tombe sur la surface, près de l'atelier.
+    const c = document.getElementById('map-canvas');
+    const r = c.getBoundingClientRect();
+    return { x: r.left + r.width * 0.5, y: r.top + r.height * 0.1 };
+  });
+  await page.mouse.click(target.x, target.y);
+  await page.waitForTimeout(250);
+  const placed = await ev(() => window.__EM.state.markers.list.map((m) => ({ kind: m.kind, label: m.label })));
+  check(placed.length === 2 && placed[1].kind === 'ore', `un clic sur la carte pose un repère du type choisi (${JSON.stringify(placed)})`);
+  await page.click('[data-action="markerTrack"]');
+  await page.waitForTimeout(200);
+  await shot('26-map-markers');
+  await page.keyboard.press('Escape');
+  await page.waitForTimeout(200);
+  await teleport(20, S + 60); // loin du repère suivi : la flèche le montre au bord de l'écran
+  await page.waitForTimeout(600);
+  const trackLine = (await page.textContent('#hud-track')) ?? '';
+  await shot('26a-marker-arrow');
+  check(trackLine.includes(here[0].label) && / m/.test(trackLine), `le repère suivi s'affiche sous la mini-carte avec sa distance (${trackLine.trim()})`);
 } catch (e) {
   failures++;
   console.error(e);

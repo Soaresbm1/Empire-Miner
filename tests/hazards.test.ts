@@ -191,7 +191,7 @@ describe('dangers : eau', () => {
     expect(g.hp).toBeCloseTo(hp - 2 * WATER.dps, 0);
   });
 
-  it('une pompe au charbon assèche la galerie ; sans charbon, l’eau reste', () => {
+  it('une pompe assèche la galerie toute seule, sans charbon', () => {
     const g = new GameState(4);
     rock(g, X, Y, X + 8, Y + 2);
     open(g, X + 1, Y + 1, X + 7, Y + 1);
@@ -204,15 +204,12 @@ describe('dangers : eau', () => {
     w.set(X + 4, Y + 2, AIR);
     const pump = g.place('pump', X + 4, Y + 2, 0) as Pump;
     expect(pump).toBeInstanceOf(Pump);
+    expect(g.inventory.count('coal')).toBe(0);
     run(g, 1);
-    expect(pump.status).toBe('nofuel');
-    expect(g.hazards.waterAt(X + 4, Y + 1)).toBeGreaterThan(200);
-    pump.addFuel(2);
-    run(g, 5);
-    expect(pump.status).toBe('idle');
+    expect(pump.status).toBe('ok');
+    run(g, 4);
     expect(g.hazards.hasWater).toBe(false);
-    expect(pump.fuelSeconds()).toBeLessThan(2 * 30); // le charbon a servi
-    expect(pump.fuelSeconds()).toBeGreaterThan(30); // mais seulement pendant le pompage
+    expect(pump.status).toBe('idle');
   });
 });
 

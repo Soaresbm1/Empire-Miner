@@ -20,8 +20,8 @@ export interface PickaxeDef {
 export const PICKAXES: PickaxeDef[] = [
   { id: 'old', name: 'Vieille pioche', tier: 1, damage: 1, swingTime: 0.55, reach: 1.9, price: 0, head: '#7b7064', description: 'Émoussée et rouillée. Elle a connu des jours meilleurs.' },
   { id: 'improved', name: 'Pioche améliorée', tier: 2, damage: 2, swingTime: 0.45, reach: 1.9, price: 60, head: '#a9a9b3', description: 'Tête affûtée : perce la roche dure et le fer.' },
-  { id: 'iron', name: 'Pioche en fer', tier: 3, damage: 4, swingTime: 0.38, reach: 2.0, price: 380, head: '#c7ccd6', description: "Assez solide pour le basalte, l'argent et l'or." },
-  { id: 'pro', name: 'Pioche pro en acier', tier: 4, damage: 7, swingTime: 0.32, reach: 2.1, price: 1500, head: '#7fb4e0', description: 'Équipement professionnel. Rapide et redoutable.' },
+  { id: 'iron', name: 'Pioche en fer', tier: 3, damage: 4, swingTime: 0.38, reach: 2.0, price: 380, head: '#c7ccd6', description: "Assez solide pour le basalte, la roche volcanique, l'argent et l'or." },
+  { id: 'pro', name: 'Pioche pro en acier', tier: 4, damage: 7, swingTime: 0.32, reach: 2.1, price: 1500, head: '#7fb4e0', description: 'Équipement professionnel, rapide et redoutable. La seule à tailler les filons de diamant (sous 500 m).' },
 ];
 
 export interface BagDef {

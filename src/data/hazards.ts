@@ -1,5 +1,5 @@
 /**
- * Dangers de la mine (données pures) : éboulements, grisou, eau, et santé du joueur.
+ * Dangers de la mine (données pures) : éboulements, grisou, eau, chaleur et santé du joueur.
  *
  * Les profondeurs sont en mètres. La mine de départ (vers 35 m) reste sûre : les dangers
  * commencent plus bas, là où le joueur arrive avec de meilleurs outils.
@@ -57,6 +57,22 @@ export const WATER = {
   slowDeep: 0.45,
   slowShallow: 0.75,
   dps: 3,
+};
+
+/**
+ * Chaleur de la Fournaise (sous `minDepth`) : les foreuses et les fours y tournent moins vite,
+ * de `factorTop` en haut de la zone à `factorBottom` au fond. Un ventilateur à `fanRadius`
+ * cases rafraîchit la machine, qui retrouve sa cadence normale.
+ */
+export const HEAT = {
+  minDepth: 450,
+  maxDepth: 600,
+  factorTop: 0.85,
+  factorBottom: 0.5,
+  fanRadius: 4,
+  /** Température affichée (°C) en haut et au fond de la zone. */
+  tempTop: 42,
+  tempBottom: 68,
 };
 
 export const HEALTH = {

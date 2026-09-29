@@ -20,10 +20,12 @@ export interface StructureContext {
   countDelivered(n: number): void;
   /** Éboulements, grisou et eau (ventilateur, pompe). */
   hazards: HazardSystem;
-  /** Statistique : un lingot vient de sortir d'un four ou d'une fonderie. */
+  /** Statistique : un four ou une fonderie vient de sortir un lingot. */
   countSmelted(res: string, from: Structure): void;
-  /** Vente automatique (caisse d'expédition) : crédite l'argent du joueur. */
-  autoSell(total: number, n: number, from: Structure): void;
+  /** Statistique : une foreuse vient d'extraire une unité de `res`. */
+  countExtracted(res: string, from: Structure): void;
+  /** Vente automatique (caisse d'expédition) : crédite l'argent du joueur. `items` : ce qui est parti, par ressource. */
+  autoSell(total: number, n: number, from: Structure, items?: Record<string, number>): void;
   /** Perce une tuile (foreuse de percement) ; les morceaux tombent en (from.x, from.y), en unités monde. Renvoie les morceaux lâchés. */
   digTile(tx: number, ty: number, from: { x: number; y: number }): Drop[];
   /** Vrai si le joueur ou un wagonnet occupe la tuile. */

@@ -76,9 +76,10 @@ export class ShippingCrate extends Structure {
     for (const count of Object.values(this.items)) n += count;
     if (n === 0) return;
     const total = this.pendingValue();
+    const sold = this.items;
     this.items = {};
     this.soldTotal += total;
-    ctx.autoSell(total, n, this);
+    ctx.autoSell(total, n, this, sold);
   }
 
   contents(): Record<string, number> {

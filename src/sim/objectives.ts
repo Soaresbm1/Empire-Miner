@@ -44,6 +44,12 @@ export const OBJECTIVES: Objective[] = [
     text: "Fondez 10 lingots dans un four (Atelier) : minerai + charbon, lingots vendus 2,5 fois plus cher",
     done: (g) => g.stats.smelted >= 10,
   },
+  { id: 'furnace', text: 'Descendez dans la Fournaise, sous 450 m : roche volcanique et beaucoup d’or', done: (g) => g.stats.maxDepth >= 450 },
+  {
+    id: 'diamond',
+    text: 'Trouvez un diamant, sous 500 m (Pioche pro en acier)',
+    done: (g) => (g.stats.collected.diamond ?? 0) > 0,
+  },
 ];
 
 export function currentObjective(g: GameState): { objective: Objective | null; index: number } {

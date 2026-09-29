@@ -17,7 +17,13 @@ export const METERS_PER_TILE = 2.5;
 export const SIM_DT = 1 / 60;
 
 export const WORLD_W = 100;
-export const WORLD_H = 190;
+/** La dernière rangée praticable (au-dessus du socle) est à 607,5 m. */
+export const WORLD_H = 256;
+/**
+ * Hauteur de la carte avant la Fournaise : ses rangées se génèrent toujours de la même façon,
+ * pour que les anciennes sauvegardes s'agrandissent sans changer ce qui était déjà là.
+ */
+export const LEGACY_WORLD_H = 190;
 
 /** Profondeur (m) du bas d'une rangée de tuiles. 0 en surface. */
 export function depthAt(tileY: number): number {

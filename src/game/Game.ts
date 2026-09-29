@@ -7,7 +7,7 @@ import { DX, DY, Dir, opposite, rotateCW } from '../core/dir';
 import { Input } from '../core/Input';
 import { Sfx } from '../audio/Sfx';
 import { getBlock } from '../data/blocks';
-import { MACHINES, getMachine, kitName, parseKit } from '../data/machines';
+import { MACHINES, MACHINE_GROUPS, MachineDef, getMachine, kitName, parseKit } from '../data/machines';
 import { getResource } from '../data/resources';
 import { deserialize, serialize, saveToBrowser, loadFromBrowser, browserSaveInfo, SaveData } from '../save/save';
 import { GameState, NO_INTENT, PlayerIntent } from '../sim/GameState';
@@ -16,8 +16,9 @@ import { Building, BUILDING_INFO } from '../sim/structures/Building';
 import { Conveyor } from '../sim/structures/Conveyor';
 import { TunnelBorer } from '../sim/structures/Borer';
 import { Smelter } from '../sim/structures/Smelter';
+import { MARKER_KINDS, MarkerKind } from '../sim/Markers';
 import { Fan, Prop, Pump } from '../sim/structures/Safety';
-import { CAVE_IN, GAS, WATER } from '../data/hazards';
+import { CAVE_IN, GAS, HEAT, WATER } from '../data/hazards';
 import { Drill, reachTiles } from '../sim/structures/Drill';
 import { ShippingCrate } from '../sim/structures/ShippingCrate';
 import { Sorter } from '../sim/structures/Sorter';
@@ -45,8 +46,14 @@ export class Game {
   private acc = 0;
   private last = 0;
   private buildMode = false;
-  private buildIndex = 0;
+  /** Kit choisi et onglet de la barre de construction. */
+  private buildKit: string | null = null;
+  private buildCat: string | null = null;
   private buildDir: Dir = 0;
+  /** Ce que ferait un clic là où vise la souris (ligne d'état de la barre de construction). */
+  private buildHover: { tone: 'ok' | 'bad' | 'remove'; text: string } | null = null;
+  /** Hauteur de la barre de construction (la plus grande de la session) : la caméra remonte d'autant. */
+  private buildInset = 0;
   private dragLast: { tx: number; ty: number } | null = null;
   private autosave = AUTOSAVE_EVERY;
   private confirmNew = false;
@@ -246,7 +253,17 @@ export class Game {
         this.ui.setTab(arg);
         break;
       case 'selectKit':
-        this.buildIndex = Number(arg) || 0;
+        this.buildKit = arg;
+        this.buildCat = null;
+        return;
+      case 'buildCat':
+        this.buildCat = arg;
+        return;
+      case 'buildRotate':
+        this.buildDir = rotateCW(this.buildDir);
+        return;
+      case 'buildClose':
+        this.setBuildMode(false);
         return;
     }
     if (!g) return;
@@ -320,13 +337,6 @@ export class Game {
       case 'borerLength':
         if (target instanceof TunnelBorer) g.setBorerLength(target, Number(arg));
         break;
-      case 'pumpFuel':
-        if (target instanceof Pump) {
-          const k = target.addFuel(g.inventory.count('coal'));
-          g.inventory.remove('coal', k);
-          if (k) this.ui.toast(`${k} charbon chargé${k > 1 ? 's' : ''} dans la pompe.`, 'good');
-        }
-        break;
       case 'smelterFuel':
         if (target instanceof Smelter) {
           const n = g.fuelSmelter(target);
@@ -362,6 +372,27 @@ export class Game {
         break;
       case 'openMap':
         this.togglePanel('map');
+        break;
+      case 'markerKind':
+        if (arg in MARKER_KINDS) g.markerKind = arg as MarkerKind;
+        break;
+      case 'markHere':
+        this.markHere(g);
+        break;
+      case 'mapClick': {
+        const [px, py] = arg.split(',').map(Number);
+        const t = this.map.tileAt(px, py);
+        if (!t) break;
+        const m = g.addMarker(g.markerKind, t.x, t.y);
+        if (m) this.ui.toast(`Repère posé : ${m.label}.`, 'good');
+        else this.ui.toast(g.markers.full ? 'Trop de repères : supprimez-en un dans la liste.' : 'Hors de la carte.', 'warn');
+        break;
+      }
+      case 'markerTrack':
+        g.markers.toggleTrack(Number(arg));
+        break;
+      case 'markerDelete':
+        g.markers.remove(Number(arg));
         break;
       case 'drillUpgrade':
         if (target instanceof Drill) g.upgradeMachine(target);
@@ -448,10 +479,16 @@ export class Game {
           }
         }
       }
-      if (inp.wasPressed('KeyI', 'Tab')) this.togglePanel('inventory');
+      if (inp.wasPressed('KeyI')) this.togglePanel('inventory');
+      // Tab : onglet suivant en construction (Maj+Tab : précédent), sinon le sac.
+      if (inp.wasPressed('Tab')) {
+        if (this.buildMode && !this.ui.panel) this.cycleBuildCat(g, inp.isDown('ShiftLeft', 'ShiftRight') ? -1 : 1);
+        else this.togglePanel('inventory');
+      }
       if (inp.wasPressed('KeyH', 'F1')) this.togglePanel('help');
       // M : la lettre M du clavier, où qu'elle soit (AZERTY, QWERTY…).
       if (inp.wasTyped('m')) this.togglePanel('map');
+      if (inp.wasTyped('n') && !this.ui.panel) this.markHere(g);
       if (inp.wasPressed('KeyB') && !this.ui.panel) this.setBuildMode(!this.buildMode);
       if (inp.wasPressed('KeyT') && !this.ui.panel) g.toggleTool();
     }
@@ -495,7 +532,8 @@ export class Game {
         }
       }
       intent = { mx, my, mine, target };
-      if (mouseActive) tooltip = this.describeTile(g, mtx, mty);
+      // En construction, la ligne d'état de la barre remplace l'infobulle.
+      if (mouseActive && !this.buildMode) tooltip = this.describeTile(g, mtx, mty);
     }
     const near = g.nearestInteractable();
     if (!this.ui.blocking && near) overlay.interact = near;
@@ -551,7 +589,19 @@ export class Game {
       hints: this.hintsHtml(),
       income: this.incomeHtml(g),
     });
+    // La barre cache le bas de l'écran : on garde le joueur au centre de ce qui reste visible.
+    this.buildInset = this.buildMode ? Math.max(this.buildInset, this.ui.buildBarHeight) : 0;
+    this.renderer.bottomInset = this.buildInset;
     if (this.debug) this.drawDebug(g);
+  }
+
+  /** Pose un repère là où se trouve le joueur (touche N). */
+  private markHere(g: GameState): void {
+    const m = g.addMarker(g.markerKind, g.player.tileX, g.player.tileY);
+    if (m) {
+      this.sfx.place();
+      this.ui.toast(`Repère posé : ${m.label} (carte : M).`, 'good');
+    } else this.ui.toast('Trop de repères : supprimez-en un depuis la carte (M).', 'warn');
   }
 
   private togglePanel(kind: PanelKind): void {
@@ -566,13 +616,12 @@ export class Game {
     const s = g.nearestInteractable();
     if (!s) return;
     this.setBuildMode(false);
-    if (s instanceof Building) this.ui.openPanel(s.type === 'counter' ? 'counter' : 'workshop', s, 'tools');
+    if (s instanceof Building) this.ui.openPanel(s.type === 'counter' ? 'counter' : s.type === 'board' ? 'board' : 'workshop', s, 'tools');
     else if (s instanceof Storage) this.ui.openPanel('storage', s);
     else if (s instanceof ShippingCrate) this.ui.openPanel('shipping', s);
     else if (s instanceof Drill) this.ui.openPanel('drill', s);
     else if (s instanceof TunnelBorer) this.ui.openPanel('borer', s);
     else if (s instanceof Smelter) this.ui.openPanel('furnace', s);
-    else if (s instanceof Pump) this.ui.openPanel('pump', s);
     else if (s instanceof Sorter) this.ui.openPanel('sorter', s);
     else if (s instanceof RailStation) this.ui.openPanel('station', s);
     else if (s instanceof RailSwitch) this.ui.openPanel('switch', s);
@@ -597,7 +646,6 @@ export class Game {
     if (near instanceof Drill) return `${e} Foreuse niv. ${near.level} — charbon, production, amélioration`;
     if (near instanceof TunnelBorer) return `${e} Foreuse de percement niv. ${near.level} — charbon, départ, améliorations`;
     if (near instanceof Smelter) return `${e} ${near.def.name} — charbon, minerai, lingots`;
-    if (near instanceof Pump) return `${e} Pompe — charbon`;
     if (near instanceof Sorter) return `${e} Trieur — choisir le minerai trié`;
     if (near instanceof RailStation) return `${e} ${near.def.name}`;
     if (near instanceof RailSwitch) return `${e} Aiguillage — choisir la branche`;
@@ -614,7 +662,7 @@ export class Game {
 
   private hintsHtml(): string {
     const l = (c: string) => this.input.label(c);
-    return `<span><kbd>${l('KeyB')}</kbd> Construire</span><span><kbd>${l('KeyI')}</kbd> Sac</span><span><kbd>M</kbd> Carte</span><span><kbd>${l('KeyH')}</kbd> Aide</span><span><kbd>Échap</kbd> Menu</span>`;
+    return `<span><kbd>${l('KeyB')}</kbd> Construire</span><span><kbd>${l('KeyI')}</kbd> Sac</span><span><kbd>M</kbd> Carte</span><span><kbd>N</kbd> Repère</span><span><kbd>${l('KeyH')}</kbd> Aide</span><span><kbd>Échap</kbd> Menu</span>`;
   }
 
   // ------------------------------------------------------------------ construction
@@ -630,6 +678,50 @@ export class Game {
       .sort((a, b) => rank(a) - rank(b));
   }
 
+  /** Kits en stock rangés par onglet (ordre du magasin), sans les onglets vides. */
+  private kitGroups(g: GameState): { id: string; tab: string; icon: string; kits: string[] }[] {
+    const kits = this.availableKits(g);
+    return MACHINE_GROUPS.map((grp) => ({
+      id: grp.id,
+      tab: grp.tab,
+      icon: grp.icon,
+      kits: kits.filter((k) => grp.categories.includes(getMachine(parseKit(k).machine).category)),
+    })).filter((grp) => grp.kits.length);
+  }
+
+  /**
+   * Onglet et kit choisis, toujours valides : si le kit s'épuise, on passe au même
+   * modèle d'un autre niveau, sinon au premier kit de l'onglet.
+   */
+  private buildSelection(g: GameState): { groups: ReturnType<Game['kitGroups']>; group: ReturnType<Game['kitGroups']>[number] | null; kit: string | null } {
+    const groups = this.kitGroups(g);
+    const has = (grp: (typeof groups)[number]) => !!this.buildKit && grp.kits.includes(this.buildKit);
+    const group = groups.find((grp) => grp.id === this.buildCat) ?? groups.find(has) ?? groups[0] ?? null;
+    if (!group) return { groups, group: null, kit: null };
+    const machine = this.buildKit ? parseKit(this.buildKit).machine : '';
+    const kit = has(group) ? this.buildKit! : (group.kits.find((k) => parseKit(k).machine === machine) ?? group.kits[0]);
+    this.buildCat = group.id;
+    this.buildKit = kit;
+    return { groups, group, kit };
+  }
+
+  /** Onglet et touche (1-9) d'un kit dans la barre de construction (utilisé par les tests). */
+  kitSlot(g: GameState, kit: string): { cat: string; index: number } | null {
+    for (const grp of this.kitGroups(g)) {
+      const index = grp.kits.indexOf(kit);
+      if (index >= 0) return { cat: grp.id, index };
+    }
+    return null;
+  }
+
+  private cycleBuildCat(g: GameState, step: number): void {
+    const { groups, group } = this.buildSelection(g);
+    if (!group || groups.length < 2) return;
+    const i = groups.indexOf(group);
+    this.buildCat = groups[(i + step + groups.length) % groups.length].id;
+    this.buildSelection(g);
+  }
+
   private setBuildMode(on: boolean): void {
     // Sans kit en stock, le mode construction sert encore à démonter (clic droit) et à tourner.
     if (on && this.state && !this.availableKits(this.state).length)
@@ -640,10 +732,12 @@ export class Game {
 
   private updateBuild(g: GameState, mtx: number, mty: number, mouseActive: boolean, overlay: Overlay): void {
     const inp = this.input;
-    const kits = this.availableKits(g);
-    for (let i = 0; i < Math.min(9, kits.length); i++) if (inp.wasPressed(`Digit${i + 1}`)) this.buildIndex = i;
-    this.buildIndex = Math.max(0, Math.min(this.buildIndex, kits.length - 1));
+    const { group } = this.buildSelection(g);
+    if (group) for (let i = 0; i < Math.min(9, group.kits.length); i++) if (inp.wasPressed(`Digit${i + 1}`, `Numpad${i + 1}`)) this.buildKit = group.kits[i];
+    const kit = group ? this.buildKit : null;
+    this.buildHover = null;
     const existing = g.structures.at(mtx, mty);
+    const removable = existing && existing.removable ? existing : null;
     for (let k = inp.pressCount('KeyR'); k > 0; k--) {
       if (existing && existing.removable && getMachine(existing.type).rotatable) g.rotateAt(mtx, mty);
       else this.buildDir = rotateCW(this.buildDir);
@@ -652,15 +746,15 @@ export class Game {
       this.dragLast = null;
       return;
     }
-    if (!kits.length) {
+    if (removable) this.buildHover = { tone: 'remove', text: `${this.structureName(removable.type)} ici : clic droit pour démonter (le kit revient dans le stock)` };
+    if (!kit) {
       // Rien à poser : on peut seulement démonter.
-      if (existing && existing.removable) overlay.removeHint = { tx: mtx, ty: mty };
-      if ((inp.consumeRightPress() || inp.right) && existing && existing.removable) g.removeAt(mtx, mty);
+      if (removable) overlay.removeHint = { tx: mtx, ty: mty };
+      if ((inp.consumeRightPress() || inp.right) && removable) g.removeAt(mtx, mty);
       inp.consumeLeftPress();
       this.dragLast = null;
       return;
     }
-    const kit = kits[this.buildIndex];
     const { machine, level } = parseKit(kit);
     const mdef = getMachine(machine);
     // Convoyeurs et rails se tracent en glissant.
@@ -669,9 +763,23 @@ export class Game {
     const upgrade = g.beltToReplace(machine, mtx, mty);
     // Un wagonnet se pose sur la voie ; un aiguillage peut remplacer un rail simple.
     const onRail = (!!mdef.onTrack && !!existing?.isTrack) || !!g.railToReplace(machine, mtx, mty);
-    if (existing && existing.removable && !upgrade && !onRail) overlay.removeHint = { tx: mtx, ty: mty };
+    if (removable && !upgrade && !onRail) overlay.removeHint = { tx: mtx, ty: mty };
     else {
-      overlay.ghost = { machine, tx: mtx, ty: mty, dir: upgrade ? upgrade.dir : this.buildDir, ok: g.canPlace(kit, mtx, mty).ok };
+      const check = g.canPlace(kit, mtx, mty);
+      overlay.ghost = { machine, tx: mtx, ty: mty, dir: upgrade ? upgrade.dir : this.buildDir, ok: check.ok };
+      if (!check.ok) this.buildHover = { tone: 'bad', text: check.reason ?? 'Impossible ici' };
+      else {
+        const what = upgrade
+          ? `remplacer ce convoyeur par un ${mdef.name.toLowerCase()}`
+          : mdef.onTrack
+            ? 'poser le wagonnet sur la voie'
+            : g.railToReplace(machine, mtx, mty)
+              ? 'remplacer ce rail par un aiguillage'
+              : isBelt
+                ? 'poser ici (glisser pour tracer une ligne)'
+                : 'poser ici';
+        this.buildHover = { tone: 'ok', text: `Clic : ${what}` };
+      }
       // Foreuse améliorée : cases qu'elle forera ici, dans la direction choisie.
       const reach = level > 1 ? mdef.levels?.[level - 1]?.reach : undefined;
       if (reach) overlay.ghost.reach = reachTiles(mtx, mty, this.buildDir, reach);
@@ -682,7 +790,7 @@ export class Game {
     }
 
     // Démontage : clic droit (maintenu, ou clic très bref entre deux images).
-    if ((inp.consumeRightPress() || inp.right) && existing && existing.removable) g.removeAt(mtx, mty);
+    if ((inp.consumeRightPress() || inp.right) && removable) g.removeAt(mtx, mty);
 
     // Pose.
     if (inp.consumeLeftPress()) {
@@ -743,28 +851,103 @@ export class Game {
       return false;
     }
     g.place(kit, tx, ty, dir);
-    if (!this.availableKits(g).includes(kit)) this.buildIndex = 0;
     return true;
+  }
+
+  /** Nom d'une machine posée (ligne d'état du démontage). */
+  private structureName(type: string): string {
+    return MACHINES.find((m) => m.id === type)?.name ?? 'Machine';
+  }
+
+  /** Règles de pose d'une machine, en quelques mots. */
+  private placeTips(def: MachineDef): string[] {
+    const tips: string[] = [];
+    if (def.needsDeposit) tips.push('Sur un gisement');
+    if (def.surfaceOnly) tips.push('En surface, au camp');
+    if (def.onTrack) tips.push('Sur des rails');
+    if (def.conveyor || def.dragPlace) tips.push('Glisser pour tracer une ligne');
+    if (def.conveyor && def.id !== 'conveyor') tips.push('Remplace un convoyeur posé');
+    if (def.bridge) tips.push(`Par paire, jusqu'à ${def.bridge.range} cases d'écart`);
+    if (def.w > 1 || def.h > 1) tips.push(`${def.w}×${def.h} cases : visez le coin en haut à gauche`);
+    if (!def.solid && !def.conveyor && !def.track && !def.onTrack && !def.bridge) tips.push('Ne bloque pas le passage');
+    return tips;
   }
 
   private buildBarHtml(g: GameState): string {
     if (!this.buildMode) return '';
-    const kits = this.availableKits(g);
-    const arrows = ['→', '↓', '←', '↑'];
-    const items = kits.length
-      ? kits
-          .map(
-            (id, i) =>
-              `<div class="kit ${i === this.buildIndex ? 'sel' : ''}" data-action="selectKit" data-arg="${i}"><kbd>${i + 1}</kbd><b>${kitName(id)}</b><span>×${g.inventory.kitCount(id)}</span></div>`,
-          )
-          .join('')
-      : '<div class="kit empty">Aucune machine en stock : clic droit pour démonter, achats à l\'Atelier</div>';
     const l = (c: string) => this.input.label(c);
-    return `<div class="buildbar hud-box"><div class="build-title">Construction · direction ${arrows[this.buildDir]}</div><div class="kits-row">${items}</div>
-      <div class="build-help"><kbd>Clic</kbd> poser (glisser = ligne) · <kbd>Clic droit</kbd> démonter · <kbd>${l('KeyR')}</kbd> tourner · <kbd>${l('KeyB')}</kbd>/<kbd>Échap</kbd> quitter</div></div>`;
+    const icon = (machine: string, cls = '') => {
+      const src = this.renderer.machineIcon(machine);
+      return src ? `<img class="${cls}" src="${src}" alt="">` : '';
+    };
+    const { groups, group, kit } = this.buildSelection(g);
+    const close = `<div class="bb-close" data-action="buildClose" title="Quitter la construction (${l('KeyB')})">✕</div>`;
+    const keys = (parts: string[]) => `<div class="bb-keys">${parts.map((p) => `<span>${p}</span>`).join('')}</div>`;
+    if (!group || !kit) {
+      const status = this.buildHover
+        ? `<div class="bb-status remove">${esc(this.buildHover.text)}</div>`
+        : '<div class="bb-status">Visez une machine posée et faites clic droit pour la démonter.</div>';
+      return `<div class="buildbar hud-box"><div class="bb-head"><span class="bb-title">Construction</span><span class="bb-tabs"></span>${close}</div>
+        <div class="bb-empty">Aucune machine en stock. Achetez-en à l'<b>Atelier</b>, au camp en surface.</div>${status}
+        ${keys([`<kbd>Clic droit</kbd> démonter`, `<kbd>${l('KeyB')}</kbd> quitter`])}</div>`;
+    }
+    const tabs = groups
+      .map(
+        (grp) =>
+          `<div class="bb-tab ${grp === group ? 'sel' : ''}" data-action="buildCat" data-arg="${grp.id}">${icon(grp.icon)}${grp.tab}</div>`,
+      )
+      .join('');
+    const tiles = group.kits
+      .map((id, i) => {
+        const { machine, level } = parseKit(id);
+        return `<div class="bb-kit ${id === kit ? 'sel' : ''}" data-action="selectKit" data-arg="${id}" title="${esc(kitName(id))}">
+          ${i < 9 ? `<kbd class="n">${i + 1}</kbd>` : ''}<span class="count">×${g.inventory.kitCount(id)}</span>
+          ${icon(machine)}${level > 1 ? `<span class="lvl">N${level}</span>` : ''}<b>${esc(getMachine(machine).name)}</b></div>`;
+      })
+      .join('');
+    const { machine, level } = parseKit(kit);
+    const def = getMachine(machine);
+    const lvl = level > 1 ? def.levels?.[level - 1] : undefined;
+    const tips = this.placeTips(def)
+      .map((t) => `<span class="bb-tip">${t}</span>`)
+      .join('');
+    const arrows = ['→', '↓', '←', '↑'];
+    const dir = def.rotatable
+      ? `<div class="bb-dir" data-action="buildRotate" title="Tourner (${l('KeyR')})">Direction <big>${arrows[this.buildDir]}</big> <kbd>${l('KeyR')}</kbd></div>`
+      : '';
+    const hover = this.buildHover;
+    const status = hover
+      ? `<div class="bb-status ${hover.tone}">${hover.tone === 'ok' ? '✓' : hover.tone === 'bad' ? '✗' : '⚒'} ${esc(hover.text)}</div>`
+      : '<div class="bb-status">Visez un emplacement : contour vert = pose possible, rouge = impossible.</div>';
+    return `<div class="buildbar hud-box">
+      <div class="bb-head"><span class="bb-title">Construction</span><div class="bb-tabs">${tabs}</div>${close}</div>
+      <div class="bb-kits">${tiles}</div>
+      <div class="bb-info">
+        <div class="bb-name"><b>${esc(kitName(kit))}</b><span class="muted">${g.inventory.kitCount(kit)} en stock</span>${tips}${dir}</div>
+        <div class="bb-desc">${esc(def.summary)}${lvl ? ` <span class="bb-level">Niveau ${level}${lvl.name ? ` (${esc(lvl.name)})` : ''} : ${esc(lvl.summary)}</span>` : ''}</div>
+      </div>
+      ${status}
+      ${keys([
+        '<kbd>Clic</kbd> poser',
+        '<kbd>Clic droit</kbd> démonter',
+        `<kbd>1</kbd>–<kbd>${Math.min(9, group.kits.length)}</kbd> machine`,
+        ...(groups.length > 1 ? ['<kbd>Tab</kbd> catégorie'] : []),
+        `<kbd>${l('KeyR')}</kbd> tourner`,
+        `<kbd>${l('KeyB')}</kbd> quitter`,
+      ])}
+    </div>`;
   }
 
   // ------------------------------------------------------------------ infos
+
+  /** Chaleur de la Fournaise sur une machine (infobulle). */
+  private heatLine(g: GameState, x: number, y: number): string {
+    if (g.hazards.heatAt(y) === null) return '';
+    const f = g.hazards.heatFactor(x, y);
+    return f < 1
+      ? `<br><span class="bad">Chaleur : cadence ${Math.round(f * 100)} %</span> <span class="muted">(ventilateur à ${HEAT.fanRadius} cases)</span>`
+      : '<br><span class="good">Rafraîchie par un ventilateur</span>';
+  }
 
   private describeTile(g: GameState, tx: number, ty: number): string | null {
     const w = g.world;
@@ -808,7 +991,7 @@ export class Game {
     }
     if (s instanceof Drill) {
       const st = { ok: 'en marche', nofuel: 'sans charbon', full: 'sortie bloquée', depleted: 'gisement épuisé' }[s.status];
-      return `<b>Foreuse</b> niveau ${s.level} — ${st}<br>${s.sources(g).length} case(s) forée(s) · charbon : ${s.fuelUnits} · extrait : ${s.extracted}`;
+      return `<b>Foreuse</b> niveau ${s.level} — ${st}<br>${s.sources(g).length} case(s) forée(s) · charbon : ${s.fuelUnits} · extrait : ${s.extracted}${this.heatLine(g, s.x, s.y)}`;
     }
     if (s instanceof TunnelBorer) {
       const st = {
@@ -824,17 +1007,17 @@ export class Game {
       }[s.status];
       return `<b>Foreuse de percement</b> niv. ${s.level} ${['→', '↓', '←', '↑'][s.dir]} — ${st}<br>Base : ${s.fuelUnits} charbon${
         s.stats.hopper ? ` · ${s.storeCount()} minerai(s)` : ''
-      } · tunnel : ${s.tunnel} cases`;
+      } · tunnel : ${s.tunnel} cases${s.status === 'digging' && s.heat < 1 ? `<br><span class="bad">Chaleur : perce à ${Math.round(s.heat * 100)} %</span>` : ''}`;
     }
     if (s instanceof Prop) return `<b>Étai</b><br>Pas d'éboulement à ${CAVE_IN.propRadius} cases autour`;
-    if (s instanceof Fan) return `<b>Ventilateur</b> — ${s.active ? 'chasse le grisou' : 'air sain'}<br>Portée : ${GAS.fanRadius} cases`;
-    if (s instanceof Pump) {
-      const st = { ok: 'pompe', idle: "pas d'eau à portée", nofuel: 'sans charbon' }[s.status];
-      return `<b>Pompe</b> — ${st}<br>Charbon : ${s.fuelUnits} · portée : ${WATER.pumpRadius} cases`;
-    }
+    if (s instanceof Fan)
+      return `<b>Ventilateur</b> — ${s.active ? 'chasse le grisou' : s.cooling ? 'rafraîchit les machines' : 'air sain'}<br>Grisou : ${GAS.fanRadius} cases${
+        s.cooling ? ` · machines : ${HEAT.fanRadius} cases` : ''
+      }`;
+    if (s instanceof Pump) return `<b>Pompe</b> — ${s.status === 'ok' ? 'assèche la galerie' : "pas d'eau à portée"}<br>Portée : ${WATER.pumpRadius} cases · sans charbon`;
     if (s instanceof Smelter) {
       const st = { ok: 'fond le minerai', idle: 'attend du minerai', nofuel: 'sans charbon', full: 'sortie saturée' }[s.status];
-      return `<b>${s.def.name}</b> ${['→', '↓', '←', '↑'][s.dir]} — ${st}<br>Minerai : ${s.input.length} · lingots prêts : ${s.output.length} · charbon : ${s.fuelUnits}`;
+      return `<b>${s.def.name}</b> ${['→', '↓', '←', '↑'][s.dir]} — ${st}<br>Minerai : ${s.input.length} · lingots prêts : ${s.output.length} · charbon : ${s.fuelUnits}${this.heatLine(g, s.x, s.y)}`;
     }
     if (s instanceof Storage) return `<b>Coffre</b><br>${kg(s.weight())} / ${kg(s.capacity)}`;
     if (s instanceof ShippingCrate)

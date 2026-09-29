@@ -11,6 +11,8 @@ export type Rarity = 'commun' | 'peu commun' | 'rare' | 'très rare' | 'légenda
 export interface VeinSpec {
   /** Nombre moyen de filons pour 1000 tuiles de roche dans sa tranche de profondeur. */
   perThousand: number;
+  /** Plus riche dans la Fournaise (sous 450 m) : filons pour 1000 tuiles à cette profondeur. */
+  deepPerThousand?: number;
   /** Taille d'un filon (nombre de tuiles). */
   size: [number, number];
 }
@@ -185,7 +187,7 @@ export const RESOURCES: ResourceDef[] = [
     minDepth: 290,
     maxDepth: Infinity,
     drops: [1, 2],
-    vein: { perThousand: 3, size: [2, 4] },
+    vein: { perThousand: 3, deepPerThousand: 5, size: [2, 4] },
     deposit: [80, 200],
     color: '#f2c230',
     light: '#fff1a0',
@@ -193,7 +195,27 @@ export const RESOURCES: ResourceDef[] = [
     uses: ['Vente', 'Four et fonderie : lingot'],
     smeltsTo: 'gold_ingot',
   },
-  // Lingots : toujours après les minerais (l'index des minerais sert aux gisements sauvegardés).
+  {
+    id: 'diamond',
+    name: 'Diamant',
+    veinName: 'Filon de diamant',
+    value: 260,
+    weight: 0.5,
+    rarity: 'légendaire',
+    resistance: 40,
+    tier: 4,
+    minDepth: 500,
+    maxDepth: Infinity,
+    drops: [1, 1],
+    vein: { perThousand: 1.6, size: [2, 3] },
+    deposit: [30, 70],
+    color: '#8fe3ee',
+    light: '#ffffff',
+    dark: '#2f7f92',
+    uses: ['Vente : la ressource la plus précieuse', 'Ne se fond pas', 'Pioche pro en acier requise'],
+  },
+  // Lingots : toujours après les minerais. Un nouveau minerai s'ajoute à la suite des autres
+  // (leur index sert aux gisements sauvegardés ; les lingots, eux, ne forment jamais de gisement).
   ingot('copper_ingot', 'Lingot de cuivre', 18, 2.5, 'commun', '#d9793c', '#ffb27a', '#8a4520'),
   ingot('iron_ingot', 'Lingot de fer', 40, 3, 'peu commun', '#9aa3b0', '#e2e7ee', '#565d69'),
   ingot('silver_ingot', "Lingot d'argent", 95, 2, 'rare', '#dfe5ee', '#ffffff', '#8b95a4'),

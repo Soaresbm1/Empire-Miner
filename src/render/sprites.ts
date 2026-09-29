@@ -276,6 +276,68 @@ export function buildCounterSprite(): HTMLCanvasElement {
   return c;
 }
 
+/**
+ * Tableau d'affichage : deux poteaux, un petit auvent et un panneau de liège où sont épinglés un graphique
+ * (mêmes couleurs que l'histogramme des gains), une note et une affichette (2×2 tuiles + auvent).
+ */
+export function buildBoardSprite(): HTMLCanvasElement {
+  const W = 2 * TILE;
+  const H = 2 * TILE + 8;
+  const [c, ctx] = canvas(W, H);
+  // Poteaux
+  for (const x of [3, 26]) {
+    ctx.fillStyle = '#5a3a22';
+    ctx.fillRect(x, 12, 3, H - 12);
+    ctx.fillStyle = '#7a5231';
+    ctx.fillRect(x, 12, 1, H - 12);
+  }
+  // Cadre et panneau de liège
+  ctx.fillStyle = '#3b2616';
+  ctx.fillRect(1, 8, W - 2, 22);
+  ctx.fillStyle = '#b08558';
+  ctx.fillRect(3, 10, W - 6, 18);
+  for (let y = 11; y < 28; y += 3) {
+    ctx.fillStyle = '#9c7449';
+    ctx.fillRect(3 + ((y / 3) % 2) * 3, y, 4, 1);
+    ctx.fillRect(15 + ((y / 3) % 2) * 4, y, 3, 1);
+  }
+  // Auvent
+  ctx.fillStyle = '#3b2616';
+  ctx.fillRect(0, 3, W, 5);
+  ctx.fillStyle = '#7a5231';
+  ctx.fillRect(0, 3, W, 2);
+  ctx.fillStyle = 'rgba(0,0,0,0.3)';
+  ctx.fillRect(1, 8, W - 2, 2);
+  // Graphique épinglé : trois colonnes ambre et bleues, comme dans le panneau
+  ctx.fillStyle = '#efe6cf';
+  ctx.fillRect(5, 12, 11, 12);
+  ctx.fillStyle = '#c9bd9c';
+  ctx.fillRect(5, 23, 11, 1);
+  ctx.fillStyle = '#b98012';
+  ctx.fillRect(7, 19, 2, 4);
+  ctx.fillRect(10, 16, 2, 7);
+  ctx.fillRect(13, 18, 2, 5);
+  ctx.fillStyle = '#3f88cf';
+  ctx.fillRect(10, 14, 2, 2);
+  ctx.fillRect(13, 15, 2, 3);
+  // Note : quelques lignes de texte
+  ctx.fillStyle = '#efe6cf';
+  ctx.fillRect(18, 11, 10, 8);
+  ctx.fillStyle = '#8a6a4c';
+  for (const y of [13, 15, 17]) ctx.fillRect(19, y, 8, 1);
+  // Affichette dorée
+  ctx.fillStyle = '#f2c230';
+  ctx.fillRect(19, 21, 8, 6);
+  ctx.fillStyle = '#a07410';
+  ctx.fillRect(21, 22, 4, 4);
+  ctx.fillStyle = '#f2c230';
+  ctx.fillRect(22, 23, 2, 2);
+  // Punaises
+  ctx.fillStyle = '#c0392b';
+  for (const [x, y] of [[10, 12], [22, 11], [22, 21]]) ctx.fillRect(x, y, 2, 2);
+  return c;
+}
+
 /** Atelier : bâtiment de pierre, toit sombre, cheminée et enclume. */
 export function buildWorkshopSprite(): HTMLCanvasElement {
   const W = 3 * TILE;
