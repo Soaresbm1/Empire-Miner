@@ -1167,6 +1167,39 @@ try {
   await page.keyboard.press('Escape');
   await page.waitForTimeout(200);
   await shot('22a-minimap');
+
+  // Repères : N marque la position du joueur ; sur la carte, un clic pose un repère du type choisi ;
+  // « Suivre » affiche le repère sous la mini-carte et une flèche au bord de l'écran.
+  await teleport(50, S + 14);
+  await page.waitForTimeout(300);
+  await page.keyboard.press('KeyN');
+  await page.waitForTimeout(200);
+  const here = await ev(() => window.__EM.state.markers.list.map((m) => ({ x: m.x, y: m.y, label: m.label })));
+  check(here.length === 1 && here[0].x === 50 && here[0].y === S + 14, `N pose un repère là où se trouve le joueur (${JSON.stringify(here)})`);
+  await page.keyboard.press('KeyM');
+  await page.waitForTimeout(400);
+  await page.click('[data-action="markerKind"][data-arg="ore"]');
+  await page.waitForTimeout(150);
+  const target = await ev(() => {
+    // Un point du canvas de la carte qui tombe sur la surface, près de l'atelier.
+    const c = document.getElementById('map-canvas');
+    const r = c.getBoundingClientRect();
+    return { x: r.left + r.width * 0.5, y: r.top + r.height * 0.1 };
+  });
+  await page.mouse.click(target.x, target.y);
+  await page.waitForTimeout(250);
+  const placed = await ev(() => window.__EM.state.markers.list.map((m) => ({ kind: m.kind, label: m.label })));
+  check(placed.length === 2 && placed[1].kind === 'ore', `un clic sur la carte pose un repère du type choisi (${JSON.stringify(placed)})`);
+  await page.click('[data-action="markerTrack"]');
+  await page.waitForTimeout(200);
+  await shot('26-map-markers');
+  await page.keyboard.press('Escape');
+  await page.waitForTimeout(200);
+  await teleport(20, S + 60); // loin du repère suivi : la flèche le montre au bord de l'écran
+  await page.waitForTimeout(600);
+  const trackLine = (await page.textContent('#hud-track')) ?? '';
+  await shot('26a-marker-arrow');
+  check(trackLine.includes(here[0].label) && / m/.test(trackLine), `le repère suivi s'affiche sous la mini-carte avec sa distance (${trackLine.trim()})`);
 } catch (e) {
   failures++;
   console.error(e);

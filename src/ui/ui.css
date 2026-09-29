@@ -130,6 +130,23 @@ kbd {
   background: linear-gradient(135deg, var(--l) 0 25%, var(--c) 26% 70%, var(--d) 71%);
   box-shadow: 0 0 0 1.5px #120e10;
 }
+/* Repère suivi (sous la mini-carte). */
+#hud-track:empty { display: none; }
+.track { font-size: 13px; padding: 5px 10px; cursor: pointer; max-width: 196px; }
+.track b { color: var(--gold); white-space: nowrap; }
+
+/* Repères dans le panneau de la carte. */
+.marker-kinds { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 6px; }
+.marker-list { list-style: none; margin: 6px 0 0; padding: 0; display: grid; gap: 4px; font-size: 13px; max-height: 190px; overflow-y: auto; }
+.marker-list li { display: flex; align-items: flex-start; gap: 6px; border-bottom: 1px dashed rgba(91,70,54,0.5); padding-bottom: 4px; }
+.marker-list .mk-body { flex: 1; min-width: 0; }
+.marker-list .mk-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.marker-list .mk-row { display: flex; align-items: center; gap: 4px; margin-top: 2px; }
+.marker-list .mk-dist { color: var(--muted); white-space: nowrap; flex: 1; font-size: 12px; }
+.marker-list .btn.small { padding: 1px 6px; font-size: 12px; flex: none; }
+.mk-sym { font-size: 14px; width: 14px; text-align: center; text-shadow: 1px 1px #000; }
+.map-canvas { cursor: crosshair; }
+
 /* Santé et alerte de danger (HUD en bas à gauche). */
 .bar.health { margin-top: 6px; height: 14px; }
 .bar.health span { font-size: 11px; line-height: 13px; }
@@ -302,7 +319,7 @@ kbd {
 .drill-map span.out { color: #fff; font-weight: 700; text-shadow: 1px 1px 0 #000; }
 
 /* Carte complète (touche M). */
-.map-layout { display: grid; grid-template-columns: 1fr 210px; gap: 14px; align-items: start; }
+.map-layout { display: grid; grid-template-columns: 1fr 240px; gap: 14px; align-items: start; }
 .map-canvas { display: block; width: 100%; height: min(calc(100vh - 205px), 600px); background: #0b0a0d; border: 2px solid var(--line); border-radius: 5px; image-rendering: pixelated; }
 .map-side h4 { margin-top: 0; }
 .map-note { margin: 0 0 10px; font-size: 12px; }

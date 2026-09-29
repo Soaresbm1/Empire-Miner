@@ -8,6 +8,7 @@
  */
 import { SURFACE_ROWS, TILE, depthAt, rowForDepth } from '../core/constants';
 import { DX, DY } from '../core/dir';
+import { MARKER_KINDS, MarkerKind } from '../sim/Markers';
 import { AIR, BEDROCK, CLIFF, HOST_ROCKS, TREE, getBlock } from '../data/blocks';
 import { RESOURCES } from '../data/resources';
 import type { GameState } from '../sim/GameState';
@@ -141,7 +142,7 @@ function structureColor(s: Structure): string {
 }
 
 /** Vue : tuile en haut à gauche et taille d'une tuile, en pixels du canvas. */
-interface View {
+export interface View {
   x0: number;
   y0: number;
   cell: number;
@@ -149,7 +150,40 @@ interface View {
   oy: number;
 }
 
+/** Case sous le point (px, py) d'une vue de carte. */
+export function viewTileAt(v: View, px: number, py: number): { x: number; y: number } {
+  return { x: Math.floor(v.x0 + (px - v.ox) / v.cell), y: Math.floor(v.y0 + (py - v.oy) / v.cell) };
+}
+
+/** Symbole d'un repère : losange (filon), carré (base), triangle (danger), étoile à quatre branches (repère). */
+export function markerShape(ctx: CanvasRenderingContext2D, kind: MarkerKind, cx: number, cy: number, r: number, color: string): void {
+  ctx.fillStyle = color;
+  ctx.beginPath();
+  if (kind === 'base') ctx.rect(cx - r * 0.8, cy - r * 0.8, r * 1.6, r * 1.6);
+  else if (kind === 'danger') {
+    ctx.moveTo(cx, cy - r);
+    ctx.lineTo(cx + r, cy + r * 0.8);
+    ctx.lineTo(cx - r, cy + r * 0.8);
+  } else if (kind === 'ore') {
+    ctx.moveTo(cx, cy - r);
+    ctx.lineTo(cx + r, cy);
+    ctx.lineTo(cx, cy + r);
+    ctx.lineTo(cx - r, cy);
+  } else {
+    for (let k = 0; k < 8; k++) {
+      const a = (k * Math.PI) / 4 - Math.PI / 2;
+      const rr = k % 2 ? r * 0.45 : r;
+      if (k === 0) ctx.moveTo(cx + Math.cos(a) * rr, cy + Math.sin(a) * rr);
+      else ctx.lineTo(cx + Math.cos(a) * rr, cy + Math.sin(a) * rr);
+    }
+  }
+  ctx.closePath();
+  ctx.fill();
+}
+
 export class MineMap {
+  /** Dernière vue de la carte complète (pour convertir un clic en case). */
+  private fullView: View | null = null;
   private terrain: HTMLCanvasElement | null = null;
   private image: ImageData | null = null;
   private frame: Bounds = { x0: 0, y0: 0, x1: 0, y1: 0 };
@@ -196,6 +230,7 @@ export class MineMap {
     const view: View = { x0: g.player.x / TILE - cols / 2, y0: g.player.y / TILE - rows / 2, cell, ox: 0, oy: 0 };
     this.drawTerrain(ctx, view, cols, rows);
     this.drawThings(ctx, g, view, cols, rows, time, 2 * dpr);
+    this.drawMarkers(ctx, g, view, cols, rows, time, 2.5 * dpr, false);
   }
 
   /** Carte complète : cadrée sur la mine explorée et le camp, avec les zones de profondeur. */
@@ -238,6 +273,45 @@ export class MineMap {
       ctx.fillText(label, view.ox + 4 * dpr, y - 2 * dpr);
     }
     this.drawThings(ctx, g, view, vw, vh, time, Math.max(2 * dpr, cell * 0.6));
+    this.drawMarkers(ctx, g, view, vw, vh, time, Math.max(3.5 * dpr, cell * 0.9), true);
+    this.fullView = view;
+  }
+
+  /** Case de la carte complète sous le point (px, py) du canvas (pixels du canvas), ou null. */
+  tileAt(px: number, py: number): { x: number; y: number } | null {
+    const v = this.fullView;
+    return v ? viewTileAt(v, px, py) : null;
+  }
+
+  /** Repères : symbole coloré par type (et nom sur la carte complète) ; le repère suivi pulse. */
+  private drawMarkers(ctx: CanvasRenderingContext2D, g: GameState, v: View, cols: number, rows: number, time: number, size: number, labels: boolean): void {
+    const dpr = window.devicePixelRatio || 1;
+    ctx.font = `${Math.round(11 * dpr)}px "Pixelify Sans", monospace`;
+    ctx.textBaseline = 'middle';
+    for (const m of g.markers.list) {
+      const x = m.x + 0.5;
+      const y = m.y + 0.5;
+      if (x < v.x0 - 1 || y < v.y0 - 1 || x > v.x0 + cols + 1 || y > v.y0 + rows + 1) continue;
+      const cx = v.ox + (x - v.x0) * v.cell;
+      const cy = v.oy + (y - v.y0) * v.cell;
+      const k = MARKER_KINDS[m.kind];
+      if (g.markers.tracked === m.id) {
+        const pulse = (time * 1.2) % 1;
+        ctx.strokeStyle = `rgba(255,255,255,${0.9 * (1 - pulse)})`;
+        ctx.lineWidth = Math.max(1, dpr);
+        ctx.beginPath();
+        ctx.arc(cx, cy, size * (1.2 + pulse * 1.6), 0, Math.PI * 2);
+        ctx.stroke();
+      }
+      markerShape(ctx, m.kind, cx, cy, size + Math.max(1, dpr), '#000');
+      markerShape(ctx, m.kind, cx, cy, size, k.color);
+      if (labels) {
+        ctx.fillStyle = '#000';
+        ctx.fillText(m.label, cx + size + 3 * dpr + dpr, cy + dpr);
+        ctx.fillStyle = '#f2e6c8';
+        ctx.fillText(m.label, cx + size + 3 * dpr, cy);
+      }
+    }
   }
 
   private prepare(canvas: HTMLCanvasElement): CanvasRenderingContext2D | null {

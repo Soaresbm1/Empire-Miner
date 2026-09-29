@@ -15,7 +15,7 @@ profondeur et roches plus dures, sauvegarde/chargement, première automatisation
 - Chargeur/déchargeur : transfert coffre → convoyeur.
 - Indicateurs de débit (objets/min) sur les machines et convoyeurs.
 - ✅ Carte de la mine : mini-carte dans le HUD et carte complète (touche M).
-- Marqueurs posés par le joueur sur la carte.
+- ✅ Repères posés par le joueur (touche N, clic sur la carte), suivis avec une flèche.
 
 ## v0.3 — Transport et profondeur
 - ✅ Wagonnets et rails : quais de chargement / déchargement, navette automatique, voyage à bord.

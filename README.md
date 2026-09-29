@@ -30,6 +30,7 @@ Version autonome en un seul fichier HTML (ouvrable sans serveur) : `npm run buil
 | Pioche ↔ marteau-piqueur | `T` (une fois le marteau-piqueur acheté) |
 | Monter / descendre d'un wagonnet | `F` |
 | Carte de la mine | `M` (ou clic sur la mini-carte) |
+| Poser un repère là où on est | `N` (sur la carte : clic) |
 | Zoom | molette |
 | Pause, sauvegarde, chargement, export | `Échap` |
 
@@ -121,6 +122,11 @@ lettre tapée : c'est la touche marquée M, quel que soit le clavier.
 - **Mini-carte** en haut à droite (la mine autour du joueur) et **carte complète** avec `M` : galeries, roche,
   filons et gisements repérés, machines, rails, wagonnets, position du joueur et zones de profondeur (100 m,
   300 m). Seul ce que le joueur a déjà vu y apparaît.
+- **Repères** : `N` marque l'endroit où l'on se trouve, et un clic sur la carte complète pose un repère ailleurs.
+  Quatre types (repère, filon, base, danger), chacun avec sa couleur et son symbole, jusqu'à 24 repères. Le nom est
+  donné d'après ce qu'il y a à cet endroit (« Filon d'or », « Gisement de fer », « Fonderie », « Grisou »…), sinon
+  « Repère 3 ». Les repères apparaissent sur la carte, la mini-carte et dans la mine (fanion et nom). Un repère
+  « suivi » s'affiche sous la mini-carte avec sa distance, et une flèche au bord de l'écran montre sa direction.
 - Sauvegarde automatique (chaque minute), manuelle, export/import de fichier.
 - Sons synthétisés, éclairage de la mine, particules, objectifs guidant les premières minutes.
 
@@ -140,7 +146,7 @@ séparateur, pont, trieur, wagonnets, aiguillage), améliore une foreuse jusqu'a
 creuse au marteau-piqueur, lance une foreuse de percement sur 10 cases (elle sort de sa base, perce le tunnel
 puis y revient), l'améliore depuis son panneau, pose un four, le charge depuis son panneau et récupère les
 lingots, fait craquer un plafond à 100 m et le retient avec un étai posé à temps, perce une poche de grisou,
-et ouvre la carte.
+ouvre la carte, pose des repères (touche N et clic sur la carte) et en suit un.
 
 ## Choix techniques
 

@@ -16,6 +16,7 @@ import { Building, BUILDING_INFO } from '../sim/structures/Building';
 import { Conveyor } from '../sim/structures/Conveyor';
 import { TunnelBorer } from '../sim/structures/Borer';
 import { Smelter } from '../sim/structures/Smelter';
+import { MARKER_KINDS, MarkerKind } from '../sim/Markers';
 import { Fan, Prop, Pump } from '../sim/structures/Safety';
 import { CAVE_IN, GAS, WATER } from '../data/hazards';
 import { Drill, reachTiles } from '../sim/structures/Drill';
@@ -363,6 +364,27 @@ export class Game {
       case 'openMap':
         this.togglePanel('map');
         break;
+      case 'markerKind':
+        if (arg in MARKER_KINDS) g.markerKind = arg as MarkerKind;
+        break;
+      case 'markHere':
+        this.markHere(g);
+        break;
+      case 'mapClick': {
+        const [px, py] = arg.split(',').map(Number);
+        const t = this.map.tileAt(px, py);
+        if (!t) break;
+        const m = g.addMarker(g.markerKind, t.x, t.y);
+        if (m) this.ui.toast(`Repère posé : ${m.label}.`, 'good');
+        else this.ui.toast(g.markers.full ? 'Trop de repères : supprimez-en un dans la liste.' : 'Hors de la carte.', 'warn');
+        break;
+      }
+      case 'markerTrack':
+        g.markers.toggleTrack(Number(arg));
+        break;
+      case 'markerDelete':
+        g.markers.remove(Number(arg));
+        break;
       case 'drillUpgrade':
         if (target instanceof Drill) g.upgradeMachine(target);
         break;
@@ -452,6 +474,7 @@ export class Game {
       if (inp.wasPressed('KeyH', 'F1')) this.togglePanel('help');
       // M : la lettre M du clavier, où qu'elle soit (AZERTY, QWERTY…).
       if (inp.wasTyped('m')) this.togglePanel('map');
+      if (inp.wasTyped('n') && !this.ui.panel) this.markHere(g);
       if (inp.wasPressed('KeyB') && !this.ui.panel) this.setBuildMode(!this.buildMode);
       if (inp.wasPressed('KeyT') && !this.ui.panel) g.toggleTool();
     }
@@ -554,6 +577,15 @@ export class Game {
     if (this.debug) this.drawDebug(g);
   }
 
+  /** Pose un repère là où se trouve le joueur (touche N). */
+  private markHere(g: GameState): void {
+    const m = g.addMarker(g.markerKind, g.player.tileX, g.player.tileY);
+    if (m) {
+      this.sfx.place();
+      this.ui.toast(`Repère posé : ${m.label} (carte : M).`, 'good');
+    } else this.ui.toast('Trop de repères : supprimez-en un depuis la carte (M).', 'warn');
+  }
+
   private togglePanel(kind: PanelKind): void {
     if (this.ui.panel?.kind === kind) this.ui.closePanel();
     else {
@@ -614,7 +646,7 @@ export class Game {
 
   private hintsHtml(): string {
     const l = (c: string) => this.input.label(c);
-    return `<span><kbd>${l('KeyB')}</kbd> Construire</span><span><kbd>${l('KeyI')}</kbd> Sac</span><span><kbd>M</kbd> Carte</span><span><kbd>${l('KeyH')}</kbd> Aide</span><span><kbd>Échap</kbd> Menu</span>`;
+    return `<span><kbd>${l('KeyB')}</kbd> Construire</span><span><kbd>${l('KeyI')}</kbd> Sac</span><span><kbd>M</kbd> Carte</span><span><kbd>N</kbd> Repère</span><span><kbd>${l('KeyH')}</kbd> Aide</span><span><kbd>Échap</kbd> Menu</span>`;
   }
 
   // ------------------------------------------------------------------ construction

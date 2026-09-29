@@ -123,6 +123,11 @@ ne pas changer le terrain), `gas` et `water` (niveaux 0 à 255). `GameState.brea
 l'évanouissement ramène le joueur au camp. Les poches ne sont pas sauvegardées (elles se recalculent depuis la
 graine) ; `dug`, le gaz, l'eau, les éboulements annoncés et la santé le sont.
 
+Repères (`sim/Markers.ts`) : `GameState.markers` (un `MarkerBook`) garde la liste, le repère suivi et
+les sauvegarde ; `GameState.addMarker` les nomme d'après le terrain et les machines. La carte complète
+convertit un clic en case (`MineMap.tileAt`, via la dernière vue dessinée) ; l'interface transmet la position du
+clic sur un canvas qui porte un `data-action`.
+
 ## Étendre le jeu
 
 - **Nouveau minerai** : ajouter une entrée dans `src/data/resources.ts` (valeur, poids, rareté, résistance,

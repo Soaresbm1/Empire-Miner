@@ -17,6 +17,7 @@ import { Wagon, type WagonSave } from '../sim/Wagons';
 import type { StructureSave } from '../sim/structures/Structure';
 import { rleDecode, rleEncode } from './codec';
 import { HEALTH } from '../data/hazards';
+import type { MarkerSave } from '../sim/Markers';
 
 export const SAVE_VERSION = 1;
 
@@ -60,6 +61,8 @@ export interface SaveData {
    * recalculent depuis la graine.
    */
   hazards?: { dug: string; gas: [number, number][]; water: [number, number][]; pending: [number, number, number][] };
+  /** Repères de la carte (absents des anciennes sauvegardes). */
+  markers?: MarkerSave;
 }
 
 function sparse(grid: Float32Array): [number, number][] {
@@ -100,6 +103,7 @@ export function serialize(g: GameState): SaveData {
     structures: g.structures.list.filter((s) => s.removable).map((s) => s.serialize()),
     wagons: g.wagons.list.map((w) => w.serialize()),
     health: round2(g.hp),
+    markers: g.markers.serialize(),
     hazards: {
       dug: rleEncode(w.dug),
       gas: sparse(w.gas),
@@ -130,6 +134,7 @@ export function deserialize(data: SaveData): GameState {
     g.hazards.pending = (data.hazards.pending ?? []).map(([x, y, t]) => ({ x, y, t }));
   }
   g.hazards.rebuild();
+  g.markers.load(data.markers);
   w.markAllDirty();
 
   g.time = data.time;

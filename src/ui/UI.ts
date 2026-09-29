@@ -2,7 +2,7 @@
  * Couche d'interface HTML au-dessus du canvas : HUD, messages, panneaux, menus.
  * Les actions des boutons sont relayées à l'hôte (Game) via `onAction`.
  */
-import { depthAt } from '../core/constants';
+import { METERS_PER_TILE, TILE, depthAt } from '../core/constants';
 import { zoneForDepth } from '../data/depth';
 import { getMachine } from '../data/machines';
 import type { GameState } from '../sim/GameState';
@@ -10,6 +10,7 @@ import { OBJECTIVES, currentObjective } from '../sim/objectives';
 import type { TunnelBorer } from '../sim/structures/Borer';
 import type { Smelter } from '../sim/structures/Smelter';
 import { GAS, HEALTH, WATER } from '../data/hazards';
+import { MARKER_KINDS } from '../sim/Markers';
 import type { Pump } from '../sim/structures/Safety';
 import { Drill } from '../sim/structures/Drill';
 import { ShippingCrate } from '../sim/structures/ShippingCrate';
@@ -20,6 +21,9 @@ import type { Structure } from '../sim/structures/Structure';
 import { esc, kg, money, resIcon } from './format';
 import { MAP_COLORS } from '../render/MineMap';
 import { borerPanel, counterPanel, pumpPanel, smelterPanel, drillPanel, helpPanel, inventoryPanel, mapPanel, shippingPanel, sorterPanel, stationPanel, storagePanel, switchPanel, workshopPanel } from './panels';
+
+/** Flèches dans les 8 directions, dans l'ordre des angles (est, sud-est, sud…). */
+const ARROWS8 = ['→', '↘', '↓', '↙', '←', '↖', '↑', '↗'];
 
 export type PanelKind = 'counter' | 'workshop' | 'inventory' | 'storage' | 'drill' | 'borer' | 'furnace' | 'pump' | 'shipping' | 'sorter' | 'station' | 'switch' | 'map' | 'help';
 
@@ -55,6 +59,14 @@ export class UI {
       const el = (e.target as HTMLElement).closest<HTMLElement>('[data-action]');
       if (!el || (el as HTMLButtonElement).disabled || e.button !== 0) return;
       e.preventDefault();
+      // Un canvas cliquable (carte) reçoit la position du clic, en pixels du canvas.
+      if (el instanceof HTMLCanvasElement) {
+        const r = el.getBoundingClientRect();
+        const px = ((e.clientX - r.left) * el.width) / Math.max(1, r.width);
+        const py = ((e.clientY - r.top) * el.height) / Math.max(1, r.height);
+        this.host.onAction(el.dataset.action!, `${Math.round(px)},${Math.round(py)}`);
+        return;
+      }
       this.host.onAction(el.dataset.action!, el.dataset.arg ?? '');
     };
     for (const root of [this.panelRoot, this.menuRoot, this.hud]) root.addEventListener('pointerdown', onPointer);
@@ -130,6 +142,18 @@ export class UI {
         ? `<div class="obj-title">Objectif ${index + 1}/${OBJECTIVES.length}</div><div>${esc(objective.text)}</div>`
         : `<div class="obj-title">Objectif libre</div><div>Agrandissez votre exploitation et descendez toujours plus bas.</div>`,
     );
+    // Repère suivi : nom, distance et direction.
+    const t = g.markers.trackedMarker;
+    let track = '';
+    if (t) {
+      const dx = t.x + 0.5 - p.x / TILE;
+      const dy = t.y + 0.5 - p.y / TILE;
+      const d = Math.hypot(dx, dy) * METERS_PER_TILE;
+      const arrow = d < 2 ? '●' : ARROWS8[(Math.round(Math.atan2(dy, dx) / (Math.PI / 4)) + 8) % 8];
+      const k = MARKER_KINDS[t.kind];
+      track = `<span style="color:${k.color}">${k.symbol}</span> ${esc(t.label)} <b>${arrow} ${Math.round(d)} m</b>`;
+    }
+    this.set('hud-track', track);
     this.set('hud-prompt', extra.prompt);
     this.set('hud-build', extra.build);
     this.set('hud-hints', extra.hints);

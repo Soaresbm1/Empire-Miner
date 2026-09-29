@@ -16,6 +16,7 @@ import { RESOURCES, getResource, hasResource, resourceIndex } from '../data/reso
 import { BAGS, JACKHAMMER, PICKAXES } from '../data/tools';
 import { Drop, DropSystem } from './Drops';
 import { HazardSystem } from './Hazards';
+import { MARKER_KINDS, Marker, MarkerBook, MarkerKind } from './Markers';
 import type { SimEvent, ToolKind } from './events';
 import { generateWorld, WorldLayout } from './generator';
 import { Inventory } from './Inventory';
@@ -93,6 +94,10 @@ export class GameState implements StructureContext {
   readonly layout: WorldLayout;
   /** Éboulements, grisou et eau. */
   readonly hazards: HazardSystem;
+  /** Repères posés sur la carte. */
+  readonly markers = new MarkerBook();
+  /** Type de repère choisi dans le panneau de la carte (pour le prochain repère posé). */
+  markerKind: MarkerKind = 'point';
   readonly player: Player;
   readonly inventory: Inventory;
   readonly drops = new DropSystem();
@@ -232,6 +237,59 @@ export class GameState implements StructureContext {
     this.hazards.update(dt);
     this.updateHealth(dt);
     this.updateExploration();
+  }
+
+  // ---------------------------------------------------------------- repères
+
+  /**
+   * Pose un repère en (x, y), nommé d'après ce qui s'y trouve. Renvoie null hors de la carte
+   * ou si la liste est pleine ; sur une case déjà marquée, le repère est mis à jour.
+   */
+  addMarker(kind: MarkerKind, x: number, y: number): Marker | null {
+    if (!this.world.inBounds(x, y)) return null;
+    return this.markers.add(kind, x, y, this.markerLabel(kind, x, y));
+  }
+
+  /** Nom d'un repère : filon, gisement, machine ou danger à cet endroit, sinon « Repère 3 ». */
+  markerLabel(kind: MarkerKind, x: number, y: number): string {
+    const w = this.world;
+    const ore = (): string | null => {
+      // Filon dans la paroi ou gisement au sol, parmi les cases vues à 2 cases au plus.
+      let best: string | null = null;
+      let bestD = 99;
+      for (let dy = -2; dy <= 2; dy++)
+        for (let dx = -2; dx <= 2; dx++) {
+          const nx = x + dx;
+          const ny = y + dy;
+          if (!w.inBounds(nx, ny) || !w.explored[w.idx(nx, ny)]) continue;
+          const d = Math.max(Math.abs(dx), Math.abs(dy));
+          if (d >= bestD) continue;
+          const b = getBlock(w.get(nx, ny));
+          const dep = w.depositAt(nx, ny);
+          if (b.ore) best = b.name;
+          else if (dep) best = `Gisement de ${getResource(dep).name.toLowerCase()}`;
+          else continue;
+          bestD = d;
+        }
+      return best;
+    };
+    const machine = (): string | null => {
+      for (let dy = -1; dy <= 1; dy++)
+        for (let dx = -1; dx <= 1; dx++) {
+          const s = this.structures.at(x + dx, y + dy);
+          if (!s || s.isBelt || s.isTrack || s.type === 'prop') continue;
+          return s instanceof Building ? s.name : getMachine(s.type).name;
+        }
+      return null;
+    };
+    const danger = (): string | null => {
+      if (w.inBounds(x, y) && w.gas[w.idx(x, y)] > 0) return 'Grisou';
+      if (w.inBounds(x, y) && w.water[w.idx(x, y)] > 0) return 'Galerie inondée';
+      if (this.hazards.pendingNear(x, y)) return 'Plafond qui craque';
+      return null;
+    };
+    const found = kind === 'ore' ? ore() : kind === 'base' ? machine() : kind === 'danger' ? danger() : (machine() ?? ore());
+    return found ?? `${MARKER_KINDS[kind].name} ${this.markers.count(kind) + 1}`;
   }
 
   // ---------------------------------------------------------------- santé

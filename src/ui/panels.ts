@@ -3,9 +3,10 @@
  * Chaque bouton porte un `data-action` traité par Game.
  */
 import { DIR_ARROWS, DX, DY } from '../core/dir';
-import { SURFACE_ROWS, depthAt } from '../core/constants';
+import { METERS_PER_TILE, SURFACE_ROWS, TILE, depthAt } from '../core/constants';
 import { BorerLevelSpec, MACHINES, MachineDef, MachineLevel, conveyorThroughput, kitName, parseKit } from '../data/machines';
 import { GAS, WATER } from '../data/hazards';
+import { MARKER_KINDS, MARKER_ORDER, MAX_MARKERS } from '../sim/Markers';
 import { RESOURCES, getResource } from '../data/resources';
 import { BAGS, JACKHAMMER, PICKAXES } from '../data/tools';
 import type { GameState } from '../sim/GameState';
@@ -712,9 +713,32 @@ export function mapPanel(g: GameState, colors: Record<string, string>): string {
   let explored = 0;
   for (let i = SURFACE_ROWS * w.w; i < w.explored.length; i++) explored += w.explored[i];
   const total = w.explored.length - SURFACE_ROWS * w.w;
+  // Repères : type choisi pour le prochain, puis la liste (suivre, supprimer).
+  const p = g.player;
+  const kinds = MARKER_ORDER.map((k) => {
+    const d = MARKER_KINDS[k];
+    return btn('markerKind', `<span class="mk-sym" style="color:${d.color}">${d.symbol}</span> ${d.name}`, { arg: k, cls: `small ${g.markerKind === k ? 'on' : 'off'}` });
+  }).join('');
+  const list = g.markers.list
+    .map((m) => {
+      const d = MARKER_KINDS[m.kind];
+      const dist = Math.round(Math.hypot(m.x + 0.5 - p.x / TILE, m.y + 0.5 - p.y / TILE) * METERS_PER_TILE);
+      const tracked = g.markers.tracked === m.id;
+      return `<li><span class="mk-sym" style="color:${d.color}">${d.symbol}</span><div class="mk-body">
+        <div class="mk-name" title="${esc(m.label)}">${esc(m.label)}</div>
+        <div class="mk-row"><span class="mk-dist">${m.y < SURFACE_ROWS ? 'surface' : `${Math.floor(depthAt(m.y))} m`} · à ${dist} m</span>
+        ${btn('markerTrack', tracked ? 'Suivi' : 'Suivre', { arg: String(m.id), cls: `small ${tracked ? 'on' : 'off'}` })}${btn('markerDelete', '✕', { arg: String(m.id), cls: 'small', title: 'Supprimer' })}</div>
+      </div></li>`;
+    })
+    .join('');
   return `<div class="map-layout">
-    <canvas id="map-canvas" class="map-canvas"></canvas>
+    <canvas id="map-canvas" class="map-canvas" data-action="mapClick" title="Cliquez pour poser un repère"></canvas>
     <div class="map-side">
+      <h4>Repères (${g.markers.list.length} / ${MAX_MARKERS})</h4>
+      <div class="marker-kinds">${kinds}</div>
+      <div class="buy" style="margin-top:0">${btn('markHere', 'Marquer ma position (N)', { cls: 'small', disabled: g.markers.full && !g.markers.at(p.tileX, p.tileY) })}</div>
+      <p class="hint map-note">Cliquez sur la carte pour poser un repère du type choisi ; « Suivre » affiche une flèche vers lui dans la mine.</p>
+      ${list ? `<ul class="marker-list">${list}</ul>` : ''}
       <h4>Légende</h4>
       <ul class="map-legend">
         ${item(sw(colors.player, 'dot'), 'Vous')}
@@ -757,6 +781,7 @@ export function helpPanel(keys: { move: string; label: (c: string) => string }):
     <div><h4>Wagonnet</h4><p>${k('KeyF')} : monter / descendre</p></div>
     <div><h4>Outil en main</h4><p>${k('KeyT')} : pioche ou marteau-piqueur (s'il est acheté)</p></div>
     <div><h4>Carte</h4><p><kbd>M</kbd> : carte de la mine (ou clic sur la mini-carte)</p></div>
+    <div><h4>Repères</h4><p><kbd>N</kbd> : marquer l'endroit où vous êtes ; sur la carte, un clic pose un repère. « Suivre » affiche une flèche vers lui</p></div>
     <div><h4>Dangers (en profondeur)</h4><p>Plafond qui craque : posez un <b>étai</b> ou fuyez. Grisou : sortez du nuage, un <b>ventilateur</b> le chasse. Eau : une <b>pompe</b> l'assèche. À 0 de santé, on se réveille au camp, le sac reste au fond.</p></div>
     <div><h4>Four et fonderie</h4><p>Minerai (convoyeur ou ${k('KeyE')} : déposer) + charbon → lingots vendus 2,5 fois plus cher, poussés devant la flèche</p></div>
     <div><h4>Améliorer une foreuse</h4><p>${k('KeyE')} sur la foreuse : niveau 2 = cases gauche et droite, niveau 3 = aussi derrière</p></div>
