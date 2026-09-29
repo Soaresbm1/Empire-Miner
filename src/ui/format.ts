@@ -1,5 +1,6 @@
 /** Aides de formatage pour l'interface. */
 import { RARITY_COLORS, getResource } from '../data/resources';
+import { icon } from './theme';
 
 export function money(v: number): string {
   return `${Math.floor(v).toLocaleString('fr-FR')} $`;
@@ -16,6 +17,9 @@ export function num(v: number, digits = 1): string {
 /** Petite icône de minerai (dégradé CSS aux couleurs de la ressource). */
 export function resIcon(id: string): string {
   const r = getResource(id);
+  // Le sprite de la mine, s'il est prêt ; sinon une pastille de couleur.
+  const src = icon(`res:${id}`);
+  if (src) return `<img class="res-img${r.ingot ? ' ingot' : ''}" src="${src}" alt="">`;
   return `<i class="res${r.ingot ? ' ingot' : ''}" style="--c:${r.color};--l:${r.light};--d:${r.dark}"></i>`;
 }
 

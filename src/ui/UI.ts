@@ -18,6 +18,8 @@ import type { RailStation, RailSwitch } from '../sim/structures/Rail';
 import { Storage } from '../sim/structures/Storage';
 import type { Structure } from '../sim/structures/Structure';
 import { esc, kg, money, resIcon } from './format';
+import { icon } from './theme';
+import { MenuFx } from './menuFx';
 import { MAP_COLORS } from '../render/MineMap';
 import { QUALITY_LABEL, type Quality } from '../render/quality';
 import { boardPanel, borerPanel, counterPanel, smelterPanel, drillPanel, helpPanel, inventoryPanel, mapPanel, shippingPanel, sorterPanel, stationPanel, storagePanel, switchPanel, workshopPanel } from './panels';
@@ -46,6 +48,9 @@ export class UI {
   private readonly hud = $('#hud');
   private readonly panelRoot = $('#panel-root');
   private readonly menuRoot = $('#menu-root');
+  private readonly menuFx = new MenuFx($('#menu-fx') as HTMLCanvasElement);
+  /** Nombre de grains du décor animé des menus (réglage Qualité). */
+  private menuMotes = 0;
   private readonly toasts = $('#toasts');
   private readonly tooltip = $('#tooltip');
   private readonly cache = new Map<string, string>();
@@ -138,14 +143,14 @@ export class UI {
     }`;
     this.set(
       'hud-equip',
-      `<div class="equip"><span class="tier">N${g.activeTool.tier}</span> ${g.activeTool.name}${
+      `<div class="equip">${g.tool === 'pickaxe' && icon(`pick${g.pickaxeLevel}`) ? `<img class="tool-ico" src="${icon(`pick${g.pickaxeLevel}`)}" alt="">` : ''}<span class="tier">N${g.activeTool.tier}</span> ${g.activeTool.name}${
         g.hasJackhammer
           ? `<div class="fuel-line"><kbd>${this.host.keyLabel('KeyT')}</kbd> ${g.tool === 'jackhammer' ? 'passer à la pioche' : 'passer au marteau-piqueur'}${
               g.tool === 'jackhammer' ? ` · charbon dans le sac : ${g.inventory.count('coal')}` : ''
             }</div>`
           : ''
       }</div>
-       <div class="bar ${ratio >= 0.999 ? 'full' : ratio > 0.8 ? 'warn' : ''}"><div style="width:${Math.min(100, ratio * 100)}%"></div><span>${g.bag.name} ${kg(w)} / ${kg(inv.capacity)}</span></div>
+       <div class="bar bag ${ratio >= 0.999 ? 'full' : ratio > 0.8 ? 'warn' : ''}"><div style="width:${Math.min(100, ratio * 100)}%"></div><span>${g.bag.name} ${kg(w)} / ${kg(inv.capacity)}</span></div>
        <div class="chips">${items || '<span class="muted">Sac vide</span>'}</div>
        ${health}`,
     );
@@ -334,14 +339,25 @@ export class UI {
 
   // ------------------------------------------------------------------ menus
 
+  /** Règle le décor animé des menus (0 : aucun) ; s'applique tout de suite si un menu est ouvert. */
+  setMenuMotes(n: number): void {
+    this.menuMotes = n;
+    if (this.menu) this.menuFx.start(n);
+  }
+
   showMainMenu(save: { savedAt: string; money: number; depth: number } | null, confirmNew = false): void {
     this.menu = 'main';
     this.syncOverlay();
+    this.menuFx.start(this.menuMotes);
     const saveInfo = save
       ? `<small>${new Date(save.savedAt).toLocaleString('fr-FR')} · ${money(save.money)} · ${Math.floor(save.depth)} m</small>`
       : '';
     this.menuRoot.innerHTML = `<div class="menu main-menu">
-      <h1><span>EMPIRE</span><span>MINER</span></h1>
+      ${
+        icon('logo')
+          ? `<img class="logo" src="${icon('logo')}" alt="Empire Miner">`
+          : '<h1><span>EMPIRE</span><span>MINER</span></h1>'
+      }
       <p class="tagline">Une vieille pioche. Une petite mine. Un futur empire industriel.</p>
       <div class="menu-buttons">
         ${save ? `<button class="btn primary big" data-action="continue">Continuer${saveInfo}</button>` : ''}
@@ -356,6 +372,7 @@ export class UI {
   showPauseMenu(muted: boolean, quality: Quality = 'high'): void {
     this.menu = 'pause';
     this.syncOverlay();
+    this.menuFx.stop();
     this.menuRoot.innerHTML = `<div class="menu pause-menu"><h2>Pause</h2><div class="menu-buttons">
       <button class="btn primary big" data-action="resume">Reprendre</button>
       <button class="btn" data-action="save">Sauvegarder</button>
@@ -371,6 +388,7 @@ export class UI {
 
   hideMenu(): void {
     this.menu = null;
+    this.menuFx.stop();
     this.menuRoot.innerHTML = '';
     this.syncOverlay();
   }

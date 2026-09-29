@@ -26,7 +26,7 @@ import { Rail, RailStation, RailSwitch, type SwitchSetting } from '../sim/struct
 import { Splitter } from '../sim/structures/Splitter';
 import { Storage } from '../sim/structures/Storage';
 import { MineMap } from '../render/MineMap';
-import { Quality, loadQuality, nextQuality, saveQuality } from '../render/quality';
+import { PROFILES, Quality, loadQuality, nextQuality, saveQuality } from '../render/quality';
 import { Renderer, Overlay } from '../render/Renderer';
 import { UI, PanelKind } from '../ui/UI';
 import { esc, kg, money, resIcon } from '../ui/format';
@@ -77,6 +77,7 @@ export class Game {
       moveKeys: () => this.input.moveKeys(),
       machineIcon: (id) => this.renderer.machineIcon(id),
     });
+    this.ui.setMenuMotes(PROFILES[this.quality].menuMotes);
     window.addEventListener('resize', () => this.renderer.resize());
     const unlock = () => this.sfx.unlock();
     window.addEventListener('pointerdown', unlock);
@@ -251,6 +252,7 @@ export class Game {
         this.quality = nextQuality(this.quality);
         saveQuality(this.quality);
         this.renderer.setQuality(this.quality);
+        this.ui.setMenuMotes(PROFILES[this.quality].menuMotes);
         this.ui.showPauseMenu(this.sfx.muted, this.quality);
         return;
       case 'quit':

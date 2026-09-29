@@ -146,6 +146,15 @@ lettre tapée : c'est la touche marquée M, quel que soit le clavier.
   « suivi » s'affiche sous la mini-carte avec sa distance, et une flèche au bord de l'écran montre sa direction.
 - Sauvegarde automatique (chaque minute), manuelle, export/import de fichier.
 - Sons synthétisés, éclairage de la mine, particules, objectifs guidant les premières minutes.
+- **Graphismes en pixel art**, tous dessinés en code (aucune image externe). La lumière vient toujours d'en haut à
+  gauche : le mineur (casque à lampe, sac à dos, marche à 4 images, clignement des yeux), les machines ombrées et
+  animées (voyants, gyrophare, flammes, engrenages, vapeur), les bâtiments du camp (étal aux bocaux, atelier à toit
+  d'ardoise et forge), les minerais rares qui étincellent. L'interface est habillée du même style : cadres de métal et
+  de laiton à rivets, boutons biseautés qui s'enfoncent, barres graduées, touches en relief, icônes dessinées (pièce,
+  cœur, sac, pioche, minerais). L'écran titre a un logo dessiné en pixels, et des poussières et des braises flottent
+  derrière les menus.
+- **Qualité graphique** : Pause → « Graphismes » fait tourner Élevée, Moyenne et Basse (nombre de particules, lueurs,
+  animations de détail, décor animé des menus). Le réglage est mémorisé ; « Basse » convient aux petits appareils.
 
 ## Tests
 
