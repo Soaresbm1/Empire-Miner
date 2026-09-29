@@ -9,8 +9,9 @@ construites soi-même — dans **la même mine**, qui garde la trace de chaque c
 
 ## Jouer
 
+Depuis la racine du dépôt :
+
 ```bash
-cd empire-miner
 npm install
 npm run dev          # http://localhost:5173
 ```
