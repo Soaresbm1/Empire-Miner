@@ -275,6 +275,42 @@ kbd {
 .stat { display: flex; justify-content: space-between; gap: 10px; font-size: 14px; padding: 2px 0; border-bottom: 1px dashed rgba(91,70,54,0.5); }
 .stat span { color: var(--muted); }
 .stat em { color: var(--good); font-style: normal; }
+/* Statistiques de production : chiffres clés, histogramme des gains, machines à surveiller.
+   Les deux séries de l'histogramme passent la validation de palette sur le fond du panneau. */
+.kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 10px; }
+.kpi { display: flex; flex-direction: column; gap: 1px; border: 2px solid var(--line); border-radius: 6px; padding: 8px 12px; background: rgba(0,0,0,0.25); }
+.kpi-label { color: var(--muted); font-size: 13px; }
+.kpi-value { font-size: 26px; line-height: 1.15; color: var(--text); }
+.kpi-value small { font-size: 13px; font-weight: 400; color: var(--muted); }
+.kpi-sub { color: var(--muted); font-size: 12px; }
+.pchart { margin-top: 4px; padding-left: 58px; }
+.pc-area { position: relative; height: 132px; margin-top: 18px; }
+.pc-grid { position: absolute; left: 0; right: 0; height: 1px; background: rgba(168,149,124,0.22); }
+.pc-tick { position: absolute; left: -58px; width: 52px; text-align: right; font-size: 11px; color: var(--muted); transform: translateY(50%); font-variant-numeric: tabular-nums; }
+.pc-cols { position: absolute; inset: 0; display: flex; gap: 6px; }
+.pc-col { position: relative; flex: 1; min-width: 0; display: flex; flex-direction: column; justify-content: flex-end; align-items: center; cursor: default; }
+.pc-col:hover { background: rgba(255,255,255,0.05); }
+.pc-stack { width: 100%; max-width: 24px; display: flex; flex-direction: column; gap: 2px; }
+.pc-seg { display: block; min-height: 2px; }
+.pc-seg:first-child { border-radius: 4px 4px 0 0; }
+.pc-seg.counter { background: #b98012; }
+.pc-seg.crate { background: #3f88cf; }
+.pc-val { position: absolute; bottom: 100%; left: 50%; transform: translate(-50%, -2px); white-space: nowrap; font-size: 12px; color: var(--text); pointer-events: none; }
+.pc-col:first-child .pc-val { transform: translate(-30%, -2px); }
+.pc-col:last-child .pc-val { transform: translate(-70%, -2px); }
+.pc-empty { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; margin: 0; color: var(--muted); font-size: 13px; pointer-events: none; }
+.pc-x { display: flex; justify-content: space-between; margin-top: 4px; padding-left: 58px; font-size: 11px; color: var(--muted); }
+.pc-legend { display: flex; flex-wrap: wrap; gap: 4px 16px; margin-top: 6px; padding-left: 58px; font-size: 13px; color: var(--muted); }
+.pc-legend .sw { display: inline-block; width: 10px; height: 10px; margin-right: 6px; border-radius: 2px; }
+.pc-legend .sw.counter { background: #b98012; }
+.pc-legend .sw.crate { background: #3f88cf; }
+.table th.num { text-align: right; }
+.table td.dash { color: #5e5048; }
+.watch { margin: 6px 0 0; padding: 0; list-style: none; font-size: 14px; }
+.watch li { padding: 3px 0 3px 10px; border-left: 4px solid var(--line-light); margin-bottom: 4px; background: rgba(0,0,0,0.2); color: var(--muted); }
+.watch li b { color: var(--text); }
+.watch li.bad { border-color: var(--bad); color: #ff9d90; }
+.watch li.warn { border-color: var(--warn); color: var(--warn); }
 .buy { margin-top: 10px; display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
 .buy small { color: var(--muted); }
 .lock { color: var(--warn) !important; }

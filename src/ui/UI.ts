@@ -263,7 +263,7 @@ export class UI {
     switch (kind) {
       case 'counter':
         title = 'Comptoir de vente';
-        body = counterPanel(g);
+        body = counterPanel(g, tab);
         break;
       case 'workshop':
         title = 'Atelier';

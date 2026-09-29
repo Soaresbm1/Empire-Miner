@@ -44,8 +44,9 @@ lettre tapée : c'est la touche marquée M, quel que soit le clavier.
 - Ramassage physique, sac limité **en poids**, choix de ce que l'on ramasse, possibilité de jeter.
 - Les **pierres laissées par terre s'effritent** au bout de 60 s (elles clignotent les 5 dernières secondes) pour ne
   pas encombrer les galeries ; les minerais, eux, restent au sol indéfiniment.
-- Profondeur réelle (2,5 m par rangée) : roche tendre → roche dure (100 m) → basalte (300 m).
-- Ressources : pierre, charbon, cuivre, fer, argent, or (valeur, poids, rareté, résistance, profondeur).
+- Profondeur réelle (2,5 m par rangée), jusqu'à 607 m : roche tendre → roche dure (100 m) → basalte (300 m) →
+  roche volcanique (450 m, la Fournaise).
+- Ressources : pierre, charbon, cuivre, fer, argent, or, diamant (valeur, poids, rareté, résistance, profondeur).
 - Comptoir de vente et atelier en surface ; 4 pioches, 3 moyens de transport (sac, grand sac, brouette).
 - **Marteau-piqueur** (900 $, pioche en fer) : attaque la paroi sur 3 cases de large (la case visée et ses voisines,
   perpendiculairement au coup), très vite, en brûlant le charbon du sac (1 unité / 12 s de travail). `T` passe de la
@@ -123,9 +124,20 @@ lettre tapée : c'est la touche marquée M, quel que soit le clavier.
 - Vente automatique : **caisse d'expédition** à poser en surface. Tout ce qui y arrive est vendu au prix du
   comptoir à chaque passage du transporteur (toutes les 15 s) ; sa capacité est limitée (120 kg), pleine elle
   bloque les convoyeurs. Le HUD affiche le revenu automatique par minute.
+- **La Fournaise** (sous 450 m) : roche volcanique aux fissures rougeoyantes, or plus abondant et, sous 500 m, des
+  **filons de diamant** (la ressource la plus précieuse, taillée seulement par la Pioche pro en acier, qui ne se
+  fond pas). La chaleur y ralentit les foreuses, la foreuse de percement et les fours, de 85 % de leur cadence à
+  450 m jusqu'à 50 % au fond (la température s'affiche sous la profondeur, un thermomètre signale les machines
+  ralenties). Un **ventilateur** à 4 cases les rafraîchit et leur rend leur cadence normale. Les anciennes
+  sauvegardes se chargent et la mine se prolonge simplement par le bas.
+- **Statistiques de production** : un onglet « Statistiques » au **Comptoir** (à côté de la vente) et à l'**Atelier**
+  (à côté de la boutique). Trois chiffres (ventes, minerai extrait, lingots fondus par minute, moyennés sur les
+  5 dernières minutes), un histogramme des gains des 10 dernières minutes (comptoir et caisses d'expédition), un
+  tableau par ressource (extrait, fondu, vendu) et la liste des machines à surveiller (sans charbon, sortie
+  bloquée, coffre plein, ralenties par la chaleur…). Les mesures sont sauvegardées.
 - **Mini-carte** en haut à droite (la mine autour du joueur) et **carte complète** avec `M` : galeries, roche,
   filons et gisements repérés, machines, rails, wagonnets, position du joueur et zones de profondeur (100 m,
-  300 m). Seul ce que le joueur a déjà vu y apparaît.
+  300 m, 450 m). Seul ce que le joueur a déjà vu y apparaît.
 - **Repères** : `N` marque l'endroit où l'on se trouve, et un clic sur la carte complète pose un repère ailleurs.
   Quatre types (repère, filon, base, danger), chacun avec sa couleur et son symbole, jusqu'à 24 repères. Le nom est
   donné d'après ce qu'il y a à cet endroit (« Filon d'or », « Gisement de fer », « Fonderie », « Grisou »…), sinon

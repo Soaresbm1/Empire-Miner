@@ -17,6 +17,7 @@ import { BAGS, JACKHAMMER, PICKAXES } from '../data/tools';
 import { Drop, DropSystem } from './Drops';
 import { HazardSystem } from './Hazards';
 import { MARKER_KINDS, Marker, MarkerBook, MarkerKind } from './Markers';
+import { ProductionLog } from './Production';
 import type { SimEvent, ToolKind } from './events';
 import { generateWorld, WorldLayout } from './generator';
 import { Inventory } from './Inventory';
@@ -96,6 +97,8 @@ export class GameState implements StructureContext {
   readonly hazards: HazardSystem;
   /** Repères posés sur la carte. */
   readonly markers = new MarkerBook();
+  /** Extraction, fonte et ventes minute après minute (panneau Statistiques). */
+  readonly production = new ProductionLog(() => this.time);
   /** Type de repère choisi dans le panneau de la carte (pour le prochain repère posé). */
   markerKind: MarkerKind = 'point';
   readonly player: Player;
@@ -178,8 +181,13 @@ export class GameState implements StructureContext {
     this.events.push(e);
   }
 
+  countExtracted(res: string, _from: Structure): void {
+    this.production.addOre(res, 1, true);
+  }
+
   countSmelted(res: string, from: Structure): void {
     this.stats.smelted++;
+    this.production.addIngot(res);
     // Premier lingot d'un métal : il rejoint le carnet (inventaire, trieur).
     if (!this.stats.discovered.includes(res)) {
       this.stats.discovered.push(res);
@@ -191,10 +199,11 @@ export class GameState implements StructureContext {
     this.stats.delivered += n;
   }
 
-  autoSell(total: number, n: number, from: Structure): void {
+  autoSell(total: number, n: number, from: Structure, items: Record<string, number> = {}): void {
     this.money += total;
     this.stats.earned += total;
     this.stats.autoSold += total;
+    this.production.addSale(items, total, true);
     this.emit({ t: 'shipped', tx: from.x, ty: from.y, total, n });
   }
 
@@ -547,6 +556,7 @@ export class GameState implements StructureContext {
     }
     if (block.drop && this.rng.chance(block.drop.chance)) {
       const n = this.rng.int(block.drop.min, block.drop.max);
+      this.production.addOre(block.drop.res, n, !!from);
       const cx = (tx + 0.5) * TILE;
       const cy = (ty + 0.5) * TILE;
       // Les morceaux jaillissent plutôt du côté du mineur (ou vers l'arrière de la machine).
@@ -712,6 +722,7 @@ export class GameState implements StructureContext {
     const total = k * getResource(res).value;
     this.money += total;
     this.stats.earned += total;
+    this.production.addSale({ [res]: k }, total, false);
     this.emit({ t: 'sold', total, n: k });
     return total;
   }
@@ -720,14 +731,17 @@ export class GameState implements StructureContext {
     if (!this.isNear('counter')) return 0;
     let total = 0;
     let n = 0;
+    const sold: Record<string, number> = {};
     for (const [res, count] of Object.entries(this.inventory.items)) {
       this.inventory.remove(res, count);
       total += count * getResource(res).value;
       n += count;
+      sold[res] = count;
     }
     if (n > 0) {
       this.money += total;
       this.stats.earned += total;
+      this.production.addSale(sold, total, false);
       this.emit({ t: 'sold', total, n });
     }
     return total;

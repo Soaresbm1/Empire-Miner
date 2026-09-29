@@ -177,6 +177,7 @@ export class Drill extends Structure {
       if (res) {
         this.buffer.push(res);
         this.extracted++;
+        ctx.countExtracted(res, this);
         ctx.emit({ t: 'extract', tx: src.x, ty: src.y, res });
         this.tryOutput(ctx);
       }
