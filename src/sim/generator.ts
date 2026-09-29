@@ -21,7 +21,7 @@ import { Rng, fbm } from '../core/rng';
 import { World } from './World';
 
 export interface BuildingPlacement {
-  type: 'counter' | 'workshop';
+  type: 'counter' | 'workshop' | 'board';
   x: number;
   y: number;
 }
@@ -123,6 +123,8 @@ export function generateWorld(seed: number, w = WORLD_W, h = WORLD_H): WorldLayo
     buildings: [
       { type: 'counter', x: 40, y: 6 },
       { type: 'workshop', x: 57, y: 6 },
+      // Entre les deux : x = 49 et 50, au milieu du camp.
+      { type: 'board', x: 49, y: 6 },
     ],
     spawn: { x: 50, y: 9 },
     entrance: { x: SHAFT_X, y: S, w: 2 },

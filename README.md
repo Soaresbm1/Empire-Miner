@@ -130,11 +130,12 @@ lettre tapée : c'est la touche marquée M, quel que soit le clavier.
   450 m jusqu'à 50 % au fond (la température s'affiche sous la profondeur, un thermomètre signale les machines
   ralenties). Un **ventilateur** à 4 cases les rafraîchit et leur rend leur cadence normale. Les anciennes
   sauvegardes se chargent et la mine se prolonge simplement par le bas.
-- **Statistiques de production** : un onglet « Statistiques » au **Comptoir** (à côté de la vente) et à l'**Atelier**
-  (à côté de la boutique). Trois chiffres (ventes, minerai extrait, lingots fondus par minute, moyennés sur les
-  5 dernières minutes), un histogramme des gains des 10 dernières minutes (comptoir et caisses d'expédition), un
-  tableau par ressource (extrait, fondu, vendu) et la liste des machines à surveiller (sans charbon, sortie
-  bloquée, coffre plein, ralenties par la chaleur…). Les mesures sont sauvegardées.
+- **Tableau d'affichage** : un panneau de bois au milieu du camp, entre le Comptoir et l'Atelier (`E` devant lui).
+  Il affiche les **statistiques de production** : trois chiffres (ventes, minerai extrait, lingots fondus par
+  minute, moyennés sur les 5 dernières minutes), un histogramme des gains des 10 dernières minutes (comptoir et
+  caisses d'expédition), un tableau par ressource (extrait, fondu, vendu) et la liste des machines à surveiller
+  (sans charbon, sortie bloquée, coffre plein, ralenties par la chaleur…). Les mesures sont sauvegardées ; les
+  anciennes sauvegardes trouvent le tableau au camp, avec des mesures à zéro.
 - **Mini-carte** en haut à droite (la mine autour du joueur) et **carte complète** avec `M` : galeries, roche,
   filons et gisements repérés, machines, rails, wagonnets, position du joueur et zones de profondeur (100 m,
   300 m, 450 m). Seul ce que le joueur a déjà vu y apparaît.

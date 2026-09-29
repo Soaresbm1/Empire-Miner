@@ -7,7 +7,8 @@ import { GameState } from '../src/sim/GameState';
 import { GAIN_MINUTES, ProductionLog, RATE_SLOTS, SLOT_COUNT, SLOT_SECONDS } from '../src/sim/Production';
 import type { Smelter } from '../src/sim/structures/Smelter';
 import type { Storage } from '../src/sim/structures/Storage';
-import { counterPanel, workshopPanel } from '../src/ui/panels';
+import { boardPanel, counterPanel, workshopPanel } from '../src/ui/panels';
+import { BUILDING_INFO } from '../src/sim/structures/Building';
 import { productionStats } from '../src/ui/stats';
 import { goTo, run, teleport } from './helpers';
 
@@ -166,18 +167,13 @@ describe('statistiques de production dans la partie', () => {
 });
 
 describe('panneau des statistiques', () => {
-  it('est un onglet du comptoir et de l’atelier', () => {
+  it('est celui du tableau d’affichage, pas du comptoir ni de l’atelier', () => {
     const g = new GameState(4);
-    const counterSell = counterPanel(g);
-    const counterStats = counterPanel(g, 'stats');
-    expect(counterSell).toContain('data-arg="stats"');
-    expect(counterSell).not.toContain('Gains des');
-    expect(counterStats).toContain('Gains des 10 dernières minutes');
-    expect(counterPanel(g, 'tools')).toBe(counterSell); // l'onglet par défaut de l'interface reste la vente
-    const shop = workshopPanel(g, 'stats');
-    expect(shop).toContain('Gains des 10 dernières minutes');
-    expect(shop).toContain('data-arg="machines"');
+    expect(boardPanel(g)).toContain('Gains des 10 dernières minutes');
+    expect(boardPanel(g)).toContain('Machines à surveiller');
+    expect(counterPanel(g)).not.toContain('Gains des');
     expect(workshopPanel(g, 'tools')).not.toContain('Gains des');
+    expect(workshopPanel(g, 'tools')).not.toContain('data-arg="stats"');
   });
 
   it('montre les chiffres, les gains et les machines à l’arrêt', () => {
@@ -201,5 +197,44 @@ describe('panneau des statistiques', () => {
     expect(after).not.toContain('Aucune vente pour l’instant');
     expect(after).toContain('pc-seg counter');
     expect(after).toMatch(/Il y a \d min|Cette dernière minute/);
+  });
+});
+
+describe('tableau d’affichage du camp', () => {
+  it('se dresse entre le comptoir et l’atelier, et s’ouvre comme eux', () => {
+    const g = new GameState(4);
+    const at = (type: string) => g.structures.list.find((s) => s.type === type)!;
+    const board = at('board');
+    expect(board).toBeTruthy();
+    expect(board.removable).toBe(false);
+    const counter = at('counter');
+    const workshop = at('workshop');
+    // Au milieu du camp, sur la même rangée, sans toucher les deux autres.
+    expect(board.y).toBe(counter.y);
+    expect(board.x).toBeGreaterThanOrEqual(counter.x + counter.w + 2);
+    expect(board.x + board.w).toBeLessThanOrEqual(workshop.x - 2);
+    expect((board.x + board.w / 2) * 2).toBeCloseTo(counter.x + counter.w / 2 + (workshop.x + workshop.w / 2));
+    expect(BUILDING_INFO.board.name).toBe("Tableau d'affichage");
+    // Devant lui, il est l'élément interactif le plus proche.
+    goTo(g, 'board');
+    expect(g.nearestInteractable()?.type).toBe('board');
+    expect(g.isNear('counter')).toBe(false);
+    goTo(g, 'counter');
+    expect(g.nearestInteractable()?.type).toBe('counter');
+  });
+
+  it('ne gêne ni l’arrivée du joueur ni le chemin du puits', () => {
+    const g = new GameState(4);
+    const board = g.structures.list.find((s) => s.type === 'board')!;
+    const { spawn, entrance } = g.layout;
+    expect(spawn.y).toBeGreaterThan(board.y + board.h);
+    for (let y = spawn.y; y <= entrance.y; y++) for (let x = entrance.x; x < entrance.x + entrance.w; x++) expect(g.structures.at(x, y)).toBeUndefined();
+  });
+
+  it('les anciennes sauvegardes l’ont aussi : il fait partie du décor, pas de la sauvegarde', () => {
+    const g = new GameState(4);
+    const data = JSON.parse(JSON.stringify(serialize(g)));
+    expect(data.structures.some((x: { type: string }) => x.type === 'board')).toBe(false);
+    expect(deserialize(data).structures.list.some((s) => s.type === 'board')).toBe(true);
   });
 });

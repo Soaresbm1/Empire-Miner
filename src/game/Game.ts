@@ -616,7 +616,7 @@ export class Game {
     const s = g.nearestInteractable();
     if (!s) return;
     this.setBuildMode(false);
-    if (s instanceof Building) this.ui.openPanel(s.type === 'counter' ? 'counter' : 'workshop', s, 'tools');
+    if (s instanceof Building) this.ui.openPanel(s.type === 'counter' ? 'counter' : s.type === 'board' ? 'board' : 'workshop', s, 'tools');
     else if (s instanceof Storage) this.ui.openPanel('storage', s);
     else if (s instanceof ShippingCrate) this.ui.openPanel('shipping', s);
     else if (s instanceof Drill) this.ui.openPanel('drill', s);

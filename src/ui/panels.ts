@@ -33,21 +33,7 @@ function sortedItems(items: Record<string, number>): [string, number][] {
 
 // ------------------------------------------------------------------ comptoir
 
-/** Barre d'onglets d'un panneau. */
-function tabBar(tabs: [string, string][], active: string): string {
-  return `<div class="tabs">${tabs
-    .map(([id, label]) => `<button class="tab ${active === id ? 'active' : ''}" data-action="tab" data-arg="${id}">${label}</button>`)
-    .join('')}</div>`;
-}
-
-const COUNTER_TABS: [string, string][] = [
-  ['sell', 'Vente'],
-  ['stats', 'Statistiques'],
-];
-
-export function counterPanel(g: GameState, tab = 'sell'): string {
-  const tabs = tabBar(COUNTER_TABS, tab === 'stats' ? 'stats' : 'sell');
-  if (tab === 'stats') return `<p class="sub">Ce que produit votre mine, et ce qui se vend.</p>${tabs}${productionStats(g)}`;
+export function counterPanel(g: GameState): string {
   const items = sortedItems(g.inventory.items);
   const total = items.reduce((s, [res, n]) => s + n * getResource(res).value, 0);
   const rows = items
@@ -59,13 +45,19 @@ export function counterPanel(g: GameState, tab = 'sell'): string {
     .join('');
   return `
     <p class="sub">« Posez ça là, je vous en donne un bon prix. »</p>
-    ${tabs}
     ${
       items.length
         ? `<table class="table"><thead><tr><th>Ressource</th><th>Qté</th><th>Prix</th><th>Total</th><th></th></tr></thead><tbody>${rows}</tbody></table>
        <div class="panel-footer"><span>Total : <b class="gold">${money(total)}</b></span>${btn('sellAll', `Tout vendre (${money(total)})`, { cls: 'primary' })}</div>`
         : `<p class="empty">Votre sac est vide. Descendez à la mine et rapportez des minerais !</p>`
     }`;
+}
+
+// ------------------------------------------------------------------ tableau d'affichage
+
+/** Tableau d'affichage du camp, entre le comptoir et l'atelier : les statistiques de production. */
+export function boardPanel(g: GameState): string {
+  return `<p class="sub">Ce que produit votre mine, et ce qui se vend. Mis à jour en direct.</p>${productionStats(g)}`;
 }
 
 // ------------------------------------------------------------------ atelier
@@ -101,15 +93,13 @@ function jackhammerCard(g: GameState): string {
 }
 
 export function workshopPanel(g: GameState, tab: string, icon: (id: string) => string = () => ''): string {
-  const tabs = tabBar(
-    [
-      ['tools', 'Outils'],
-      ['transport', 'Transport'],
-      ['machines', 'Machines'],
-      ['stats', 'Statistiques'],
-    ],
-    tab,
-  );
+  const tabs = [
+    ['tools', 'Outils'],
+    ['transport', 'Transport'],
+    ['machines', 'Machines'],
+  ]
+    .map(([id, label]) => `<button class="tab ${tab === id ? 'active' : ''}" data-action="tab" data-arg="${id}">${label}</button>`)
+    .join('');
   let body = '';
   if (tab === 'tools') {
     const cur = g.pickaxe;
@@ -148,12 +138,10 @@ export function workshopPanel(g: GameState, tab: string, icon: (id: string) => s
         <div class="buy">${btn('buyBag', `Acheter — ${money(next.price)}`, { cls: 'primary', disabled: !can })}${can ? '' : `<small>Il vous manque ${money(next.price - g.money)}</small>`}</div></div>`;
     } else body += `<div class="card"><h3>Transport personnel au maximum</h3><p>Pour transporter davantage, automatisez : foreuses, convoyeurs et coffres.</p></div>`;
     body += `</div>`;
-  } else if (tab === 'stats') {
-    body = productionStats(g);
   } else {
     body = `<p class="shop-hint">Survolez une machine pour lire sa description complète.</p>${machineShop(g, icon)}`;
   }
-  return `<p class="sub">Outils, équipement et machines. Les machines achetées se posent avec <kbd>B</kbd>.</p>${tabs}${body}`;
+  return `<p class="sub">Outils, équipement et machines. Les machines achetées se posent avec <kbd>B</kbd>.</p><div class="tabs">${tabs}</div>${body}`;
 }
 
 /** Chiffres utiles d'une machine, en étiquettes courtes. */
@@ -791,7 +779,7 @@ export function helpPanel(keys: { move: string; label: (c: string) => string }):
     <div><h4>Repères</h4><p><kbd>N</kbd> : marquer l'endroit où vous êtes ; sur la carte, un clic pose un repère. « Suivre » affiche une flèche vers lui</p></div>
     <div><h4>Dangers (en profondeur)</h4><p>Plafond qui craque : posez un <b>étai</b> ou fuyez. Grisou : sortez du nuage, un <b>ventilateur</b> le chasse. Eau : une <b>pompe</b> l'assèche. À 0 de santé, on se réveille au camp, le sac reste au fond.</p></div>
     <div><h4>Fournaise (sous 450 m)</h4><p>Roche volcanique, plus d'or et, sous 500 m, des diamants (Pioche pro en acier). La chaleur ralentit foreuses et fours : un <b>ventilateur</b> à ${HEAT.fanRadius} cases les rafraîchit</p></div>
-    <div><h4>Statistiques</h4><p>Au comptoir ou à l'atelier, onglet « Statistiques » : ventes, minerai et lingots par minute, gains des 10 dernières minutes, machines à l'arrêt</p></div>
+    <div><h4>Tableau d'affichage</h4><p>${k('KeyE')} devant le tableau, entre le comptoir et l'atelier : ventes, minerai et lingots par minute, gains des 10 dernières minutes, machines à l'arrêt</p></div>
     <div><h4>Four et fonderie</h4><p>Minerai (convoyeur ou ${k('KeyE')} : déposer) + charbon → lingots vendus 2,5 fois plus cher, poussés devant la flèche</p></div>
     <div><h4>Améliorer une foreuse</h4><p>${k('KeyE')} sur la foreuse : niveau 2 = cases gauche et droite, niveau 3 = aussi derrière</p></div>
     <div><h4>Menu</h4><p><kbd>Échap</kbd> : pause, sauvegarde, chargement</p></div>

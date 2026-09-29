@@ -33,6 +33,7 @@ import {
   PICK_ANGLES,
   PICK_SIZE,
   PlayerSprites,
+  buildBoardSprite,
   buildCounterSprite,
   buildCrackSprites,
   buildLanternSprite,
@@ -92,6 +93,7 @@ export class Renderer {
   private readonly cracks: HTMLCanvasElement[];
   private readonly counter: HTMLCanvasElement;
   private readonly workshop: HTMLCanvasElement;
+  private readonly board: HTMLCanvasElement;
   private readonly lantern: HTMLCanvasElement;
   private time = 0;
   private smokeTimer = 0;
@@ -110,6 +112,7 @@ export class Renderer {
     this.cracks = buildCrackSprites();
     this.counter = buildCounterSprite();
     this.workshop = buildWorkshopSprite();
+    this.board = buildBoardSprite();
     this.lantern = buildLanternSprite();
     this.resize();
   }
@@ -730,7 +733,7 @@ export class Renderer {
   }
 
   private drawBuilding(b: Building): void {
-    const img = b.type === 'counter' ? this.counter : this.workshop;
+    const img = b.type === 'counter' ? this.counter : b.type === 'workshop' ? this.workshop : this.board;
     const x = b.x * TILE;
     const y = (b.y + b.h) * TILE - img.height;
     this.ctx.fillStyle = 'rgba(0,0,0,0.25)';

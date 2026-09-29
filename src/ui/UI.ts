@@ -19,12 +19,12 @@ import { Storage } from '../sim/structures/Storage';
 import type { Structure } from '../sim/structures/Structure';
 import { esc, kg, money, resIcon } from './format';
 import { MAP_COLORS } from '../render/MineMap';
-import { borerPanel, counterPanel, smelterPanel, drillPanel, helpPanel, inventoryPanel, mapPanel, shippingPanel, sorterPanel, stationPanel, storagePanel, switchPanel, workshopPanel } from './panels';
+import { boardPanel, borerPanel, counterPanel, smelterPanel, drillPanel, helpPanel, inventoryPanel, mapPanel, shippingPanel, sorterPanel, stationPanel, storagePanel, switchPanel, workshopPanel } from './panels';
 
 /** Flèches dans les 8 directions, dans l'ordre des angles (est, sud-est, sud…). */
 const ARROWS8 = ['→', '↘', '↓', '↙', '←', '↖', '↑', '↗'];
 
-export type PanelKind = 'counter' | 'workshop' | 'inventory' | 'storage' | 'drill' | 'borer' | 'furnace' | 'shipping' | 'sorter' | 'station' | 'switch' | 'map' | 'help';
+export type PanelKind = 'counter' | 'workshop' | 'board' | 'inventory' | 'storage' | 'drill' | 'borer' | 'furnace' | 'shipping' | 'sorter' | 'station' | 'switch' | 'map' | 'help';
 
 export interface UIHost {
   onAction(action: string, arg: string): void;
@@ -263,7 +263,11 @@ export class UI {
     switch (kind) {
       case 'counter':
         title = 'Comptoir de vente';
-        body = counterPanel(g, tab);
+        body = counterPanel(g);
+        break;
+      case 'board':
+        title = "Tableau d'affichage";
+        body = boardPanel(g);
         break;
       case 'workshop':
         title = 'Atelier';
