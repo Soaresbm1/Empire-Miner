@@ -29,8 +29,15 @@ export class Fx {
   particles: Particle[] = [];
   texts: FloatingText[] = [];
   shake = 0;
+  /** Part des particules réellement émises (réglage Qualité) : 1 = toutes. */
+  density = 1;
 
   emit(kind: ParticleKind, x: number, y: number, color: string, n: number, speed = 40): void {
+    // Sous 100 %, on tire au sort la part qui sort : peu de grains gardent leur cadence moyenne.
+    if (this.density < 1) {
+      const k = n * this.density;
+      n = Math.floor(k) + (Math.random() < k - Math.floor(k) ? 1 : 0);
+    }
     for (let i = 0; i < n; i++) {
       const a = Math.random() * Math.PI * 2;
       const sp = speed * (0.3 + Math.random() * 0.7);

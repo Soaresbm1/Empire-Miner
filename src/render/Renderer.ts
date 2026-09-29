@@ -29,6 +29,8 @@ import { STRUCTURE_FACTORIES } from '../sim/structures/registry';
 import type { Structure } from '../sim/structures/Structure';
 import { ChunkCache } from './ChunkCache';
 import { Fx } from './fx';
+import { PROFILES, Quality, QualityProfile } from './quality';
+import { INK, Pen, ramp } from './art';
 import {
   PICK_ANGLES,
   PICK_SIZE,
@@ -84,6 +86,9 @@ export class Renderer {
   /** Bas de l'écran caché par l'interface (px CSS) : le joueur reste centré dans ce qui reste visible. */
   bottomInset = 0;
   readonly fx = new Fx();
+  /** Réglage Qualité : nombre de particules et d'effets de détail. */
+  quality: Quality = 'high';
+  profile: QualityProfile = PROFILES.high;
   private chunks: ChunkCache | null = null;
   private state: GameState | null = null;
   private readonly player: PlayerSprites;
@@ -93,6 +98,7 @@ export class Renderer {
   private readonly cracks: HTMLCanvasElement[];
   private readonly counter: HTMLCanvasElement;
   private readonly workshop: HTMLCanvasElement;
+  private penCache: Pen | null = null;
   private readonly board: HTMLCanvasElement;
   private readonly lantern: HTMLCanvasElement;
   private time = 0;
@@ -123,6 +129,18 @@ export class Renderer {
     this.fx.particles = [];
     this.fx.texts = [];
     this.snapCamera();
+  }
+
+  /** Pinceau sur le contexte courant (le contexte change quand on dessine une icône). */
+  private get pen(): Pen {
+    if (!this.penCache || this.penCache.ctx !== this.ctx) this.penCache = new Pen(this.ctx);
+    return this.penCache;
+  }
+
+  setQuality(q: Quality): void {
+    this.quality = q;
+    this.profile = PROFILES[q];
+    this.fx.density = this.profile.particles;
   }
 
   resize(): void {
@@ -352,24 +370,48 @@ export class Renderer {
 
   private drawEntrance(x: number, y: number, w: number): void {
     const ctx = this.ctx;
+    const pen = this.pen;
     const left = x * TILE - 3;
     const right = (x + w) * TILE + 1;
     const top = y * TILE - 14;
-    ctx.fillStyle = '#4a3020';
-    ctx.fillRect(left, top, 4, 16);
-    ctx.fillRect(right, top, 4, 16);
-    ctx.fillStyle = '#6e4a2c';
-    ctx.fillRect(left - 2, top - 3, right - left + 8, 5);
-    ctx.fillStyle = '#8a5f38';
-    ctx.fillRect(left - 2, top - 3, right - left + 8, 1);
-    // Panneau
-    ctx.fillStyle = '#3b2616';
-    ctx.fillRect(left + 6, top - 11, right - left - 8, 8);
-    ctx.fillStyle = '#d8b377';
+    // Montants de bois veinés, posés sur des pierres.
+    for (const px of [left, right]) {
+      pen.rect(px - 1, top - 1, 6, 19, INK);
+      pen.rect(px, top, 4, 15, '#5a3a22');
+      pen.rect(px, top, 1, 15, '#8a5f38');
+      pen.rect(px + 3, top, 1, 15, '#3a2414');
+      pen.px(px + 1, top + 6, '#3a2414');
+      pen.px(px + 2, top + 10, '#7a4f2e');
+      pen.rect(px - 1, top + 14, 6, 3, '#6f695f');
+      pen.rect(px - 1, top + 14, 6, 1, '#a39b8c');
+    }
+    // Linteau et goussets en biais.
+    pen.rect(left - 3, top - 4, right - left + 10, 7, INK);
+    pen.rect(left - 2, top - 3, right - left + 8, 5, '#7a5231');
+    pen.rect(left - 2, top - 3, right - left + 8, 1, '#b07a44');
+    pen.rect(left - 2, top + 1, right - left + 8, 1, '#4a2f1a');
+    for (let k = 0; k < 4; k++) {
+      pen.px(left + 4 + k, top + 2 + k, '#5a3a22');
+      pen.px(left + 4 + k, top + 1 + k, '#7a5231');
+      pen.px(right - k, top + 2 + k, '#5a3a22');
+      pen.px(right - k, top + 1 + k, '#7a5231');
+    }
+    // Panneau suspendu par deux chaînes, planche cloutée.
+    const sx = left + 6;
+    const sw = right - left - 8;
+    pen.rect(sx + 2, top - 8, 1, 5, '#8a8e99');
+    pen.rect(sx + sw - 3, top - 8, 1, 5, '#8a8e99');
+    pen.rect(sx - 1, top - 13, sw + 2, 10, INK);
+    pen.rect(sx, top - 12, sw, 8, '#3b2616');
+    pen.rect(sx, top - 12, sw, 1, '#6a4526');
+    pen.rect(sx, top - 5, sw, 1, '#22150c');
+    pen.rivet(sx + 1, top - 6, '#b4b9c4');
+    pen.rivet(sx + sw - 2, top - 6, '#b4b9c4');
+    ctx.fillStyle = '#e8c88a';
     ctx.font = '6px monospace';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.fillText('MINE', (left + right + 4) / 2, top - 6.5);
+    ctx.fillText('MINE', (left + right + 4) / 2, top - 7.5);
   }
 
   // ------------------------------------------------------------------ objets
@@ -402,40 +444,50 @@ export class Renderer {
 
   private drawConveyor(b: Conveyor): void {
     const ctx = this.ctx;
+    const pen = this.pen;
+    const rail = ramp(b.def.accent ?? '#7d7e89');
     const x = b.x * TILE;
     const y = b.y * TILE;
+    const stuck = b.blocked && b.items.length >= b.capacity;
     ctx.save();
     ctx.translate(x + 8, y + 8);
     ctx.rotate((b.dir * Math.PI) / 2);
-    // Châssis (orienté vers +x)
-    ctx.fillStyle = '#26262c';
-    ctx.fillRect(-8, -7, 16, 14);
-    ctx.fillStyle = b.def.accent ?? '#6a6b74';
-    ctx.fillRect(-8, -7, 16, 2);
-    ctx.fillRect(-8, 5, 16, 2);
-    ctx.fillStyle = '#3a3a42';
-    ctx.fillRect(-8, -5, 16, 10);
-    // Lattes de la bande, animées dans le sens du transport.
-    const off = b.blocked && b.items.length >= b.capacity ? 0 : (this.time * b.speed * 16) % 4;
-    ctx.fillStyle = '#2f2f36';
+    // Châssis (orienté vers +x) : cadre sombre, bande creusée, deux rails biseautés.
+    pen.rect(-8, -7, 16, 14, '#1b1a20');
+    pen.rect(-8, -5, 16, 10, '#3a3a44');
+    pen.rect(-8, -5, 16, 1, '#2a2a32'); // ombre du rail du haut sur la bande
+    pen.rect(-8, 4, 16, 1, '#4a4a56'); // reflet du bord du bas
+    // Lattes qui défilent : un trait sombre suivi d'un reflet.
+    const off = stuck ? 0 : (this.time * b.speed * 16) % 4;
     for (let k = -3; k < 3; k++) {
       const xx = Math.round(-8 + k * 4 + off);
-      if (xx >= -8 && xx < 8) ctx.fillRect(xx, -5, 1, 10);
+      if (xx >= -6 && xx < 6) {
+        pen.rect(xx, -4, 1, 8, '#2b2b33');
+        pen.rect(xx + 1, -4, 1, 8, '#4b4b58');
+      }
+    }
+    // Rails latéraux à la couleur du niveau, avec rivets.
+    pen.rect(-8, -7, 16, 1, rail.hi);
+    pen.rect(-8, -6, 16, 1, rail.base);
+    pen.rect(-8, 5, 16, 1, rail.shade);
+    pen.rect(-8, 6, 16, 1, rail.dark);
+    for (let k = -6; k < 8; k += 4) {
+      pen.px(k, -6, rail.dark);
+      pen.px(k, 5, rail.light);
     }
     // Chevron central indiquant la direction.
     const chev = Math.round(((this.time * b.speed * 16) % 16) - 8);
-    ctx.fillStyle = b.blocked ? '#a8563c' : '#8d8e98';
+    ctx.fillStyle = b.blocked ? '#b8603f' : '#a9abb6';
     for (let r = 0; r < 3; r++) {
-      const xx = (b.blocked && b.items.length >= b.capacity ? 0 : chev) + r - 1;
-      if (xx >= -8 && xx < 8) {
+      const xx = (stuck ? 0 : chev) + r - 1;
+      if (xx >= -6 && xx < 6) {
         ctx.fillRect(xx, -3 + r, 1, 1);
         ctx.fillRect(xx, 2 - r, 1, 1);
       }
     }
     // Rouleaux aux extrémités.
-    ctx.fillStyle = '#8a8b94';
-    ctx.fillRect(-8, -5, 1, 10);
-    ctx.fillRect(7, -5, 1, 10);
+    pen.tube(-8, -5, 2, 10, '#8d8e99');
+    pen.tube(6, -5, 2, 10, '#8d8e99');
     ctx.restore();
   }
 
@@ -465,26 +517,31 @@ export class Renderer {
       ctx.fillRect(x + TILE - 1, y, 1, TILE);
     }
     const dirs = mask ? [0, 1, 2, 3].filter((d) => mask & (1 << d)) : [0, 2];
+    const pen = this.pen;
     for (const d of dirs) {
       ctx.save();
       ctx.translate(x + 8, y + 8);
       ctx.rotate((d * Math.PI) / 2);
-      // Traverses sombres, puis deux rails d'acier bien contrastés.
-      ctx.fillStyle = '#2e1f14';
-      ctx.fillRect(0, -6, 3, 12);
-      ctx.fillRect(5, -6, 3, 12);
-      ctx.fillStyle = '#4a3020';
-      ctx.fillRect(0, -6, 3, 1);
-      ctx.fillRect(5, -6, 3, 1);
-      ctx.fillStyle = '#1a1418';
-      ctx.fillRect(-2, -5, 10, 1);
-      ctx.fillRect(-2, 2, 10, 1);
-      ctx.fillStyle = '#d0d4dc';
-      ctx.fillRect(-2, -4, 10, 1);
-      ctx.fillRect(-2, 3, 10, 1);
-      ctx.fillStyle = '#7a808a';
-      ctx.fillRect(-2, -3, 10, 1);
-      ctx.fillRect(-2, 4, 10, 1);
+      // Lit de gravier sombre, traverses de bois veinées, puis deux rails d'acier bien contrastés.
+      pen.rect(-1, -7, 9, 14, 'rgba(24,16,12,0.28)');
+      for (const sx of [0, 5]) {
+        pen.rect(sx, -6, 3, 12, '#2e1f14');
+        pen.rect(sx, -6, 3, 1, '#6a4526');
+        pen.rect(sx, -5, 1, 10, '#4a3020');
+        pen.px(sx + 1, -1, '#3a2618');
+        pen.px(sx + 2, 3, '#3a2618');
+      }
+      pen.rect(-2, -5, 10, 1, '#1a1418');
+      pen.rect(-2, 2, 10, 1, '#1a1418');
+      pen.rect(-2, -4, 10, 1, '#e6e9ef');
+      pen.rect(-2, 3, 10, 1, '#e6e9ef');
+      pen.rect(-2, -3, 10, 1, '#7a808a');
+      pen.rect(-2, 4, 10, 1, '#7a808a');
+      // Crampons aux croisements traverse / rail.
+      for (const sx of [1, 6]) {
+        pen.px(sx, -4, '#3a3d47');
+        pen.px(sx, 3, '#3a3d47');
+      }
       ctx.restore();
     }
     if (s instanceof RailSwitch) this.drawSwitchMarks(s, mask);
@@ -541,25 +598,23 @@ export class Renderer {
   /** Wagonnet : caisse d'acier sur roues, avec un tas de minerai proportionnel au chargement. */
   private drawWagon(w: Wagon | null, cx: number, cy: number): void {
     const ctx = this.ctx;
+    const pen = this.pen;
     const x = Math.round(cx - 7);
     const y = Math.round(cy - 7);
-    ctx.fillStyle = 'rgba(0,0,0,0.35)';
-    ctx.fillRect(x, y + 12, 14, 3);
-    // Contour sombre (lisibilité sur les rails) et roues
-    ctx.fillStyle = '#120e10';
-    ctx.fillRect(x - 1, y + 1, 16, 11);
-    ctx.fillRect(x + 1, y + 10, 3, 3);
-    ctx.fillRect(x + 10, y + 10, 3, 3);
-    // Caisse
-    ctx.fillStyle = '#4a4f58';
-    ctx.fillRect(x, y + 2, 14, 9);
-    ctx.fillStyle = '#b8bec8';
-    ctx.fillRect(x, y + 2, 14, 2);
-    ctx.fillStyle = '#3a3e46';
-    ctx.fillRect(x, y + 9, 14, 2);
-    ctx.fillStyle = '#9aa0aa';
-    ctx.fillRect(x + 3, y + 5, 1, 4);
-    ctx.fillRect(x + 10, y + 5, 1, 4);
+    pen.shadow(x, y + 12, 14, 0.35);
+    // Roues (moyeu clair) puis caisse d'acier rivetée, arêtes éclairées.
+    for (const wx of [x + 1, x + 10]) {
+      pen.rect(wx - 1, y + 9, 5, 5, INK);
+      pen.rect(wx, y + 10, 3, 3, '#3a3d47');
+      pen.px(wx + 1, y + 11, '#b4b9c4');
+    }
+    pen.slab(x, y + 2, 14, 9, '#5d6470');
+    pen.rect(x, y + 8, 14, 1, '#3f444e');
+    for (const rx of [x + 2, x + 6, x + 11]) pen.px(rx, y + 5, '#2d3038');
+    pen.rect(x + 3, y + 5, 1, 4, '#8a909c');
+    pen.rect(x + 10, y + 5, 1, 4, '#8a909c');
+    pen.rect(x - 1, y + 1, 16, 2, '#8a909c');
+    pen.rect(x - 1, y + 1, 16, 1, '#d0d4dc');
     // Chargement
     if (w && !w.isEmpty()) {
       const entries = Object.entries(w.cargo).sort((a, b) => b[1] - a[1]);
@@ -582,20 +637,21 @@ export class Renderer {
   /** Séparateur : bande courte sous un carter jaune, flèches vers les trois sorties. */
   private drawSplitter(s: Splitter): void {
     const ctx = this.ctx;
+    const pen = this.pen;
     ctx.save();
     ctx.translate(s.x * TILE + 8, s.y * TILE + 8);
     ctx.rotate((s.dir * Math.PI) / 2);
-    ctx.fillStyle = '#26262c';
-    ctx.fillRect(-8, -8, 16, 16);
-    ctx.fillStyle = '#3a3a42';
-    ctx.fillRect(-7, -7, 14, 14);
-    // Carter
-    ctx.fillStyle = s.def.accent ?? '#e0b84a';
-    ctx.fillRect(-3, -8, 6, 16);
-    ctx.fillStyle = '#8a6a1a';
-    ctx.fillRect(-3, -8, 1, 16);
-    ctx.fillStyle = '#26221e';
-    for (let k = -6; k <= 6; k += 4) ctx.fillRect(-1, k, 2, 2);
+    pen.rect(-8, -8, 16, 16, '#1b1a20');
+    pen.rect(-7, -7, 14, 14, '#3a3a44');
+    pen.rect(-7, -7, 14, 1, '#2a2a32');
+    // Carter à la couleur du modèle, boulonné, avec trois fentes de sortie.
+    pen.slab(-3, -8, 6, 16, s.def.accent ?? '#e0b84a', false);
+    for (let k = -6; k <= 6; k += 4) {
+      pen.rect(-1, k, 2, 2, '#26221e');
+      pen.px(-1, k, '#5a4a30');
+    }
+    pen.rivet(-2, -6, '#cfd3dc');
+    pen.rivet(1, 6, '#cfd3dc');
     ctx.restore();
     if (s instanceof Sorter) {
       // Trieur : le minerai choisi au centre, flèche verte vers l'avant, flèches grises sur les côtés.
@@ -639,23 +695,26 @@ export class Renderer {
   /** Pied de pont : rampe qui monte (entrée) ou descend (sortie) dans le sens du transport. */
   private drawBridgeFoot(b: Bridge): void {
     const ctx = this.ctx;
+    const pen = this.pen;
     ctx.save();
     ctx.translate(b.x * TILE + 8, b.y * TILE + 8);
     ctx.rotate((b.dir * Math.PI) / 2);
-    ctx.fillStyle = '#26262c';
-    ctx.fillRect(-8, -7, 16, 14);
-    ctx.fillStyle = '#6a6b74';
-    ctx.fillRect(-8, -7, 16, 2);
-    ctx.fillRect(-8, 5, 16, 2);
+    pen.rect(-8, -7, 16, 14, '#1b1a20');
+    pen.rect(-8, -7, 16, 1, '#a0a3ad');
+    pen.rect(-8, -6, 16, 1, '#7d7e89');
+    pen.rect(-8, 5, 16, 1, '#565964');
+    pen.rect(-8, 6, 16, 1, '#3a3d47');
     // Rampe en planches, plus claire du côté haut
     const up = b.source ? -1 : 1; // sortie : la rampe descend dans le sens du transport
     for (let k = 0; k < 4; k++) {
       const shade = up > 0 ? 0.6 + k * 0.13 : 1 - k * 0.13;
       ctx.fillStyle = `rgb(${Math.round(138 * shade)},${Math.round(95 * shade)},${Math.round(56 * shade)})`;
       ctx.fillRect(-7 + k * 4, -5, 3, 10);
+      pen.rect(-7 + k * 4, -5, 3, 1, `rgb(${Math.round(190 * shade)},${Math.round(140 * shade)},${Math.round(90 * shade)})`);
+      pen.rect(-4 + k * 4, -5, 1, 10, '#2e1f14');
     }
-    ctx.fillStyle = '#4a3020';
-    ctx.fillRect(up > 0 ? 5 : -7, -7, 2, 14);
+    pen.rect(up > 0 ? 5 : -7, -7, 2, 14, '#4a3020');
+    pen.rect(up > 0 ? 5 : -7, -6, 1, 12, '#6e4a2c');
     ctx.restore();
     if (!b.target && !b.source) this.drawArrow(b.x * TILE + 8 + DX[b.dir] * 5, b.y * TILE + 8 + DY[b.dir] * 5, b.dir, '#f2e6c8');
   }
@@ -745,51 +804,59 @@ export class Renderer {
 
   private drawDrill(d: Drill): void {
     const ctx = this.ctx;
+    const pen = this.pen;
     const x = d.x * TILE;
     const y = d.y * TILE;
     const active = d.status === 'ok';
-    const jiggle = active ? Math.round(Math.sin(this.time * 40) * 0.5) : 0;
+    const jig = active ? Math.round(Math.sin(this.time * 40) * 0.5) : 0;
     if (d.level > 1) this.drawDrillHeads(d);
-    // Ombre et socle
-    ctx.fillStyle = 'rgba(0,0,0,0.35)';
-    ctx.fillRect(x + 1, y + 13, 15, 3);
-    ctx.fillStyle = '#2d2e33';
-    ctx.fillRect(x + 1, y + 3, 14, 12);
-    // Carter jaune (face avant visible : relief)
-    ctx.fillStyle = '#d9a526';
-    ctx.fillRect(x + 2, y + jiggle, 12, 11);
-    ctx.fillStyle = '#f2c230';
-    ctx.fillRect(x + 2, y + jiggle, 12, 2);
-    ctx.fillStyle = '#a57a14';
-    ctx.fillRect(x + 2, y + 9 + jiggle, 12, 3);
-    // Bandes de danger
-    ctx.fillStyle = '#26221e';
-    for (let k = 0; k < 4; k++) ctx.fillRect(x + 3 + k * 3, y + 10 + jiggle, 1, 2);
-    // Engrenage rotatif
+    pen.shadow(x + 1, y + 13, 15);
+    // Socle d'acier boulonné.
+    pen.slab(x + 1, y + 10, 14, 5, '#3f4049');
+    pen.rivet(x + 3, y + 13);
+    pen.rivet(x + 12, y + 13);
+    // Carter jaune : arêtes éclairées en haut à gauche, ombré en bas à droite.
+    pen.slab(x + 2, y + jig, 12, 11, '#e2ac2a');
+    // Bandes de danger en biais, en bas du carter.
+    for (let k = 0; k < 6; k++) {
+      pen.px(x + 3 + k * 2, y + 9 + jig, '#26221e');
+      pen.px(x + 4 + k * 2, y + 8 + jig, '#26221e');
+    }
+    // Hublot du mécanisme : engrenage qui tourne, éclairé de l'intérieur quand la foreuse tourne.
+    pen.rect(x + 4, y + 1 + jig, 8, 7, INK);
+    pen.rect(x + 5, y + 2 + jig, 6, 5, active ? '#5a4a30' : '#3a3b42');
     const a = d.activeTime * 7;
     const cx = x + 8;
-    const cy = y + 5 + jiggle;
-    ctx.fillStyle = '#4a4b52';
-    ctx.fillRect(cx - 3, cy - 3, 6, 6);
-    ctx.fillStyle = '#9aa0aa';
+    const cy = y + 4 + jig;
+    ctx.fillStyle = '#b4b9c4';
     for (let k = 0; k < 4; k++) {
       const aa = a + (k * Math.PI) / 2;
-      ctx.fillRect(Math.round(cx + Math.cos(aa) * 2.5) - 1, Math.round(cy + Math.sin(aa) * 2.5) - 1, 2, 2);
+      ctx.fillRect(Math.round(cx + Math.cos(aa) * 2) - 1, Math.round(cy + Math.sin(aa) * 2) - 1, 2, 2);
     }
-    ctx.fillStyle = '#2d2e33';
-    ctx.fillRect(cx - 1, cy - 1, 2, 2);
-    // Pot d'échappement
-    ctx.fillStyle = '#3a3a40';
-    ctx.fillRect(x + 11, y - 2 + jiggle, 2, 4);
+    pen.rect(cx - 1, cy - 1, 2, 2, '#5b5f68');
+    pen.px(cx, cy, '#e3e7f0');
+    // Voyant d'état : vert en marche, rouge sans charbon, orange si bloquée.
+    const lamp = d.status === 'ok' ? '#6fe08a' : d.status === 'nofuel' ? '#e0483c' : '#f0a33a';
+    const lit = d.status !== 'ok' || !this.profile.detail || Math.floor(this.time * 3) % 4 !== 0;
+    pen.px(x + 3, y + 2 + jig, lit ? lamp : '#3a3b42');
+    // Échelons d'amélioration : une pastille par niveau au-dessus du premier.
+    for (let k = 1; k < d.level; k++) pen.px(x + 12 - (k - 1) * 2, y + 2 + jig, '#fff3b0');
+    // Pot d'échappement chromé.
+    pen.tube(x + 11, y - 3 + jig, 3, 5, '#7d818b');
+    pen.rect(x + 10, y - 4 + jig, 5, 1, INK);
+    pen.rect(x + 11, y - 4 + jig, 3, 1, '#b4b9c4');
     // Flèche de sortie
     this.drawArrow(x + 8 + DX[d.dir] * 6, y + 8 + DY[d.dir] * 6, d.dir, '#ffffff');
     // Jauge de combustible
     const fuel = d.fuelSeconds() / (d.fuelMax * (d.def.fuel?.secondsPerUnit ?? 1));
-    ctx.fillStyle = '#1a1418';
+    ctx.fillStyle = INK;
     ctx.fillRect(x + 1, y + 15, 14, 2);
     ctx.fillStyle = fuel > 0.2 ? '#f08a24' : '#d0342c';
     ctx.fillRect(x + 1, y + 15, Math.round(14 * Math.min(1, fuel)), 2);
-    if (active && Math.random() < 0.15) this.fx.emit('dust', x + 8, y + 13, 'rgba(160,140,120,0.5)', 1, 10);
+    if (active) {
+      if (Math.random() < 0.15) this.fx.emit('dust', x + 8, y + 13, 'rgba(160,140,120,0.5)', 1, 10);
+      if (Math.random() < 0.12) this.fx.emit('smoke', x + 12.5, y - 5, 'rgba(120,120,128,0.55)', 1, 6);
+    }
   }
 
   /** Position (coin haut gauche, unités monde) de la foreuse d'une foreuse de percement, trajet compris. */
@@ -804,16 +871,13 @@ export class Renderer {
    */
   private drawBorerBase(b: TunnelBorer): void {
     const ctx = this.ctx;
+    const pen = this.pen;
     const x = b.x * TILE;
     const y = b.y * TILE;
-    ctx.fillStyle = 'rgba(0,0,0,0.3)';
-    ctx.fillRect(x, y + 3, 16, 14);
-    ctx.fillStyle = '#26272c';
-    ctx.fillRect(x, y + 2, 16, 14);
-    ctx.fillStyle = '#3d3e46';
-    ctx.fillRect(x + 1, y + 3, 14, 12);
-    ctx.fillStyle = '#4f505a';
-    ctx.fillRect(x + 1, y + 3, 14, 1);
+    pen.shadow(x, y + 14, 16, 0.3);
+    // Dalle d'acier boulonnée.
+    pen.slab(x + 1, y + 3, 14, 12, '#474852');
+    for (const [bx, by] of [[3, 5], [12, 5], [3, 13], [12, 13]]) pen.rivet(x + bx, y + by, '#8a8e99');
     // Sortie balisée (bandes jaunes et noires) sur le bord de la flèche.
     ctx.save();
     ctx.translate(x + 8, y + 9);
@@ -830,26 +894,18 @@ export class Renderer {
       ctx.fillRect(2, -2, 1, 4);
     }
     ctx.restore();
-    // Trémie à charbon, au fond de la dalle.
-    ctx.fillStyle = '#1a1418';
-    ctx.fillRect(x + 3, y - 5, 10, 8);
-    ctx.fillStyle = '#6b6d77';
-    ctx.fillRect(x + 4, y - 4, 8, 6);
-    ctx.fillStyle = '#8a8c96';
-    ctx.fillRect(x + 4, y - 4, 8, 1);
-    ctx.fillStyle = '#2a2a30';
-    ctx.fillRect(x + 5, y - 3, 6, 3);
+    // Trémie à charbon, au fond de la dalle : bac d'acier, niveau visible.
+    pen.slab(x + 3, y - 4, 10, 8, '#6f717c');
+    pen.rect(x + 5, y - 3, 6, 4, '#25252b');
     const fill = b.fuelMax ? b.fuelUnits / b.fuelMax : 0;
     if (fill > 0) {
-      ctx.fillStyle = '#0e0d10';
-      const h = Math.max(1, Math.round(3 * fill));
-      ctx.fillRect(x + 5, y - h, 6, h);
-      ctx.fillStyle = '#4a4a55';
-      ctx.fillRect(x + 6, y - h, 1, 1);
-      ctx.fillRect(x + 9, y - h, 1, 1);
+      const h = Math.max(1, Math.round(4 * fill));
+      pen.rect(x + 5, y + 1 - h, 6, h, '#0e0d10');
+      pen.px(x + 6, y + 1 - h, '#5a5a66');
+      pen.px(x + 9, y + 1 - h, '#5a5a66');
     }
     // Jauge de la réserve.
-    ctx.fillStyle = '#1a1418';
+    ctx.fillStyle = INK;
     ctx.fillRect(x + 1, y + 15, 14, 2);
     ctx.fillStyle = fill > 0.2 ? '#f08a24' : '#d0342c';
     ctx.fillRect(x + 1, y + 15, Math.round(14 * Math.min(1, fill)), 2);
@@ -860,7 +916,7 @@ export class Renderer {
       const cx = x + 8 - DX[b.dir] * 5;
       const cy = y + 10 - DY[b.dir] * 4;
       for (let k = 0; k < n; k++) {
-        ctx.fillStyle = '#1a1418';
+        ctx.fillStyle = INK;
         ctx.fillRect(cx - 3 + (k % 3) * 2, cy - Math.floor(k / 3) * 2, 3, 3);
         ctx.fillStyle = getResource(stored[k % stored.length]).color;
         ctx.fillRect(cx - 2 + (k % 3) * 2, cy + 1 - Math.floor(k / 3) * 2, 2, 1);
@@ -876,27 +932,29 @@ export class Renderer {
     const working = digging || rolling;
     const jig = digging ? Math.round(Math.sin(this.time * 45) * 0.5) : 0;
     // Ombre, chenilles (les maillons défilent quand elle roule, à l'envers au retour).
-    ctx.fillStyle = 'rgba(0,0,0,0.35)';
-    ctx.fillRect(x + 1, y + 13, 15, 3);
-    ctx.fillStyle = '#1a1418';
-    ctx.fillRect(x + 1, y + 10, 14, 5);
-    ctx.fillStyle = '#5b5b63';
+    const pen = this.pen;
+    pen.shadow(x + 1, y + 13, 15);
+    pen.rect(x + 1, y + 9, 14, 6, INK);
+    pen.rect(x + 2, y + 10, 12, 4, '#33333b');
+    pen.rect(x + 2, y + 10, 12, 1, '#4a4a54');
     const roll = rolling ? (((b.status === 'returning' ? -1 : 1) * Math.floor(this.time * 12)) % 3 + 3) % 3 : 0;
-    for (let k = roll; k < 14; k += 3) ctx.fillRect(x + 1 + k, y + 13, 1, 1);
-    // Caisson.
-    ctx.fillStyle = '#c8472e';
-    ctx.fillRect(x + 2, y + 1 + jig, 12, 10);
-    ctx.fillStyle = '#e2603f';
-    ctx.fillRect(x + 2, y + 1 + jig, 12, 2);
-    ctx.fillStyle = '#8f2f1f';
-    ctx.fillRect(x + 2, y + 9 + jig, 12, 2);
-    // Cabine et bandes de danger.
-    ctx.fillStyle = '#26221e';
-    ctx.fillRect(x + 5, y + 3 + jig, 6, 4);
-    ctx.fillStyle = working ? '#ffe28a' : '#6a6048';
-    ctx.fillRect(x + 6, y + 4 + jig, 2, 1);
-    ctx.fillStyle = '#f2c230';
-    for (let k = 0; k < 3; k++) ctx.fillRect(x + 3 + k * 4, y + 9 + jig, 2, 1);
+    for (let k = roll; k < 12; k += 3) {
+      pen.px(x + 2 + k, y + 11, '#6a6a76');
+      pen.px(x + 2 + k, y + 13, '#6a6a76');
+    }
+    for (const wx of [3, 7, 11]) pen.rect(x + wx, y + 12, 2, 1, '#8a8e99');
+    // Caisson rouge éclairé d'en haut à gauche.
+    pen.slab(x + 2, y + 1 + jig, 12, 10, '#cc4a30');
+    // Cabine vitrée, feu de travail, bandes de danger.
+    pen.rect(x + 4, y + 2 + jig, 8, 5, INK);
+    pen.rect(x + 5, y + 3 + jig, 6, 3, working ? '#5a4a26' : '#26323f');
+    pen.px(x + 5, y + 3 + jig, working ? '#ffe28a' : '#6a8aaa');
+    pen.px(x + 6, y + 3 + jig, working ? '#ffd060' : '#4a6a8a');
+    if (working) pen.rect(x + 7, y + 5 + jig, 3, 1, '#a87a20');
+    for (let k = 0; k < 6; k++) pen.px(x + 3 + k * 2, y + 9 + jig, k % 2 ? '#26221e' : '#f2c230');
+    // Gyrophare qui clignote quand elle travaille.
+    const beacon = working && (!this.profile.detail || Math.floor(this.time * 4) % 2 === 0);
+    pen.px(x + 13, y + jig, beacon ? '#ffb040' : '#6a4a20');
     // Moteur renforcé (niveau 2+) : pot d'échappement chromé sur le caisson.
     if (b.level >= 2) {
       ctx.fillStyle = '#1a1418';
@@ -1045,8 +1103,27 @@ export class Renderer {
    * Four (1 case) et fonderie (2×2) : four de briques, bouche rougeoyante quand il fond,
    * cheminée(s), goulotte de sortie du côté de la flèche et jauge de charbon.
    */
+  /** Mur de briques éclairé : joints sombres, briques de tons variés, arête claire sur chaque brique. */
+  private bricks(x: number, y: number, w: number, h: number, base: string): void {
+    const pen = this.pen;
+    const r = ramp(base);
+    pen.rect(x, y, w, h, r.dark);
+    for (let row = 0, yy = y; yy < y + h; row++, yy += 3) {
+      const bh = Math.min(2, y + h - yy);
+      for (let xx = x - (row % 2 ? 3 : 0); xx < x + w; xx += 6) {
+        const bx = Math.max(x, xx);
+        const bw = Math.min(x + w, xx + 5) - bx;
+        if (bw <= 0) continue;
+        const tone = Math.abs(xx * 7 + yy * 13 + row) % 5;
+        pen.rect(bx, yy, bw, bh, tone === 0 ? r.light : tone === 4 ? r.shade : r.base);
+        pen.rect(bx, yy, bw, 1, tone === 4 ? r.base : r.light);
+      }
+    }
+  }
+
   private drawSmelter(s: Smelter): void {
     const ctx = this.ctx;
+    const pen = this.pen;
     const x = s.x * TILE;
     const y = s.y * TILE;
     const W = s.w * TILE;
@@ -1055,65 +1132,63 @@ export class Renderer {
     const hot = s.status === 'ok';
     const flicker = hot ? 0.75 + Math.sin(this.time * 17) * 0.15 + Math.sin(this.time * 7.3) * 0.1 : 0;
     const top = big ? 10 : 6; // hauteur du four au-dessus de sa case (vue de trois quarts)
-    ctx.fillStyle = 'rgba(0,0,0,0.35)';
-    ctx.fillRect(x + 1, y + H - 3, W - 1, 3);
-    // Cheminées (derrière le corps).
+    pen.shadow(x + 1, y + H - 3, W - 1);
+    // Cheminées de pierre (derrière le corps), coiffées d'un anneau sombre et noircies de suie.
     const chimneys = big ? [x + 5, x + W - 10] : [x + 10];
+    const cw = big ? 6 : 4;
+    const chh = big ? 10 : 7;
     for (const cx of chimneys) {
-      ctx.fillStyle = '#1a1418';
-      ctx.fillRect(cx - 1, y - top - (big ? 9 : 6), big ? 7 : 5, big ? 10 : 7);
-      ctx.fillStyle = '#4a3a34';
-      ctx.fillRect(cx, y - top - (big ? 8 : 5), big ? 5 : 3, big ? 9 : 6);
-      ctx.fillStyle = '#2a2024';
-      ctx.fillRect(cx - 1, y - top - (big ? 9 : 6), big ? 7 : 5, 2);
+      const cy = y - top - chh + 1;
+      pen.slab(cx, cy, cw, chh, '#6a5a54');
+      pen.slab(cx - 1, cy - 1, cw + 2, 2, '#3f3230');
+      pen.rect(cx + 1, cy + 2, 1, chh - 3, '#4a3c38');
+      if (hot && this.profile.detail) pen.px(cx + (cw >> 1), cy + 1, '#7a4a3a');
     }
-    // Corps en briques.
-    ctx.fillStyle = '#1a1418';
-    ctx.fillRect(x, y - top, W, H + top - 1);
-    ctx.fillStyle = '#8a4b38';
-    ctx.fillRect(x + 1, y - top + 1, W - 2, H + top - 3);
-    ctx.fillStyle = '#a8614a';
-    ctx.fillRect(x + 1, y - top + 1, W - 2, big ? 4 : 3);
-    ctx.fillStyle = '#6a3527';
-    for (let row = y - top + (big ? 6 : 5); row < y + H - 3; row += 3) {
-      ctx.fillRect(x + 1, row, W - 2, 1);
-      const off = ((row - y) / 3) % 2 ? 2 : 5;
-      for (let col = x + off; col < x + W - 2; col += 6) ctx.fillRect(col, row - 2, 1, 2);
-    }
+    // Corps en briques, plaque d'acier rivetée en haut.
+    pen.rect(x, y - top, W, H + top - 1, INK);
+    this.bricks(x + 1, y - top + 1, W - 2, H + top - 3, '#a95a42');
+    pen.rect(x + 1, y - top + 1, W - 2, big ? 3 : 2, '#5d626d');
+    pen.rect(x + 1, y - top + 1, W - 2, 1, '#9aa0aa');
+    for (let rx = x + 3; rx < x + W - 2; rx += 5) pen.px(rx, y - top + (big ? 3 : 2), '#2d3038');
     // Fonderie : creuset de métal en fusion sur le dessus.
     if (big) {
-      ctx.fillStyle = '#2a2024';
-      ctx.fillRect(x + 8, y - top + 1, W - 16, 4);
-      ctx.fillStyle = hot ? `rgba(255,${Math.round(120 + flicker * 60)},30,1)` : '#4a3a34';
-      ctx.fillRect(x + 9, y - top + 2, W - 18, 2);
+      pen.rect(x + 7, y - top + 4, W - 14, 5, INK);
+      pen.rect(x + 8, y - top + 5, W - 16, 3, hot ? `rgb(255,${Math.round(120 + flicker * 60)},30)` : '#3f3230');
+      if (hot) pen.rect(x + 8, y - top + 5, W - 16, 1, '#ffe28a');
     }
-    // Bouche du four (face avant) : noire à l'arrêt, rougeoyante quand il fond.
+    // Bouche du four : arche de pierre, noire à l'arrêt, flammes qui dansent quand il fond.
     const mw = big ? 14 : 8;
     const mh = big ? 9 : 6;
     const mx = x + Math.round((W - mw) / 2);
     const my = y + H - mh - (big ? 5 : 3);
-    ctx.fillStyle = '#26221e';
-    ctx.fillRect(mx - 1, my - 1, mw + 2, mh + 1);
-    ctx.fillStyle = '#0e0b0d';
-    ctx.fillRect(mx, my, mw, mh);
+    pen.rect(mx - 2, my - 2, mw + 4, mh + 3, INK);
+    pen.rect(mx - 1, my - 1, mw + 2, mh + 2, '#8b8175');
+    pen.rect(mx - 1, my - 1, mw + 2, 1, '#c4baa8');
+    pen.rect(mx, my, mw, mh, '#0e0b0d');
     if (hot) {
-      ctx.fillStyle = `rgba(255,${Math.round(90 + flicker * 70)},20,${0.75 + flicker * 0.25})`;
-      ctx.fillRect(mx + 1, my + 2, mw - 2, mh - 2);
-      ctx.fillStyle = '#ffe28a';
-      ctx.fillRect(mx + 2, my + mh - 2, mw - 4, 1);
+      pen.rect(mx, my + mh - 3, mw, 3, `rgb(255,${Math.round(90 + flicker * 70)},20)`);
+      for (let i = 0; i < mw; i++) {
+        const fh = 1 + Math.round(((Math.sin(this.time * 9 + i * 1.7) + 1) * (mh - 3)) / 2.4);
+        pen.rect(mx + i, my + mh - 3 - Math.min(fh, mh - 3), 1, Math.min(fh, mh - 3), i % 3 === 0 ? '#ff9a30' : '#e2571c');
+        if (fh > 2) pen.px(mx + i, my + mh - 3 - Math.min(fh, mh - 3), '#ffe28a');
+      }
+      pen.rect(mx + 1, my + mh - 1, mw - 2, 1, '#ffe28a');
+      if (this.profile.glow) {
+        ctx.fillStyle = `rgba(255,140,40,${0.14 + flicker * 0.08})`;
+        ctx.fillRect(mx - 3, my + mh + 1, mw + 6, 3);
+      }
     } else if (s.input.length) {
-      ctx.fillStyle = '#5a2a18'; // braises
-      ctx.fillRect(mx + 1, my + mh - 2, mw - 2, 1);
+      pen.rect(mx + 1, my + mh - 2, mw - 2, 1, '#5a2a18'); // braises
+      pen.px(mx + 2, my + mh - 2, '#a04a24');
     }
     // Goulotte de sortie du côté de la flèche, avec le lingot qui attend.
     ctx.save();
     ctx.translate(x + W / 2, y + H / 2);
     ctx.rotate((s.dir * Math.PI) / 2);
     const edge = (s.dir % 2 === 0 ? W : H) / 2;
-    ctx.fillStyle = '#1a1418';
-    ctx.fillRect(edge - 3, -4, 5, 8);
-    ctx.fillStyle = '#6a6f78';
-    ctx.fillRect(edge - 2, -3, 3, 6);
+    pen.rect(edge - 3, -4, 5, 8, INK);
+    pen.rect(edge - 2, -3, 3, 6, '#7d818b');
+    pen.rect(edge - 2, -3, 1, 6, '#b4b9c4');
     ctx.restore();
     if (s.output.length) {
       const img = this.nuggets.get(s.output[0]);
@@ -1122,7 +1197,7 @@ export class Renderer {
     this.drawArrow(x + W / 2 + DX[s.dir] * (W / 2 - 5), y + H / 2 + DY[s.dir] * (H / 2 - 5) - (s.dir % 2 ? 0 : 3), s.dir, '#ffffff');
     // Jauge de charbon.
     const fuel = s.fuelMax ? (s.fuelUnits + (s.burn > 0 ? 1 : 0)) / s.fuelMax : 0;
-    ctx.fillStyle = '#1a1418';
+    ctx.fillStyle = INK;
     ctx.fillRect(x + 1, y + H - 1, W - 2, 2);
     ctx.fillStyle = fuel > 0.2 ? '#f08a24' : '#d0342c';
     ctx.fillRect(x + 1, y + H - 1, Math.round((W - 2) * Math.min(1, fuel)), 2);
@@ -1273,120 +1348,127 @@ export class Renderer {
 
   /** Étai : deux poteaux et une poutre de bois (on passe dessous). */
   private drawProp(s: Prop): void {
-    const ctx = this.ctx;
+    const pen = this.pen;
     const x = s.x * TILE;
     const y = s.y * TILE;
-    ctx.fillStyle = 'rgba(0,0,0,0.3)';
-    ctx.fillRect(x + 1, y + 14, 3, 2);
-    ctx.fillRect(x + 12, y + 14, 3, 2);
+    pen.shadow(x, y + 14, 16, 0.3);
+    // Deux poteaux de bois veinés (arête claire à gauche), un chapeau et des cales en coin.
     for (const px of [x + 1, x + 12]) {
-      ctx.fillStyle = '#3e2714';
-      ctx.fillRect(px, y - 6, 3, 21);
-      ctx.fillStyle = '#8a5a32';
-      ctx.fillRect(px, y - 6, 2, 21);
-      ctx.fillStyle = '#b07a44';
-      ctx.fillRect(px, y - 6, 1, 21);
+      pen.rect(px - 1, y - 6, 5, 22, INK);
+      pen.rect(px, y - 6, 3, 21, '#8a5a32');
+      pen.rect(px, y - 6, 1, 21, '#c08a50');
+      pen.rect(px + 2, y - 6, 1, 21, '#4a2f1a');
+      pen.px(px + 1, y + 1, '#6a4424');
+      pen.px(px + 1, y + 8, '#6a4424');
+      pen.px(px + 1, y + 4, '#a8764a');
     }
-    ctx.fillStyle = '#3e2714';
-    ctx.fillRect(x - 1, y - 9, 18, 4);
-    ctx.fillStyle = '#9a6a3a';
-    ctx.fillRect(x - 1, y - 9, 18, 3);
-    ctx.fillStyle = '#c08a50';
-    ctx.fillRect(x - 1, y - 9, 18, 1);
-    // Cales en coin.
-    ctx.fillStyle = '#6a4424';
-    ctx.fillRect(x + 4, y - 6, 2, 2);
-    ctx.fillRect(x + 10, y - 6, 2, 2);
+    pen.rect(x - 2, y - 10, 20, 5, INK);
+    pen.rect(x - 1, y - 9, 18, 3, '#9a6a3a');
+    pen.rect(x - 1, y - 9, 18, 1, '#d09a5c');
+    pen.rect(x - 1, y - 7, 18, 1, '#5a3a22');
+    pen.rect(x + 4, y - 6, 2, 2, '#6a4424');
+    pen.rect(x + 10, y - 6, 2, 2, '#6a4424');
+    pen.px(x + 4, y - 6, '#a8764a');
+    pen.px(x + 10, y - 6, '#a8764a');
   }
 
   /** Ventilateur : hélice dans un cadre d'acier ; elle s'emballe quand il y a du grisou. */
   private drawFan(s: Fan): void {
     const ctx = this.ctx;
+    const pen = this.pen;
     const x = s.x * TILE;
     const y = s.y * TILE;
-    ctx.fillStyle = 'rgba(0,0,0,0.35)';
-    ctx.fillRect(x + 1, y + 13, 15, 3);
-    ctx.fillStyle = '#1a1418';
-    ctx.fillRect(x + 1, y - 3, 14, 17);
-    ctx.fillStyle = '#5b5d66';
-    ctx.fillRect(x + 2, y - 2, 12, 15);
-    ctx.fillStyle = '#7a7c86';
-    ctx.fillRect(x + 2, y - 2, 12, 2);
-    ctx.fillStyle = '#26262c';
-    ctx.fillRect(x + 3, y + 1, 10, 10);
+    pen.shadow(x + 1, y + 13, 15);
+    // Cadre d'acier boulonné, puis l'hélice dans son puits sombre.
+    pen.slab(x + 1, y - 3, 14, 17, '#666a75');
+    pen.rivet(x + 3, y - 1, '#a0a4af');
+    pen.rivet(x + 12, y - 1, '#a0a4af');
+    pen.rivet(x + 3, y + 12, '#a0a4af');
+    pen.rivet(x + 12, y + 12, '#a0a4af');
+    pen.rect(x + 3, y + 1, 10, 10, INK);
+    pen.rect(x + 4, y + 2, 8, 8, '#20222a');
     const cx = x + 8;
     const cy = y + 6;
     for (let k = 0; k < 4; k++) {
       const a = s.spin + (k * Math.PI) / 2;
-      ctx.fillStyle = k % 2 ? '#b8bcc6' : '#9aa0aa';
-      for (let d = 1; d <= 4; d++) ctx.fillRect(Math.round(cx + Math.cos(a) * d) - 1, Math.round(cy + Math.sin(a) * d) - 1, 2, 2);
+      ctx.fillStyle = k % 2 ? '#c4c8d2' : '#a0a5b0';
+      for (let d = 1; d <= 3; d++) ctx.fillRect(Math.round(cx + Math.cos(a) * d) - 1, Math.round(cy + Math.sin(a) * d) - 1, 2, 2);
     }
-    ctx.fillStyle = '#f2c230';
-    ctx.fillRect(cx - 1, cy - 1, 2, 2);
+    pen.rect(cx - 1, cy - 1, 2, 2, '#f2c230');
+    pen.px(cx - 1, cy - 1, '#fff3b0');
     if (s.active && Math.random() < 0.3) this.fx.emit('smoke', cx, cy, 'rgba(170,200,110,0.5)', 1, 14);
+    // Souffle frais dans la Fournaise : de petits traits clairs qui s'échappent.
+    if (s.cooling && !s.active && this.profile.detail && Math.random() < 0.08) this.fx.emit('smoke', cx, cy, 'rgba(190,225,255,0.45)', 1, 12);
   }
 
   /** Pompe : cylindre, balancier qui monte et descend en pompant, tuyau qui plonge dans le sol. */
   private drawPump(s: Pump): void {
     const ctx = this.ctx;
+    const pen = this.pen;
     const x = s.x * TILE;
     const y = s.y * TILE;
     const on = s.status === 'ok';
     const stroke = on ? Math.round(Math.sin(s.activeTime * 8) * 2) : 0;
-    ctx.fillStyle = 'rgba(0,0,0,0.35)';
-    ctx.fillRect(x + 1, y + 13, 15, 3);
-    // Socle et tuyau.
-    ctx.fillStyle = '#2d2e33';
-    ctx.fillRect(x + 1, y + 8, 14, 7);
-    ctx.fillStyle = '#3b6a8a';
-    ctx.fillRect(x + 11, y + 4, 3, 11);
-    ctx.fillStyle = '#5d8fb0';
-    ctx.fillRect(x + 11, y + 4, 1, 11);
-    // Cylindre.
-    ctx.fillStyle = '#1a1418';
-    ctx.fillRect(x + 2, y - 2, 8, 12);
-    ctx.fillStyle = '#4d7a9a';
-    ctx.fillRect(x + 3, y - 1, 6, 10);
-    ctx.fillStyle = '#6fa0c0';
-    ctx.fillRect(x + 3, y - 1, 6, 2);
-    // Tige et balancier.
-    ctx.fillStyle = '#9aa0aa';
-    ctx.fillRect(x + 5, y - 6 + stroke, 2, 6);
-    ctx.fillStyle = '#6a4424';
-    ctx.fillRect(x + 2, y - 7 + stroke, 12, 2);
+    pen.shadow(x + 1, y + 13, 15);
+    // Socle boulonné et tuyau d'eau qui plonge dans le sol.
+    pen.slab(x + 1, y + 8, 14, 7, '#3f4049');
+    pen.rivet(x + 3, y + 13, '#8a8e99');
+    pen.tube(x + 11, y + 4, 4, 11, '#4a86ac');
+    pen.rect(x + 10, y + 5, 6, 1, INK);
+    pen.rect(x + 11, y + 6, 4, 1, '#9fd0ea');
+    // Cylindre de cuivre patiné, avec sa bague claire.
+    pen.slab(x + 2, y - 2, 8, 12, '#4d86a8');
+    pen.rect(x + 3, y - 1, 6, 2, '#8cc4e2');
+    pen.rect(x + 3, y + 3, 6, 1, '#356a88');
+    // Tige et balancier de bois.
+    pen.rect(x + 5, y - 6 + stroke, 2, 6, '#b4b9c4');
+    pen.px(x + 5, y - 6 + stroke, '#ffffff');
+    pen.slab(x + 1, y - 8 + stroke, 13, 3, '#8a5a33');
     if (on && Math.random() < 0.25) this.fx.emit('dust', x + 12, y + 14, 'rgba(120,180,240,0.6)', 1, 18);
+    if (on && this.profile.detail && Math.floor(this.time * 6) % 2 === 0) pen.px(x + 13, y + 1, '#bfe6ff');
+    void ctx;
   }
 
   private drawStorage(s: Storage): void {
     const ctx = this.ctx;
+    const pen = this.pen;
     const x = s.x * TILE;
     const y = s.y * TILE;
-    ctx.fillStyle = 'rgba(0,0,0,0.35)';
-    ctx.fillRect(x + 1, y + 13, 15, 3);
-    // Dessus
-    ctx.fillStyle = '#8a5f38';
-    ctx.fillRect(x + 1, y - 1, 14, 10);
-    ctx.fillStyle = '#a8764a';
-    ctx.fillRect(x + 1, y - 1, 14, 1);
-    // Face avant
-    ctx.fillStyle = '#6b4526';
-    ctx.fillRect(x + 1, y + 9, 14, 6);
-    ctx.fillStyle = '#4a2f1a';
-    for (let k = 0; k < 3; k++) ctx.fillRect(x + 1, y + 1 + k * 3, 14, 1);
-    // Ferrures
-    ctx.fillStyle = '#9aa0aa';
-    ctx.fillRect(x + 1, y - 1, 2, 16);
-    ctx.fillRect(x + 13, y - 1, 2, 16);
-    ctx.fillStyle = '#e0b84a';
-    ctx.fillRect(x + 7, y + 10, 2, 3);
+    pen.shadow(x + 1, y + 13, 15);
+    // Dessus du coffre (planches) : contour, planches claires et joints sombres.
+    pen.rect(x, y - 2, 16, 12, INK);
+    pen.rect(x + 1, y - 1, 14, 10, '#96683c');
+    pen.rect(x + 1, y - 1, 14, 1, '#c89058');
+    for (let k = 0; k < 3; k++) {
+      pen.rect(x + 1, y + 2 + k * 3, 14, 1, '#6b4526');
+      pen.rect(x + 1, y + 3 + k * 3, 14, 1, '#a8764a');
+    }
+    // Face avant : planches verticales.
+    pen.rect(x, y + 9, 16, 7, INK);
+    pen.rect(x + 1, y + 10, 14, 5, '#6b4526');
+    pen.rect(x + 1, y + 10, 14, 1, '#8a5a33');
+    for (const k of [4, 8, 11]) pen.rect(x + k, y + 11, 1, 4, '#4a2f1a');
+    // Ferrures d'acier : deux bandes verticales rivetées.
+    for (const bx of [x + 1, x + 12]) {
+      pen.rect(bx, y - 1, 3, 15, '#7d818b');
+      pen.rect(bx, y - 1, 1, 15, '#b4b9c4');
+      pen.rect(bx + 2, y - 1, 1, 15, '#565a64');
+      pen.rivet(bx + 1, y + 1, '#9aa0aa');
+      pen.rivet(bx + 1, y + 12, '#9aa0aa');
+    }
+    // Serrure de laiton.
+    pen.rect(x + 6, y + 10, 4, 4, INK);
+    pen.rect(x + 7, y + 11, 2, 2, '#e8c050');
+    pen.px(x + 7, y + 11, '#fff3b0');
+    pen.px(x + 8, y + 12, '#a07410');
     // Aperçu du contenu (minerai dominant) + jauge
     const entries = Object.entries(s.items).sort((a, b) => b[1] - a[1]);
     if (entries.length) {
-      ctx.drawImage(this.nuggets.get(entries[0][0])!, x + 4, y + 1);
-      if (entries[1]) ctx.drawImage(this.nuggets.get(entries[1][0])!, x + 7, y + 2);
+      ctx.drawImage(this.nuggets.get(entries[0][0])!, x + 4, y);
+      if (entries[1]) ctx.drawImage(this.nuggets.get(entries[1][0])!, x + 8, y + 1);
     }
     const fill = s.weight() / s.capacity;
-    ctx.fillStyle = '#1a1418';
+    ctx.fillStyle = INK;
     ctx.fillRect(x + 1, y + 15, 14, 2);
     ctx.fillStyle = fill > 0.9 ? '#d0342c' : '#6fcf6a';
     ctx.fillRect(x + 1, y + 15, Math.round(14 * Math.min(1, fill)), 2);
@@ -1395,44 +1477,49 @@ export class Renderer {
   /** Caisse d'expédition : caisse verte ouverte, panneau à pièce et minuteur du transporteur. */
   private drawShipping(c: ShippingCrate): void {
     const ctx = this.ctx;
+    const pen = this.pen;
     const x = c.x * TILE;
     const y = c.y * TILE;
-    ctx.fillStyle = 'rgba(0,0,0,0.35)';
-    ctx.fillRect(x + 1, y + 13, 15, 3);
-    // Poteau et panneau « pièce »
-    ctx.fillStyle = '#4a3020';
-    ctx.fillRect(x + 12, y - 7, 2, 8);
-    ctx.fillStyle = '#1a1418';
-    ctx.fillRect(x + 9, y - 13, 8, 7);
-    ctx.fillStyle = '#f2c230';
-    ctx.fillRect(x + 10, y - 12, 6, 5);
-    ctx.fillStyle = '#a07410';
-    ctx.fillRect(x + 12, y - 11, 2, 3);
+    pen.shadow(x + 1, y + 13, 15);
+    // Poteau et panneau « pièce », avec un petit reflet.
+    pen.rect(x + 12, y - 7, 2, 8, '#4a3020');
+    pen.rect(x + 12, y - 7, 1, 8, '#6e4a2c');
+    pen.rect(x + 8, y - 14, 10, 8, INK);
+    pen.rect(x + 9, y - 13, 8, 6, '#f2c230');
+    pen.rect(x + 9, y - 13, 8, 1, '#fff3b0');
+    pen.rect(x + 9, y - 8, 8, 1, '#a07410');
+    pen.rect(x + 12, y - 12, 2, 4, '#a07410');
+    pen.px(x + 12, y - 12, '#fff3b0');
     // Minuteur du transporteur (se remplit jusqu'au prochain passage)
     const t = 1 - c.timer / c.interval;
-    ctx.fillStyle = '#1a1418';
-    ctx.fillRect(x + 9, y - 16, 8, 2);
+    ctx.fillStyle = INK;
+    ctx.fillRect(x + 8, y - 17, 10, 3);
+    ctx.fillStyle = '#2a4a6a';
+    ctx.fillRect(x + 9, y - 16, 8, 1);
     ctx.fillStyle = '#6fb3ff';
-    ctx.fillRect(x + 9, y - 16, Math.round(8 * Math.min(1, Math.max(0, t))), 2);
-    // Caisse : dessus ouvert puis face avant
-    ctx.fillStyle = '#3f8a5e';
-    ctx.fillRect(x + 1, y + 1, 12, 8);
-    ctx.fillStyle = '#5fae7a';
-    ctx.fillRect(x + 1, y + 1, 12, 1);
-    ctx.fillStyle = '#16221b';
-    ctx.fillRect(x + 3, y + 3, 8, 5);
+    ctx.fillRect(x + 9, y - 16, Math.round(8 * Math.min(1, Math.max(0, t))), 1);
+    // Caisse : dessus ouvert (creux sombre, minerai visible) puis face avant.
+    pen.rect(x, y, 14, 10, INK);
+    pen.rect(x + 1, y + 1, 12, 8, '#4a9a6c');
+    pen.rect(x + 1, y + 1, 12, 1, '#7fd0a0');
+    pen.rect(x + 1, y + 2, 1, 7, '#5fae7a');
+    pen.rect(x + 3, y + 3, 8, 5, '#14201a');
+    pen.rect(x + 3, y + 3, 8, 1, '#0c140f');
     const entries = Object.entries(c.items).sort((a, b) => b[1] - a[1]);
     entries.slice(0, 2).forEach(([res], i) => ctx.drawImage(this.nuggets.get(res)!, x + 3 + i * 3, y + 2 + i));
-    ctx.fillStyle = '#2f6b4a';
-    ctx.fillRect(x + 1, y + 9, 12, 6);
-    ctx.fillStyle = '#244f38';
-    ctx.fillRect(x + 1, y + 11, 12, 1);
-    ctx.fillRect(x + 1, y + 13, 12, 1);
-    ctx.fillStyle = '#f2c230';
-    ctx.fillRect(x + 6, y + 10, 2, 2);
+    pen.rect(x, y + 9, 14, 7, INK);
+    pen.rect(x + 1, y + 10, 12, 5, '#2f7a52');
+    pen.rect(x + 1, y + 10, 12, 1, '#4a9a6c');
+    pen.rect(x + 1, y + 12, 12, 1, '#245f3f');
+    pen.rect(x + 1, y + 14, 12, 1, '#1c4a32');
+    // Plaque de laiton et rivets.
+    pen.rect(x + 5, y + 10, 4, 3, INK);
+    pen.rect(x + 6, y + 11, 2, 1, '#f2c230');
+    pen.rivet(x + 2, y + 13, '#9aa0aa');
+    pen.rivet(x + 11, y + 13, '#9aa0aa');
     // Jauge de remplissage
     const fill = c.weight() / c.capacity;
-    ctx.fillStyle = '#1a1418';
+    ctx.fillStyle = INK;
     ctx.fillRect(x + 1, y + 15, 14, 2);
     ctx.fillStyle = fill > 0.9 ? '#d0342c' : '#6fcf6a';
     ctx.fillRect(x + 1, y + 15, Math.round(14 * Math.min(1, fill)), 2);
@@ -1502,9 +1589,12 @@ export class Renderer {
     const ctx = this.ctx;
     const frames = this.player.frames[p.facing];
     const walking = p.moving && p.swingT <= 0;
-    const frame = walking ? 1 + (Math.floor(p.walkTime * 8) % 2) : 0;
-    const img = frames[frame];
-    const bob = walking && frame === 1 ? -1 : 0;
+    // Marche à quatre images : pas, passage, pas, passage (le corps se soulève au passage).
+    const frame = walking ? 1 + (Math.floor(p.walkTime * 9) % 4) : 0;
+    // À l'arrêt, le mineur cligne des yeux de temps en temps.
+    const blink = !walking && p.swingT <= 0 && this.time % 4.6 < 0.14;
+    const img = blink ? this.player.blink[p.facing] : frames[frame];
+    const bob = walking && frame % 2 === 0 ? -1 : 0;
     const x = Math.round(p.x - img.width / 2);
     const y = Math.round(p.y - img.height + 3 + bob);
     ctx.fillStyle = 'rgba(0,0,0,0.35)';

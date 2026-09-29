@@ -19,6 +19,7 @@ import { Storage } from '../sim/structures/Storage';
 import type { Structure } from '../sim/structures/Structure';
 import { esc, kg, money, resIcon } from './format';
 import { MAP_COLORS } from '../render/MineMap';
+import { QUALITY_LABEL, type Quality } from '../render/quality';
 import { boardPanel, borerPanel, counterPanel, smelterPanel, drillPanel, helpPanel, inventoryPanel, mapPanel, shippingPanel, sorterPanel, stationPanel, storagePanel, switchPanel, workshopPanel } from './panels';
 
 /** Flèches dans les 8 directions, dans l'ordre des angles (est, sud-est, sud…). */
@@ -352,7 +353,7 @@ export class UI {
     </div>`;
   }
 
-  showPauseMenu(muted: boolean): void {
+  showPauseMenu(muted: boolean, quality: Quality = 'high'): void {
     this.menu = 'pause';
     this.syncOverlay();
     this.menuRoot.innerHTML = `<div class="menu pause-menu"><h2>Pause</h2><div class="menu-buttons">
@@ -362,6 +363,7 @@ export class UI {
       ${CAN_DOWNLOAD ? '<button class="btn" data-action="export">Exporter la sauvegarde (fichier)</button>' : ''}
       <button class="btn" data-action="import">Importer une sauvegarde…</button>
       <button class="btn" data-action="mute">Son : ${muted ? 'coupé' : 'activé'}</button>
+      <button class="btn" data-action="quality" title="Élevée : tous les effets. Basse : pour les petits appareils.">Graphismes : ${QUALITY_LABEL[quality]}</button>
       <button class="btn" data-action="help">Commandes</button>
       <button class="btn" data-action="quit">Quitter vers le menu</button>
     </div></div>`;
