@@ -42,13 +42,13 @@ function upgradeTo(g: GameState, d: Drill, level: number) {
   g.pickaxeLevel = 2; // pioche en fer : débloque le niveau 3
   while (d.level < level) {
     g.money += d.nextLevel()!.price;
-    expect(g.upgradeDrill(d)).toBe(true);
+    expect(g.upgradeMachine(d)).toBe(true);
   }
 }
 
 describe('cases couvertes par niveau', () => {
   it('niveau 1 : la case sous la foreuse ; 2 : + gauche et droite ; 3 : + derrière', () => {
-    const at = (dir: Dir, level: number) => reachTiles(10, 10, dir, LEVELS[level - 1].reach).map((t) => `${t.side}:${t.x},${t.y}`);
+    const at = (dir: Dir, level: number) => reachTiles(10, 10, dir, LEVELS[level - 1].reach!).map((t) => `${t.side}:${t.x},${t.y}`);
     expect(at(0, 1)).toEqual(['under:10,10']);
     // Flèche vers l'est : la gauche est au nord, la droite au sud, l'arrière à l'ouest.
     expect(at(0, 2)).toEqual(['under:10,10', 'left:10,9', 'right:10,11']);
@@ -170,26 +170,26 @@ describe('achat des améliorations', () => {
     const g = new GameState(4);
     const { d } = setup(g);
     g.money = 0;
-    expect(g.drillUpgradeBlocker(d)).toBe("Pas assez d'argent");
-    expect(g.upgradeDrill(d)).toBe(false);
+    expect(g.upgradeBlocker(d)).toBe("Pas assez d'argent");
+    expect(g.upgradeMachine(d)).toBe(false);
     expect(d.level).toBe(1);
 
     g.money = 1000;
-    expect(g.upgradeDrill(d)).toBe(true);
+    expect(g.upgradeMachine(d)).toBe(true);
     expect(d.level).toBe(2);
     expect(g.money).toBe(1000 - LEVELS[1].price);
 
     // Pioche de départ : le niveau 3 est verrouillé, même avec l'argent.
-    expect(g.drillUpgradeBlocker(d)).toBe('Nécessite la Pioche en fer');
-    expect(g.upgradeDrill(d)).toBe(false);
+    expect(g.upgradeBlocker(d)).toBe('Nécessite la Pioche en fer');
+    expect(g.upgradeMachine(d)).toBe(false);
     g.pickaxeLevel = 2;
-    expect(g.upgradeDrill(d)).toBe(true);
+    expect(g.upgradeMachine(d)).toBe(true);
     expect(d.level).toBe(3);
     expect(g.money).toBe(1000 - LEVELS[1].price - LEVELS[2].price);
 
     expect(d.nextLevel()).toBe(null);
-    expect(g.drillUpgradeBlocker(d)).toBe('Niveau maximal atteint');
-    expect(g.upgradeDrill(d)).toBe(false);
+    expect(g.upgradeBlocker(d)).toBe('Niveau maximal atteint');
+    expect(g.upgradeMachine(d)).toBe(false);
   });
 
   it('démontée puis reposée, une foreuse améliorée garde son niveau', () => {

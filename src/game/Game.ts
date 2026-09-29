@@ -317,6 +317,15 @@ export class Game {
       case 'borerLength':
         if (target instanceof TunnelBorer) g.setBorerLength(target, Number(arg));
         break;
+      case 'borerUpgrade':
+        if (target instanceof TunnelBorer) g.upgradeMachine(target);
+        break;
+      case 'borerCollect':
+        if (target instanceof TunnelBorer) {
+          const n = g.collectBorer(target);
+          if (n) this.ui.toast(`${n} minerai${n > 1 ? 's' : ''} récupéré${n > 1 ? 's' : ''} dans la base.`, 'good');
+        }
+        break;
       case 'borerRotate':
         if (target) g.rotateAt(target.x, target.y);
         break;
@@ -324,7 +333,7 @@ export class Game {
         this.togglePanel('map');
         break;
       case 'drillUpgrade':
-        if (target instanceof Drill) g.upgradeDrill(target);
+        if (target instanceof Drill) g.upgradeMachine(target);
         break;
       case 'stationDeposit':
         if (target instanceof RailStation) g.stationDepositAll(target);
@@ -553,7 +562,7 @@ export class Game {
     if (near instanceof Storage) return `${e} Ouvrir le coffre`;
     if (near instanceof ShippingCrate) return `${e} Caisse d'expédition — vente automatique`;
     if (near instanceof Drill) return `${e} Foreuse niv. ${near.level} — charbon, production, amélioration`;
-    if (near instanceof TunnelBorer) return `${e} Foreuse de percement — charbon, longueur, départ, rappel`;
+    if (near instanceof TunnelBorer) return `${e} Foreuse de percement niv. ${near.level} — charbon, départ, améliorations`;
     if (near instanceof Sorter) return `${e} Trieur — choisir le minerai trié`;
     if (near instanceof RailStation) return `${e} ${near.def.name}`;
     if (near instanceof RailSwitch) return `${e} Aiguillage — choisir la branche`;
@@ -629,7 +638,8 @@ export class Game {
     else {
       overlay.ghost = { machine, tx: mtx, ty: mty, dir: upgrade ? upgrade.dir : this.buildDir, ok: g.canPlace(kit, mtx, mty).ok };
       // Foreuse améliorée : cases qu'elle forera ici, dans la direction choisie.
-      if (mdef.levels && level > 1) overlay.ghost.reach = reachTiles(mtx, mty, this.buildDir, mdef.levels[level - 1].reach);
+      const reach = level > 1 ? mdef.levels?.[level - 1]?.reach : undefined;
+      if (reach) overlay.ghost.reach = reachTiles(mtx, mty, this.buildDir, reach);
       if (getMachine(machine).bridge) {
         const entry = this.bridgeEntryFor(g, mtx, mty, this.buildDir);
         if (entry) overlay.ghost.link = { tx: entry.x, ty: entry.y };
@@ -773,10 +783,13 @@ export class Game {
         returning: 'rentre à la base',
         waiting: `attend (${s.blockReason})`,
         nofuel: 'plus de charbon',
+        full: 'base pleine de minerai',
         blocked: `rentrée (${s.blockReason})`,
         done: 'tunnel terminé',
       }[s.status];
-      return `<b>Foreuse de percement</b> ${['→', '↓', '←', '↑'][s.dir]} — ${st}<br>Base : ${s.fuelUnits} charbon · tunnel : ${s.tunnel} cases`;
+      return `<b>Foreuse de percement</b> niv. ${s.level} ${['→', '↓', '←', '↑'][s.dir]} — ${st}<br>Base : ${s.fuelUnits} charbon${
+        s.stats.hopper ? ` · ${s.storeCount()} minerai(s)` : ''
+      } · tunnel : ${s.tunnel} cases`;
     }
     if (s instanceof Storage) return `<b>Coffre</b><br>${kg(s.weight())} / ${kg(s.capacity)}`;
     if (s instanceof ShippingCrate)

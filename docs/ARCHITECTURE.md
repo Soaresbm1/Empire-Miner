@@ -61,8 +61,12 @@ foreuse qui en sort n'est pas une structure mais une position (`dist`, en cases 
 flèche, plus le trajet en cours `moveT`). `StructureManager.borers` les liste pour `GameState.borerAt` (collisions
 du joueur, pose interdite, E et infobulle depuis le tunnel). Elle perce avec `digTile` (même effet qu'un bloc
 miné, morceaux lâchés derrière elle), attend si `occupied` (joueur, wagonnet), révèle le tunnel avec `reveal` et
-rentre à la base (`returning` : plus de charbon, obstacle, tunnel fini, rappel) ; rentrée faute de charbon, elle
-refait le plein (`tank`) dans la réserve de la base (`fuelUnits`) et repart.
+rentre à la base (`returning` : plus de charbon, benne pleine, obstacle, tunnel fini, rappel) ; rentrée faute de
+charbon ou pour vider sa benne, elle refait le plein (`tank`) dans la réserve de la base (`fuelUnits`) et repart.
+Ses niveaux (`MachineDef.levels[].borer`) règlent vitesse, charbon emporté, largeur du front (`faceTiles`) et benne
+(`load`, vidée dans le stock de la base `store`, que la base pousse dans les structures collées). `digTile` renvoie
+les morceaux lâchés pour que la benne les ramasse. Le niveau suit le kit au démontage (`borer@4`), comme la foreuse
+à charbon ; `GameState.upgradeMachine` / `upgradeBlocker` servent aux deux.
 
 Combustible : une structure qui brûle quelque chose expose `fuelWanted()` (la ressource voulue tant que son
 réservoir n'est pas plein). Un coffre remplit d'abord le réservoir de ses voisins, puis se vide dans les

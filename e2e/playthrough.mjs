@@ -1021,6 +1021,19 @@ try {
     `la foreuse perce seule un tunnel de 10 cases puis rentre à sa base (${JSON.stringify(bore)}, ${tunnel} cases ouvertes et révélées)`,
   );
 
+  // Amélioration de la foreuse de percement depuis le panneau de sa base : niveau 2 (moteur renforcé).
+  await teleport(52, 25);
+  await page.waitForTimeout(300);
+  await pressE();
+  await page.waitForTimeout(150);
+  await page.click('[data-action="borerUpgrade"]');
+  await page.waitForTimeout(200);
+  const borerLevel = await ev(() => window.__EM.state.structures.borers[0].level);
+  const borerText = (await page.textContent('.panel-borer')) ?? '';
+  check(borerLevel === 2 && borerText.includes('Moteur renforcé') && borerText.includes('Benne à minerai'), `la foreuse de percement s'améliore depuis son panneau (niveau ${borerLevel})`);
+  await shot('24b-borer-upgrade');
+  await page.keyboard.press('Escape');
+
   // Carte : mini-carte dans le HUD, carte complète avec M (ou clic sur la mini-carte).
   const colorsIn = (sel) =>
     ev((q) => {

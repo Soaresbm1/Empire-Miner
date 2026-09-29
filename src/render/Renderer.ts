@@ -815,6 +815,19 @@ export class Renderer {
     ctx.fillRect(x + 1, y + 15, 14, 2);
     ctx.fillStyle = fill > 0.2 ? '#f08a24' : '#d0342c';
     ctx.fillRect(x + 1, y + 15, Math.round(14 * Math.min(1, fill)), 2);
+    // Minerai ramené par la benne : petit tas sur la dalle, du côté opposé à la sortie.
+    const stored = Object.keys(b.store);
+    if (stored.length) {
+      const n = Math.min(5, Math.ceil((b.storeCount() / b.spec.store) * 5));
+      const cx = x + 8 - DX[b.dir] * 5;
+      const cy = y + 10 - DY[b.dir] * 4;
+      for (let k = 0; k < n; k++) {
+        ctx.fillStyle = '#1a1418';
+        ctx.fillRect(cx - 3 + (k % 3) * 2, cy - Math.floor(k / 3) * 2, 3, 3);
+        ctx.fillStyle = getResource(stored[k % stored.length]).color;
+        ctx.fillRect(cx - 2 + (k % 3) * 2, cy + 1 - Math.floor(k / 3) * 2, 2, 1);
+      }
+    }
   }
 
   /** Foreuse de percement : caisson sur chenilles, tête de coupe rotative du côté de sa flèche. */
@@ -846,15 +859,51 @@ export class Renderer {
     ctx.fillRect(x + 6, y + 4 + jig, 2, 1);
     ctx.fillStyle = '#f2c230';
     for (let k = 0; k < 3; k++) ctx.fillRect(x + 3 + k * 4, y + 9 + jig, 2, 1);
+    // Moteur renforcé (niveau 2+) : pot d'échappement chromé sur le caisson.
+    if (b.level >= 2) {
+      ctx.fillStyle = '#1a1418';
+      ctx.fillRect(x + 11, y - 3 + jig, 3, 5);
+      ctx.fillStyle = '#c7ccd6';
+      ctx.fillRect(x + 12, y - 3 + jig, 1, 4);
+      ctx.fillStyle = '#8a8c96';
+      ctx.fillRect(x + 11, y - 3 + jig, 3, 1);
+    }
+    // Benne à minerai (niveau 4) : bac sur le caisson, rempli de la couleur du minerai ramassé.
+    if (b.stats.hopper) {
+      ctx.fillStyle = '#1a1418';
+      ctx.fillRect(x + 2, y - 2 + jig, 8, 4);
+      ctx.fillStyle = '#5b5d66';
+      ctx.fillRect(x + 3, y - 1 + jig, 6, 2);
+      const ores = Object.keys(b.load);
+      const shown = Math.min(6, Math.ceil((b.loadCount() / b.stats.hopper) * 6));
+      for (let k = 0; k < shown; k++) {
+        ctx.fillStyle = getResource(ores[k % ores.length]).color;
+        ctx.fillRect(x + 3 + k, y - 1 + jig - (k % 2), 1, 1 + (k % 2));
+      }
+    }
     // Tête de coupe : dessinée vers l'est puis tournée d'un quart de tour (pixels nets).
     ctx.save();
     ctx.translate(x + 8, y + 8);
     ctx.rotate((b.dir * Math.PI) / 2);
+    const phase = working ? Math.floor(b.activeTime * 18) : 0;
+    // Tête large (niveau 3+) : une barre porte deux fraises qui mordent dans les cases voisines.
+    if (b.stats.width > 1) {
+      ctx.fillStyle = '#1a1418';
+      ctx.fillRect(4, -21, 4, 42);
+      ctx.fillStyle = '#4a4b52';
+      ctx.fillRect(5, -20, 1, 40);
+      for (const side of [-1, 1]) {
+        for (let k = 0; k < 5; k++) {
+          ctx.fillStyle = (k + phase) % 2 ? '#c7ccd6' : '#6a6f78';
+          ctx.fillRect(7 + jig, side * 11 - 5 + k * 2, 3, 2);
+          if ((k + phase) % 2) ctx.fillRect(10 + jig, side * 11 - 5 + k * 2, 1, 1);
+        }
+      }
+    }
     ctx.fillStyle = '#1a1418';
     ctx.fillRect(4, -7, 6, 14);
     ctx.fillStyle = '#4a4b52';
     ctx.fillRect(4, -2, 2, 4);
-    const phase = working ? Math.floor(b.activeTime * 18) : 0;
     for (let k = 0; k < 6; k++) {
       ctx.fillStyle = (k + phase) % 2 ? '#c7ccd6' : '#6a6f78';
       ctx.fillRect(6 + jig, -6 + k * 2, 3, 2);

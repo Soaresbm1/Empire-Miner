@@ -33,12 +33,12 @@ function setup(g: GameState, coal = 10, block = SOFT) {
   return b;
 }
 
-/** Avance par petits pas jusqu'à ce que `until` soit vrai (ou `max` secondes). */
+/** Avance pas à pas (1/60 s) jusqu'à ce que `until` soit vrai (ou `max` secondes). */
 function runUntil(g: GameState, until: () => boolean, max = 60): number {
   let t = 0;
   while (!until() && t < max) {
-    run(g, 0.05);
-    t += 0.05;
+    run(g, 1 / 60);
+    t += 1 / 60;
   }
   return t;
 }

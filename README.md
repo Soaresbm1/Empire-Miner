@@ -56,8 +56,14 @@ lettre tapée : c'est la touche marquée M, quel que soit le clavier.
   tunnel), quand elle ne peut plus percer (roche indestructible ou trop dure, machine, bord de la mine), quand le
   tunnel est fini ou quand on la rappelle. Une base alimentée par un convoyeur ou un coffre de charbon collé la fait
   creuser sans s'arrêter. Les minerais tombent derrière elle, les filons percés laissent leur gisement, le tunnel
-  apparaît sur la carte et son phare l'éclaire. Elle patiente si le joueur est sur son chemin ; on ne tourne ou ne
-  démonte la base que foreuse rangée.
+  apparaît sur la carte et son phare l'éclaire. Elle patiente si le joueur est sur son chemin ; on ne tourne, n'améliore
+  ou ne démonte la base que foreuse rangée. **Améliorations** (touche E sur la base, chaque niveau garde les précédents ;
+  démontée, elle garde son niveau) :
+  - niveau 2, **moteur renforcé** (600 $) : perce 2 fois plus vite, roule plus vite, emporte 4 unités de charbon ;
+  - niveau 3, **tête large** (1 100 $) : tunnel de 3 cases de large (les côtés indestructibles sont épargnés) ;
+  - niveau 4, **benne à minerai** (1 800 $) : ramasse le minerai percé (30 morceaux, la pierre reste au sol) et le ramène
+    à la base, qui le pousse dans un convoyeur ou un coffre collé (ou on le récupère depuis son panneau) ; le charbon
+    ramené remplit la réserve de la base. Benne pleine, elle rentre la vider et repart.
 - Première automatisation : **foreuse à charbon → convoyeurs → coffre**, avec minerais visibles sur les
   convoyeurs, capacité et débit réels (saturation possible), alimentation en charbon manuelle ou par convoyeur.
 - Trois niveaux de **convoyeurs** : de base (2,25 objets/s), **rapide** (×2, pioche améliorée) et **express**
@@ -113,7 +119,7 @@ enfin prolonger la ligne dans le puits jusqu'à une caisse d'expédition en surf
 rentre pendant que le joueur reste au fond de la mine. Il construit ensuite chaque machine (convoyeurs rapides,
 séparateur, pont, trieur, wagonnets, aiguillage), améliore une foreuse jusqu'au niveau 3 depuis son panneau,
 creuse au marteau-piqueur, lance une foreuse de percement sur 10 cases (elle sort de sa base, perce le tunnel
-puis y revient) et ouvre la carte.
+puis y revient), l'améliore depuis son panneau et ouvre la carte.
 
 ## Choix techniques
 

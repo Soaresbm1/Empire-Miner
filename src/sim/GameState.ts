@@ -13,7 +13,7 @@ import { zoneForDepth } from '../data/depth';
 import { getMachine, kitId, kitName, MACHINES, parseKit } from '../data/machines';
 import { RESOURCES, getResource, hasResource, resourceIndex } from '../data/resources';
 import { BAGS, JACKHAMMER, PICKAXES } from '../data/tools';
-import { DropSystem } from './Drops';
+import { Drop, DropSystem } from './Drops';
 import type { SimEvent, ToolKind } from './events';
 import { generateWorld, WorldLayout } from './generator';
 import { Inventory } from './Inventory';
@@ -168,8 +168,8 @@ export class GameState implements StructureContext {
     this.emit({ t: 'shipped', tx: from.x, ty: from.y, total, n });
   }
 
-  digTile(tx: number, ty: number, from: { x: number; y: number }): void {
-    this.breakTile(tx, ty, from);
+  digTile(tx: number, ty: number, from: { x: number; y: number }): Drop[] {
+    return this.breakTile(tx, ty, from);
   }
 
   /** Foreuse de percement dont la foreuse, sortie de sa base, occupe la case. */
@@ -402,7 +402,8 @@ export class GameState implements StructureContext {
    * Détruit une tuile : elle devient praticable et lâche ses ressources. Les morceaux
    * jaillissent vers le mineur, ou tombent en `from` (derrière une foreuse de percement).
    */
-  breakTile(tx: number, ty: number, from?: { x: number; y: number }): void {
+  breakTile(tx: number, ty: number, from?: { x: number; y: number }): Drop[] {
+    const out: Drop[] = [];
     const id = this.world.get(tx, ty);
     const block = getBlock(id);
     this.world.set(tx, ty, AIR);
@@ -424,11 +425,13 @@ export class GameState implements StructureContext {
         const sp = 30 + this.rng.float() * 30;
         d.vx = Math.cos(a) * sp;
         d.vy = Math.sin(a) * sp;
+        out.push(d);
       }
     }
     this.stats.tilesMined++;
     this.emit({ t: 'break', tx, ty, block: id });
     this.lastPlayerTile = -1; // force une mise à jour de la visibilité
+    return out;
   }
 
   // ---------------------------------------------------------------- ramassage
@@ -710,7 +713,7 @@ export class GameState implements StructureContext {
     }
     this.inventory.removeKit(kit);
     const s = this.structures.add(factory.create(tx, ty, def.rotatable ? dir : 1));
-    if (s instanceof Drill) s.level = Math.min(level, s.maxLevel);
+    if (s instanceof Drill || s instanceof TunnelBorer) s.level = Math.min(level, s.maxLevel);
     if (replaced && s instanceof Conveyor) {
       s.items = replaced.items.slice(0, s.capacity);
       for (const extra of replaced.items.slice(s.capacity)) this.drops.spawn(extra.res, 1, (tx + 0.5) * TILE, (ty + 0.5) * TILE);
@@ -747,8 +750,8 @@ export class GameState implements StructureContext {
       return false;
     }
     this.structures.remove(s);
-    // Une foreuse améliorée revient dans le stock avec son niveau (kit « drill@3 »).
-    this.inventory.addKit(s instanceof Drill ? kitId(s.type, s.level) : s.type);
+    // Une foreuse améliorée revient dans le stock avec son niveau (kit « drill@3 », « borer@4 »).
+    this.inventory.addKit(s instanceof Drill || s instanceof TunnelBorer ? kitId(s.type, s.level) : s.type);
     for (const [res, n] of Object.entries(s.contents())) this.drops.spawn(res, n, (s.x + 0.5) * TILE, (s.y + 0.5) * TILE);
     this.emit({ t: 'removed', type: s.type, tx, ty });
     return true;
@@ -881,20 +884,24 @@ export class GameState implements StructureContext {
   }
 
   /** Pourquoi l'amélioration suivante d'une foreuse est impossible, ou null si elle l'est. */
-  drillUpgradeBlocker(d: Drill): string | null {
-    const next = d.nextLevel();
+  upgradeBlocker(m: Drill | TunnelBorer): string | null {
+    const next = m.nextLevel();
     if (!next) return 'Niveau maximal atteint';
+    if (m instanceof TunnelBorer && !m.home) return 'Rappelez d’abord la foreuse à sa base';
     if (next.unlock && this.pickaxe.tier < next.unlock.pickaxeTier) return next.unlock.text;
     if (this.money < next.price) return 'Pas assez d\'argent';
     return null;
   }
 
-  /** Améliore une foreuse posée : elle couvre plus de cases. */
-  upgradeDrill(d: Drill): boolean {
-    const next = d.nextLevel();
-    if (!next || this.drillUpgradeBlocker(d) || !this.pay(next.price)) return false;
-    d.level = next.level;
-    this.emit({ t: 'bought', name: `${d.def.name} niveau ${next.level}` });
+  /**
+   * Améliore une foreuse posée : la foreuse à charbon couvre plus de cases, la foreuse de
+   * percement gagne son amélioration (moteur, tête large, benne).
+   */
+  upgradeMachine(m: Drill | TunnelBorer): boolean {
+    const next = m.nextLevel();
+    if (!next || this.upgradeBlocker(m) || !this.pay(next.price)) return false;
+    m.level = next.level;
+    this.emit({ t: 'bought', name: `${m.def.name} niveau ${next.level}${next.name ? ` (${next.name.toLowerCase()})` : ''}` });
     return true;
   }
 
@@ -905,6 +912,18 @@ export class GameState implements StructureContext {
     const k = b.addFuel(this.inventory.count(fuel.res));
     this.inventory.remove(fuel.res, k);
     return k;
+  }
+
+  /** Récupère dans le sac le minerai que la foreuse de percement a ramené à sa base. */
+  collectBorer(b: TunnelBorer): number {
+    let n = 0;
+    for (const res of Object.keys(b.store)) {
+      const k = b.takeStored(res, Math.min(b.store[res], Math.floor(this.inventory.room(res))));
+      if (k > 0) this.inventory.add(res, k);
+      n += k;
+    }
+    if (b.storeCount()) this.emit({ t: 'invFull' });
+    return n;
   }
 
   /** Règle la longueur du prochain tunnel (0 = sans limite). */
