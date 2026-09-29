@@ -782,7 +782,7 @@ export class GameState implements StructureContext {
     const machineId = parseKit(kit).machine;
     const def = getMachine(machineId);
     if (this.inventory.kitCount(kit) <= 0) return { ok: false, reason: `Aucun ${kitName(kit).toLowerCase()} en stock` };
-    if (this.distanceToTile(tx, ty) > BUILD_RANGE) return { ok: false, reason: 'Trop loin' };
+    if (this.distanceToTile(tx, ty) > BUILD_RANGE) return { ok: false, reason: `Trop loin : approchez-vous (${BUILD_RANGE} cases au plus)` };
     if (def.onTrack) {
       if (!this.structures.at(tx, ty)?.isTrack) return { ok: false, reason: 'Se pose sur des rails' };
       if (this.wagons.at(tx, ty)) return { ok: false, reason: 'Il y a déjà un wagonnet ici' };
@@ -791,7 +791,7 @@ export class GameState implements StructureContext {
     if (this.beltToReplace(machineId, tx, ty) || this.railToReplace(machineId, tx, ty)) return { ok: true };
     for (let y = ty; y < ty + def.h; y++)
       for (let x = tx; x < tx + def.w; x++) {
-        if (!this.world.isOpen(x, y)) return { ok: false, reason: 'Il faut un sol dégagé' };
+        if (!this.world.isOpen(x, y)) return { ok: false, reason: 'Il faut un sol dégagé : creusez d’abord la roche' };
         if (this.structures.at(x, y)) return { ok: false, reason: 'Emplacement occupé' };
         if (this.borerAt(x, y)) return { ok: false, reason: 'La foreuse de percement passe ici' };
       }

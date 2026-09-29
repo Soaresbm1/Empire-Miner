@@ -83,11 +83,16 @@ export class UI {
 
   // ------------------------------------------------------------------ HUD
 
-  private set(id: string, html: string): void {
-    if (this.cache.get(id) === html) return;
+  /** Hauteur de la barre de construction (px CSS, 0 hors construction). */
+  buildBarHeight = 0;
+
+  /** Remplace le contenu d'un élément s'il a changé (vrai dans ce cas). */
+  private set(id: string, html: string): boolean {
+    if (this.cache.get(id) === html) return false;
     this.cache.set(id, html);
     const el = document.getElementById(id);
     if (el) el.innerHTML = html;
+    return true;
   }
 
   showHud(v: boolean): void {
@@ -154,7 +159,13 @@ export class UI {
     }
     this.set('hud-track', track);
     this.set('hud-prompt', extra.prompt);
-    this.set('hud-build', extra.build);
+    if (this.set('hud-build', extra.build)) {
+      // Hauteur de la barre de construction : sur un écran étroit, l'équipement passe au-dessus.
+      this.hud.classList.toggle('building', !!extra.build);
+      const h = document.getElementById('hud-build')?.offsetHeight ?? 0;
+      this.buildBarHeight = h;
+      if (h) this.hud.style.setProperty('--build-h', `${h}px`);
+    }
     this.set('hud-hints', extra.hints);
   }
 

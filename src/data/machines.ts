@@ -42,6 +42,27 @@ export interface BorerSpec {
   store: number;
 }
 
+export interface MachineGroup {
+  id: string;
+  /** Titre dans le magasin. */
+  title: string;
+  /** Nom court de l'onglet de la barre de construction. */
+  tab: string;
+  /** Machine dont l'icône illustre l'onglet. */
+  icon: string;
+  categories: MachineCategory[];
+}
+
+/** Groupes de machines, dans l'ordre du magasin et de la barre de construction. */
+export const MACHINE_GROUPS: MachineGroup[] = [
+  { id: 'extraction', title: 'Extraction', tab: 'Extraction', icon: 'drill', categories: ['extraction'] },
+  { id: 'traitement', title: 'Traitement', tab: 'Fonte', icon: 'furnace', categories: ['traitement'] },
+  { id: 'transport', title: 'Transport', tab: 'Transport', icon: 'conveyor', categories: ['logistique'] },
+  { id: 'rail', title: 'Wagonnets et rails', tab: 'Rails', icon: 'wagon', categories: ['rail'] },
+  { id: 'stockage', title: 'Stockage et vente', tab: 'Stockage', icon: 'storage', categories: ['stockage', 'vente'] },
+  { id: 'securite', title: 'Sécurité', tab: 'Sécurité', icon: 'prop', categories: ['securite'] },
+];
+
 /** Four et fonderie : minerai → lingot, au charbon. */
 export interface SmelterSpec {
   /** Temps pour fondre un minerai en lingot (s). */

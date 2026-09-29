@@ -80,6 +80,8 @@ export class Renderer {
   zoomBias = 0;
   camX = 0;
   camY = 0;
+  /** Bas de l'écran caché par l'interface (px CSS) : le joueur reste centré dans ce qui reste visible. */
+  bottomInset = 0;
   readonly fx = new Fx();
   private chunks: ChunkCache | null = null;
   private state: GameState | null = null;
@@ -182,8 +184,9 @@ export class Renderer {
         this.fx.emit('dust', (p.x + 0.5 + (Math.random() - 0.5) * 5) * TILE, (p.y + 0.5 + (Math.random() - 0.5) * 5) * TILE, 'rgba(150,130,110,0.7)', 1, 10);
     }
     if (follow) {
+      const inset = (this.bottomInset * (this.canvas.width / window.innerWidth)) / this.zoom;
       const tx = this.state.player.x - this.viewW / 2;
-      const ty = this.state.player.y - 8 - this.viewH / 2;
+      const ty = this.state.player.y - 8 - (this.viewH - inset) / 2;
       const k = 1 - Math.exp(-8 * dt);
       this.camX += (tx - this.camX) * k;
       this.camY += (ty - this.camY) * k;

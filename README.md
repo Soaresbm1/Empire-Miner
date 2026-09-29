@@ -25,8 +25,8 @@ Version autonome en un seul fichier HTML (ouvrable sans serveur) : `npm run buil
 | Se déplacer | `ZQSD` (AZERTY) / `WASD` (QWERTY) ou flèches |
 | Miner | maintenir le **clic gauche** sur une paroi proche, ou `Espace` pour frapper devant soi |
 | Interagir (comptoir, atelier, coffre, foreuse) | `E` |
-| Sac et carnet | `I` ou `Tab` |
-| Mode construction | `B` — clic gauche : poser (glisser pour tracer convoyeurs et rails), clic droit : démonter, `R` : tourner, `1-9` : choisir |
+| Sac et carnet | `I` ou `Tab` (hors construction) |
+| Mode construction | `B` — machines rangées par onglets : `Tab` (ou clic) change d'onglet, `1-9` (ou clic) choisit la machine ; clic gauche : poser (glisser pour tracer convoyeurs et rails), clic droit : démonter, `R` : tourner. Une ligne d'état dit si la pose est possible, et pourquoi sinon |
 | Pioche ↔ marteau-piqueur | `T` (une fois le marteau-piqueur acheté) |
 | Monter / descendre d'un wagonnet | `F` |
 | Carte de la mine | `M` (ou clic sur la mini-carte) |
@@ -115,7 +115,11 @@ lettre tapée : c'est la touche marquée M, quel que soit le clavier.
   - **eau** (dès 70 m) : des poches (suintements bleus) inondent la galerie ; l'eau ralentit, profonde elle épuise ;
     une **pompe** (240 $, sans charbon : elle tourne toute seule) l'assèche.
   Le HUD affiche la santé et le danger du moment, la carte montre les galeries inondées ou envahies de grisou.
-- Le mode construction (`B`) s'ouvre même sans aucune machine en stock, pour démonter au clic droit.
+- Le mode construction (`B`) range les machines en stock par onglets (extraction, fonte, transport, rails,
+  stockage, sécurité), chacune avec son icône et son stock. La fiche de la machine choisie rappelle ses règles de
+  pose (sur un gisement, en surface…), et une ligne d'état dit en direct si la pose est possible là où vise la
+  souris, et pourquoi sinon. La caméra remonte pour que la barre ne cache pas le joueur. Le mode s'ouvre même
+  sans aucune machine en stock, pour démonter au clic droit.
 - Vente automatique : **caisse d'expédition** à poser en surface. Tout ce qui y arrive est vendu au prix du
   comptoir à chaque passage du transporteur (toutes les 15 s) ; sa capacité est limitée (120 kg), pleine elle
   bloque les convoyeurs. Le HUD affiche le revenu automatique par minute.

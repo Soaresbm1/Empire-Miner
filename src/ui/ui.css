@@ -111,14 +111,49 @@ kbd {
 
 .hud-br { position: absolute; bottom: 14px; right: 14px; display: flex; gap: 12px; font-size: 13px; color: var(--muted); text-shadow: 1px 1px 0 #000; }
 
-.buildbar { padding: 8px 10px; }
-.build-title { font-size: 13px; color: var(--accent); font-weight: 700; margin-bottom: 6px; text-transform: uppercase; letter-spacing: 1px; }
-.kits-row { display: flex; gap: 6px; }
-.kit { display: flex; flex-direction: column; align-items: center; min-width: 110px; padding: 6px 8px; border: 2px solid var(--line); border-radius: 5px; background: #1c1518; cursor: pointer; font-size: 14px; }
-.kit.sel { border-color: var(--gold); background: #2e2318; }
-.kit span { color: var(--muted); font-size: 12px; }
-.kit.empty { cursor: default; color: var(--muted); }
-.build-help { margin-top: 6px; font-size: 12px; color: var(--muted); }
+/* Barre de construction (B) : onglets, tuiles, fiche de la machine, état de la pose. */
+.buildbar { position: relative; width: min(780px, calc(100vw - 24px)); margin-top: 10px; padding: 12px 10px 7px; }
+.bb-head { display: flex; align-items: center; gap: 10px; margin-bottom: 7px; }
+/* Titre posé sur le bord du cadre. */
+.bb-title { position: absolute; top: -11px; left: 12px; padding: 0 8px; border: 2px solid var(--line-light); border-radius: 4px; background: #2e2318; font-size: 12px; line-height: 18px; color: var(--accent); font-weight: 700; text-transform: uppercase; letter-spacing: 1px; }
+.bb-tabs { flex: 1; display: flex; flex-wrap: wrap; gap: 4px; }
+.bb-tab { display: inline-flex; align-items: center; gap: 5px; height: 26px; padding: 0 8px 0 4px; border: 2px solid var(--line); border-radius: 5px; background: #1c1518; color: var(--muted); font-size: 14px; cursor: pointer; }
+.bb-tab img { height: 20px; image-rendering: pixelated; }
+.bb-tab:hover { border-color: var(--line-light); color: var(--text); }
+.bb-tab.sel { border-color: var(--gold); background: #2e2318; color: var(--text); }
+.bb-close { padding: 0 6px; font-size: 18px; color: var(--muted); cursor: pointer; }
+.bb-close:hover { color: var(--text); }
+.bb-kits { display: flex; flex-wrap: wrap; gap: 6px; }
+.bb-kit { position: relative; width: 86px; display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 14px 4px 4px; border: 2px solid var(--line); border-radius: 6px; background: #1c1518; text-align: center; cursor: pointer; }
+.bb-kit:hover { border-color: var(--line-light); }
+.bb-kit.sel { border-color: var(--gold); background: #2e2318; box-shadow: 0 0 0 1px var(--gold); }
+.bb-kit img { height: 36px; image-rendering: pixelated; }
+.bb-kit b { font-size: 12px; font-weight: 600; line-height: 1.15; min-height: 2.3em; display: flex; align-items: center; }
+.bb-kit .n { position: absolute; top: 3px; left: 3px; font-size: 11px; }
+.bb-kit .count { position: absolute; top: 3px; right: 6px; font-size: 12px; color: var(--text); }
+.bb-kit .lvl { position: absolute; top: 32px; right: 8px; background: var(--accent); color: #1a1418; font-size: 11px; font-weight: 700; padding: 0 4px; border-radius: 3px; }
+.bb-info { margin-top: 7px; font-size: 13px; line-height: 1.35; }
+.bb-name { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; }
+.bb-name > b { color: var(--gold); font-size: 15px; }
+.bb-desc { margin-top: 2px; }
+.bb-level { color: var(--good); }
+.bb-tip { font-size: 12px; padding: 0 6px; border: 1px solid var(--line); border-radius: 3px; background: #2a2024; }
+.bb-dir { margin-left: auto; display: inline-flex; align-items: center; gap: 6px; padding: 0 8px; border: 2px solid var(--line); border-radius: 5px; background: #1c1518; color: var(--muted); font-size: 12px; cursor: pointer; }
+.bb-dir:hover { border-color: var(--line-light); }
+.bb-dir big { font-size: 20px; line-height: 1.1; color: var(--gold); }
+.bb-status { margin-top: 7px; padding: 4px 8px; border-left: 4px solid var(--line-light); border-radius: 3px; background: #120e10; font-size: 14px; color: var(--muted); }
+.bb-status.ok { border-color: var(--good); color: var(--good); }
+.bb-status.bad { border-color: var(--bad); color: #ff9d90; }
+.bb-status.remove { border-color: var(--warn); color: var(--warn); }
+.bb-keys { display: flex; flex-wrap: wrap; gap: 3px 14px; margin-top: 6px; font-size: 12px; color: var(--muted); }
+.bb-empty { padding: 4px 2px; font-size: 14px; }
+/* Pendant la construction, la barre donne déjà les touches ; sur un écran étroit, la
+   santé et le sac passent au-dessus d'elle. */
+#hud.building .hud-br { display: none; }
+@media (max-width: 1379px) {
+  #hud.building .hud-bl { bottom: calc(var(--build-h, 220px) + 26px); }
+  #hud.building .hud-bl .chips { display: none; }
+}
 
 #save-indicator { position: absolute; right: 16px; bottom: 44px; font-size: 13px; color: var(--good); opacity: 0; text-shadow: 1px 1px 0 #000; }
 #save-indicator.show { animation: saved 2.5s ease-out; }

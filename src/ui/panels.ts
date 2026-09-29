@@ -4,7 +4,7 @@
  */
 import { DIR_ARROWS, DX, DY } from '../core/dir';
 import { METERS_PER_TILE, SURFACE_ROWS, TILE, depthAt } from '../core/constants';
-import { BorerLevelSpec, MACHINES, MachineDef, MachineLevel, conveyorThroughput, kitName, parseKit } from '../data/machines';
+import { BorerLevelSpec, MACHINES, MACHINE_GROUPS, MachineDef, MachineLevel, conveyorThroughput, kitName, parseKit } from '../data/machines';
 import { GAS, WATER } from '../data/hazards';
 import { MARKER_KINDS, MARKER_ORDER, MAX_MARKERS } from '../sim/Markers';
 import { RESOURCES, getResource } from '../data/resources';
@@ -175,14 +175,7 @@ function machineSpecs(m: MachineDef): [string, string][] {
   return out;
 }
 
-const SHOP_GROUPS: { title: string; categories: MachineDef['category'][] }[] = [
-  { title: 'Extraction', categories: ['extraction'] },
-  { title: 'Traitement', categories: ['traitement'] },
-  { title: 'Transport', categories: ['logistique'] },
-  { title: 'Wagonnets et rails', categories: ['rail'] },
-  { title: 'Stockage et vente', categories: ['stockage', 'vente'] },
-  { title: 'Sécurité', categories: ['securite'] },
-];
+const SHOP_GROUPS = MACHINE_GROUPS;
 
 function machineRow(g: GameState, m: MachineDef, icon: (id: string) => string): string {
   const unlocked = g.isUnlocked(m.id);
@@ -752,7 +745,7 @@ export function helpPanel(keys: { move: string; label: (c: string) => string }):
     <div><h4>Miner</h4><p>Maintenir le <kbd>clic gauche</kbd> sur une paroi proche, ou ${k('Space')} pour frapper devant soi</p></div>
     <div><h4>Interagir</h4><p>${k('KeyE')} près du comptoir, de l'atelier, d'un coffre ou d'une foreuse</p></div>
     <div><h4>Sac</h4><p>${k('KeyI')} ou <kbd>Tab</kbd></p></div>
-    <div><h4>Construire</h4><p>${k('KeyB')} : mode construction. <kbd>Clic gauche</kbd> poser (glisser pour tracer des convoyeurs), <kbd>clic droit</kbd> démonter, ${k('KeyR')} tourner, <kbd>1-9</kbd> choisir</p></div>
+    <div><h4>Construire</h4><p>${k('KeyB')} : mode construction. <kbd>Tab</kbd> change d'onglet, <kbd>1-9</kbd> choisit la machine. <kbd>Clic gauche</kbd> poser (glisser pour tracer des convoyeurs), <kbd>clic droit</kbd> démonter, ${k('KeyR')} tourner</p></div>
     <div><h4>Zoom</h4><p>Molette de la souris</p></div>
     <div><h4>Wagonnet</h4><p>${k('KeyF')} : monter / descendre</p></div>
     <div><h4>Outil en main</h4><p>${k('KeyT')} : pioche ou marteau-piqueur (s'il est acheté)</p></div>
