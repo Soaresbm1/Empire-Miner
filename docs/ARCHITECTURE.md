@@ -11,7 +11,7 @@ src/
     Drops.ts             minerais physiques au sol (la pierre s'effrite après `groundLife` secondes)
     Inventory.ts         sac limité en poids + kits de construction
     StructureManager.ts  index spatial des structures et ordre de mise à jour
-    structures/          Conveyor, Drill, Storage, ShippingCrate, Building (+ registre de fabrication)
+    structures/          Conveyor, Drill, TunnelBorer, Smelter, Storage, ShippingCrate, Building (+ registre de fabrication)
     Wagons.ts            wagonnets (véhicules qui roulent sur la voie : rails et quais)
     visibility.ts        exploration (révélation des galeries)
     objectives.ts        objectifs calculés depuis l'état réel
@@ -108,11 +108,27 @@ coffres et foreuses collés l'alimentent comme un convoyeur. Sur un aiguillage (
 sortie vient de `route()` : branche choisie pour un wagonnet venu de la pointe, pointe pour un wagonnet venu
 d'une branche.
 
+Four et fonderie (`Smelter`, une classe pour les deux, réglée par `MachineDef.smelter`) : le minerai qui a un
+`smeltsTo` (`data/resources.ts`) entre dans `input` par tous les côtés sauf la sortie, devient un lingot (ressource
+`ingot: true`, rangée après les minerais pour garder l'index des gisements sauvegardés) dans `output`, poussé devant
+la flèche (`frontTiles` : deux cases pour la fonderie 2×2). Le premier lingot d'un métal passe par
+`StructureContext.countSmelted`, qui l'ajoute au carnet et compte les lingots pour l'objectif.
+
+Dangers (`sim/Hazards.ts`, données dans `data/hazards.ts`) : `World` porte quatre grilles de plus, `dug` (case
+creusée à la main), `pocket` (poche cachée de grisou ou d'eau, placée par le générateur avec son propre tirage pour
+ne pas changer le terrain), `gas` et `water` (niveaux 0 à 255). `GameState.breakTile` prévient `HazardSystem.onBroken`
+(poche libérée, et case marquée creusée si ce n'est pas une machine) ; le système annonce les éboulements
+(`pending`), fait retomber les niveaux et ne parcourt que les cases touchées. Ventilateur et pompe agissent par
+`StructureContext.hazards`. La santé (`GameState.hp`) baisse avec `hurtPlayer`, remonte après un délai et
+l'évanouissement ramène le joueur au camp. Les poches ne sont pas sauvegardées (elles se recalculent depuis la
+graine) ; `dug`, le gaz, l'eau, les éboulements annoncés et la santé le sont.
+
 ## Étendre le jeu
 
 - **Nouveau minerai** : ajouter une entrée dans `src/data/resources.ts` (valeur, poids, rareté, résistance,
   niveau, profondeurs, filons, réserves, durée de vie au sol, couleurs). Le bloc de filon, la génération, l'économie, l'inventaire,
-  les foreuses et le rendu le prennent en compte automatiquement.
+  les foreuses et le rendu le prennent en compte automatiquement. Pour qu'il se fonde, lui donner un `smeltsTo` et
+  ajouter son lingot (`ingot(...)`) en fin de liste.
 - **Nouvelle roche hôte** : `HOST_ROCKS` dans `src/data/blocks.ts`.
 - **Nouvelle machine** : définition dans `src/data/machines.ts`, classe dans `src/sim/structures/`,
   enregistrement dans `structures/registry.ts`, rendu dans `Renderer.drawStructure`, panneau éventuel dans `ui/panels.ts`.

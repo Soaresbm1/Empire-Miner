@@ -15,6 +15,9 @@ import { Bridge } from '../sim/structures/Bridge';
 import { Building, BUILDING_INFO } from '../sim/structures/Building';
 import { Conveyor } from '../sim/structures/Conveyor';
 import { TunnelBorer } from '../sim/structures/Borer';
+import { Smelter } from '../sim/structures/Smelter';
+import { Fan, Prop, Pump } from '../sim/structures/Safety';
+import { CAVE_IN, GAS, WATER } from '../data/hazards';
 import { Drill, reachTiles } from '../sim/structures/Drill';
 import { ShippingCrate } from '../sim/structures/ShippingCrate';
 import { Sorter } from '../sim/structures/Sorter';
@@ -317,6 +320,34 @@ export class Game {
       case 'borerLength':
         if (target instanceof TunnelBorer) g.setBorerLength(target, Number(arg));
         break;
+      case 'pumpFuel':
+        if (target instanceof Pump) {
+          const k = target.addFuel(g.inventory.count('coal'));
+          g.inventory.remove('coal', k);
+          if (k) this.ui.toast(`${k} charbon chargé${k > 1 ? 's' : ''} dans la pompe.`, 'good');
+        }
+        break;
+      case 'smelterFuel':
+        if (target instanceof Smelter) {
+          const n = g.fuelSmelter(target);
+          if (n) this.ui.toast(`${n} charbon chargé${n > 1 ? 's' : ''} dans le ${target.def.name.toLowerCase()}.`, 'good');
+        }
+        break;
+      case 'smelterDeposit':
+        if (target instanceof Smelter) {
+          const n = g.smelterDeposit(target);
+          if (n) this.ui.toast(`${n} minerai${n > 1 ? 's' : ''} déposé${n > 1 ? 's' : ''} à fondre.`, 'good');
+        }
+        break;
+      case 'smelterCollect':
+        if (target instanceof Smelter) {
+          const n = g.smelterCollect(target);
+          if (n) this.ui.toast(`${n} lingot${n > 1 ? 's' : ''} récupéré${n > 1 ? 's' : ''}.`, 'good');
+        }
+        break;
+      case 'smelterRotate':
+        if (target) g.rotateAt(target.x, target.y);
+        break;
       case 'borerUpgrade':
         if (target instanceof TunnelBorer) g.upgradeMachine(target);
         break;
@@ -540,6 +571,8 @@ export class Game {
     else if (s instanceof ShippingCrate) this.ui.openPanel('shipping', s);
     else if (s instanceof Drill) this.ui.openPanel('drill', s);
     else if (s instanceof TunnelBorer) this.ui.openPanel('borer', s);
+    else if (s instanceof Smelter) this.ui.openPanel('furnace', s);
+    else if (s instanceof Pump) this.ui.openPanel('pump', s);
     else if (s instanceof Sorter) this.ui.openPanel('sorter', s);
     else if (s instanceof RailStation) this.ui.openPanel('station', s);
     else if (s instanceof RailSwitch) this.ui.openPanel('switch', s);
@@ -563,6 +596,8 @@ export class Game {
     if (near instanceof ShippingCrate) return `${e} Caisse d'expédition — vente automatique`;
     if (near instanceof Drill) return `${e} Foreuse niv. ${near.level} — charbon, production, amélioration`;
     if (near instanceof TunnelBorer) return `${e} Foreuse de percement niv. ${near.level} — charbon, départ, améliorations`;
+    if (near instanceof Smelter) return `${e} ${near.def.name} — charbon, minerai, lingots`;
+    if (near instanceof Pump) return `${e} Pompe — charbon`;
     if (near instanceof Sorter) return `${e} Trieur — choisir le minerai trié`;
     if (near instanceof RailStation) return `${e} ${near.def.name}`;
     if (near instanceof RailSwitch) return `${e} Aiguillage — choisir la branche`;
@@ -791,6 +826,16 @@ export class Game {
         s.stats.hopper ? ` · ${s.storeCount()} minerai(s)` : ''
       } · tunnel : ${s.tunnel} cases`;
     }
+    if (s instanceof Prop) return `<b>Étai</b><br>Pas d'éboulement à ${CAVE_IN.propRadius} cases autour`;
+    if (s instanceof Fan) return `<b>Ventilateur</b> — ${s.active ? 'chasse le grisou' : 'air sain'}<br>Portée : ${GAS.fanRadius} cases`;
+    if (s instanceof Pump) {
+      const st = { ok: 'pompe', idle: "pas d'eau à portée", nofuel: 'sans charbon' }[s.status];
+      return `<b>Pompe</b> — ${st}<br>Charbon : ${s.fuelUnits} · portée : ${WATER.pumpRadius} cases`;
+    }
+    if (s instanceof Smelter) {
+      const st = { ok: 'fond le minerai', idle: 'attend du minerai', nofuel: 'sans charbon', full: 'sortie saturée' }[s.status];
+      return `<b>${s.def.name}</b> ${['→', '↓', '←', '↑'][s.dir]} — ${st}<br>Minerai : ${s.input.length} · lingots prêts : ${s.output.length} · charbon : ${s.fuelUnits}`;
+    }
     if (s instanceof Storage) return `<b>Coffre</b><br>${kg(s.weight())} / ${kg(s.capacity)}`;
     if (s instanceof ShippingCrate)
       return `<b>Caisse d'expédition</b><br>${kg(s.weight())} / ${kg(s.capacity)} · ${money(s.pendingValue())} en attente<br>Passage dans ${Math.ceil(s.timer)} s`;
@@ -805,6 +850,14 @@ export class Game {
       return `<b>${esc(b.name)}</b> ${drop}<br>Résistance ${Math.max(0, b.hp - dmg)}/${b.hp} · niveau ${b.tier}${
         tooHard ? `<br><span class="bad">Pioche trop faible (niveau ${b.tier} requis)</span>` : ''
       }`;
+    }
+    const gas = w.gas[w.idx(tx, ty)];
+    const water = w.water[w.idx(tx, ty)];
+    if (!b.solid && (gas > 0 || water > 0)) {
+      const parts: string[] = [];
+      if (gas > 0) parts.push(`<b>Grisou</b> ${Math.round((gas / 255) * 100)} %${gas >= GAS.harmful ? ' — <span class="bad">irrespirable</span>' : ''}`);
+      if (water > 0) parts.push(`<b>Eau</b> ${water >= WATER.deep ? '<span class="bad">profonde</span>' : 'peu profonde'} (${Math.round((water / 255) * 100)} %)`);
+      return parts.join('<br>');
     }
     const dep = w.depositAt(tx, ty);
     if (dep) return `<b>Gisement de ${getResource(dep).name.toLowerCase()}</b><br>Réserve : ${w.reserve[w.idx(tx, ty)]} unités<br><span class="muted">Posez une foreuse dessus</span>`;
@@ -889,6 +942,30 @@ export class Game {
           break;
         case 'message':
           this.ui.toast(e.text, e.kind);
+          break;
+        case 'hurt':
+          if (e.amount >= 10) this.sfx.hurt();
+          r.onHurt(e.amount);
+          break;
+        case 'faint':
+          this.sfx.hurt();
+          r.snapCamera();
+          break;
+        case 'rumble':
+          this.sfx.rumble();
+          r.onRumble(e.tx, e.ty);
+          break;
+        case 'collapse':
+          this.sfx.collapse();
+          r.onCollapse(e.tx, e.ty);
+          break;
+        case 'gas':
+          this.sfx.gas();
+          r.onGasRelease(e.tx, e.ty);
+          break;
+        case 'flood':
+          this.sfx.flood();
+          r.onFlood(e.tx, e.ty);
           break;
       }
     }

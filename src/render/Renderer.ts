@@ -4,7 +4,8 @@
  */
 import { SURFACE_ROWS, TILE, clamp } from '../core/constants';
 import { DX, DY, Dir } from '../core/dir';
-import { getBlock } from '../data/blocks';
+import { AIR, getBlock } from '../data/blocks';
+import { CAVE_IN, GAS, HEALTH, POCKET_WATER } from '../data/hazards';
 import { getMachine } from '../data/machines';
 import { getResource } from '../data/resources';
 import { FADE_TIME } from '../sim/Drops';
@@ -15,6 +16,8 @@ import { Wagon } from '../sim/Wagons';
 import { Building } from '../sim/structures/Building';
 import { Conveyor } from '../sim/structures/Conveyor';
 import { TunnelBorer } from '../sim/structures/Borer';
+import { Smelter } from '../sim/structures/Smelter';
+import { Fan, Prop, Pump } from '../sim/structures/Safety';
 import { Drill } from '../sim/structures/Drill';
 import { ShippingCrate } from '../sim/structures/ShippingCrate';
 import { Sorter } from '../sim/structures/Sorter';
@@ -88,6 +91,8 @@ export class Renderer {
   private readonly lantern: HTMLCanvasElement;
   private time = 0;
   private smokeTimer = 0;
+  /** Flash rouge après une blessure (0 à 1). */
+  private hurtFlash = 0;
 
   constructor(canvas: HTMLCanvasElement) {
     this.canvas = canvas;
@@ -165,7 +170,15 @@ export class Renderer {
   update(dt: number, follow = true): void {
     this.time += dt;
     this.fx.update(dt);
+    this.hurtFlash = Math.max(0, this.hurtFlash - dt * 2.5);
     if (!this.state) return;
+    // Plafond qui craque : poussière qui tombe et sol qui tremble.
+    for (const p of this.state.hazards.pending) {
+      if (!this.inView(p.x * TILE, p.y * TILE, 96)) continue;
+      this.fx.shake = Math.max(this.fx.shake, 0.7);
+      if (Math.random() < 0.6)
+        this.fx.emit('dust', (p.x + 0.5 + (Math.random() - 0.5) * 5) * TILE, (p.y + 0.5 + (Math.random() - 0.5) * 5) * TILE, 'rgba(150,130,110,0.7)', 1, 10);
+    }
     if (follow) {
       const tx = this.state.player.x - this.viewW / 2;
       const ty = this.state.player.y - 8 - this.viewH / 2;
@@ -181,7 +194,11 @@ export class Renderer {
       for (const s of this.state.structures.list)
         if (s instanceof Drill && s.status === 'ok' && this.inView(s.x * TILE, s.y * TILE, 64))
           this.fx.emit('smoke', s.x * TILE + 11, s.y * TILE + 1, 'rgba(90,90,96,0.6)', 1, 6);
-        else if (s instanceof TunnelBorer && (s.status === 'digging' || s.status === 'moving' || s.status === 'returning')) {
+        else if (s instanceof Smelter && s.status === 'ok' && this.inView(s.x * TILE, s.y * TILE, 64)) {
+          const big = s.w > 1;
+          for (const cx of big ? [s.x * TILE + 7, s.x * TILE + s.w * TILE - 8] : [s.x * TILE + 11])
+            this.fx.emit('smoke', cx, s.y * TILE - (big ? 26 : 16), 'rgba(80,76,80,0.6)', 1, 6);
+        } else if (s instanceof TunnelBorer && (s.status === 'digging' || s.status === 'moving' || s.status === 'returning')) {
           const v = this.borerVehicleXY(s);
           if (this.inView(v.x, v.y, 64)) this.fx.emit('smoke', v.x + 8 - DX[s.dir] * 5, v.y + 2 - DY[s.dir] * 5, 'rgba(90,90,96,0.6)', 1, 6);
         }
@@ -227,6 +244,7 @@ export class Renderer {
     this.chunks.sync();
     this.chunks.draw(ctx, x0, y0, x1, y1);
     this.drawCracks(state);
+    this.drawGroundHazards(state, x0, y0, x1, y1);
 
     // Voie des wagonnets (rails et quais), au ras du sol.
     for (const s of state.structures.list) {
@@ -291,9 +309,12 @@ export class Renderer {
     for (const d of list) d.draw();
     // Travées des ponts : au-dessus de tout ce qui est au sol (on passe dessous).
     for (const b of state.structures.list) if (b instanceof Bridge && b.target && this.inView(b.x * TILE, b.y * TILE, 6 * TILE)) this.drawBridgeSpan(b);
+    this.drawGas(state, x0, y0, x1, y1);
+    this.drawCaveInWarnings(state);
 
     this.drawParticles();
     this.drawLighting();
+    this.drawHurt(state);
 
     // Surcouches d'interface dans le monde (au-dessus de l'obscurité).
     ctx.setTransform(this.zoom, 0, 0, this.zoom, ox, oy);
@@ -689,6 +710,10 @@ export class Renderer {
       this.drawBorerBase(s);
       if (s.home) this.drawBorer(s, s.x * TILE, s.y * TILE);
     }
+    else if (s instanceof Smelter) this.drawSmelter(s);
+    else if (s instanceof Prop) this.drawProp(s);
+    else if (s instanceof Fan) this.drawFan(s);
+    else if (s instanceof Pump) this.drawPump(s);
     else if (s instanceof Storage) this.drawStorage(s);
     else if (s instanceof ShippingCrate) this.drawShipping(s);
     else if (s instanceof Building) this.drawBuilding(s);
@@ -1003,6 +1028,300 @@ export class Renderer {
     ctx.restore();
   }
 
+  /**
+   * Four (1 case) et fonderie (2×2) : four de briques, bouche rougeoyante quand il fond,
+   * cheminée(s), goulotte de sortie du côté de la flèche et jauge de charbon.
+   */
+  private drawSmelter(s: Smelter): void {
+    const ctx = this.ctx;
+    const x = s.x * TILE;
+    const y = s.y * TILE;
+    const W = s.w * TILE;
+    const H = s.h * TILE;
+    const big = s.w > 1;
+    const hot = s.status === 'ok';
+    const flicker = hot ? 0.75 + Math.sin(this.time * 17) * 0.15 + Math.sin(this.time * 7.3) * 0.1 : 0;
+    const top = big ? 10 : 6; // hauteur du four au-dessus de sa case (vue de trois quarts)
+    ctx.fillStyle = 'rgba(0,0,0,0.35)';
+    ctx.fillRect(x + 1, y + H - 3, W - 1, 3);
+    // Cheminées (derrière le corps).
+    const chimneys = big ? [x + 5, x + W - 10] : [x + 10];
+    for (const cx of chimneys) {
+      ctx.fillStyle = '#1a1418';
+      ctx.fillRect(cx - 1, y - top - (big ? 9 : 6), big ? 7 : 5, big ? 10 : 7);
+      ctx.fillStyle = '#4a3a34';
+      ctx.fillRect(cx, y - top - (big ? 8 : 5), big ? 5 : 3, big ? 9 : 6);
+      ctx.fillStyle = '#2a2024';
+      ctx.fillRect(cx - 1, y - top - (big ? 9 : 6), big ? 7 : 5, 2);
+    }
+    // Corps en briques.
+    ctx.fillStyle = '#1a1418';
+    ctx.fillRect(x, y - top, W, H + top - 1);
+    ctx.fillStyle = '#8a4b38';
+    ctx.fillRect(x + 1, y - top + 1, W - 2, H + top - 3);
+    ctx.fillStyle = '#a8614a';
+    ctx.fillRect(x + 1, y - top + 1, W - 2, big ? 4 : 3);
+    ctx.fillStyle = '#6a3527';
+    for (let row = y - top + (big ? 6 : 5); row < y + H - 3; row += 3) {
+      ctx.fillRect(x + 1, row, W - 2, 1);
+      const off = ((row - y) / 3) % 2 ? 2 : 5;
+      for (let col = x + off; col < x + W - 2; col += 6) ctx.fillRect(col, row - 2, 1, 2);
+    }
+    // Fonderie : creuset de métal en fusion sur le dessus.
+    if (big) {
+      ctx.fillStyle = '#2a2024';
+      ctx.fillRect(x + 8, y - top + 1, W - 16, 4);
+      ctx.fillStyle = hot ? `rgba(255,${Math.round(120 + flicker * 60)},30,1)` : '#4a3a34';
+      ctx.fillRect(x + 9, y - top + 2, W - 18, 2);
+    }
+    // Bouche du four (face avant) : noire à l'arrêt, rougeoyante quand il fond.
+    const mw = big ? 14 : 8;
+    const mh = big ? 9 : 6;
+    const mx = x + Math.round((W - mw) / 2);
+    const my = y + H - mh - (big ? 5 : 3);
+    ctx.fillStyle = '#26221e';
+    ctx.fillRect(mx - 1, my - 1, mw + 2, mh + 1);
+    ctx.fillStyle = '#0e0b0d';
+    ctx.fillRect(mx, my, mw, mh);
+    if (hot) {
+      ctx.fillStyle = `rgba(255,${Math.round(90 + flicker * 70)},20,${0.75 + flicker * 0.25})`;
+      ctx.fillRect(mx + 1, my + 2, mw - 2, mh - 2);
+      ctx.fillStyle = '#ffe28a';
+      ctx.fillRect(mx + 2, my + mh - 2, mw - 4, 1);
+    } else if (s.input.length) {
+      ctx.fillStyle = '#5a2a18'; // braises
+      ctx.fillRect(mx + 1, my + mh - 2, mw - 2, 1);
+    }
+    // Goulotte de sortie du côté de la flèche, avec le lingot qui attend.
+    ctx.save();
+    ctx.translate(x + W / 2, y + H / 2);
+    ctx.rotate((s.dir * Math.PI) / 2);
+    const edge = (s.dir % 2 === 0 ? W : H) / 2;
+    ctx.fillStyle = '#1a1418';
+    ctx.fillRect(edge - 3, -4, 5, 8);
+    ctx.fillStyle = '#6a6f78';
+    ctx.fillRect(edge - 2, -3, 3, 6);
+    ctx.restore();
+    if (s.output.length) {
+      const img = this.nuggets.get(s.output[0]);
+      if (img) ctx.drawImage(img, Math.round(x + W / 2 + DX[s.dir] * (W / 2 - 2) - img.width / 2), Math.round(y + H / 2 + DY[s.dir] * (H / 2 - 2) - img.height / 2));
+    }
+    this.drawArrow(x + W / 2 + DX[s.dir] * (W / 2 - 5), y + H / 2 + DY[s.dir] * (H / 2 - 5) - (s.dir % 2 ? 0 : 3), s.dir, '#ffffff');
+    // Jauge de charbon.
+    const fuel = s.fuelMax ? (s.fuelUnits + (s.burn > 0 ? 1 : 0)) / s.fuelMax : 0;
+    ctx.fillStyle = '#1a1418';
+    ctx.fillRect(x + 1, y + H - 1, W - 2, 2);
+    ctx.fillStyle = fuel > 0.2 ? '#f08a24' : '#d0342c';
+    ctx.fillRect(x + 1, y + H - 1, Math.round((W - 2) * Math.min(1, fuel)), 2);
+    if (hot && Math.random() < (big ? 0.25 : 0.12)) this.fx.emit('spark', mx + mw / 2, my + mh / 2, '#ffb040', 1, 25);
+  }
+
+  /** Eau au sol (sous les machines et le joueur) et indices de poches sur les parois qui bordent une galerie. */
+  private drawGroundHazards(state: GameState, x0: number, y0: number, x1: number, y1: number): void {
+    const ctx = this.ctx;
+    const w = state.world;
+    const tx0 = Math.max(0, Math.floor(x0 / TILE));
+    const ty0 = Math.max(0, Math.floor(y0 / TILE));
+    const tx1 = Math.min(w.w - 1, Math.floor(x1 / TILE));
+    const ty1 = Math.min(w.h - 1, Math.floor(y1 / TILE));
+    for (let ty = ty0; ty <= ty1; ty++)
+      for (let tx = tx0; tx <= tx1; tx++) {
+        const i = w.idx(tx, ty);
+        if (!w.explored[i]) continue;
+        const x = tx * TILE;
+        const y = ty * TILE;
+        if (w.tiles[i] === AIR) {
+          const lvl = w.water[i];
+          if (lvl <= 0) continue;
+          const k = lvl / 255;
+          ctx.fillStyle = `rgba(38,104,186,${0.2 + k * 0.45})`;
+          ctx.fillRect(x, y, TILE, TILE);
+          // Reflets qui ondulent.
+          ctx.fillStyle = `rgba(170,215,255,${0.15 + k * 0.3})`;
+          for (let r = 0; r < 2; r++) {
+            const ph = (this.time * (0.6 + r * 0.3) + tx * 0.37 + ty * 0.61 + r * 0.5) % 1;
+            ctx.fillRect(x + 1 + Math.floor(ph * 10), y + 4 + r * 7 + ((tx + ty) % 2), 4, 1);
+          }
+          continue;
+        }
+        const pocket = w.pocket[i];
+        if (!pocket) continue;
+        if (!(w.isOpen(tx, ty + 1) || w.isOpen(tx, ty - 1) || w.isOpen(tx + 1, ty) || w.isOpen(tx - 1, ty))) continue;
+        // Indices discrets : suintements sombres (eau) ou taches jaunâtres (grisou).
+        const h = (tx * 73856093) ^ (ty * 19349663);
+        if (pocket === POCKET_WATER) {
+          ctx.fillStyle = 'rgba(28,58,104,0.55)';
+          ctx.fillRect(x + 3 + (h & 7), y + 3 + ((h >> 3) & 3), 2, 5);
+          ctx.fillRect(x + 9 + ((h >> 5) & 3), y + 6 + ((h >> 7) & 3), 2, 4);
+          const drip = (this.time * 0.8 + (h & 15) / 16) % 1;
+          ctx.fillStyle = 'rgba(120,180,240,0.7)';
+          ctx.fillRect(x + 4 + (h & 7), y + 8 + Math.floor(drip * 7), 1, 1);
+        } else {
+          ctx.fillStyle = 'rgba(176,190,64,0.45)';
+          ctx.fillRect(x + 2 + (h & 7), y + 4 + ((h >> 3) & 3), 3, 2);
+          ctx.fillRect(x + 8 + ((h >> 5) & 3), y + 9 + ((h >> 7) & 3), 2, 2);
+          ctx.fillStyle = 'rgba(210,220,120,0.5)';
+          ctx.fillRect(x + 11 - ((h >> 2) & 3), y + 3 + ((h >> 9) & 3), 1, 1);
+        }
+      }
+  }
+
+  /** Nuage de grisou : voile verdâtre et volutes, au-dessus de tout ce qui est au sol. */
+  private drawGas(state: GameState, x0: number, y0: number, x1: number, y1: number): void {
+    if (!state.hazards.hasGas) return;
+    const ctx = this.ctx;
+    const w = state.world;
+    const tx0 = Math.max(0, Math.floor(x0 / TILE));
+    const ty0 = Math.max(0, Math.floor(y0 / TILE));
+    const tx1 = Math.min(w.w - 1, Math.floor(x1 / TILE));
+    const ty1 = Math.min(w.h - 1, Math.floor(y1 / TILE));
+    for (let ty = ty0; ty <= ty1; ty++)
+      for (let tx = tx0; tx <= tx1; tx++) {
+        const lvl = w.gas[w.idx(tx, ty)];
+        if (lvl <= 0) continue;
+        const k = lvl / 255;
+        ctx.fillStyle = `rgba(150,184,70,${0.1 + k * 0.32})`;
+        ctx.fillRect(tx * TILE, ty * TILE, TILE, TILE);
+        for (let p = 0; p < 2; p++) {
+          const a = this.time * (0.7 + p * 0.4) + tx * 1.3 + ty * 2.1 + p * 3;
+          ctx.fillStyle = `rgba(196,220,120,${0.12 + k * 0.28})`;
+          ctx.fillRect(Math.round(tx * TILE + 8 + Math.cos(a) * 5) - 2, Math.round(ty * TILE + 8 + Math.sin(a * 1.3) * 5) - 1, 4, 3);
+        }
+      }
+  }
+
+  /** Plafond qui craque : zone menacée qui clignote, avec le compte à rebours. */
+  private drawCaveInWarnings(state: GameState): void {
+    const ctx = this.ctx;
+    const r = CAVE_IN.radius;
+    for (const p of state.hazards.pending) {
+      if (!this.inView(p.x * TILE, p.y * TILE, 96)) continue;
+      const blink = Math.floor(this.time * (p.t < 1.5 ? 8 : 4)) % 2 === 0;
+      ctx.strokeStyle = blink ? 'rgba(255,110,50,0.95)' : 'rgba(255,190,80,0.6)';
+      ctx.lineWidth = 1;
+      ctx.setLineDash([3, 2]);
+      ctx.strokeRect((p.x - r) * TILE + 0.5, (p.y - r) * TILE + 0.5, (2 * r + 1) * TILE - 1, (2 * r + 1) * TILE - 1);
+      ctx.setLineDash([]);
+      ctx.fillStyle = 'rgba(255,110,50,0.12)';
+      ctx.fillRect((p.x - r) * TILE, (p.y - r) * TILE, (2 * r + 1) * TILE, (2 * r + 1) * TILE);
+    }
+  }
+
+  /** Blessure : bord de l'écran rouge (flash), et rouge persistant quand la santé est basse. */
+  private drawHurt(state: GameState): void {
+    const low = state.hp < HEALTH.max * 0.35 ? 0.25 + Math.sin(this.time * 5) * 0.08 : 0;
+    const gas = state.hazards.gasAt(state.player.tileX, state.player.tileY) >= GAS.harmful ? 0.18 : 0;
+    const a = Math.max(this.hurtFlash * 0.55, low);
+    if (a <= 0 && gas <= 0) return;
+    const ctx = this.ctx;
+    const W = this.canvas.width;
+    const H = this.canvas.height;
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    if (gas > 0) {
+      ctx.fillStyle = `rgba(120,160,40,${gas})`;
+      ctx.fillRect(0, 0, W, H);
+    }
+    if (a > 0) {
+      const g = ctx.createRadialGradient(W / 2, H / 2, Math.min(W, H) * 0.3, W / 2, H / 2, Math.max(W, H) * 0.7);
+      g.addColorStop(0, 'rgba(200,20,20,0)');
+      g.addColorStop(1, `rgba(200,20,20,${a})`);
+      ctx.fillStyle = g;
+      ctx.fillRect(0, 0, W, H);
+    }
+  }
+
+  /** Étai : deux poteaux et une poutre de bois (on passe dessous). */
+  private drawProp(s: Prop): void {
+    const ctx = this.ctx;
+    const x = s.x * TILE;
+    const y = s.y * TILE;
+    ctx.fillStyle = 'rgba(0,0,0,0.3)';
+    ctx.fillRect(x + 1, y + 14, 3, 2);
+    ctx.fillRect(x + 12, y + 14, 3, 2);
+    for (const px of [x + 1, x + 12]) {
+      ctx.fillStyle = '#3e2714';
+      ctx.fillRect(px, y - 6, 3, 21);
+      ctx.fillStyle = '#8a5a32';
+      ctx.fillRect(px, y - 6, 2, 21);
+      ctx.fillStyle = '#b07a44';
+      ctx.fillRect(px, y - 6, 1, 21);
+    }
+    ctx.fillStyle = '#3e2714';
+    ctx.fillRect(x - 1, y - 9, 18, 4);
+    ctx.fillStyle = '#9a6a3a';
+    ctx.fillRect(x - 1, y - 9, 18, 3);
+    ctx.fillStyle = '#c08a50';
+    ctx.fillRect(x - 1, y - 9, 18, 1);
+    // Cales en coin.
+    ctx.fillStyle = '#6a4424';
+    ctx.fillRect(x + 4, y - 6, 2, 2);
+    ctx.fillRect(x + 10, y - 6, 2, 2);
+  }
+
+  /** Ventilateur : hélice dans un cadre d'acier ; elle s'emballe quand il y a du grisou. */
+  private drawFan(s: Fan): void {
+    const ctx = this.ctx;
+    const x = s.x * TILE;
+    const y = s.y * TILE;
+    ctx.fillStyle = 'rgba(0,0,0,0.35)';
+    ctx.fillRect(x + 1, y + 13, 15, 3);
+    ctx.fillStyle = '#1a1418';
+    ctx.fillRect(x + 1, y - 3, 14, 17);
+    ctx.fillStyle = '#5b5d66';
+    ctx.fillRect(x + 2, y - 2, 12, 15);
+    ctx.fillStyle = '#7a7c86';
+    ctx.fillRect(x + 2, y - 2, 12, 2);
+    ctx.fillStyle = '#26262c';
+    ctx.fillRect(x + 3, y + 1, 10, 10);
+    const cx = x + 8;
+    const cy = y + 6;
+    for (let k = 0; k < 4; k++) {
+      const a = s.spin + (k * Math.PI) / 2;
+      ctx.fillStyle = k % 2 ? '#b8bcc6' : '#9aa0aa';
+      for (let d = 1; d <= 4; d++) ctx.fillRect(Math.round(cx + Math.cos(a) * d) - 1, Math.round(cy + Math.sin(a) * d) - 1, 2, 2);
+    }
+    ctx.fillStyle = '#f2c230';
+    ctx.fillRect(cx - 1, cy - 1, 2, 2);
+    if (s.active && Math.random() < 0.3) this.fx.emit('smoke', cx, cy, 'rgba(170,200,110,0.5)', 1, 14);
+  }
+
+  /** Pompe : cylindre, balancier qui monte et descend en pompant, tuyau qui plonge dans le sol. */
+  private drawPump(s: Pump): void {
+    const ctx = this.ctx;
+    const x = s.x * TILE;
+    const y = s.y * TILE;
+    const on = s.status === 'ok';
+    const stroke = on ? Math.round(Math.sin(s.activeTime * 8) * 2) : 0;
+    ctx.fillStyle = 'rgba(0,0,0,0.35)';
+    ctx.fillRect(x + 1, y + 13, 15, 3);
+    // Socle et tuyau.
+    ctx.fillStyle = '#2d2e33';
+    ctx.fillRect(x + 1, y + 8, 14, 7);
+    ctx.fillStyle = '#3b6a8a';
+    ctx.fillRect(x + 11, y + 4, 3, 11);
+    ctx.fillStyle = '#5d8fb0';
+    ctx.fillRect(x + 11, y + 4, 1, 11);
+    // Cylindre.
+    ctx.fillStyle = '#1a1418';
+    ctx.fillRect(x + 2, y - 2, 8, 12);
+    ctx.fillStyle = '#4d7a9a';
+    ctx.fillRect(x + 3, y - 1, 6, 10);
+    ctx.fillStyle = '#6fa0c0';
+    ctx.fillRect(x + 3, y - 1, 6, 2);
+    // Tige et balancier.
+    ctx.fillStyle = '#9aa0aa';
+    ctx.fillRect(x + 5, y - 6 + stroke, 2, 6);
+    ctx.fillStyle = '#6a4424';
+    ctx.fillRect(x + 2, y - 7 + stroke, 12, 2);
+    // Jauge de charbon.
+    const fuel = s.fuelMax ? (s.fuelUnits + (s.burn > 0 ? 1 : 0)) / s.fuelMax : 0;
+    ctx.fillStyle = '#1a1418';
+    ctx.fillRect(x + 1, y + 15, 14, 2);
+    ctx.fillStyle = fuel > 0.2 ? '#f08a24' : '#d0342c';
+    ctx.fillRect(x + 1, y + 15, Math.round(14 * Math.min(1, fuel)), 2);
+    if (on && Math.random() < 0.25) this.fx.emit('dust', x + 12, y + 14, 'rgba(120,180,240,0.6)', 1, 18);
+  }
+
   private drawStorage(s: Storage): void {
     const ctx = this.ctx;
     const x = s.x * TILE;
@@ -1101,6 +1420,12 @@ export class Renderer {
       let icon: 'nofuel' | 'full' | 'stop' | null = null;
       let at = { x: s.x * TILE, y: s.y * TILE };
       if (s instanceof Drill && s.status !== 'ok') icon = s.status === 'nofuel' ? 'nofuel' : s.status === 'full' ? 'full' : 'stop';
+      else if (s instanceof Pump && s.status === 'nofuel') icon = 'nofuel';
+      else if (s instanceof Smelter) {
+        // Four sans charbon alors qu'il a du minerai, ou sortie saturée.
+        icon = s.status === 'nofuel' ? 'nofuel' : s.status === 'full' ? 'full' : null;
+        at = { x: s.x * TILE + (s.w - 1) * 8, y: s.y * TILE - (s.w > 1 ? 14 : 8) };
+      }
       else if (s instanceof TunnelBorer) {
         icon = s.status === 'nofuel' ? 'nofuel' : s.status === 'waiting' ? 'full' : s.status === 'blocked' ? 'stop' : null;
         if (icon === 'full') at = this.borerVehicleXY(s);
@@ -1244,6 +1569,8 @@ export class Renderer {
     for (const l of state.layout.lamps) punch(l.x, l.y, 3.6 + Math.sin(this.time * 5 + l.x) * 0.08, 0.85);
     for (const s of state.structures.list) {
       if (s instanceof Drill) punch((s.x + 0.5) * TILE, (s.y + 0.5) * TILE, s.status === 'ok' ? 3.2 : 1.6, 0.8);
+      // Four et fonderie : la bouche éclaire autour d'elle quand ils fondent.
+      else if (s instanceof Smelter) punch((s.x + s.w / 2) * TILE, (s.y + s.h - 0.3) * TILE, s.status === 'ok' ? 3 + s.w : 1.4, 0.85);
       // Phare de la foreuse de percement : éclaire le front de taille, où qu'elle soit ; la base a sa lampe.
       else if (s instanceof TunnelBorer) {
         const v = this.borerVehicleXY(s);
@@ -1298,7 +1625,7 @@ export class Renderer {
       ctx.strokeStyle = o.ghost.ok ? '#7dffa0' : '#ff6b5b';
       ctx.lineWidth = 1;
       ctx.strokeRect(x + 0.5, y + 0.5, def.w * TILE - 1, def.h * TILE - 1);
-      if (def.rotatable) this.drawArrow(x + 8, y + 8, o.ghost.dir, o.ghost.ok ? '#7dffa0' : '#ff6b5b');
+      if (def.rotatable) this.drawArrow(x + def.w * 8, y + def.h * 8, o.ghost.dir, o.ghost.ok ? '#7dffa0' : '#ff6b5b');
       const state = this.state;
       if (o.ghost.reach && state)
         this.drawReachTiles(o.ghost.reach, (t) => !!state.world.depositAt(t.x, t.y) && !(state.structures.at(t.x, t.y) instanceof Drill));
@@ -1381,8 +1708,9 @@ export class Renderer {
     const factory = STRUCTURE_FACTORIES[id];
     if (!factory && id !== 'wagon') return '';
     const s = factory ? factory.create(0, 0, 0) : null;
-    const W = 28;
-    const H = 40;
+    // Place pour les machines de plusieurs cases (fonderie 2×2).
+    const W = 28 + ((s?.w ?? 1) - 1) * TILE;
+    const H = 40 + ((s?.h ?? 1) - 1) * TILE;
     const canvas = document.createElement('canvas');
     canvas.width = W;
     canvas.height = H;
@@ -1452,6 +1780,29 @@ export class Renderer {
   }
 
   /** Coup de marteau-piqueur : poussière sur la case visée et légère secousse. */
+  onHurt(amount: number): void {
+    this.hurtFlash = Math.min(1, this.hurtFlash + (amount >= 10 ? 1 : 0.5));
+  }
+
+  onRumble(tx: number, ty: number): void {
+    this.fx.shake = Math.max(this.fx.shake, 2);
+    for (let k = 0; k < 12; k++) this.fx.emit('dust', (tx + 0.5 + (Math.random() - 0.5) * 5) * TILE, (ty + 0.5 + (Math.random() - 0.5) * 5) * TILE, 'rgba(150,130,110,0.7)', 1, 16);
+  }
+
+  onCollapse(tx: number, ty: number): void {
+    this.fx.shake = Math.max(this.fx.shake, 6);
+    for (let k = 0; k < 40; k++)
+      this.fx.emit(k % 3 ? 'dust' : 'chip', (tx + 0.5 + (Math.random() - 0.5) * 5) * TILE, (ty + 0.5 + (Math.random() - 0.5) * 5) * TILE, k % 3 ? 'rgba(140,120,100,0.8)' : '#8a7662', 1, 40);
+  }
+
+  onGasRelease(tx: number, ty: number): void {
+    this.fx.emit('smoke', (tx + 0.5) * TILE, (ty + 0.5) * TILE, 'rgba(170,200,90,0.7)', 18, 30);
+  }
+
+  onFlood(tx: number, ty: number): void {
+    this.fx.emit('dust', (tx + 0.5) * TILE, (ty + 0.5) * TILE, 'rgba(110,170,240,0.8)', 24, 60);
+  }
+
   onHammer(): void {
     const t = this.state?.player.swingTarget;
     if (t) this.fx.emit('dust', (t.tx + 0.5) * TILE, (t.ty + 0.7) * TILE, 'rgba(150,135,120,0.45)', 2, 22);

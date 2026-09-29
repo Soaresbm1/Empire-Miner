@@ -16,6 +16,7 @@ import { STRUCTURE_FACTORIES } from '../sim/structures/registry';
 import { Wagon, type WagonSave } from '../sim/Wagons';
 import type { StructureSave } from '../sim/structures/Structure';
 import { rleDecode, rleEncode } from './codec';
+import { HEALTH } from '../data/hazards';
 
 export const SAVE_VERSION = 1;
 
@@ -51,6 +52,20 @@ export interface SaveData {
   structures: StructureSave[];
   /** Absent des sauvegardes d'avant les wagonnets. */
   wagons?: WagonSave[];
+  /** Santé du joueur (absente des sauvegardes d'avant les dangers : pleine santé). */
+  health?: number;
+  /**
+   * Dangers (absents des anciennes sauvegardes) : cases creusées à la main, grisou et eau
+   * ([indice, niveau]) et éboulements annoncés ([x, y, temps restant]). Les poches cachées se
+   * recalculent depuis la graine.
+   */
+  hazards?: { dug: string; gas: [number, number][]; water: [number, number][]; pending: [number, number, number][] };
+}
+
+function sparse(grid: Float32Array): [number, number][] {
+  const out: [number, number][] = [];
+  for (let i = 0; i < grid.length; i++) if (grid[i] > 0) out.push([i, round2(grid[i])]);
+  return out;
 }
 
 export function serialize(g: GameState): SaveData {
@@ -84,6 +99,13 @@ export function serialize(g: GameState): SaveData {
     drops: g.drops.list.map((d) => [d.res, d.count, round2(d.x), round2(d.y), round2(d.age)]),
     structures: g.structures.list.filter((s) => s.removable).map((s) => s.serialize()),
     wagons: g.wagons.list.map((w) => w.serialize()),
+    health: round2(g.hp),
+    hazards: {
+      dug: rleEncode(w.dug),
+      gas: sparse(w.gas),
+      water: sparse(w.water),
+      pending: g.hazards.pending.map((p) => [p.x, p.y, round2(p.t)]),
+    },
   };
 }
 
@@ -101,6 +123,13 @@ export function deserialize(data: SaveData): GameState {
   for (const [i, r] of data.world.reserves) w.reserve[i] = r;
   w.damage.clear();
   for (const [i, d] of data.world.damage) w.damage.set(i, d);
+  if (data.hazards) {
+    w.dug.set(rleDecode(data.hazards.dug, n));
+    for (const [i, v] of data.hazards.gas ?? []) if (i >= 0 && i < n) w.gas[i] = v;
+    for (const [i, v] of data.hazards.water ?? []) if (i >= 0 && i < n) w.water[i] = v;
+    g.hazards.pending = (data.hazards.pending ?? []).map(([x, y, t]) => ({ x, y, t }));
+  }
+  g.hazards.rebuild();
   w.markAllDirty();
 
   g.time = data.time;
@@ -108,6 +137,7 @@ export function deserialize(data: SaveData): GameState {
   g.player.y = data.player.y;
   g.player.facing = data.player.facing;
   g.money = data.money;
+  g.hp = Math.min(HEALTH.max, Math.max(1, Number(data.health ?? HEALTH.max) || HEALTH.max));
   g.pickaxeLevel = Math.min(Math.max(0, data.pickaxeLevel), PICKAXES.length - 1);
   g.setBagLevel(Math.min(Math.max(0, data.bagLevel), BAGS.length - 1));
   g.hasJackhammer = !!data.tools?.jackhammer;

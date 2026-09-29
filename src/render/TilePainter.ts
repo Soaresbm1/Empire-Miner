@@ -130,6 +130,7 @@ function paintWall(world: World, tx: number, ty: number, put: Put): void {
   const ore = block.ore ? RESOURCES.find((r) => r.id === block.ore)! : null;
   const oreC = ore ? [hex(ore.color), hex(ore.light), hex(ore.dark)] : null;
   const bedrock = block.kind === 'bedrock';
+  const rubble = block.key === 'rubble';
   for (let py = 0; py < TILE; py++)
     for (let px = 0; px < TILE; px++) {
       const wx = tx * TILE + px;
@@ -143,6 +144,11 @@ function paintWall(world: World, tx: number, ty: number, put: Put): void {
         if (crack > 0.49 && crack < 0.52) c = scale(c, 0.72);
         if (h < 0.04) c = scale(c, 1.2);
         if (bedrock && h > 0.9) c = scale(c, 0.7);
+        // Éboulis : un tas de pierres bosselé.
+        if (rubble) {
+          const s = valueNoise(wx / 2.2, wy / 2.2, 41);
+          c = scale(c, s > 0.62 ? 1.22 : s < 0.34 ? 0.66 : 0.95);
+        }
         if (nOpen && py === 0) c = scale(c, 1.3);
         else if (nOpen && py === 1) c = scale(c, 1.12);
         if (wOpen && px === 0) c = scale(c, 0.8);

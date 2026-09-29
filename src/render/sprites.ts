@@ -182,10 +182,12 @@ export function buildPickaxeSprites(): HTMLCanvasElement[][] {
 // ------------------------------------------------------------------ minerais
 
 const NUGGET = ['.aab.', 'aaabb', 'abbbc', '.bcc.'];
+/** Lingot : une barre trapézoïdale, le dessus éclairé. */
+const INGOT = ['.aaaa.', 'abbbbc', 'bbcccc'];
 
 export function buildNuggetSprites(): Map<string, HTMLCanvasElement> {
   const map = new Map<string, HTMLCanvasElement>();
-  for (const r of RESOURCES) map.set(r.id, fromArt(NUGGET, { a: r.light, b: r.color, c: r.dark }, '#120e10'));
+  for (const r of RESOURCES) map.set(r.id, fromArt(r.ingot ? INGOT : NUGGET, { a: r.light, b: r.color, c: r.dark }, '#120e10'));
   return map;
 }
 

@@ -10,6 +10,7 @@
  *  - Gisements naturels au sol de certaines cavernes.
  */
 import { AIR, BEDROCK, CLIFF, HOST_ROCK_IDS, ORE_BLOCK, TREE, hostRockIndexForDepth } from '../data/blocks';
+import { GAS, POCKET_GAS, POCKET_WATER, WATER } from '../data/hazards';
 import { RESOURCES, ResourceDef, resourceIndex } from '../data/resources';
 import { SURFACE_ROWS, TILE, WORLD_H, WORLD_W, depthAt, rowForDepth } from '../core/constants';
 import { Rng, fbm } from '../core/rng';
@@ -113,6 +114,9 @@ export function generateWorld(seed: number, w = WORLD_W, h = WORLD_H): WorldLayo
   // 5. Mine de départ (creusée à la main par un ancien mineur).
   carveStartMine(world);
 
+  // 5 bis. Poches de grisou et d'eau cachées dans la roche (tirage séparé : le terrain ne change pas).
+  placePockets(world, seed);
+
   // 6. Décor de surface : chemins et arbres.
   for (let y = 2; y < S; y++) {
     for (let x = 2; x < w - 2; x++) {
@@ -158,6 +162,37 @@ function pickResourceForDepth(rng: Rng, depth: number): ResourceDef | null {
     if (roll <= 0) return r;
   }
   return candidates[candidates.length - 1];
+}
+
+/**
+ * Poches de grisou et d'eau : petits amas de cases de roche (jamais de filon) marqués dans
+ * `world.pocket`, dans leur tranche de profondeur. Elles ne se voient qu'à de légers indices
+ * sur la paroi, et se libèrent quand on perce la case.
+ */
+export function placePockets(world: World, seed: number): void {
+  const rng = new Rng(seed ^ 0x2545f491);
+  const rock = new Set(HOST_ROCK_IDS);
+  const kinds: [number, { minDepth: number; perThousand: number; size: [number, number] }][] = [
+    [POCKET_WATER, WATER],
+    [POCKET_GAS, GAS],
+  ];
+  for (const [kind, spec] of kinds) {
+    const y0 = Math.max(S + 1, rowForDepth(spec.minDepth));
+    const y1 = world.h - 2;
+    if (y1 <= y0) continue;
+    const count = Math.round((((y1 - y0) * (world.w - 2)) / 1000) * spec.perThousand);
+    for (let i = 0; i < count; i++) {
+      let x = rng.int(1, world.w - 2);
+      let y = rng.int(y0, y1);
+      const size = rng.int(spec.size[0], spec.size[1]);
+      for (let k = 0; k < size; k++) {
+        const j = world.idx(x, y);
+        if (rock.has(world.tiles[j]) && !world.pocket[j]) world.pocket[j] = kind;
+        x = Math.min(world.w - 2, Math.max(1, x + rng.int(-1, 1)));
+        y = Math.min(y1, Math.max(y0, y + rng.int(-1, 1)));
+      }
+    }
+  }
 }
 
 function carve(world: World, x0: number, y0: number, x1: number, y1: number): void {

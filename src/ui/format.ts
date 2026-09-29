@@ -16,7 +16,7 @@ export function num(v: number, digits = 1): string {
 /** Petite icône de minerai (dégradé CSS aux couleurs de la ressource). */
 export function resIcon(id: string): string {
   const r = getResource(id);
-  return `<i class="res" style="--c:${r.color};--l:${r.light};--d:${r.dark}"></i>`;
+  return `<i class="res${r.ingot ? ' ingot' : ''}" style="--c:${r.color};--l:${r.light};--d:${r.dark}"></i>`;
 }
 
 export function rarityTag(id: string): string {

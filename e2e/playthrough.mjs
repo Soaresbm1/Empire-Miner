@@ -941,6 +941,8 @@ try {
   await page.click('.tab[data-arg="machines"]');
   await page.waitForTimeout(150);
   await page.click('[data-action="buyKit"][data-arg="borer:1"]');
+  await page.waitForTimeout(150);
+  await page.click('[data-action="buyKit"][data-arg="furnace:1"]');
   await page.keyboard.press('Escape');
   check((await ev(() => ({ j: window.__EM.state.hasJackhammer, t: window.__EM.state.tool }))).t === 'jackhammer', 'marteau-piqueur acheté et pris en main');
   // Mur sud de la salle du fond : trois cases de roche tendre (bloc n° 4) sous le joueur.
@@ -1033,6 +1035,110 @@ try {
   check(borerLevel === 2 && borerText.includes('Moteur renforcé') && borerText.includes('Benne à minerai'), `la foreuse de percement s'améliore depuis son panneau (niveau ${borerLevel})`);
   await shot('24b-borer-upgrade');
   await page.keyboard.press('Escape');
+
+  // Four : posé dans la salle du fond, chargé depuis son panneau (charbon et cuivre du sac), lingots récupérés.
+  await ev(() => {
+    const g = window.__EM.state;
+    g.inventory.items = {}; // sac vidé : 5 charbons et 3 cuivres tiennent dans le petit sac
+    g.inventory.add('coal', 5);
+    g.inventory.add('copper', 3);
+  });
+  const spot = await ev(() => {
+    const g = window.__EM.state;
+    const free = (x, y) => g.world.isOpen(x, y) && !g.structures.at(x, y) && !g.borerAt(x, y);
+    // Case libre pour le four, pour le joueur dessous, et devant sa sortie (les lingots restent dans le four).
+    for (let y = 25; y <= 26; y++) for (let x = 46; x <= 51; x++) if (free(x, y) && free(x, y + 1) && free(x + 1, y)) return { x, y };
+    return null;
+  });
+  await teleport(spot.x, spot.y + 1);
+  await page.waitForTimeout(300);
+  await page.keyboard.press('KeyB');
+  await page.waitForTimeout(100);
+  await placeAt('furnace', spot.x, spot.y, 0);
+  await page.keyboard.press('Escape');
+  check((await ev(([x, y]) => window.__EM.state.structures.at(x, y)?.type, [spot.x, spot.y])) === 'furnace', `four posé dans la mine (${spot.x}, ${spot.y})`);
+  await pressE();
+  check(await page.isVisible('.panel-furnace'), 'le panneau du four s’ouvre avec E');
+  await page.click('[data-action="smelterFuel"]');
+  await page.waitForTimeout(100);
+  await page.click('[data-action="smelterDeposit"]');
+  for (let i = 0; i < 60; i++) {
+    if ((await ev(([x, y]) => window.__EM.state.structures.at(x, y).smelted, [spot.x, spot.y])) >= 3) break;
+    await page.waitForTimeout(500);
+  }
+  await page.waitForTimeout(200);
+  await shot('24c-furnace');
+  await page.click('[data-action="smelterCollect"]');
+  await page.waitForTimeout(150);
+  const ingots = await ev(() => window.__EM.state.inventory.count('copper_ingot'));
+  const furnace = await ev(([x, y]) => {
+    const f = window.__EM.state.structures.at(x, y);
+    return { smelted: f.smelted, output: f.output.length, input: f.input.length, status: f.status };
+  }, [spot.x, spot.y]);
+  check(ingots === 3, `le four fond le cuivre en lingots, récupérés dans le sac (${ingots} lingots, ${JSON.stringify(furnace)})`);
+  await page.keyboard.press('Escape');
+
+  // Dangers, à 100 m : une salle creusée à la main craque sous la pioche, un étai posé à temps la retient ;
+  // une poche de grisou percée blesse le joueur et s'affiche dans le HUD.
+  const DY = S + 39;
+  await ev((y) => {
+    const g = window.__EM.state;
+    const w = g.world;
+    for (let yy = y; yy <= y + 8; yy++)
+      for (let x = 20; x <= 30; x++) {
+        w.set(x, yy, 4);
+        w.pocket[w.idx(x, yy)] = 0;
+        w.setExplored(x, yy);
+      }
+    w.set(24, y + 2, 0); // niche naturelle où se tient le joueur
+    for (let yy = y + 3; yy <= y + 4; yy++) for (let x = 22; x <= 26; x++) g.breakTile(x, yy); // 10 cases creusées
+    g.inventory.items = {};
+    g.inventory.addKit('prop', 1);
+    g.tool = 'pickaxe';
+  }, DY);
+  await teleport(24, DY + 4);
+  await page.waitForTimeout(400);
+  const crackAt = await tileScreen(24, DY + 5);
+  await page.mouse.move(crackAt.x, crackAt.y);
+  await page.mouse.down();
+  for (let i = 0; i < 20 && (await ev((y) => window.__EM.state.world.isSolid(24, y + 5), DY)); i++) await page.waitForTimeout(100);
+  await page.mouse.up();
+  await page.waitForTimeout(200);
+  const warned = await ev(() => window.__EM.state.hazards.pending.length);
+  const hudWarn = (await page.textContent('#hud-equip')) ?? '';
+  await shot('25-cave-in-warning');
+  check(warned === 1 && hudWarn.includes('plafond craque'), `creuser une grande salle en profondeur fait craquer le plafond (alerte dans le HUD : ${warned})`);
+  await page.keyboard.press('KeyB');
+  await page.waitForTimeout(100);
+  await placeAt('prop', 23, DY + 3, 0);
+  await page.keyboard.press('Escape');
+  await page.waitForTimeout(4500);
+  const held = await ev((y) => {
+    const g = window.__EM.state;
+    let rubble = 0;
+    // Tout ce qui n'est ni vide ni la roche posée (bloc n° 4) serait de l'éboulis.
+    for (let yy = y; yy <= y + 8; yy++) for (let x = 20; x <= 30; x++) if (![0, 4].includes(g.world.get(x, yy))) rubble++;
+    return { pending: g.hazards.pending.length, rubble, prop: g.structures.at(23, y + 3)?.type, hp: g.hp };
+  }, DY);
+  check(held.prop === 'prop' && held.pending === 0 && held.rubble === 0 && held.hp === 100, `un étai posé à temps empêche l'éboulement (${JSON.stringify(held)})`);
+  // Grisou : une poche cachée dans la paroi, percée à la pioche.
+  await ev((y) => {
+    const g = window.__EM.state;
+    g.world.pocket[g.world.idx(27, y + 3)] = 1;
+  }, DY);
+  await teleport(26, DY + 3);
+  await page.waitForTimeout(300);
+  const gasAt = await tileScreen(27, DY + 3);
+  await page.mouse.move(gasAt.x, gasAt.y);
+  await page.mouse.down();
+  for (let i = 0; i < 20 && (await ev((y) => window.__EM.state.world.isSolid(27, y + 3), DY)); i++) await page.waitForTimeout(100);
+  await page.mouse.up();
+  await page.waitForTimeout(1500);
+  const gassed = await ev(() => ({ hp: window.__EM.state.hp, gas: window.__EM.state.hazards.hasGas }));
+  const hudGas = (await page.textContent('#hud-equip')) ?? '';
+  await shot('25a-gas');
+  check(gassed.gas && gassed.hp < 100 && hudGas.includes('Grisou'), `une poche de grisou percée blesse le joueur et s'affiche dans le HUD (${JSON.stringify(gassed)})`);
+  await teleport(50, S + 10); // hors du nuage
 
   // Carte : mini-carte dans le HUD, carte complète avec M (ou clic sur la mini-carte).
   const colorsIn = (sel) =>

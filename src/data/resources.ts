@@ -46,6 +46,32 @@ export interface ResourceDef {
   dark: string;
   /** Utilisations connues (affichées dans l'inventaire). */
   uses: string[];
+  /** Minerai fondu au four : identifiant du lingot obtenu (1 minerai → 1 lingot). */
+  smeltsTo?: string;
+  /** Lingot (produit par un four ou une fonderie, jamais trouvé dans la roche). */
+  ingot?: boolean;
+}
+
+/** Lingot d'un minerai : même poids, vendu 2,5 fois plus cher. Il ne se trouve pas dans la roche. */
+function ingot(id: string, name: string, value: number, weight: number, rarity: Rarity, color: string, light: string, dark: string): ResourceDef {
+  return {
+    id,
+    name,
+    veinName: name,
+    value,
+    weight,
+    rarity,
+    resistance: 0,
+    tier: 0,
+    minDepth: 0,
+    maxDepth: 0,
+    drops: [0, 0],
+    color,
+    light,
+    dark,
+    uses: ['Vente (2,5 fois le prix du minerai)'],
+    ingot: true,
+  };
 }
 
 export const RESOURCES: ResourceDef[] = [
@@ -104,7 +130,8 @@ export const RESOURCES: ResourceDef[] = [
     color: '#c8743a',
     light: '#f0a768',
     dark: '#7d4020',
-    uses: ['Vente'],
+    uses: ['Vente', 'Four et fonderie : lingot'],
+    smeltsTo: 'copper_ingot',
   },
   {
     id: 'iron',
@@ -123,7 +150,8 @@ export const RESOURCES: ResourceDef[] = [
     color: '#a5654e',
     light: '#d99b82',
     dark: '#5e3325',
-    uses: ['Vente'],
+    uses: ['Vente', 'Four et fonderie : lingot'],
+    smeltsTo: 'iron_ingot',
   },
   {
     id: 'silver',
@@ -142,7 +170,8 @@ export const RESOURCES: ResourceDef[] = [
     color: '#c9d0da',
     light: '#ffffff',
     dark: '#7c8594',
-    uses: ['Vente'],
+    uses: ['Vente', 'Four et fonderie : lingot'],
+    smeltsTo: 'silver_ingot',
   },
   {
     id: 'gold',
@@ -161,8 +190,14 @@ export const RESOURCES: ResourceDef[] = [
     color: '#f2c230',
     light: '#fff1a0',
     dark: '#a07410',
-    uses: ['Vente'],
+    uses: ['Vente', 'Four et fonderie : lingot'],
+    smeltsTo: 'gold_ingot',
   },
+  // Lingots : toujours après les minerais (l'index des minerais sert aux gisements sauvegardés).
+  ingot('copper_ingot', 'Lingot de cuivre', 18, 2.5, 'commun', '#d9793c', '#ffb27a', '#8a4520'),
+  ingot('iron_ingot', 'Lingot de fer', 40, 3, 'peu commun', '#9aa3b0', '#e2e7ee', '#565d69'),
+  ingot('silver_ingot', "Lingot d'argent", 95, 2, 'rare', '#dfe5ee', '#ffffff', '#8b95a4'),
+  ingot('gold_ingot', "Lingot d'or", 240, 3.5, 'très rare', '#f5c21f', '#fff3a6', '#a8740a'),
 ];
 
 const byId = new Map(RESOURCES.map((r) => [r.id, r]));

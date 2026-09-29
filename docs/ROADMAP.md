@@ -27,12 +27,14 @@ profondeur et roches plus dures, sauvegarde/chargement, première automatisation
 - Électricité : générateurs, câbles, machines électriques plus puissantes.
 
 ## v0.4 — Traitement
-- Trieur (filtre par ressource), concasseur (pierre → gravier), four/fonderie (minerai → lingots, plus rentables).
-- Premiers produits transformés et contrats de vente.
+- ✅ Trieur (filtre par ressource).
+- ✅ Four et fonderie : minerai → lingots (2,5 fois plus chers), au charbon.
+- Concasseur (pierre → gravier), alliages (ex. bronze), contrats de vente.
 
 ## v0.5 — Énergie et contraintes
 - Générateurs (charbon), réseau électrique, consommation des machines.
-- Ventilation, eau et pompes, chaleur en profondeur, stabilité des tunnels (étais).
+- ✅ Dangers : éboulements (étais), grisou (ventilateurs), eau (pompes), santé du joueur.
+- Chaleur en profondeur, coups de grisou qui explosent près d'une flamme, détecteur de poches.
 
 ## Plus tard
 - Ressources rares et fictives au-delà de 450 m, mine agrandie ou étages multiples.

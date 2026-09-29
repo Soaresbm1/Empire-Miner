@@ -8,6 +8,9 @@ import { getMachine } from '../data/machines';
 import type { GameState } from '../sim/GameState';
 import { OBJECTIVES, currentObjective } from '../sim/objectives';
 import type { TunnelBorer } from '../sim/structures/Borer';
+import type { Smelter } from '../sim/structures/Smelter';
+import { GAS, HEALTH, WATER } from '../data/hazards';
+import type { Pump } from '../sim/structures/Safety';
 import { Drill } from '../sim/structures/Drill';
 import { ShippingCrate } from '../sim/structures/ShippingCrate';
 import type { Sorter } from '../sim/structures/Sorter';
@@ -16,9 +19,9 @@ import { Storage } from '../sim/structures/Storage';
 import type { Structure } from '../sim/structures/Structure';
 import { esc, kg, money, resIcon } from './format';
 import { MAP_COLORS } from '../render/MineMap';
-import { borerPanel, counterPanel, drillPanel, helpPanel, inventoryPanel, mapPanel, shippingPanel, sorterPanel, stationPanel, storagePanel, switchPanel, workshopPanel } from './panels';
+import { borerPanel, counterPanel, pumpPanel, smelterPanel, drillPanel, helpPanel, inventoryPanel, mapPanel, shippingPanel, sorterPanel, stationPanel, storagePanel, switchPanel, workshopPanel } from './panels';
 
-export type PanelKind = 'counter' | 'workshop' | 'inventory' | 'storage' | 'drill' | 'borer' | 'shipping' | 'sorter' | 'station' | 'switch' | 'map' | 'help';
+export type PanelKind = 'counter' | 'workshop' | 'inventory' | 'storage' | 'drill' | 'borer' | 'furnace' | 'pump' | 'shipping' | 'sorter' | 'station' | 'switch' | 'map' | 'help';
 
 export interface UIHost {
   onAction(action: string, arg: string): void;
@@ -92,6 +95,21 @@ export class UI {
     const items = Object.entries(inv.items)
       .map(([res, n]) => `<span class="chip">${resIcon(res)}${n}</span>`)
       .join('');
+    // Santé et dangers là où se trouve le joueur.
+    const p = g.player;
+    const gas = g.hazards.gasAt(p.tileX, p.tileY);
+    const water = g.hazards.waterAt(p.tileX, p.tileY);
+    const quake = g.hazards.pendingNear(p.tileX, p.tileY, 4);
+    const alerts: string[] = [];
+    if (quake) alerts.push(`Le plafond craque : étai ou fuite ! (${Math.ceil(quake.t)} s)`);
+    if (gas >= GAS.harmful) alerts.push('Grisou : sortez du nuage !');
+    else if (gas > 0) alerts.push('Traces de grisou');
+    if (water >= WATER.deep) alerts.push('Eau profonde : vous vous épuisez');
+    else if (water > 0) alerts.push("Dans l'eau : vous êtes ralenti");
+    const hp = g.hp / HEALTH.max;
+    const health = `<div class="bar health ${hp < 0.35 ? 'full' : hp < 0.7 ? 'warn' : ''}"><div style="width:${Math.max(0, hp * 100)}%"></div><span>Santé ${Math.ceil(g.hp)} / ${HEALTH.max}</span></div>${
+      alerts.length ? `<div class="danger-line">⚠ ${alerts.join(' · ')}</div>` : ''
+    }`;
     this.set(
       'hud-equip',
       `<div class="equip"><span class="tier">N${g.activeTool.tier}</span> ${g.activeTool.name}${
@@ -102,7 +120,8 @@ export class UI {
           : ''
       }</div>
        <div class="bar ${ratio >= 0.999 ? 'full' : ratio > 0.8 ? 'warn' : ''}"><div style="width:${Math.min(100, ratio * 100)}%"></div><span>${g.bag.name} ${kg(w)} / ${kg(inv.capacity)}</span></div>
-       <div class="chips">${items || '<span class="muted">Sac vide</span>'}</div>`,
+       <div class="chips">${items || '<span class="muted">Sac vide</span>'}</div>
+       ${health}`,
     );
     const { objective, index } = currentObjective(g);
     this.set(
@@ -222,6 +241,14 @@ export class UI {
       case 'borer':
         title = getMachine('borer').name;
         body = borerPanel(g, target as TunnelBorer);
+        break;
+      case 'furnace':
+        title = (target as Smelter).def.name;
+        body = smelterPanel(g, target as Smelter);
+        break;
+      case 'pump':
+        title = getMachine('pump').name;
+        body = pumpPanel(g, target as Pump);
         break;
       case 'shipping':
         title = getMachine('shipping').name;

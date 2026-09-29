@@ -6,7 +6,7 @@
  * (trieurs, concasseurs, fonderies, générateurs…) s'intègrent sans changer l'UI.
  */
 
-export type MachineCategory = 'extraction' | 'logistique' | 'rail' | 'stockage' | 'vente';
+export type MachineCategory = 'extraction' | 'traitement' | 'logistique' | 'rail' | 'stockage' | 'vente' | 'securite';
 
 export interface MachineStats {
   /** Extraction : unités/s. Convoyeur : tuiles/s. */
@@ -40,6 +40,16 @@ export interface BorerSpec {
   lengths: number[];
   /** Minerai que la base peut garder (benne vidée au retour), en morceaux. */
   store: number;
+}
+
+/** Four et fonderie : minerai → lingot, au charbon. */
+export interface SmelterSpec {
+  /** Temps pour fondre un minerai en lingot (s). */
+  smeltTime: number;
+  /** Minerai en attente de fonte (morceaux). */
+  inputMax: number;
+  /** Lingots prêts à sortir (morceaux). */
+  outputMax: number;
 }
 
 /** Foreuse de percement : ce que change chaque niveau d'amélioration. */
@@ -124,6 +134,8 @@ export interface MachineDef {
   levels?: MachineLevel[];
   /** Foreuse de percement : base fixe d'où sort une foreuse qui perce un tunnel droit. */
   borer?: BorerSpec;
+  /** Four ou fonderie : fond le minerai en lingots. */
+  smelter?: SmelterSpec;
 }
 
 export const MACHINES: MachineDef[] = [
@@ -369,6 +381,83 @@ export const MACHINES: MachineDef[] = [
         borer: { damagePerSecond: 12, moveTime: 0.22, tankUnits: 4, width: 3, hopper: 30 },
       },
     ],
+  },
+  {
+    id: 'furnace',
+    name: 'Four',
+    summary: 'Fond le minerai en lingots, vendus 2,5 fois plus cher. Brûle du charbon.',
+    category: 'traitement',
+    description:
+      "Reçoit le minerai par un convoyeur ou à la main, sur n'importe quel côté sauf sa sortie, le fond en lingots au charbon et les pousse devant sa flèche. Cuivre, fer, argent et or.",
+    price: 350,
+    w: 1,
+    h: 1,
+    solid: true,
+    rotatable: true,
+    stats: { speed: 1 / 3, power: 0, capacity: 12, efficiency: 1, level: 1 },
+    fuel: { res: 'coal', secondsPerUnit: 24, maxUnits: 10 },
+    unlock: { pickaxeTier: 2, text: 'Nécessite la Pioche améliorée' },
+    smelter: { smeltTime: 3, inputMax: 12, outputMax: 12 },
+  },
+  {
+    id: 'foundry',
+    name: 'Fonderie',
+    summary: 'Grande fonderie de 2×2 cases : 6 fois plus rapide qu’un four et bien plus économe en charbon.',
+    category: 'traitement',
+    description:
+      'Un haut fourneau pour les grosses lignes : même principe que le four (entrée sur les côtés et à l’arrière, lingots poussés devant la flèche), mais un lingot toutes les demi-secondes.',
+    price: 1500,
+    w: 2,
+    h: 2,
+    solid: true,
+    rotatable: true,
+    stats: { speed: 2, power: 0, capacity: 40, efficiency: 1, level: 1 },
+    fuel: { res: 'coal', secondsPerUnit: 15, maxUnits: 20 },
+    unlock: { pickaxeTier: 3, text: 'Nécessite la Pioche en fer' },
+    smelter: { smeltTime: 0.5, inputMax: 40, outputMax: 40 },
+  },
+  {
+    id: 'prop',
+    name: 'Étai',
+    summary: "Consolide le plafond : pas d'éboulement à 3 cases autour de lui. On passe dessous.",
+    category: 'securite',
+    description:
+      "Poteaux et poutre de bois. En profondeur (dès 60 m), une grande salle creusée à la main finit par craquer : un étai posé à moins de 3 cases l'empêche de s'effondrer, même pendant qu'elle craque.",
+    price: 15,
+    w: 1,
+    h: 1,
+    solid: false,
+    rotatable: false,
+    stats: { speed: 0, power: 0, capacity: 0, efficiency: 1, level: 1 },
+  },
+  {
+    id: 'fan',
+    name: 'Ventilateur',
+    summary: 'Chasse le grisou à 6 cases autour de lui, en quelques secondes. Tourne tout seul.',
+    category: 'securite',
+    description: "Grande hélice qui aspire le grisou libéré par une poche percée (dès 120 m). Posé près d'un front de taille, il garde la galerie respirable.",
+    price: 180,
+    w: 1,
+    h: 1,
+    solid: true,
+    rotatable: false,
+    stats: { speed: 0, power: 0, capacity: 0, efficiency: 1, level: 1 },
+    unlock: { pickaxeTier: 2, text: 'Nécessite la Pioche améliorée' },
+  },
+  {
+    id: 'pump',
+    name: 'Pompe',
+    summary: "Assèche les galeries inondées à 5 cases autour d'elle. Brûle du charbon quand elle pompe.",
+    category: 'securite',
+    description: "Pompe à vapeur pour les poches d'eau (dès 70 m). Elle ne consomme que lorsqu'il y a de l'eau à retirer ; un coffre de charbon collé la recharge.",
+    price: 240,
+    w: 1,
+    h: 1,
+    solid: true,
+    rotatable: false,
+    stats: { speed: 0, power: 0, capacity: 0, efficiency: 1, level: 1 },
+    fuel: { res: 'coal', secondsPerUnit: 30, maxUnits: 10 },
+    unlock: { pickaxeTier: 2, text: 'Nécessite la Pioche améliorée' },
   },
   {
     id: 'storage',
