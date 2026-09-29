@@ -15,6 +15,7 @@ import { Wagon } from '../sim/Wagons';
 import { Building } from '../sim/structures/Building';
 import { Conveyor } from '../sim/structures/Conveyor';
 import { TunnelBorer } from '../sim/structures/Borer';
+import { Smelter } from '../sim/structures/Smelter';
 import { Drill } from '../sim/structures/Drill';
 import { ShippingCrate } from '../sim/structures/ShippingCrate';
 import { Sorter } from '../sim/structures/Sorter';
@@ -181,7 +182,11 @@ export class Renderer {
       for (const s of this.state.structures.list)
         if (s instanceof Drill && s.status === 'ok' && this.inView(s.x * TILE, s.y * TILE, 64))
           this.fx.emit('smoke', s.x * TILE + 11, s.y * TILE + 1, 'rgba(90,90,96,0.6)', 1, 6);
-        else if (s instanceof TunnelBorer && (s.status === 'digging' || s.status === 'moving' || s.status === 'returning')) {
+        else if (s instanceof Smelter && s.status === 'ok' && this.inView(s.x * TILE, s.y * TILE, 64)) {
+          const big = s.w > 1;
+          for (const cx of big ? [s.x * TILE + 7, s.x * TILE + s.w * TILE - 8] : [s.x * TILE + 11])
+            this.fx.emit('smoke', cx, s.y * TILE - (big ? 26 : 16), 'rgba(80,76,80,0.6)', 1, 6);
+        } else if (s instanceof TunnelBorer && (s.status === 'digging' || s.status === 'moving' || s.status === 'returning')) {
           const v = this.borerVehicleXY(s);
           if (this.inView(v.x, v.y, 64)) this.fx.emit('smoke', v.x + 8 - DX[s.dir] * 5, v.y + 2 - DY[s.dir] * 5, 'rgba(90,90,96,0.6)', 1, 6);
         }
@@ -689,6 +694,7 @@ export class Renderer {
       this.drawBorerBase(s);
       if (s.home) this.drawBorer(s, s.x * TILE, s.y * TILE);
     }
+    else if (s instanceof Smelter) this.drawSmelter(s);
     else if (s instanceof Storage) this.drawStorage(s);
     else if (s instanceof ShippingCrate) this.drawShipping(s);
     else if (s instanceof Building) this.drawBuilding(s);
@@ -1003,6 +1009,94 @@ export class Renderer {
     ctx.restore();
   }
 
+  /**
+   * Four (1 case) et fonderie (2×2) : four de briques, bouche rougeoyante quand il fond,
+   * cheminée(s), goulotte de sortie du côté de la flèche et jauge de charbon.
+   */
+  private drawSmelter(s: Smelter): void {
+    const ctx = this.ctx;
+    const x = s.x * TILE;
+    const y = s.y * TILE;
+    const W = s.w * TILE;
+    const H = s.h * TILE;
+    const big = s.w > 1;
+    const hot = s.status === 'ok';
+    const flicker = hot ? 0.75 + Math.sin(this.time * 17) * 0.15 + Math.sin(this.time * 7.3) * 0.1 : 0;
+    const top = big ? 10 : 6; // hauteur du four au-dessus de sa case (vue de trois quarts)
+    ctx.fillStyle = 'rgba(0,0,0,0.35)';
+    ctx.fillRect(x + 1, y + H - 3, W - 1, 3);
+    // Cheminées (derrière le corps).
+    const chimneys = big ? [x + 5, x + W - 10] : [x + 10];
+    for (const cx of chimneys) {
+      ctx.fillStyle = '#1a1418';
+      ctx.fillRect(cx - 1, y - top - (big ? 9 : 6), big ? 7 : 5, big ? 10 : 7);
+      ctx.fillStyle = '#4a3a34';
+      ctx.fillRect(cx, y - top - (big ? 8 : 5), big ? 5 : 3, big ? 9 : 6);
+      ctx.fillStyle = '#2a2024';
+      ctx.fillRect(cx - 1, y - top - (big ? 9 : 6), big ? 7 : 5, 2);
+    }
+    // Corps en briques.
+    ctx.fillStyle = '#1a1418';
+    ctx.fillRect(x, y - top, W, H + top - 1);
+    ctx.fillStyle = '#8a4b38';
+    ctx.fillRect(x + 1, y - top + 1, W - 2, H + top - 3);
+    ctx.fillStyle = '#a8614a';
+    ctx.fillRect(x + 1, y - top + 1, W - 2, big ? 4 : 3);
+    ctx.fillStyle = '#6a3527';
+    for (let row = y - top + (big ? 6 : 5); row < y + H - 3; row += 3) {
+      ctx.fillRect(x + 1, row, W - 2, 1);
+      const off = ((row - y) / 3) % 2 ? 2 : 5;
+      for (let col = x + off; col < x + W - 2; col += 6) ctx.fillRect(col, row - 2, 1, 2);
+    }
+    // Fonderie : creuset de métal en fusion sur le dessus.
+    if (big) {
+      ctx.fillStyle = '#2a2024';
+      ctx.fillRect(x + 8, y - top + 1, W - 16, 4);
+      ctx.fillStyle = hot ? `rgba(255,${Math.round(120 + flicker * 60)},30,1)` : '#4a3a34';
+      ctx.fillRect(x + 9, y - top + 2, W - 18, 2);
+    }
+    // Bouche du four (face avant) : noire à l'arrêt, rougeoyante quand il fond.
+    const mw = big ? 14 : 8;
+    const mh = big ? 9 : 6;
+    const mx = x + Math.round((W - mw) / 2);
+    const my = y + H - mh - (big ? 5 : 3);
+    ctx.fillStyle = '#26221e';
+    ctx.fillRect(mx - 1, my - 1, mw + 2, mh + 1);
+    ctx.fillStyle = '#0e0b0d';
+    ctx.fillRect(mx, my, mw, mh);
+    if (hot) {
+      ctx.fillStyle = `rgba(255,${Math.round(90 + flicker * 70)},20,${0.75 + flicker * 0.25})`;
+      ctx.fillRect(mx + 1, my + 2, mw - 2, mh - 2);
+      ctx.fillStyle = '#ffe28a';
+      ctx.fillRect(mx + 2, my + mh - 2, mw - 4, 1);
+    } else if (s.input.length) {
+      ctx.fillStyle = '#5a2a18'; // braises
+      ctx.fillRect(mx + 1, my + mh - 2, mw - 2, 1);
+    }
+    // Goulotte de sortie du côté de la flèche, avec le lingot qui attend.
+    ctx.save();
+    ctx.translate(x + W / 2, y + H / 2);
+    ctx.rotate((s.dir * Math.PI) / 2);
+    const edge = (s.dir % 2 === 0 ? W : H) / 2;
+    ctx.fillStyle = '#1a1418';
+    ctx.fillRect(edge - 3, -4, 5, 8);
+    ctx.fillStyle = '#6a6f78';
+    ctx.fillRect(edge - 2, -3, 3, 6);
+    ctx.restore();
+    if (s.output.length) {
+      const img = this.nuggets.get(s.output[0]);
+      if (img) ctx.drawImage(img, Math.round(x + W / 2 + DX[s.dir] * (W / 2 - 2) - img.width / 2), Math.round(y + H / 2 + DY[s.dir] * (H / 2 - 2) - img.height / 2));
+    }
+    this.drawArrow(x + W / 2 + DX[s.dir] * (W / 2 - 5), y + H / 2 + DY[s.dir] * (H / 2 - 5) - (s.dir % 2 ? 0 : 3), s.dir, '#ffffff');
+    // Jauge de charbon.
+    const fuel = s.fuelMax ? (s.fuelUnits + (s.burn > 0 ? 1 : 0)) / s.fuelMax : 0;
+    ctx.fillStyle = '#1a1418';
+    ctx.fillRect(x + 1, y + H - 1, W - 2, 2);
+    ctx.fillStyle = fuel > 0.2 ? '#f08a24' : '#d0342c';
+    ctx.fillRect(x + 1, y + H - 1, Math.round((W - 2) * Math.min(1, fuel)), 2);
+    if (hot && Math.random() < (big ? 0.25 : 0.12)) this.fx.emit('spark', mx + mw / 2, my + mh / 2, '#ffb040', 1, 25);
+  }
+
   private drawStorage(s: Storage): void {
     const ctx = this.ctx;
     const x = s.x * TILE;
@@ -1101,6 +1195,11 @@ export class Renderer {
       let icon: 'nofuel' | 'full' | 'stop' | null = null;
       let at = { x: s.x * TILE, y: s.y * TILE };
       if (s instanceof Drill && s.status !== 'ok') icon = s.status === 'nofuel' ? 'nofuel' : s.status === 'full' ? 'full' : 'stop';
+      else if (s instanceof Smelter) {
+        // Four sans charbon alors qu'il a du minerai, ou sortie saturée.
+        icon = s.status === 'nofuel' ? 'nofuel' : s.status === 'full' ? 'full' : null;
+        at = { x: s.x * TILE + (s.w - 1) * 8, y: s.y * TILE - (s.w > 1 ? 14 : 8) };
+      }
       else if (s instanceof TunnelBorer) {
         icon = s.status === 'nofuel' ? 'nofuel' : s.status === 'waiting' ? 'full' : s.status === 'blocked' ? 'stop' : null;
         if (icon === 'full') at = this.borerVehicleXY(s);
@@ -1244,6 +1343,8 @@ export class Renderer {
     for (const l of state.layout.lamps) punch(l.x, l.y, 3.6 + Math.sin(this.time * 5 + l.x) * 0.08, 0.85);
     for (const s of state.structures.list) {
       if (s instanceof Drill) punch((s.x + 0.5) * TILE, (s.y + 0.5) * TILE, s.status === 'ok' ? 3.2 : 1.6, 0.8);
+      // Four et fonderie : la bouche éclaire autour d'elle quand ils fondent.
+      else if (s instanceof Smelter) punch((s.x + s.w / 2) * TILE, (s.y + s.h - 0.3) * TILE, s.status === 'ok' ? 3 + s.w : 1.4, 0.85);
       // Phare de la foreuse de percement : éclaire le front de taille, où qu'elle soit ; la base a sa lampe.
       else if (s instanceof TunnelBorer) {
         const v = this.borerVehicleXY(s);
@@ -1298,7 +1399,7 @@ export class Renderer {
       ctx.strokeStyle = o.ghost.ok ? '#7dffa0' : '#ff6b5b';
       ctx.lineWidth = 1;
       ctx.strokeRect(x + 0.5, y + 0.5, def.w * TILE - 1, def.h * TILE - 1);
-      if (def.rotatable) this.drawArrow(x + 8, y + 8, o.ghost.dir, o.ghost.ok ? '#7dffa0' : '#ff6b5b');
+      if (def.rotatable) this.drawArrow(x + def.w * 8, y + def.h * 8, o.ghost.dir, o.ghost.ok ? '#7dffa0' : '#ff6b5b');
       const state = this.state;
       if (o.ghost.reach && state)
         this.drawReachTiles(o.ghost.reach, (t) => !!state.world.depositAt(t.x, t.y) && !(state.structures.at(t.x, t.y) instanceof Drill));
@@ -1381,8 +1482,9 @@ export class Renderer {
     const factory = STRUCTURE_FACTORIES[id];
     if (!factory && id !== 'wagon') return '';
     const s = factory ? factory.create(0, 0, 0) : null;
-    const W = 28;
-    const H = 40;
+    // Place pour les machines de plusieurs cases (fonderie 2×2).
+    const W = 28 + ((s?.w ?? 1) - 1) * TILE;
+    const H = 40 + ((s?.h ?? 1) - 1) * TILE;
     const canvas = document.createElement('canvas');
     canvas.width = W;
     canvas.height = H;

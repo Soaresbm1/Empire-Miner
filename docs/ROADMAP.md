@@ -27,8 +27,9 @@ profondeur et roches plus dures, sauvegarde/chargement, première automatisation
 - Électricité : générateurs, câbles, machines électriques plus puissantes.
 
 ## v0.4 — Traitement
-- Trieur (filtre par ressource), concasseur (pierre → gravier), four/fonderie (minerai → lingots, plus rentables).
-- Premiers produits transformés et contrats de vente.
+- ✅ Trieur (filtre par ressource).
+- ✅ Four et fonderie : minerai → lingots (2,5 fois plus chers), au charbon.
+- Concasseur (pierre → gravier), alliages (ex. bronze), contrats de vente.
 
 ## v0.5 — Énergie et contraintes
 - Générateurs (charbon), réseau électrique, consommation des machines.

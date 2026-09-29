@@ -130,6 +130,12 @@ kbd {
   background: linear-gradient(135deg, var(--l) 0 25%, var(--c) 26% 70%, var(--d) 71%);
   box-shadow: 0 0 0 1.5px #120e10;
 }
+/* Lingot : barre trapézoïdale, reflet sur le dessus. */
+.res.ingot {
+  width: 15px; height: 8px; border-radius: 1px; vertical-align: 0;
+  background: linear-gradient(180deg, var(--l) 0 30%, var(--c) 31% 72%, var(--d) 73%);
+  clip-path: polygon(18% 0, 82% 0, 100% 100%, 0 100%);
+}
 .rarity { font-size: 11px; margin-left: 4px; }
 
 /* ---------------------------------------------------------------- messages */

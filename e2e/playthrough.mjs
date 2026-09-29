@@ -941,6 +941,8 @@ try {
   await page.click('.tab[data-arg="machines"]');
   await page.waitForTimeout(150);
   await page.click('[data-action="buyKit"][data-arg="borer:1"]');
+  await page.waitForTimeout(150);
+  await page.click('[data-action="buyKit"][data-arg="furnace:1"]');
   await page.keyboard.press('Escape');
   check((await ev(() => ({ j: window.__EM.state.hasJackhammer, t: window.__EM.state.tool }))).t === 'jackhammer', 'marteau-piqueur acheté et pris en main');
   // Mur sud de la salle du fond : trois cases de roche tendre (bloc n° 4) sous le joueur.
@@ -1032,6 +1034,48 @@ try {
   const borerText = (await page.textContent('.panel-borer')) ?? '';
   check(borerLevel === 2 && borerText.includes('Moteur renforcé') && borerText.includes('Benne à minerai'), `la foreuse de percement s'améliore depuis son panneau (niveau ${borerLevel})`);
   await shot('24b-borer-upgrade');
+  await page.keyboard.press('Escape');
+
+  // Four : posé dans la salle du fond, chargé depuis son panneau (charbon et cuivre du sac), lingots récupérés.
+  await ev(() => {
+    const g = window.__EM.state;
+    g.inventory.items = {}; // sac vidé : 5 charbons et 3 cuivres tiennent dans le petit sac
+    g.inventory.add('coal', 5);
+    g.inventory.add('copper', 3);
+  });
+  const spot = await ev(() => {
+    const g = window.__EM.state;
+    const free = (x, y) => g.world.isOpen(x, y) && !g.structures.at(x, y) && !g.borerAt(x, y);
+    // Case libre pour le four, pour le joueur dessous, et devant sa sortie (les lingots restent dans le four).
+    for (let y = 25; y <= 26; y++) for (let x = 46; x <= 51; x++) if (free(x, y) && free(x, y + 1) && free(x + 1, y)) return { x, y };
+    return null;
+  });
+  await teleport(spot.x, spot.y + 1);
+  await page.waitForTimeout(300);
+  await page.keyboard.press('KeyB');
+  await page.waitForTimeout(100);
+  await placeAt('furnace', spot.x, spot.y, 0);
+  await page.keyboard.press('Escape');
+  check((await ev(([x, y]) => window.__EM.state.structures.at(x, y)?.type, [spot.x, spot.y])) === 'furnace', `four posé dans la mine (${spot.x}, ${spot.y})`);
+  await pressE();
+  check(await page.isVisible('.panel-furnace'), 'le panneau du four s’ouvre avec E');
+  await page.click('[data-action="smelterFuel"]');
+  await page.waitForTimeout(100);
+  await page.click('[data-action="smelterDeposit"]');
+  for (let i = 0; i < 60; i++) {
+    if ((await ev(([x, y]) => window.__EM.state.structures.at(x, y).smelted, [spot.x, spot.y])) >= 3) break;
+    await page.waitForTimeout(500);
+  }
+  await page.waitForTimeout(200);
+  await shot('24c-furnace');
+  await page.click('[data-action="smelterCollect"]');
+  await page.waitForTimeout(150);
+  const ingots = await ev(() => window.__EM.state.inventory.count('copper_ingot'));
+  const furnace = await ev(([x, y]) => {
+    const f = window.__EM.state.structures.at(x, y);
+    return { smelted: f.smelted, output: f.output.length, input: f.input.length, status: f.status };
+  }, [spot.x, spot.y]);
+  check(ingots === 3, `le four fond le cuivre en lingots, récupérés dans le sac (${ingots} lingots, ${JSON.stringify(furnace)})`);
   await page.keyboard.press('Escape');
 
   // Carte : mini-carte dans le HUD, carte complète avec M (ou clic sur la mini-carte).

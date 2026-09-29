@@ -23,6 +23,7 @@ import { Building, BuildingType } from './structures/Building';
 import { Conveyor } from './structures/Conveyor';
 import { Rail, type RailStation, type RailSwitch, type SwitchSetting } from './structures/Rail';
 import { TunnelBorer } from './structures/Borer';
+import { Smelter } from './structures/Smelter';
 import { Drill } from './structures/Drill';
 import { ShippingCrate } from './structures/ShippingCrate';
 import type { Sorter } from './structures/Sorter';
@@ -72,6 +73,8 @@ export interface Stats {
   collected: Record<string, number>;
   /** Argent gagné par les caisses d'expédition. */
   autoSold: number;
+  /** Lingots sortis des fours et fonderies. */
+  smelted: number;
 }
 
 export const PLAYER_SPEED = 72; // unités monde / s
@@ -113,6 +116,7 @@ export class GameState implements StructureContext {
     discovered: [],
     collected: {},
     autoSold: 0,
+    smelted: 0,
   };
   events: SimEvent[] = [];
   private readonly rng: Rng;
@@ -155,6 +159,15 @@ export class GameState implements StructureContext {
 
   emit(e: SimEvent): void {
     this.events.push(e);
+  }
+
+  countSmelted(res: string, from: Structure): void {
+    this.stats.smelted++;
+    // Premier lingot d'un métal : il rejoint le carnet (inventaire, trieur).
+    if (!this.stats.discovered.includes(res)) {
+      this.stats.discovered.push(res);
+      this.emit({ t: 'discover', text: `Premier ${getResource(res).name.toLowerCase()} sorti du ${from.type === 'foundry' ? 'haut fourneau' : 'four'} !` });
+    }
   }
 
   countDelivered(n: number): void {
@@ -923,6 +936,39 @@ export class GameState implements StructureContext {
       n += k;
     }
     if (b.storeCount()) this.emit({ t: 'invFull' });
+    return n;
+  }
+
+  /** Charge le charbon du sac dans un four ou une fonderie. */
+  fuelSmelter(s: Smelter): number {
+    const fuel = s.def.fuel;
+    if (!fuel) return 0;
+    const k = s.addFuel(this.inventory.count(fuel.res));
+    this.inventory.remove(fuel.res, k);
+    return k;
+  }
+
+  /** Dépose dans un four ou une fonderie tout le minerai fusible du sac (dans la limite de sa place). */
+  smelterDeposit(s: Smelter): number {
+    let n = 0;
+    for (const r of RESOURCES) {
+      if (!r.smeltsTo) continue;
+      const k = s.addOre(r.id, this.inventory.count(r.id));
+      this.inventory.remove(r.id, k);
+      n += k;
+    }
+    return n;
+  }
+
+  /** Récupère dans le sac les lingots prêts d'un four ou d'une fonderie. */
+  smelterCollect(s: Smelter): number {
+    const taken = s.takeOutput((res) => Math.floor(this.inventory.room(res)));
+    let n = 0;
+    for (const [res, k] of Object.entries(taken)) {
+      this.inventory.add(res, k);
+      n += k;
+    }
+    if (s.output.length) this.emit({ t: 'invFull' });
     return n;
   }
 

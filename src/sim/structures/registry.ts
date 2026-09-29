@@ -6,6 +6,7 @@ import { Bridge } from './Bridge';
 import { Drill } from './Drill';
 import { Rail, RailStation, RailSwitch } from './Rail';
 import { ShippingCrate } from './ShippingCrate';
+import { Smelter } from './Smelter';
 import { Sorter } from './Sorter';
 import { Splitter } from './Splitter';
 import { Storage } from './Storage';
@@ -28,4 +29,6 @@ export const STRUCTURE_FACTORIES: Record<string, Factory> = {
   rail_load: { create: (x, y) => new RailStation(x, y, 'rail_load'), load: (s) => RailStation.load(s) },
   rail_unload: { create: (x, y) => new RailStation(x, y, 'rail_unload'), load: (s) => RailStation.load(s) },
   shipping: { create: (x, y, d) => new ShippingCrate(x, y, d), load: (s) => ShippingCrate.load(s) },
+  furnace: { create: (x, y, d) => new Smelter('furnace', x, y, d), load: (s) => Smelter.load('furnace', s) },
+  foundry: { create: (x, y, d) => new Smelter('foundry', x, y, d), load: (s) => Smelter.load('foundry', s) },
 };

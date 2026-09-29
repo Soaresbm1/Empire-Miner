@@ -95,6 +95,13 @@ lettre tapée : c'est la touche marquée M, quel que soit le clavier.
   continue tant qu'une de ses cases a encore un gisement. Le panneau montre, niveau par niveau, les cases forées
   à cet endroit. Démontée, une foreuse améliorée revient dans le stock avec son niveau (« Foreuse à charbon
   niv. 3 » dans la barre de construction) et se repose ailleurs sans perdre son amélioration.
+- **Four** (350 $, pioche améliorée) et **fonderie** (1 500 $, pioche en fer, 2×2 cases) : ils fondent le cuivre, le
+  fer, l'argent et l'or en **lingots**, vendus 2,5 fois plus cher que le minerai (même poids). Le minerai entre par
+  un convoyeur (ou une foreuse, ou la base d'une foreuse de percement collée) sur n'importe quel côté sauf la sortie,
+  ou se dépose du sac depuis leur panneau (`E`) ; le charbon entre de partout (convoyeur, coffre collé, sac) et ne
+  brûle que pendant la fonte. Les lingots sont poussés devant la flèche (convoyeur, coffre, caisse d'expédition) ou
+  récupérés dans le sac. Four : un lingot toutes les 3 s (8 lingots par charbon) ; fonderie : toutes les 0,5 s
+  (30 lingots par charbon). Objectif : fondre 10 lingots.
 - Le mode construction (`B`) s'ouvre même sans aucune machine en stock, pour démonter au clic droit.
 - Vente automatique : **caisse d'expédition** à poser en surface. Tout ce qui y arrive est vendu au prix du
   comptoir à chaque passage du transporteur (toutes les 15 s) ; sa capacité est limitée (120 kg), pleine elle
@@ -119,7 +126,8 @@ enfin prolonger la ligne dans le puits jusqu'à une caisse d'expédition en surf
 rentre pendant que le joueur reste au fond de la mine. Il construit ensuite chaque machine (convoyeurs rapides,
 séparateur, pont, trieur, wagonnets, aiguillage), améliore une foreuse jusqu'au niveau 3 depuis son panneau,
 creuse au marteau-piqueur, lance une foreuse de percement sur 10 cases (elle sort de sa base, perce le tunnel
-puis y revient), l'améliore depuis son panneau et ouvre la carte.
+puis y revient), l'améliore depuis son panneau, pose un four, le charge depuis son panneau et récupère les
+lingots, et ouvre la carte.
 
 ## Choix techniques
 

@@ -8,6 +8,7 @@ import { getMachine } from '../data/machines';
 import type { GameState } from '../sim/GameState';
 import { OBJECTIVES, currentObjective } from '../sim/objectives';
 import type { TunnelBorer } from '../sim/structures/Borer';
+import type { Smelter } from '../sim/structures/Smelter';
 import { Drill } from '../sim/structures/Drill';
 import { ShippingCrate } from '../sim/structures/ShippingCrate';
 import type { Sorter } from '../sim/structures/Sorter';
@@ -16,9 +17,9 @@ import { Storage } from '../sim/structures/Storage';
 import type { Structure } from '../sim/structures/Structure';
 import { esc, kg, money, resIcon } from './format';
 import { MAP_COLORS } from '../render/MineMap';
-import { borerPanel, counterPanel, drillPanel, helpPanel, inventoryPanel, mapPanel, shippingPanel, sorterPanel, stationPanel, storagePanel, switchPanel, workshopPanel } from './panels';
+import { borerPanel, counterPanel, smelterPanel, drillPanel, helpPanel, inventoryPanel, mapPanel, shippingPanel, sorterPanel, stationPanel, storagePanel, switchPanel, workshopPanel } from './panels';
 
-export type PanelKind = 'counter' | 'workshop' | 'inventory' | 'storage' | 'drill' | 'borer' | 'shipping' | 'sorter' | 'station' | 'switch' | 'map' | 'help';
+export type PanelKind = 'counter' | 'workshop' | 'inventory' | 'storage' | 'drill' | 'borer' | 'furnace' | 'shipping' | 'sorter' | 'station' | 'switch' | 'map' | 'help';
 
 export interface UIHost {
   onAction(action: string, arg: string): void;
@@ -222,6 +223,10 @@ export class UI {
       case 'borer':
         title = getMachine('borer').name;
         body = borerPanel(g, target as TunnelBorer);
+        break;
+      case 'furnace':
+        title = (target as Smelter).def.name;
+        body = smelterPanel(g, target as Smelter);
         break;
       case 'shipping':
         title = getMachine('shipping').name;

@@ -9,6 +9,7 @@ import { RESOURCES, getResource } from '../data/resources';
 import { BAGS, JACKHAMMER, PICKAXES } from '../data/tools';
 import type { GameState } from '../sim/GameState';
 import type { BorerStatus, ReturnReason, TunnelBorer } from '../sim/structures/Borer';
+import type { Smelter, SmelterStatus } from '../sim/structures/Smelter';
 import type { Drill } from '../sim/structures/Drill';
 import type { ShippingCrate } from '../sim/structures/ShippingCrate';
 import type { Sorter } from '../sim/structures/Sorter';
@@ -146,6 +147,13 @@ function machineSpecs(m: MachineDef): [string, string][] {
   if (m.onTrack) return [['Vitesse', `${num(s.speed)} cases/s`], ['Capacité', kg(s.capacity)], ['Passager', 'touche F']];
   if (m.station) return [['Tampon', kg(s.capacity)], ['Transfert', `${num(s.speed)} /s`]];
   if (m.railSwitch) return [['Branches', 'tout droit, gauche, droite'], ['Mode', 'fixe ou alterné']];
+  if (m.smelter && m.fuel)
+    return [
+      ['Vitesse', `1 lingot / ${num(m.smelter.smeltTime)} s`],
+      ['Charbon', `1 unité / ${num(m.fuel.secondsPerUnit / m.smelter.smeltTime, 0)} lingots`],
+      ['Lingot', '2,5 × le prix du minerai'],
+      ...(m.w > 1 ? [['Taille', `${m.w}×${m.h} cases`] as [string, string]] : []),
+    ];
   if (m.borer && m.fuel)
     return [
       ['Tunnel', "jusqu'à 50 cases, ou sans limite"],
@@ -164,6 +172,7 @@ function machineSpecs(m: MachineDef): [string, string][] {
 
 const SHOP_GROUPS: { title: string; categories: MachineDef['category'][] }[] = [
   { title: 'Extraction', categories: ['extraction'] },
+  { title: 'Traitement', categories: ['traitement'] },
   { title: 'Transport', categories: ['logistique'] },
   { title: 'Wagonnets et rails', categories: ['rail'] },
   { title: 'Stockage et vente', categories: ['stockage', 'vente'] },
@@ -609,6 +618,60 @@ export function borerPanel(g: GameState, b: TunnelBorer): string {
     <p class="hint">La base reste fixe : la foreuse en sort pour percer tout droit devant la flèche, jusqu'au basalte, puis revient faire le plein quand son charbon est vide et repart au bout du tunnel. Elle rentre aussi quand le tunnel est fini ou qu'elle ne peut plus percer (roche indestructible, machine, bord de la mine). Rouler ne consomme pas de charbon ; une base alimentée par un convoyeur ou un coffre de charbon collé la fait creuser sans s'arrêter. Les minerais tombent derrière elle (dans sa benne au niveau 4), les filons percés laissent leur gisement. On ne tourne, n'améliore ou ne démonte la base que foreuse rangée.</p>`;
 }
 
+// ------------------------------------------------------------------ four et fonderie
+
+const SMELTER_STATUS: Record<SmelterStatus, [string, string]> = {
+  ok: ['Fond le minerai', 'good'],
+  idle: ['En attente de minerai (convoyeur ou dépôt du sac)', 'warn'],
+  nofuel: ["À l'arrêt : plus de charbon", 'bad'],
+  full: ['Bloqué : la sortie est saturée (rien ne prend les lingots devant la flèche)', 'warn'],
+};
+
+/** Liste compacte de morceaux (« 3 cuivre, 2 fer »), avec icônes. */
+function chips(list: string[]): string {
+  const counts: Record<string, number> = {};
+  for (const r of list) counts[r] = (counts[r] ?? 0) + 1;
+  const out = Object.entries(counts)
+    .map(([res, n]) => `<span class="chip">${resIcon(res)} ${n}</span>`)
+    .join('');
+  return out || '<span class="muted">vide</span>';
+}
+
+export function smelterPanel(g: GameState, s: Smelter): string {
+  const [label, cls] = SMELTER_STATUS[s.status];
+  const coal = g.inventory.count('coal');
+  const ores = RESOURCES.filter((r) => r.smeltsTo).reduce((n, r) => n + g.inventory.count(r.id), 0);
+  const secs = s.fuelSeconds();
+  const rate = 60 / s.spec.smeltTime;
+  const recipes = RESOURCES.filter((r) => r.smeltsTo)
+    .map((r) => {
+      const ingot = getResource(r.smeltsTo!);
+      return `<tr><td>${resIcon(r.id)} ${r.name}</td><td>→</td><td>${resIcon(ingot.id)} ${ingot.name}</td><td class="num">${money(r.value)} → <b class="gold">${money(ingot.value)}</b></td></tr>`;
+    })
+    .join('');
+  return `
+    <div class="status ${cls}">● ${label}</div>
+    <div class="bar"><div style="width:${Math.round(s.progress * 100)}%"></div><span>Fonte en cours ${Math.round(s.progress * 100)} %</span></div>
+    <div class="cards" style="margin-top:10px"><div class="card">
+      ${stat('Minerai en attente', `${s.input.length} / ${s.spec.inputMax}`)}
+      <div class="chips">${chips(s.input)}</div>
+      ${stat('Lingots prêts', `${s.output.length} / ${s.spec.outputMax}`)}
+      <div class="chips">${chips(s.output)}</div>
+      ${stat('Cadence', `${num(rate, 0)} lingots / min`)}
+      ${stat('Fondus au total', String(s.smelted))}
+    </div><div class="card">
+      ${stat('Charbon', `${s.fuelUnits} / ${s.fuelMax}`)}
+      ${stat('Autonomie', `${Math.floor(secs / 60)} min ${Math.floor(secs % 60)} s de fonte`)}
+      <div class="buy">${btn('smelterFuel', `Charger le charbon du sac (${coal})`, { cls: 'primary', disabled: coal <= 0 || s.fuelUnits >= s.fuelMax })}</div>
+      <div class="buy">${btn('smelterDeposit', `Déposer le minerai du sac (${ores})`, { disabled: ores <= 0 || s.input.length >= s.spec.inputMax })}
+        ${btn('smelterCollect', `Récupérer les lingots (${s.output.length})`, { disabled: !s.output.length })}</div>
+      <div class="buy">${btn('smelterRotate', 'Tourner ↻')}</div>
+    </div></div>
+    <h4>Recettes</h4>
+    <table class="table"><tbody>${recipes}</tbody></table>
+    <p class="hint">Le minerai entre par n'importe quel côté sauf la sortie ${DIR_ARROWS[s.dir]} ; le charbon entre de partout (un coffre de charbon collé le recharge). Les lingots sont poussés devant la flèche (convoyeur, coffre, caisse d'expédition). Le charbon ne brûle que pendant la fonte.</p>`;
+}
+
 // ------------------------------------------------------------------ carte
 
 /** Carte complète : le canvas est dessiné à chaque image par le jeu ; à droite, la légende. */
@@ -631,6 +694,7 @@ export function mapPanel(g: GameState, colors: Record<string, string>): string {
         ${item(sw(colors.building), 'Comptoir, atelier')}
         ${item(sw(colors.drill), 'Foreuse')}
         ${item(sw(colors.borer), 'Foreuse de percement')}
+        ${item(sw(colors.furnace), 'Four, fonderie')}
         ${item(sw(colors.belt), 'Convoyeur, séparateur, trieur, pont')}
         ${item(sw(colors.storage), 'Coffre')}
         ${item(sw(colors.shipping), "Caisse d'expédition")}
@@ -661,6 +725,7 @@ export function helpPanel(keys: { move: string; label: (c: string) => string }):
     <div><h4>Wagonnet</h4><p>${k('KeyF')} : monter / descendre</p></div>
     <div><h4>Outil en main</h4><p>${k('KeyT')} : pioche ou marteau-piqueur (s'il est acheté)</p></div>
     <div><h4>Carte</h4><p><kbd>M</kbd> : carte de la mine (ou clic sur la mini-carte)</p></div>
+    <div><h4>Four et fonderie</h4><p>Minerai (convoyeur ou ${k('KeyE')} : déposer) + charbon → lingots vendus 2,5 fois plus cher, poussés devant la flèche</p></div>
     <div><h4>Améliorer une foreuse</h4><p>${k('KeyE')} sur la foreuse : niveau 2 = cases gauche et droite, niveau 3 = aussi derrière</p></div>
     <div><h4>Menu</h4><p><kbd>Échap</kbd> : pause, sauvegarde, chargement</p></div>
   </div>

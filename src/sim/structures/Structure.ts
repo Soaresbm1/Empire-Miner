@@ -17,6 +17,8 @@ export interface StructureContext {
   emit(e: SimEvent): void;
   /** Statistique : objets livrés dans un stockage par l'automatisation. */
   countDelivered(n: number): void;
+  /** Statistique : un lingot vient de sortir d'un four ou d'une fonderie. */
+  countSmelted(res: string, from: Structure): void;
   /** Vente automatique (caisse d'expédition) : crédite l'argent du joueur. */
   autoSell(total: number, n: number, from: Structure): void;
   /** Perce une tuile (foreuse de percement) ; les morceaux tombent en (from.x, from.y), en unités monde. Renvoie les morceaux lâchés. */

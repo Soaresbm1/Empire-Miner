@@ -39,6 +39,11 @@ export const OBJECTIVES: Objective[] = [
     text: "Vente automatique : amenez vos minerais par convoyeur jusqu'à une caisse d'expédition en surface",
     done: (g) => g.stats.autoSold > 0,
   },
+  {
+    id: 'smelt',
+    text: "Fondez 10 lingots dans un four (Atelier) : minerai + charbon, lingots vendus 2,5 fois plus cher",
+    done: (g) => g.stats.smelted >= 10,
+  },
 ];
 
 export function currentObjective(g: GameState): { objective: Objective | null; index: number } {

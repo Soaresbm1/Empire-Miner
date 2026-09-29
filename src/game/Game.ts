@@ -15,6 +15,7 @@ import { Bridge } from '../sim/structures/Bridge';
 import { Building, BUILDING_INFO } from '../sim/structures/Building';
 import { Conveyor } from '../sim/structures/Conveyor';
 import { TunnelBorer } from '../sim/structures/Borer';
+import { Smelter } from '../sim/structures/Smelter';
 import { Drill, reachTiles } from '../sim/structures/Drill';
 import { ShippingCrate } from '../sim/structures/ShippingCrate';
 import { Sorter } from '../sim/structures/Sorter';
@@ -317,6 +318,27 @@ export class Game {
       case 'borerLength':
         if (target instanceof TunnelBorer) g.setBorerLength(target, Number(arg));
         break;
+      case 'smelterFuel':
+        if (target instanceof Smelter) {
+          const n = g.fuelSmelter(target);
+          if (n) this.ui.toast(`${n} charbon chargé${n > 1 ? 's' : ''} dans le ${target.def.name.toLowerCase()}.`, 'good');
+        }
+        break;
+      case 'smelterDeposit':
+        if (target instanceof Smelter) {
+          const n = g.smelterDeposit(target);
+          if (n) this.ui.toast(`${n} minerai${n > 1 ? 's' : ''} déposé${n > 1 ? 's' : ''} à fondre.`, 'good');
+        }
+        break;
+      case 'smelterCollect':
+        if (target instanceof Smelter) {
+          const n = g.smelterCollect(target);
+          if (n) this.ui.toast(`${n} lingot${n > 1 ? 's' : ''} récupéré${n > 1 ? 's' : ''}.`, 'good');
+        }
+        break;
+      case 'smelterRotate':
+        if (target) g.rotateAt(target.x, target.y);
+        break;
       case 'borerUpgrade':
         if (target instanceof TunnelBorer) g.upgradeMachine(target);
         break;
@@ -540,6 +562,7 @@ export class Game {
     else if (s instanceof ShippingCrate) this.ui.openPanel('shipping', s);
     else if (s instanceof Drill) this.ui.openPanel('drill', s);
     else if (s instanceof TunnelBorer) this.ui.openPanel('borer', s);
+    else if (s instanceof Smelter) this.ui.openPanel('furnace', s);
     else if (s instanceof Sorter) this.ui.openPanel('sorter', s);
     else if (s instanceof RailStation) this.ui.openPanel('station', s);
     else if (s instanceof RailSwitch) this.ui.openPanel('switch', s);
@@ -563,6 +586,7 @@ export class Game {
     if (near instanceof ShippingCrate) return `${e} Caisse d'expédition — vente automatique`;
     if (near instanceof Drill) return `${e} Foreuse niv. ${near.level} — charbon, production, amélioration`;
     if (near instanceof TunnelBorer) return `${e} Foreuse de percement niv. ${near.level} — charbon, départ, améliorations`;
+    if (near instanceof Smelter) return `${e} ${near.def.name} — charbon, minerai, lingots`;
     if (near instanceof Sorter) return `${e} Trieur — choisir le minerai trié`;
     if (near instanceof RailStation) return `${e} ${near.def.name}`;
     if (near instanceof RailSwitch) return `${e} Aiguillage — choisir la branche`;
@@ -790,6 +814,10 @@ export class Game {
       return `<b>Foreuse de percement</b> niv. ${s.level} ${['→', '↓', '←', '↑'][s.dir]} — ${st}<br>Base : ${s.fuelUnits} charbon${
         s.stats.hopper ? ` · ${s.storeCount()} minerai(s)` : ''
       } · tunnel : ${s.tunnel} cases`;
+    }
+    if (s instanceof Smelter) {
+      const st = { ok: 'fond le minerai', idle: 'attend du minerai', nofuel: 'sans charbon', full: 'sortie saturée' }[s.status];
+      return `<b>${s.def.name}</b> ${['→', '↓', '←', '↑'][s.dir]} — ${st}<br>Minerai : ${s.input.length} · lingots prêts : ${s.output.length} · charbon : ${s.fuelUnits}`;
     }
     if (s instanceof Storage) return `<b>Coffre</b><br>${kg(s.weight())} / ${kg(s.capacity)}`;
     if (s instanceof ShippingCrate)
