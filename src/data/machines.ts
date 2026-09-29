@@ -1,0 +1,391 @@
+/**
+ * Machines et structures constructibles.
+ *
+ * Chaque machine expose des statistiques homogènes (vitesse, consommation,
+ * capacité, efficacité, niveau, coût) afin que les futures machines
+ * (trieurs, concasseurs, fonderies, générateurs…) s'intègrent sans changer l'UI.
+ */
+
+export type MachineCategory = 'extraction' | 'logistique' | 'rail' | 'stockage' | 'vente';
+
+export interface MachineStats {
+  /** Extraction : unités/s. Convoyeur : tuiles/s. */
+  speed: number;
+  /** Consommation électrique (kW). 0 = aucune (mécanique ou combustion). */
+  power: number;
+  /** Convoyeur : objets par tuile. Stockage : kg. Foreuse : tampon de sortie. */
+  capacity: number;
+  /** Efficacité (1 = 100 %) : unités extraites par unité de réserve consommée. */
+  efficiency: number;
+  level: number;
+}
+
+export interface FuelSpec {
+  res: string;
+  /** Secondes de fonctionnement par unité de combustible. */
+  secondsPerUnit: number;
+  /** Nombre max d'unités stockées dans la machine. */
+  maxUnits: number;
+}
+
+export interface ShippingSpec {
+  /** Intervalle entre deux passages du transporteur (s). */
+  interval: number;
+}
+
+export interface BorerSpec {
+  /** Niveau de roche maximal qu'elle peut percer. */
+  tier: number;
+  /** Dégâts infligés par seconde à la case devant elle. */
+  damagePerSecond: number;
+  /** Temps pour avancer d'une case une fois la roche percée (s). */
+  moveTime: number;
+  /** Longueurs de tunnel proposées dans son panneau (0 = sans limite). */
+  lengths: number[];
+}
+
+export interface BridgeSpec {
+  /** Distance maximale (en cases) entre un pont d'entrée et son pont de sortie. */
+  range: number;
+}
+
+/** Case exploitée par une foreuse, relative à sa flèche de sortie (devant). */
+export type ReachSide = 'under' | 'left' | 'right' | 'back';
+
+/** Niveau d'amélioration d'une machine (acheté sur la machine posée). */
+export interface MachineLevel {
+  level: number;
+  /** Prix de l'amélioration vers ce niveau (0 pour le niveau de base). */
+  price: number;
+  /** Foreuse : cases exploitées. */
+  reach: ReachSide[];
+  /** Condition supplémentaire (niveau de pioche). */
+  unlock?: { pickaxeTier: number; text: string };
+  /** Résumé affiché dans le panneau de la machine. */
+  summary: string;
+}
+
+export interface MachineDef {
+  id: string;
+  name: string;
+  category: MachineCategory;
+  description: string;
+  /** Résumé d'une ligne affiché dans le magasin. */
+  summary: string;
+  price: number;
+  w: number;
+  h: number;
+  /** Bloque le passage du joueur. */
+  solid: boolean;
+  rotatable: boolean;
+  stats: MachineStats;
+  fuel?: FuelSpec;
+  /** Condition de déblocage (texte + test sur le niveau de pioche). */
+  unlock?: { pickaxeTier: number; text: string };
+  /** Doit être posée sur un gisement exposé. */
+  needsDeposit?: boolean;
+  /** Ne peut être posée qu'en surface (au camp). */
+  surfaceOnly?: boolean;
+  /** Vente automatique (caisse d'expédition). */
+  shipping?: ShippingSpec;
+  /** Convoyeur (tous niveaux) : se trace en glissant et peut remplacer un autre convoyeur. */
+  conveyor?: boolean;
+  /** Couleur d'accent (liseré des convoyeurs). */
+  accent?: string;
+  /** Pont de convoyeur (se pose par paire). */
+  bridge?: BridgeSpec;
+  /** Fait partie de la voie des wagonnets (rails et quais). */
+  track?: boolean;
+  /** Se pose en glissant, case après case (rails). */
+  dragPlace?: boolean;
+  /** Se pose sur des rails (wagonnet). */
+  onTrack?: boolean;
+  /** Quai : remplit ('load') ou vide ('unload') les wagonnets. */
+  station?: 'load' | 'unload';
+  /** Aiguillage : se pose sur un embranchement (remplace un rail simple). */
+  railSwitch?: boolean;
+  /** Niveaux d'amélioration, du niveau de base (1) au niveau maximal. */
+  levels?: MachineLevel[];
+  /** Foreuse de percement : avance toute seule en creusant un tunnel droit. */
+  borer?: BorerSpec;
+}
+
+export const MACHINES: MachineDef[] = [
+  {
+    id: 'conveyor',
+    name: 'Convoyeur',
+    summary: "Transporte le minerai dans le sens de la flèche.",
+    category: 'logistique',
+    description: 'Transporte les minerais dans la direction de la flèche. Débit limité : il peut saturer.',
+    price: 6,
+    w: 1,
+    h: 1,
+    solid: false,
+    rotatable: true,
+    stats: { speed: 0.75, power: 0, capacity: 3, efficiency: 1, level: 1 },
+    conveyor: true,
+    accent: '#6a6b74',
+  },
+  {
+    id: 'conveyor_fast',
+    name: 'Convoyeur rapide',
+    summary: "Deux fois plus rapide. Posez-le sur un convoyeur pour l'améliorer.",
+    category: 'logistique',
+    description: 'Deux fois plus rapide. Posez-le sur un convoyeur existant pour l\'améliorer sur place.',
+    price: 15,
+    w: 1,
+    h: 1,
+    solid: false,
+    rotatable: true,
+    stats: { speed: 1.5, power: 0, capacity: 3, efficiency: 1, level: 2 },
+    conveyor: true,
+    accent: '#d0503a',
+    unlock: { pickaxeTier: 2, text: 'Nécessite la Pioche améliorée' },
+  },
+  {
+    id: 'conveyor_express',
+    name: 'Convoyeur express',
+    summary: "Quatre fois plus rapide que le convoyeur de base.",
+    category: 'logistique',
+    description: 'Quatre fois plus rapide que le convoyeur de base. Pour les grandes lignes principales.',
+    price: 40,
+    w: 1,
+    h: 1,
+    solid: false,
+    rotatable: true,
+    stats: { speed: 3, power: 0, capacity: 3, efficiency: 1, level: 3 },
+    conveyor: true,
+    accent: '#4d8fe0',
+    unlock: { pickaxeTier: 3, text: 'Nécessite la Pioche en fer' },
+  },
+  {
+    id: 'splitter',
+    name: 'Séparateur',
+    summary: "Partage une ligne entre l'avant, la gauche et la droite.",
+    category: 'logistique',
+    description: "Le minerai entre par l'arrière et ressort à tour de rôle devant, à gauche et à droite. Les sorties bloquées ou vides sont sautées.",
+    price: 35,
+    w: 1,
+    h: 1,
+    solid: false,
+    rotatable: true,
+    stats: { speed: 3, power: 0, capacity: 3, efficiency: 1, level: 1 },
+    accent: '#e0b84a',
+    unlock: { pickaxeTier: 2, text: 'Nécessite la Pioche améliorée' },
+  },
+  {
+    id: 'sorter',
+    name: 'Trieur',
+    summary: "Envoie le minerai choisi tout droit, le reste sur les côtés.",
+    category: 'logistique',
+    description: "Le minerai entre par l'arrière. Le minerai choisi (touche E) part tout droit, tout le reste part sur les côtés.",
+    price: 60,
+    w: 1,
+    h: 1,
+    solid: false,
+    rotatable: true,
+    stats: { speed: 3, power: 0, capacity: 3, efficiency: 1, level: 1 },
+    accent: '#5fc0b0',
+    unlock: { pickaxeTier: 2, text: 'Nécessite la Pioche améliorée' },
+  },
+  {
+    id: 'bridge',
+    name: 'Pont de convoyeur',
+    summary: "Fait passer une ligne par-dessus une autre.",
+    category: 'logistique',
+    description: 'Se pose par paire, dans la même direction : le minerai passe au-dessus de ce qui se trouve entre les deux ponts. Idéal pour croiser deux lignes.',
+    price: 25,
+    w: 1,
+    h: 1,
+    solid: false,
+    rotatable: true,
+    stats: { speed: 3, power: 0, capacity: 3, efficiency: 1, level: 1 },
+    bridge: { range: 5 },
+    unlock: { pickaxeTier: 2, text: 'Nécessite la Pioche améliorée' },
+  },
+  {
+    id: 'rail',
+    name: 'Rails',
+    summary: 'Voie des wagonnets. Se pose en glissant, les virages se font seuls.',
+    category: 'rail',
+    description: 'Rails pour wagonnets. Posez-les en glissant : ils se raccordent automatiquement (lignes droites et virages). Le joueur peut marcher dessus.',
+    price: 2,
+    w: 1,
+    h: 1,
+    solid: false,
+    rotatable: false,
+    stats: { speed: 0, power: 0, capacity: 0, efficiency: 1, level: 1 },
+    track: true,
+    dragPlace: true,
+  },
+  {
+    id: 'rail_switch',
+    name: 'Aiguillage',
+    summary: 'Choisit la branche que prennent les wagonnets à un embranchement.',
+    category: 'rail',
+    description:
+      "Se pose sur un embranchement (il remplace le rail qui s'y trouve). Les wagonnets qui arrivent par la pointe (flèche, tournée avec R) prennent la branche choisie avec E : tout droit, à gauche, à droite ou en alternance. Ceux qui reviennent par une branche repartent vers la pointe.",
+    price: 20,
+    w: 1,
+    h: 1,
+    solid: false,
+    rotatable: true,
+    stats: { speed: 0, power: 0, capacity: 0, efficiency: 1, level: 1 },
+    track: true,
+    railSwitch: true,
+  },
+  {
+    id: 'wagon',
+    name: 'Wagonnet',
+    summary: "Fait l'aller-retour sur les rails. On peut monter dedans (E).",
+    category: 'rail',
+    description: "Se pose sur des rails. Il roule jusqu'au bout de la ligne puis repart dans l'autre sens ; il s'arrête aux quais pour charger ou décharger. Montez dedans avec E pour voyager.",
+    price: 60,
+    w: 1,
+    h: 1,
+    solid: false,
+    rotatable: true,
+    stats: { speed: 6, power: 0, capacity: 100, efficiency: 1, level: 1 },
+    onTrack: true,
+  },
+  {
+    id: 'rail_load',
+    name: 'Quai de chargement',
+    summary: "Remplit les wagonnets. Alimentez-le par convoyeur, foreuse, coffre ou avec votre sac.",
+    category: 'rail',
+    description: "Fait partie de la voie (en général au bout de la ligne). Il reçoit le minerai des convoyeurs, foreuses et coffres collés, ou de votre sac (E), et le charge dans le wagonnet qui s'arrête. Le wagonnet repart quand il est plein, ou quand il n'y a plus rien à charger.",
+    price: 30,
+    w: 1,
+    h: 1,
+    solid: false,
+    rotatable: false,
+    stats: { speed: 20, power: 0, capacity: 60, efficiency: 1, level: 1 },
+    track: true,
+    station: 'load',
+  },
+  {
+    id: 'rail_unload',
+    name: 'Quai de déchargement',
+    summary: 'Vide les wagonnets et envoie le minerai dans ce qui est collé.',
+    category: 'rail',
+    description: "Fait partie de la voie (en général au bout de la ligne). Il vide le wagonnet qui s'arrête, puis envoie le minerai dans ce qui est collé : convoyeur, coffre ou caisse d'expédition.",
+    price: 30,
+    w: 1,
+    h: 1,
+    solid: false,
+    rotatable: false,
+    stats: { speed: 20, power: 0, capacity: 60, efficiency: 1, level: 1 },
+    track: true,
+    station: 'unload',
+  },
+  {
+    id: 'drill',
+    name: 'Foreuse à charbon',
+    summary: "Extrait le gisement sous elle. Brûle du charbon. Améliorable : fore aussi les cases voisines.",
+    category: 'extraction',
+    description: 'Extrait le gisement sous elle et pousse le minerai vers l\'avant (ou dans un convoyeur collé). Brûle du charbon.',
+    price: 220,
+    w: 1,
+    h: 1,
+    solid: true,
+    rotatable: true,
+    stats: { speed: 0.4, power: 0, capacity: 8, efficiency: 1, level: 1 },
+    fuel: { res: 'coal', secondsPerUnit: 30, maxUnits: 10 },
+    unlock: { pickaxeTier: 2, text: 'Nécessite la Pioche améliorée' },
+    needsDeposit: true,
+    // Chaque niveau ajoute des têtes de forage sur les cases voisines (la sortie reste devant) :
+    // chaque case couverte qui a un gisement produit à la cadence de base, pour le même charbon.
+    levels: [
+      { level: 1, price: 0, reach: ['under'], summary: 'Fore la case sous elle.' },
+      { level: 2, price: 280, reach: ['under', 'left', 'right'], summary: 'Fore aussi les cases à gauche et à droite.' },
+      {
+        level: 3,
+        price: 650,
+        reach: ['under', 'left', 'right', 'back'],
+        unlock: { pickaxeTier: 3, text: 'Nécessite la Pioche en fer' },
+        summary: 'Fore aussi la case derrière elle.',
+      },
+    ],
+  },
+  {
+    id: 'borer',
+    name: 'Foreuse de percement',
+    summary: 'Creuse toute seule un tunnel droit devant elle et révèle ce qu’elle traverse. Brûle du charbon.',
+    category: 'extraction',
+    description:
+      "Véhicule à tête rotative : avance tout droit en perçant la roche, jusqu'au basalte. Les minerais tombent derrière elle, dans le tunnel. Réglez la longueur et démarrez-la avec E ; elle s'arrête d'elle-même au bout, sans charbon ou devant un obstacle.",
+    price: 1200,
+    w: 1,
+    h: 1,
+    solid: true,
+    rotatable: true,
+    stats: { speed: 6, power: 0, capacity: 0, efficiency: 1, level: 1 },
+    fuel: { res: 'coal', secondsPerUnit: 20, maxUnits: 20 },
+    unlock: { pickaxeTier: 3, text: 'Nécessite la Pioche en fer' },
+    borer: { tier: 3, damagePerSecond: 6, moveTime: 0.35, lengths: [10, 25, 50, 0] },
+  },
+  {
+    id: 'storage',
+    name: 'Coffre de stockage',
+    summary: "Stocke le minerai, le renvoie sur les convoyeurs, recharge les foreuses.",
+    category: 'stockage',
+    description: 'Reçoit les minerais, se vide dans les convoyeurs qui en partent et recharge en charbon les foreuses collées. Vous pouvez y déposer votre sac.',
+    price: 45,
+    w: 1,
+    h: 1,
+    solid: true,
+    rotatable: false,
+    stats: { speed: 0, power: 0, capacity: 150, efficiency: 1, level: 1 },
+  },
+  {
+    id: 'shipping',
+    name: "Caisse d'expédition",
+    summary: "Vend automatiquement tout ce qui y entre.",
+    category: 'vente',
+    description: 'Vend automatiquement tout ce qui y entre, au prix du comptoir. Un transporteur la vide régulièrement. Se pose en surface.',
+    price: 180,
+    w: 1,
+    h: 1,
+    solid: true,
+    rotatable: false,
+    // capacity : kg en attente du transporteur ; efficiency : part du prix du comptoir.
+    stats: { speed: 0, power: 0, capacity: 120, efficiency: 1, level: 1 },
+    shipping: { interval: 15 },
+    unlock: { pickaxeTier: 2, text: 'Nécessite la Pioche améliorée' },
+    surfaceOnly: true,
+  },
+];
+
+const byId = new Map(MACHINES.map((m) => [m.id, m]));
+
+/**
+ * Identifiant de kit de construction : la machine seule (« drill ») au niveau 1,
+ * ou la machine et son niveau (« drill@3 ») pour une machine améliorée qu'on a
+ * démontée : reposée, elle garde son niveau.
+ */
+export function kitId(machineId: string, level = 1): string {
+  return level > 1 ? `${machineId}@${level}` : machineId;
+}
+
+export function parseKit(kit: string): { machine: string; level: number } {
+  const [machine, lvl] = kit.split('@');
+  return { machine, level: lvl ? Math.max(1, Math.floor(Number(lvl)) || 1) : 1 };
+}
+
+/** Nom affiché d'un kit, avec son niveau s'il est amélioré. */
+export function kitName(kit: string): string {
+  const { machine, level } = parseKit(kit);
+  const def = MACHINES.find((m) => m.id === machine);
+  return `${def?.name ?? machine}${level > 1 ? ` niv. ${level}` : ''}`;
+}
+
+export function getMachine(id: string): MachineDef {
+  const m = byId.get(id);
+  if (!m) throw new Error(`Machine inconnue : ${id}`);
+  return m;
+}
+
+/** Débit maximum théorique d'un convoyeur (objets/s). */
+export function conveyorThroughput(def: MachineDef): number {
+  return def.stats.speed * def.stats.capacity;
+}

@@ -1,123 +1,43 @@
 <!doctype html>
 <html lang="fr">
-<head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>The_frame's_srs – Photographie Football & Futsal</title>
-  <meta name="description" content="Portfolio photo The_frame's_srs – un regard classique sur le football et le futsal." />
-  <link rel="stylesheet" href="style.css" />
-</head>
-<body>
-  <header class="site-header">
-    <a class="brand" href="index.html" aria-current="page">The_frame's_srs</a>
-    <nav class="nav">
-      <a href="gallery.html">Galerie</a>
-      <a href="#video">Vidéo</a>
-      <a href="#licence">Licence</a>
-      <a href="#contact">Contact</a>
-    </nav>
-  </header>
-
-  <main>
-    <!-- HERO -->
-    <section class="hero">
-      <div class="frame frame--double">
-        <h1>THE_FRAME'S_SRS</h1>
-        <p>Un regard classique sur le football & le futsal. Téléchargez librement les images selon la licence.</p>
-        <div style="display:flex; gap:10px; justify-content:center; margin-top:8px">
-          <a class="btn" href="gallery.html">Voir la galerie</a>
-          <a class="btn btn--ghost" href="#licence">Licence</a>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Empire Miner</title>
+    <meta name="description" content="Empire Miner — jeu de minage, progression et automatisation." />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Pixelify+Sans:wght@400;600;700&display=swap" rel="stylesheet" />
+  </head>
+  <body>
+    <canvas id="game"></canvas>
+    <div id="ui">
+      <div id="hud" class="hidden">
+        <div class="hud-tl hud-box">
+          <div id="hud-money" class="money"></div>
+          <div id="hud-income" class="income"></div>
+          <div id="hud-depth" class="depth"></div>
         </div>
+        <div class="hud-tr">
+          <div id="hud-objective" class="hud-box objective"></div>
+          <div id="minimap-box" class="hud-box minimap" data-action="openMap" title="Carte de la mine (M)">
+            <canvas id="minimap"></canvas>
+            <div class="minimap-cap"><kbd>M</kbd> carte</div>
+          </div>
+        </div>
+        <div id="hud-equip" class="hud-bl hud-box"></div>
+        <div class="hud-bc">
+          <div id="hud-prompt" class="prompt"></div>
+          <div id="hud-build"></div>
+        </div>
+        <div id="hud-hints" class="hud-br"></div>
+        <div id="save-indicator">Sauvegarde automatique ✓</div>
       </div>
-    </section>
-
-    <!-- VIDÉO EXPLICATIVE -->
-    <section id="video" class="card">
-      <div class="frame">
-        <h2>Vidéo explicative — comment utiliser le site</h2>
-
-        <figure class="video-card">
-          <video
-            class="video-player"
-            controls
-            preload="metadata"
-            playsinline
-            poster="img/posters/explain.jpg"
-          >
-            <source src="video/explain.mp4" type="video/mp4">
-            Votre navigateur ne supporte pas la vidéo. 
-            <a href="video/explain.mp4">Télécharger la vidéo</a>.
-          </video>
-          <figcaption class="video-caption">
-            <strong>Comment trouver et télécharger les photos</strong> — vue rapide des filtres
-            (club/équipe), du bouton “Télécharger”, et de la section favoris.
-          </figcaption>
-        </figure>
-
-      </div>
-    </section>
-
-    <!-- LICENCE -->
-    <section id="licence" class="card">
-      <div class="frame">
-        <h2>LICENCE D’UTILISATION</h2>
-        <p>CC BY 4.0 – mention « The_frame's_srs » et lien vers ce site.</p>
-        <ul>
-          <li>✅ Usage presse, réseaux sociaux, projets avec attribution.</li>
-          <li>🚫 Interdit : revente directe ou modification sans autorisation.</li>
-        </ul>
-      </div>
-    </section>
-
-    <!-- CONTACT -->
-    <section id="contact" class="card">
-  <div class="frame">
-    <h2>CONTACT / AVIS</h2>
-
-    <form 
-      action="https://formspree.io/f/xrezlede" 
-      method="POST"
-      class="contact-form"
-    >
-      <label>
-        Ton nom
-        <input type="text" name="name" required>
-      </label>
-
-      <label>
-        Ton email
-        <input type="email" name="email" required>
-      </label>
-
-      <label>
-        Type de message
-        <select name="type">
-          <option value="Avis">Avis</option>
-          <option value="Question">Question</option>
-          <option value="Demande photo">Demande photo</option>
-        </select>
-      </label>
-
-      <label>
-        Message
-        <textarea name="message" rows="5" required></textarea>
-      </label>
-
-      <button type="submit" class="btn">
-        Envoyer le message
-      </button>
-    </form>
-  </div>
-</section>
-
-  </main>
-
-  <footer class="site-footer">
-    <small>© <span id="year"></span> The_frame's_srs – Football & Futsal</small>
-  </footer>
-
-  <script>
-    document.getElementById('year').textContent = new Date().getFullYear();
-  </script>
-</body>
+      <div id="toasts"></div>
+      <div id="tooltip"></div>
+      <div id="panel-root"></div>
+      <div id="menu-root"></div>
+    </div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
 </html>
