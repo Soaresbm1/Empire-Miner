@@ -104,7 +104,16 @@ export class UI {
     const surface = g.player.tileY < 12;
     this.set('hud-money', `<span class="coin"></span>${money(g.money)}`);
     this.set('hud-income', extra.income);
-    this.set('hud-depth', surface ? `<span class="zone">Surface · Camp</span>` : `▼ <b>${Math.floor(depth)} m</b> <span class="zone" style="color:${zoneForDepth(depth).color}">${zoneForDepth(depth).name}</span>`);
+    // Fournaise : température, qui ralentit les machines.
+    const temp = surface ? null : g.hazards.temperature(g.player.tileY);
+    this.set(
+      'hud-depth',
+      surface
+        ? `<span class="zone">Surface · Camp</span>`
+        : `▼ <b>${Math.floor(depth)} m</b> <span class="zone" style="color:${zoneForDepth(depth).color}">${zoneForDepth(depth).name}</span>${
+            temp !== null ? `<div class="heat">Chaleur ${temp} °C : machines ralenties</div>` : ''
+          }`,
+    );
     const inv = g.inventory;
     const w = inv.weight();
     const ratio = w / inv.capacity;

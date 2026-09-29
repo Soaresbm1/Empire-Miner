@@ -5,7 +5,7 @@
 import { DIR_ARROWS, DX, DY } from '../core/dir';
 import { METERS_PER_TILE, SURFACE_ROWS, TILE, depthAt } from '../core/constants';
 import { BorerLevelSpec, MACHINES, MACHINE_GROUPS, MachineDef, MachineLevel, conveyorThroughput, kitName, parseKit } from '../data/machines';
-import { GAS, WATER } from '../data/hazards';
+import { GAS, HEAT, WATER } from '../data/hazards';
 import { MARKER_KINDS, MARKER_ORDER, MAX_MARKERS } from '../sim/Markers';
 import { RESOURCES, getResource } from '../data/resources';
 import { BAGS, JACKHAMMER, PICKAXES } from '../data/tools';
@@ -150,7 +150,7 @@ function machineSpecs(m: MachineDef): [string, string][] {
   if (m.station) return [['Tampon', kg(s.capacity)], ['Transfert', `${num(s.speed)} /s`]];
   if (m.railSwitch) return [['Branches', 'tout droit, gauche, droite'], ['Mode', 'fixe ou alterné']];
   if (m.id === 'prop') return [['Protège', '3 cases autour (7×7)'], ['Passage', 'on passe dessous']];
-  if (m.id === 'fan') return [['Portée', `${GAS.fanRadius} cases`], ['Énergie', 'aucune']];
+  if (m.id === 'fan') return [['Grisou', `${GAS.fanRadius} cases`], ['Chaleur', `rafraîchit à ${HEAT.fanRadius} cases`], ['Énergie', 'aucune']];
   if (m.id === 'pump') return [['Portée', `${WATER.pumpRadius} cases`], ['Énergie', 'aucune']];
   if (m.smelter && m.fuel)
     return [
@@ -162,7 +162,7 @@ function machineSpecs(m: MachineDef): [string, string][] {
   if (m.borer && m.fuel)
     return [
       ['Tunnel', "jusqu'à 50 cases, ou sans limite"],
-      ['Roche', "jusqu'au basalte"],
+      ['Roche', "jusqu'à la roche volcanique"],
       ['Charbon', `1 unité / ${m.fuel.secondsPerUnit} s de perçage`],
       ['Plein', `${m.levels?.[0].borer?.tankUnits ?? 0} unités par sortie, puis retour à la base`],
       ['Améliorable', `jusqu'au niveau ${m.levels?.length ?? 1} (touche E sur la base)`],
@@ -477,12 +477,14 @@ export function drillPanel(g: GameState, d: Drill): string {
     }
   }
   const out = d.buffer.length;
+  const heat = g.hazards.heatFactor(d.x, d.y);
   return `
     <div class="status ${cls}">● ${label}</div>
+    ${heatNote(g, d.x, d.y)}
     <div class="cards"><div class="card">
       ${stat('Gisements forés', depositList || 'épuisés')}
       ${stat('Réserve restante', `${reserve} unités`)}
-      ${stat('Cadence', `${num(d.def.stats.speed * sources.length * 60, 0)} unités/min`)}
+      ${stat('Cadence', `${num(d.def.stats.speed * sources.length * 60 * heat, 0)} unités/min`)}
       ${stat('Extrait au total', String(d.extracted))}
     </div><div class="card">
       ${stat('Charbon chargé', `${d.fuelUnits} / ${d.fuelMax}`)}
@@ -585,8 +587,11 @@ export function borerPanel(g: GameState, b: TunnelBorer): string {
     : b.returning
       ? btn('borerStart', 'Faire repartir', { cls: 'primary', disabled: b.complete })
       : btn('borerStart', b.complete ? 'Tunnel terminé : choisissez plus long' : 'Démarrer', { cls: 'primary', disabled: b.complete });
+  // Chaleur là où perce la foreuse (ou devant la base, si elle est rangée).
+  const face = b.home ? { x: b.x + DX[b.dir], y: b.y + DY[b.dir] } : b.tileAt(b.dist + 1);
   return `
     <div class="status ${cls}">● ${label}</div>
+    ${heatNote(g, face.x, face.y, 'perce')}
     <div class="cards"><div class="card">
       ${stat('Direction', DIR_ARROWS[b.dir])}
       ${stat('Tunnel', `${b.tunnel} case${b.tunnel > 1 ? 's' : ''}${b.length ? ` / ${b.length}` : ''}`)}
@@ -614,7 +619,7 @@ export function borerPanel(g: GameState, b: TunnelBorer): string {
         : ''
     }</div>
     ${borerLevels(g, b)}
-    <p class="hint">La base reste fixe : la foreuse en sort pour percer tout droit devant la flèche, jusqu'au basalte, puis revient faire le plein quand son charbon est vide et repart au bout du tunnel. Elle rentre aussi quand le tunnel est fini ou qu'elle ne peut plus percer (roche indestructible, machine, bord de la mine). Rouler ne consomme pas de charbon ; une base alimentée par un convoyeur ou un coffre de charbon collé la fait creuser sans s'arrêter. Les minerais tombent derrière elle (dans sa benne au niveau 4), les filons percés laissent leur gisement. On ne tourne, n'améliore ou ne démonte la base que foreuse rangée.</p>`;
+    <p class="hint">La base reste fixe : la foreuse en sort pour percer tout droit devant la flèche, jusque dans la roche volcanique (pas les filons de diamant), puis revient faire le plein quand son charbon est vide et repart au bout du tunnel. Elle rentre aussi quand le tunnel est fini ou qu'elle ne peut plus percer (roche indestructible, machine, bord de la mine). Rouler ne consomme pas de charbon ; une base alimentée par un convoyeur ou un coffre de charbon collé la fait creuser sans s'arrêter. Les minerais tombent derrière elle (dans sa benne au niveau 4), les filons percés laissent leur gisement. On ne tourne, n'améliore ou ne démonte la base que foreuse rangée.</p>`;
 }
 
 // ------------------------------------------------------------------ four et fonderie
@@ -625,6 +630,18 @@ const SMELTER_STATUS: Record<SmelterStatus, [string, string]> = {
   nofuel: ["À l'arrêt : plus de charbon", 'bad'],
   full: ['Bloqué : la sortie est saturée (rien ne prend les lingots devant la flèche)', 'warn'],
 };
+
+/**
+ * Chaleur de la Fournaise sur une machine : cadence réduite, ou rafraîchie par un ventilateur.
+ * Rien au-dessus de la Fournaise.
+ */
+function heatNote(g: GameState, x: number, y: number, verb = 'fore'): string {
+  const temp = g.hazards.temperature(y);
+  if (temp === null) return '';
+  const f = g.hazards.heatFactor(x, y);
+  if (f >= 1) return `<div class="status good">Chaleur de la Fournaise (${temp} °C) : un ventilateur tout proche la rafraîchit, elle ${verb} à pleine cadence.</div>`;
+  return `<div class="status warn">Chaleur de la Fournaise (${temp} °C) : elle ${verb} à ${Math.round(f * 100)} % de sa cadence. Un ventilateur à ${HEAT.fanRadius} cases la rafraîchit.</div>`;
+}
 
 /** Liste compacte de morceaux (« 3 cuivre, 2 fer »), avec icônes. */
 function chips(list: string[]): string {
@@ -641,7 +658,7 @@ export function smelterPanel(g: GameState, s: Smelter): string {
   const coal = g.inventory.count('coal');
   const ores = RESOURCES.filter((r) => r.smeltsTo).reduce((n, r) => n + g.inventory.count(r.id), 0);
   const secs = s.fuelSeconds();
-  const rate = 60 / s.spec.smeltTime;
+  const rate = (60 / s.spec.smeltTime) * g.hazards.heatFactor(s.x, s.y);
   const recipes = RESOURCES.filter((r) => r.smeltsTo)
     .map((r) => {
       const ingot = getResource(r.smeltsTo!);
@@ -650,6 +667,7 @@ export function smelterPanel(g: GameState, s: Smelter): string {
     .join('');
   return `
     <div class="status ${cls}">● ${label}</div>
+    ${heatNote(g, s.x, s.y, 'fond')}
     <div class="bar"><div style="width:${Math.round(s.progress * 100)}%"></div><span>Fonte en cours ${Math.round(s.progress * 100)} %</span></div>
     <div class="cards" style="margin-top:10px"><div class="card">
       ${stat('Minerai en attente', `${s.input.length} / ${s.spec.inputMax}`)}
@@ -733,7 +751,7 @@ export function mapPanel(g: GameState, colors: Record<string, string>): string {
       ${stat('Mine explorée', `${Math.round((explored / total) * 100)} %`)}
     </div>
   </div>
-  <p class="hint">Seul ce que vous avez vu apparaît. Pointillés : roche dure (100 m) et basalte (300 m).</p>`;
+  <p class="hint">Seul ce que vous avez vu apparaît. Pointillés : roche dure (100 m), basalte (300 m) et roche volcanique de la Fournaise (450 m).</p>`;
 }
 
 // ------------------------------------------------------------------ aide
@@ -752,6 +770,7 @@ export function helpPanel(keys: { move: string; label: (c: string) => string }):
     <div><h4>Carte</h4><p><kbd>M</kbd> : carte de la mine (ou clic sur la mini-carte)</p></div>
     <div><h4>Repères</h4><p><kbd>N</kbd> : marquer l'endroit où vous êtes ; sur la carte, un clic pose un repère. « Suivre » affiche une flèche vers lui</p></div>
     <div><h4>Dangers (en profondeur)</h4><p>Plafond qui craque : posez un <b>étai</b> ou fuyez. Grisou : sortez du nuage, un <b>ventilateur</b> le chasse. Eau : une <b>pompe</b> l'assèche. À 0 de santé, on se réveille au camp, le sac reste au fond.</p></div>
+    <div><h4>Fournaise (sous 450 m)</h4><p>Roche volcanique, plus d'or et, sous 500 m, des diamants (Pioche pro en acier). La chaleur ralentit foreuses et fours : un <b>ventilateur</b> à ${HEAT.fanRadius} cases les rafraîchit</p></div>
     <div><h4>Four et fonderie</h4><p>Minerai (convoyeur ou ${k('KeyE')} : déposer) + charbon → lingots vendus 2,5 fois plus cher, poussés devant la flèche</p></div>
     <div><h4>Améliorer une foreuse</h4><p>${k('KeyE')} sur la foreuse : niveau 2 = cases gauche et droite, niveau 3 = aussi derrière</p></div>
     <div><h4>Menu</h4><p><kbd>Échap</kbd> : pause, sauvegarde, chargement</p></div>

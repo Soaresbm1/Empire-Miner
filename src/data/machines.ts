@@ -362,7 +362,7 @@ export const MACHINES: MachineDef[] = [
     summary: 'Base fixe d’où sort une foreuse qui perce seule un tunnel droit, puis revient faire le plein. Brûle du charbon.',
     category: 'extraction',
     description:
-      "La base reste où vous la posez ; la foreuse en sort pour percer tout droit devant la flèche, jusqu'au basalte, et y revient quand elle n'a plus de charbon ou ne peut plus percer. Les minerais tombent derrière elle, dans le tunnel. Chargez la base en charbon, réglez la longueur et démarrez-la avec E.",
+      "La base reste où vous la posez ; la foreuse en sort pour percer tout droit devant la flèche, jusque dans la roche volcanique, et y revient quand elle n'a plus de charbon ou ne peut plus percer. Les minerais tombent derrière elle, dans le tunnel. Chargez la base en charbon, réglez la longueur et démarrez-la avec E.",
     price: 1200,
     w: 1,
     h: 1,
@@ -454,9 +454,9 @@ export const MACHINES: MachineDef[] = [
   {
     id: 'fan',
     name: 'Ventilateur',
-    summary: 'Chasse le grisou à 6 cases autour de lui, en quelques secondes. Tourne tout seul.',
+    summary: 'Chasse le grisou à 6 cases autour de lui. Dans la Fournaise, rafraîchit les machines à 4 cases. Tourne tout seul.',
     category: 'securite',
-    description: "Grande hélice qui aspire le grisou libéré par une poche percée (dès 120 m). Posé près d'un front de taille, il garde la galerie respirable.",
+    description: "Grande hélice qui aspire le grisou libéré par une poche percée (dès 120 m). Posé près d'un front de taille, il garde la galerie respirable. Dans la Fournaise (sous 450 m), son souffle rafraîchit les foreuses et les fours proches, qui retrouvent leur cadence.",
     price: 180,
     w: 1,
     h: 1,

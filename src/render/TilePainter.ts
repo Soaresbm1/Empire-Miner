@@ -18,6 +18,7 @@ const FLOOR_STOPS: [number, RGB][] = [
   [100, hex('#3b3e46')],
   [300, hex('#40303a')],
   [460, hex('#4a2b2b')],
+  [600, hex('#5a2a1d')],
 ];
 
 function floorColor(depth: number): RGB {
@@ -33,6 +34,8 @@ const GRASS = [hex('#4d7d34'), hex('#588c3b'), hex('#43702d')];
 const DIRT = [hex('#8a6a45'), hex('#7c5d3c'), hex('#977652')];
 const PLANK = [hex('#6e4c2f'), hex('#7b5636'), hex('#5f4028')];
 const UNKNOWN = hex('#0b0a0d');
+/** Braises des fissures de la roche volcanique. */
+const EMBER = [hex('#c8401c'), hex('#ff7a2a'), hex('#ffc062')];
 
 /** Couleurs de roche hôte à une position (même bruit que le générateur). */
 function hostAt(world: World, x: number, y: number) {
@@ -131,6 +134,7 @@ function paintWall(world: World, tx: number, ty: number, put: Put): void {
   const oreC = ore ? [hex(ore.color), hex(ore.light), hex(ore.dark)] : null;
   const bedrock = block.kind === 'bedrock';
   const rubble = block.key === 'rubble';
+  const volcanic = host.key === 'volcanic';
   for (let py = 0; py < TILE; py++)
     for (let px = 0; px < TILE; px++) {
       const wx = tx * TILE + px;
@@ -142,6 +146,8 @@ function paintWall(world: World, tx: number, ty: number, put: Put): void {
         c = scale(top, 0.88 + v * 0.24);
         const crack = valueNoise(wx / 6, wy / 6, 13);
         if (crack > 0.49 && crack < 0.52) c = scale(c, 0.72);
+        // Roche volcanique : les fissures rougeoient.
+        if (volcanic && crack > 0.485 && crack < 0.525) c = EMBER[h > 0.93 ? 2 : h > 0.45 ? 1 : 0];
         if (h < 0.04) c = scale(c, 1.2);
         if (bedrock && h > 0.9) c = scale(c, 0.7);
         // Éboulis : un tas de pierres bosselé.

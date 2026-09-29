@@ -12,6 +12,7 @@ export const DEPTH_ZONES: DepthZone[] = [
   { minDepth: 0, name: 'Galeries supérieures', color: '#c9a27a' },
   { minDepth: 100, name: 'Galeries profondes', color: '#8fa6c7' },
   { minDepth: 300, name: 'Abîmes de basalte', color: '#c77f9a' },
+  { minDepth: 450, name: 'Fournaise', color: '#ff8a4a' },
 ];
 
 export function zoneForDepth(depth: number): DepthZone {

@@ -158,7 +158,7 @@ describe('four et fonderie', () => {
     expect(g.stats.smelted).toBe(10);
     const smelt = OBJECTIVES.find((o) => o.id === 'smelt')!;
     expect(smelt.done(g)).toBe(true);
-    expect(OBJECTIVES[OBJECTIVES.length - 1]).toBe(smelt); // il vient après la vente automatique
+    expect(OBJECTIVES.indexOf(smelt)).toBe(OBJECTIVES.findIndex((o) => o.id === 'ship') + 1); // il vient après la vente automatique
   });
 
   it('est sauvegardé avec son minerai, ses lingots et son charbon ; démonté, tout tombe au sol', () => {

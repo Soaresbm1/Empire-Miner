@@ -10,13 +10,15 @@
  *   seul, très vite près d'un ventilateur, et blesse le joueur qui le respire.
  * - Eau : une poche percée inonde la galerie ; l'eau s'infiltre lentement, une pompe
  *   l'assèche. Elle ralentit le joueur et, profonde, l'épuise.
+ * - Chaleur : dans la Fournaise, les foreuses et les fours ralentissent, sauf près d'un
+ *   ventilateur.
  *
  * Les niveaux de gaz et d'eau (0 à 255) vivent dans `World` ; ce système garde la liste des
  * cases touchées pour ne jamais parcourir toute la carte.
  */
 import { depthAt } from '../core/constants';
 import { RUBBLE } from '../data/blocks';
-import { CAVE_IN, GAS, POCKET_GAS, POCKET_WATER, WATER } from '../data/hazards';
+import { CAVE_IN, GAS, HEAT, POCKET_GAS, POCKET_WATER, WATER } from '../data/hazards';
 import type { SimEvent } from './events';
 import type { Structure } from './structures/Structure';
 import type { World } from './World';
@@ -83,6 +85,33 @@ export class HazardSystem {
   speedFactor(x: number, y: number): number {
     const lvl = this.waterAt(x, y);
     return lvl >= WATER.deep ? WATER.slowDeep : lvl > 0 ? WATER.slowShallow : 1;
+  }
+
+  /** Chaleur de la rangée y : null au-dessus de la Fournaise, de 0 (en haut) à 1 (au fond). */
+  heatAt(y: number): number | null {
+    const d = depthAt(y);
+    if (d < HEAT.minDepth) return null;
+    return Math.min(1, (d - HEAT.minDepth) / (HEAT.maxDepth - HEAT.minDepth));
+  }
+
+  /** Température (°C) de la rangée y, ou null au-dessus de la Fournaise. */
+  temperature(y: number): number | null {
+    const t = this.heatAt(y);
+    return t === null ? null : Math.round(HEAT.tempTop + (HEAT.tempBottom - HEAT.tempTop) * t);
+  }
+
+  /** Un ventilateur rafraîchit la case (x, y). */
+  cooled(x: number, y: number): boolean {
+    const r = HEAT.fanRadius;
+    for (let dy = -r; dy <= r; dy++) for (let dx = -r; dx <= r; dx++) if (this.host.structureAt(x + dx, y + dy)?.type === 'fan') return true;
+    return false;
+  }
+
+  /** Cadence d'une machine posée en (x, y) : 1, ou moins dans la Fournaise loin d'un ventilateur. */
+  heatFactor(x: number, y: number): number {
+    const t = this.heatAt(y);
+    if (t === null || this.cooled(x, y)) return 1;
+    return HEAT.factorTop + (HEAT.factorBottom - HEAT.factorTop) * t;
   }
 
   /** Un étai consolide la case (x, y). */

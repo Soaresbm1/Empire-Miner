@@ -1449,22 +1449,23 @@ export class Renderer {
     for (const s of state.structures.list) {
       // Foreuses : plus de charbon, sortie saturée, ou arrêt (gisement épuisé, obstacle).
       // Foreuse de percement : sur sa base (sans charbon, rentrée bloquée) ou sur la foreuse qui attend.
-      let icon: 'nofuel' | 'full' | 'stop' | null = null;
+      // Dans la Fournaise, une machine qui tourne mais que la chaleur ralentit porte un thermomètre.
+      let icon: 'nofuel' | 'full' | 'stop' | 'hot' | null = null;
       let at = { x: s.x * TILE, y: s.y * TILE };
-      if (s instanceof Drill && s.status !== 'ok') icon = s.status === 'nofuel' ? 'nofuel' : s.status === 'full' ? 'full' : 'stop';
+      if (s instanceof Drill) icon = s.status !== 'ok' ? (s.status === 'nofuel' ? 'nofuel' : s.status === 'full' ? 'full' : 'stop') : s.heat < 1 ? 'hot' : null;
       else if (s instanceof Smelter) {
         // Four sans charbon alors qu'il a du minerai, ou sortie saturée.
-        icon = s.status === 'nofuel' ? 'nofuel' : s.status === 'full' ? 'full' : null;
+        icon = s.status === 'nofuel' ? 'nofuel' : s.status === 'full' ? 'full' : s.status === 'ok' && s.heat < 1 ? 'hot' : null;
         at = { x: s.x * TILE + (s.w - 1) * 8, y: s.y * TILE - (s.w > 1 ? 14 : 8) };
       }
       else if (s instanceof TunnelBorer) {
-        icon = s.status === 'nofuel' ? 'nofuel' : s.status === 'waiting' ? 'full' : s.status === 'blocked' ? 'stop' : null;
-        if (icon === 'full') at = this.borerVehicleXY(s);
+        icon = s.status === 'nofuel' ? 'nofuel' : s.status === 'waiting' ? 'full' : s.status === 'blocked' ? 'stop' : s.status === 'digging' && s.heat < 1 ? 'hot' : null;
+        if (icon === 'full' || icon === 'hot') at = this.borerVehicleXY(s);
       }
       if (!icon || !this.inView(at.x, at.y)) continue;
       const x = at.x + 8;
-      const y = at.y - (s instanceof TunnelBorer && icon !== 'full' ? 14 : 9) + (blink ? 0 : -1);
-      const color = icon === 'nofuel' ? '#d0342c' : icon === 'full' ? '#e0a020' : '#7a7a86';
+      const y = at.y - (s instanceof TunnelBorer && icon !== 'full' && icon !== 'hot' ? 14 : 9) + (blink ? 0 : -1);
+      const color = icon === 'nofuel' ? '#d0342c' : icon === 'full' ? '#e0a020' : icon === 'hot' ? '#e8601c' : '#7a7a86';
       ctx.fillStyle = '#1a1418';
       ctx.fillRect(x - 4, y - 4, 9, 8);
       ctx.fillStyle = color;
@@ -1476,6 +1477,10 @@ export class Renderer {
       } else if (icon === 'full') {
         ctx.fillRect(x - 2, y - 1, 5, 1);
         ctx.fillRect(x - 2, y + 1, 5, 1);
+      } else if (icon === 'hot') {
+        // Thermomètre : tige et bulbe.
+        ctx.fillRect(x, y - 2, 1, 3);
+        ctx.fillRect(x - 1, y + 1, 3, 2);
       } else {
         ctx.fillRect(x - 2, y - 2, 1, 1);
         ctx.fillRect(x + 2, y - 2, 1, 1);

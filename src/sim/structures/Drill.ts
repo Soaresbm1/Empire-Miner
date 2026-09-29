@@ -62,6 +62,8 @@ export class Drill extends Structure {
   level = 1;
   /** Têtes de forage en activité au dernier pas (cases couvertes avec un gisement). */
   heads = 0;
+  /** Cadence due à la chaleur de la Fournaise (1 = normale). */
+  heat = 1;
   /** Prochaine case à forer (répartition équitable entre les têtes). */
   private cursor = 0;
 
@@ -164,7 +166,8 @@ export class Drill extends Structure {
     this.status = 'ok';
     this.burn -= dt;
     this.activeTime += dt;
-    this.progress += (dt / this.interval) * sources.length;
+    this.heat = ctx.hazards.heatFactor(this.x, this.y);
+    this.progress += (dt / this.interval) * sources.length * this.heat;
     if (this.progress >= 1) {
       this.progress -= 1;
       const k = this.cursor % sources.length;

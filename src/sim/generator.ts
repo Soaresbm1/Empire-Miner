@@ -8,11 +8,15 @@
  *  - Cavernes naturelles (bruit fractal) à découvrir.
  *  - Filons de minerais placés selon la profondeur de chaque ressource.
  *  - Gisements naturels au sol de certaines cavernes.
+ *
+ * La Fournaise (sous LEGACY_WORLD_H) a été ajoutée plus tard : ses filons, gisements et
+ * poches se tirent à part, pour que les rangées du dessus restent celles d'avant (une
+ * ancienne sauvegarde s'agrandit par le bas sans que rien ne change au-dessus).
  */
 import { AIR, BEDROCK, CLIFF, HOST_ROCK_IDS, ORE_BLOCK, TREE, hostRockIndexForDepth } from '../data/blocks';
 import { GAS, POCKET_GAS, POCKET_WATER, WATER } from '../data/hazards';
 import { RESOURCES, ResourceDef, resourceIndex } from '../data/resources';
-import { SURFACE_ROWS, TILE, WORLD_H, WORLD_W, depthAt, rowForDepth } from '../core/constants';
+import { LEGACY_WORLD_H, SURFACE_ROWS, TILE, WORLD_H, WORLD_W, depthAt, rowForDepth } from '../core/constants';
 import { Rng, fbm } from '../core/rng';
 import { World } from './World';
 
@@ -40,6 +44,10 @@ const START_CENTER = { x: 50, y: S + 12 };
 export function generateWorld(seed: number, w = WORLD_W, h = WORLD_H): WorldLayout {
   const world = new World(w, h, seed);
   const rng = new Rng(seed);
+  // Tirages de la Fournaise, à part de ceux du dessus.
+  const deepRng = new Rng(seed ^ 0x51ed270b);
+  // Bas des rangées d'origine : filons, gisements et poches du dessus s'arrêtent là, comme avant.
+  const hl = Math.min(h, LEGACY_WORLD_H);
 
   // 1. Surface et roches hôtes.
   for (let y = 0; y < h; y++) {
@@ -67,49 +75,25 @@ export function generateWorld(seed: number, w = WORLD_W, h = WORLD_H): WorldLayo
     }
   }
 
-  // 3. Filons de minerais.
-  const rockSet = new Set(HOST_ROCK_IDS);
+  // 3. Filons de minerais : rangées d'origine, puis Fournaise.
   for (const res of RESOURCES) {
     if (!res.vein) continue;
     const y0 = Math.max(S + 1, rowForDepth(res.minDepth));
-    const y1 = Math.min(h - 2, res.maxDepth === Infinity ? h - 2 : rowForDepth(res.maxDepth));
-    if (y1 <= y0) continue;
-    const area = (y1 - y0) * (w - 2);
-    const count = Math.round((area / 1000) * res.vein.perThousand);
-    const oreId = ORE_BLOCK[res.id];
-    for (let i = 0; i < count; i++) {
-      let x = rng.int(1, w - 2);
-      let y = rng.int(y0, y1);
-      const size = rng.int(res.vein.size[0], res.vein.size[1]);
-      for (let s = 0; s < size * 2 && s < 40; s++) {
-        const t = world.idx(x, y);
-        if (rockSet.has(world.tiles[t])) world.tiles[t] = oreId;
-        const d = rng.int(0, 3);
-        x = Math.min(w - 2, Math.max(1, x + (d === 0 ? 1 : d === 2 ? -1 : 0)));
-        y = Math.min(y1, Math.max(y0, y + (d === 1 ? 1 : d === 3 ? -1 : 0)));
-      }
+    const y1 = Math.min(hl - 2, res.maxDepth === Infinity ? hl - 2 : rowForDepth(res.maxDepth));
+    placeVeins(world, rng, res, y0, y1, res.vein.perThousand);
+  }
+  if (h > hl) {
+    for (const res of RESOURCES) {
+      if (!res.vein) continue;
+      const y0 = Math.max(hl - 1, rowForDepth(res.minDepth));
+      const y1 = Math.min(h - 2, res.maxDepth === Infinity ? h - 2 : rowForDepth(res.maxDepth));
+      placeVeins(world, deepRng, res, y0, y1, res.vein.deepPerThousand ?? res.vein.perThousand);
     }
   }
 
   // 4. Gisements naturels dans les cavernes.
-  for (let y = caveStart; y < h - 1; y++) {
-    for (let x = 1; x < w - 1; x++) {
-      const i = world.idx(x, y);
-      if (world.tiles[i] !== AIR || world.deposit[i]) continue;
-      if (!rng.chance(0.012)) continue;
-      const res = pickResourceForDepth(rng, depthAt(y));
-      if (!res || !res.deposit) continue;
-      const ri = resourceIndex(res.id);
-      for (let dy = -1; dy <= 1; dy++)
-        for (let dx = -1; dx <= 1; dx++) {
-          const nx = x + dx;
-          const ny = y + dy;
-          if (!world.isOpen(nx, ny)) continue;
-          if ((dx !== 0 || dy !== 0) && !rng.chance(0.45)) continue;
-          world.setDeposit(nx, ny, ri, rng.range(res.deposit[0], res.deposit[1]));
-        }
-    }
-  }
+  placeDeposits(world, rng, caveStart, hl - 1);
+  placeDeposits(world, deepRng, hl - 1, h - 1);
 
   // 5. Mine de départ (creusée à la main par un ancien mineur).
   carveStartMine(world);
@@ -152,6 +136,49 @@ export function generateWorld(seed: number, w = WORLD_W, h = WORLD_H): WorldLayo
   };
 }
 
+/** Filons d'une ressource entre les rangées y0 et y1 (incluses). */
+function placeVeins(world: World, rng: Rng, res: ResourceDef, y0: number, y1: number, perThousand: number): void {
+  if (!res.vein || y1 <= y0) return;
+  const w = world.w;
+  const rockSet = new Set(HOST_ROCK_IDS);
+  const count = Math.round((((y1 - y0) * (w - 2)) / 1000) * perThousand);
+  const oreId = ORE_BLOCK[res.id];
+  for (let i = 0; i < count; i++) {
+    let x = rng.int(1, w - 2);
+    let y = rng.int(y0, y1);
+    const size = rng.int(res.vein.size[0], res.vein.size[1]);
+    for (let s = 0; s < size * 2 && s < 40; s++) {
+      const t = world.idx(x, y);
+      if (rockSet.has(world.tiles[t])) world.tiles[t] = oreId;
+      const d = rng.int(0, 3);
+      x = Math.min(w - 2, Math.max(1, x + (d === 0 ? 1 : d === 2 ? -1 : 0)));
+      y = Math.min(y1, Math.max(y0, y + (d === 1 ? 1 : d === 3 ? -1 : 0)));
+    }
+  }
+}
+
+/** Gisements au sol des cavernes, sur les rangées [y0, y1). */
+function placeDeposits(world: World, rng: Rng, y0: number, y1: number): void {
+  for (let y = y0; y < y1; y++) {
+    for (let x = 1; x < world.w - 1; x++) {
+      const i = world.idx(x, y);
+      if (world.tiles[i] !== AIR || world.deposit[i]) continue;
+      if (!rng.chance(0.012)) continue;
+      const res = pickResourceForDepth(rng, depthAt(y));
+      if (!res || !res.deposit) continue;
+      const ri = resourceIndex(res.id);
+      for (let dy = -1; dy <= 1; dy++)
+        for (let dx = -1; dx <= 1; dx++) {
+          const nx = x + dx;
+          const ny = y + dy;
+          if (!world.isOpen(nx, ny)) continue;
+          if ((dx !== 0 || dy !== 0) && !rng.chance(0.45)) continue;
+          world.setDeposit(nx, ny, ri, rng.range(res.deposit[0], res.deposit[1]));
+        }
+    }
+  }
+}
+
 function pickResourceForDepth(rng: Rng, depth: number): ResourceDef | null {
   const candidates = RESOURCES.filter((r) => r.vein && depth >= r.minDepth && depth <= r.maxDepth);
   if (!candidates.length) return null;
@@ -170,15 +197,20 @@ function pickResourceForDepth(rng: Rng, depth: number): ResourceDef | null {
  * sur la paroi, et se libèrent quand on perce la case.
  */
 export function placePockets(world: World, seed: number): void {
-  const rng = new Rng(seed ^ 0x2545f491);
+  const hl = Math.min(world.h, LEGACY_WORLD_H);
+  pocketBand(world, new Rng(seed ^ 0x2545f491), S + 1, hl - 2);
+  // Fournaise : tirage à part (les poches du dessus ne bougent pas).
+  if (world.h > hl) pocketBand(world, new Rng(seed ^ 0x6c8e9cf5), hl - 1, world.h - 2);
+}
+
+function pocketBand(world: World, rng: Rng, top: number, y1: number): void {
   const rock = new Set(HOST_ROCK_IDS);
   const kinds: [number, { minDepth: number; perThousand: number; size: [number, number] }][] = [
     [POCKET_WATER, WATER],
     [POCKET_GAS, GAS],
   ];
   for (const [kind, spec] of kinds) {
-    const y0 = Math.max(S + 1, rowForDepth(spec.minDepth));
-    const y1 = world.h - 2;
+    const y0 = Math.max(top, rowForDepth(spec.minDepth));
     if (y1 <= y0) continue;
     const count = Math.round((((y1 - y0) * (world.w - 2)) / 1000) * spec.perThousand);
     for (let i = 0; i < count; i++) {

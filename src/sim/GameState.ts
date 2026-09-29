@@ -651,7 +651,11 @@ export class GameState implements StructureContext {
     if (p.tileY >= SURFACE_ROWS) {
       const zone = zoneForDepth(depth).name;
       if (zone !== this.lastZone) {
-        if (this.lastZone) this.emit({ t: 'discover', text: `${zone} — ${Math.floor(depth)} m` });
+        if (this.lastZone) {
+          this.emit({ t: 'discover', text: `${zone} — ${Math.floor(depth)} m` });
+          if (this.hazards.heatAt(p.tileY) !== null)
+            this.emit({ t: 'message', text: 'Il fait très chaud : ici, foreuses et fours ralentissent. Un ventilateur tout proche les rafraîchit.', kind: 'warn' });
+        }
         this.lastZone = zone;
       }
     }

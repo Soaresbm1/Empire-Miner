@@ -251,7 +251,7 @@ export class MineMap {
     const vx0 = vw >= W ? (W - vw) / 2 : Math.min(Math.max((f.x0 + f.x1 + 1) / 2 - vw / 2, 0), W - vw);
     const view: View = { x0: vx0, y0: f.y0, cell, ox: 0, oy: 0 };
     this.drawTerrain(ctx, view, vw, vh);
-    // Zones de profondeur : surface, roche dure, basalte.
+    // Zones de profondeur : surface, roche dure, basalte, roche volcanique.
     ctx.font = `${Math.round(11 * dpr)}px "Pixelify Sans", monospace`;
     ctx.textBaseline = 'bottom';
     const marks: [number, string][] = [[SURFACE_ROWS, '0 m · entrée de la mine']];

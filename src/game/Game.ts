@@ -18,7 +18,7 @@ import { TunnelBorer } from '../sim/structures/Borer';
 import { Smelter } from '../sim/structures/Smelter';
 import { MARKER_KINDS, MarkerKind } from '../sim/Markers';
 import { Fan, Prop, Pump } from '../sim/structures/Safety';
-import { CAVE_IN, GAS, WATER } from '../data/hazards';
+import { CAVE_IN, GAS, HEAT, WATER } from '../data/hazards';
 import { Drill, reachTiles } from '../sim/structures/Drill';
 import { ShippingCrate } from '../sim/structures/ShippingCrate';
 import { Sorter } from '../sim/structures/Sorter';
@@ -940,6 +940,15 @@ export class Game {
 
   // ------------------------------------------------------------------ infos
 
+  /** Chaleur de la Fournaise sur une machine (infobulle). */
+  private heatLine(g: GameState, x: number, y: number): string {
+    if (g.hazards.heatAt(y) === null) return '';
+    const f = g.hazards.heatFactor(x, y);
+    return f < 1
+      ? `<br><span class="bad">Chaleur : cadence ${Math.round(f * 100)} %</span> <span class="muted">(ventilateur à ${HEAT.fanRadius} cases)</span>`
+      : '<br><span class="good">Rafraîchie par un ventilateur</span>';
+  }
+
   private describeTile(g: GameState, tx: number, ty: number): string | null {
     const w = g.world;
     if (!w.inBounds(tx, ty) || !w.explored[w.idx(tx, ty)]) return null;
@@ -982,7 +991,7 @@ export class Game {
     }
     if (s instanceof Drill) {
       const st = { ok: 'en marche', nofuel: 'sans charbon', full: 'sortie bloquée', depleted: 'gisement épuisé' }[s.status];
-      return `<b>Foreuse</b> niveau ${s.level} — ${st}<br>${s.sources(g).length} case(s) forée(s) · charbon : ${s.fuelUnits} · extrait : ${s.extracted}`;
+      return `<b>Foreuse</b> niveau ${s.level} — ${st}<br>${s.sources(g).length} case(s) forée(s) · charbon : ${s.fuelUnits} · extrait : ${s.extracted}${this.heatLine(g, s.x, s.y)}`;
     }
     if (s instanceof TunnelBorer) {
       const st = {
@@ -998,14 +1007,17 @@ export class Game {
       }[s.status];
       return `<b>Foreuse de percement</b> niv. ${s.level} ${['→', '↓', '←', '↑'][s.dir]} — ${st}<br>Base : ${s.fuelUnits} charbon${
         s.stats.hopper ? ` · ${s.storeCount()} minerai(s)` : ''
-      } · tunnel : ${s.tunnel} cases`;
+      } · tunnel : ${s.tunnel} cases${s.status === 'digging' && s.heat < 1 ? `<br><span class="bad">Chaleur : perce à ${Math.round(s.heat * 100)} %</span>` : ''}`;
     }
     if (s instanceof Prop) return `<b>Étai</b><br>Pas d'éboulement à ${CAVE_IN.propRadius} cases autour`;
-    if (s instanceof Fan) return `<b>Ventilateur</b> — ${s.active ? 'chasse le grisou' : 'air sain'}<br>Portée : ${GAS.fanRadius} cases`;
+    if (s instanceof Fan)
+      return `<b>Ventilateur</b> — ${s.active ? 'chasse le grisou' : s.cooling ? 'rafraîchit les machines' : 'air sain'}<br>Grisou : ${GAS.fanRadius} cases${
+        s.cooling ? ` · machines : ${HEAT.fanRadius} cases` : ''
+      }`;
     if (s instanceof Pump) return `<b>Pompe</b> — ${s.status === 'ok' ? 'assèche la galerie' : "pas d'eau à portée"}<br>Portée : ${WATER.pumpRadius} cases · sans charbon`;
     if (s instanceof Smelter) {
       const st = { ok: 'fond le minerai', idle: 'attend du minerai', nofuel: 'sans charbon', full: 'sortie saturée' }[s.status];
-      return `<b>${s.def.name}</b> ${['→', '↓', '←', '↑'][s.dir]} — ${st}<br>Minerai : ${s.input.length} · lingots prêts : ${s.output.length} · charbon : ${s.fuelUnits}`;
+      return `<b>${s.def.name}</b> ${['→', '↓', '←', '↑'][s.dir]} — ${st}<br>Minerai : ${s.input.length} · lingots prêts : ${s.output.length} · charbon : ${s.fuelUnits}${this.heatLine(g, s.x, s.y)}`;
     }
     if (s instanceof Storage) return `<b>Coffre</b><br>${kg(s.weight())} / ${kg(s.capacity)}`;
     if (s instanceof ShippingCrate)

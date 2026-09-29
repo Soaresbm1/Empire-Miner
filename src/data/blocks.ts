@@ -3,8 +3,11 @@
  *
  * Les roches hôtes changent avec la profondeur et deviennent plus dures.
  * Un bloc de filon est généré automatiquement pour chaque ressource ayant un `vein`.
+ *
+ * Les identifiants de blocs sont enregistrés dans les sauvegardes : un bloc ajouté plus
+ * tard (roche ou filon) se crée toujours à la fin de la liste.
  */
-import { RESOURCES } from './resources';
+import { RESOURCES, getResource } from './resources';
 
 export type BlockKind = 'air' | 'bedrock' | 'deco' | 'rock' | 'ore';
 
@@ -43,7 +46,13 @@ export const HOST_ROCKS: HostRockSpec[] = [
   { key: 'rock', name: 'Roche', minDepth: 0, hp: 3, tier: 1, top: '#6e5f53', side: '#463b33' },
   { key: 'hardrock', name: 'Roche dure', minDepth: 100, hp: 7, tier: 2, top: '#5b616b', side: '#393d45' },
   { key: 'basalt', name: 'Basalte', minDepth: 300, hp: 13, tier: 3, top: '#4d3d47', side: '#2e242b' },
+  // Fournaise (voir data/depth) : roche brûlante, veinée de braises.
+  { key: 'volcanic', name: 'Roche volcanique', minDepth: 450, hp: 24, tier: 3, top: '#57302a', side: '#321915' },
 ];
+
+/** Roches et filons créés avant les éboulis : leurs identifiants sont figés par les sauvegardes. */
+const FIRST_ROCKS = 3;
+const FIRST_ORES = ['coal', 'copper', 'iron', 'silver', 'gold'];
 
 export const BLOCKS: BlockDef[] = [];
 
@@ -58,9 +67,8 @@ export const BEDROCK = add({ key: 'bedrock', name: 'Socle rocheux', kind: 'bedro
 export const CLIFF = add({ key: 'cliff', name: 'Falaise', kind: 'bedrock', solid: true, breakable: false, hp: 0, tier: 99, top: '#7d7468', side: '#524a40' });
 export const TREE = add({ key: 'tree', name: 'Arbre', kind: 'deco', solid: true, breakable: false, hp: 0, tier: 99, top: '#3f7a35', side: '#2b5424' });
 
-/** id de bloc pour chaque roche hôte, dans l'ordre de HOST_ROCKS. */
-export const HOST_ROCK_IDS: number[] = HOST_ROCKS.map((r) =>
-  add({
+function addHostRock(r: HostRockSpec): number {
+  return add({
     key: r.key,
     name: r.name,
     kind: 'rock',
@@ -71,13 +79,16 @@ export const HOST_ROCK_IDS: number[] = HOST_ROCKS.map((r) =>
     drop: { res: 'stone', min: 1, max: 1, chance: 0.5 },
     top: r.top,
     side: r.side,
-  }),
-);
+  });
+}
+
+/** id de bloc pour chaque roche hôte, dans l'ordre de HOST_ROCKS. */
+export const HOST_ROCK_IDS: number[] = HOST_ROCKS.slice(0, FIRST_ROCKS).map(addHostRock);
 
 /** id du bloc de filon pour chaque ressource. */
 export const ORE_BLOCK: Record<string, number> = {};
-for (const r of RESOURCES) {
-  if (!r.vein) continue;
+
+function addOre(r: (typeof RESOURCES)[number]): void {
   ORE_BLOCK[r.id] = add({
     key: `ore_${r.id}`,
     name: r.veinName,
@@ -92,6 +103,7 @@ for (const r of RESOURCES) {
     side: r.dark,
   });
 }
+for (const id of FIRST_ORES) addOre(getResource(id));
 
 /**
  * Éboulis : roche effondrée d'un plafond mal étayé. Tendre, il se dégage vite à la pioche.
@@ -109,6 +121,10 @@ export const RUBBLE = add({
   top: '#8a7662',
   side: '#54463a',
 });
+
+// Blocs ajoutés après les éboulis : roches et filons des profondeurs.
+for (const r of HOST_ROCKS.slice(FIRST_ROCKS)) HOST_ROCK_IDS.push(addHostRock(r));
+for (const r of RESOURCES) if (r.vein && !(r.id in ORE_BLOCK)) addOre(r);
 
 export function getBlock(id: number): BlockDef {
   return BLOCKS[id];

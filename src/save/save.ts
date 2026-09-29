@@ -118,17 +118,21 @@ export function deserialize(data: SaveData): GameState {
   if (data.version > SAVE_VERSION) throw new Error('Sauvegarde créée par une version plus récente du jeu');
   const g = new GameState(data.seed);
   const w = g.world;
-  if (data.world.w !== w.w || data.world.h !== w.h) throw new Error('Dimensions de carte incompatibles');
-  const n = w.w * w.h;
-  w.tiles.set(rleDecode(data.world.tiles, n));
-  w.deposit.set(rleDecode(data.world.deposit, n));
-  w.explored.set(rleDecode(data.world.explored, n));
-  w.reserve.fill(0);
-  for (const [i, r] of data.world.reserves) w.reserve[i] = r;
+  // Une carte moins haute vient d'avant la Fournaise : on garde ses rangées et la mine se
+  // prolonge par le bas. Sa dernière rangée était le socle : elle laisse place au terrain neuf.
+  if (data.world.w !== w.w || data.world.h > w.h) throw new Error('Dimensions de carte incompatibles');
+  const n = w.w * data.world.h;
+  const kept = data.world.h < w.h ? w.w * (data.world.h - 1) : n;
+  const restore = (grid: Uint8Array, rle: string, count = kept) => grid.set(rleDecode(rle, n).subarray(0, count));
+  restore(w.tiles, data.world.tiles);
+  restore(w.deposit, data.world.deposit);
+  restore(w.explored, data.world.explored, n);
+  w.reserve.fill(0, 0, kept);
+  for (const [i, r] of data.world.reserves) if (i < kept) w.reserve[i] = r;
   w.damage.clear();
-  for (const [i, d] of data.world.damage) w.damage.set(i, d);
+  for (const [i, d] of data.world.damage) if (i < kept) w.damage.set(i, d);
   if (data.hazards) {
-    w.dug.set(rleDecode(data.hazards.dug, n));
+    restore(w.dug, data.hazards.dug);
     for (const [i, v] of data.hazards.gas ?? []) if (i >= 0 && i < n) w.gas[i] = v;
     for (const [i, v] of data.hazards.water ?? []) if (i >= 0 && i < n) w.water[i] = v;
     g.hazards.pending = (data.hazards.pending ?? []).map(([x, y, t]) => ({ x, y, t }));

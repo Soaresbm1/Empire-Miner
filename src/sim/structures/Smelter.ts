@@ -35,6 +35,8 @@ export class Smelter extends Structure {
   smelted = 0;
   /** Temps de fonte cumulé (animation). */
   activeTime = 0;
+  /** Cadence due à la chaleur de la Fournaise (1 = normale). */
+  heat = 1;
   /** Case de sortie servie en dernier (fonderie : deux cases devant elle). */
   private frontCursor = 0;
 
@@ -136,7 +138,8 @@ export class Smelter extends Structure {
     this.status = 'ok';
     this.burn -= dt;
     this.activeTime += dt;
-    this.progress += dt / this.spec.smeltTime;
+    this.heat = ctx.hazards.heatFactor(this.x, this.y);
+    this.progress += (dt / this.spec.smeltTime) * this.heat;
     while (this.progress >= 1 && this.input.length && this.output.length < this.spec.outputMax) {
       this.progress -= 1;
       const ingot = ingotOf(this.input.shift()!)!;
