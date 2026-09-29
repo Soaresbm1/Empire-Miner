@@ -38,8 +38,10 @@ export interface BorerSpec {
   tier: number;
   /** Dégâts infligés par seconde à la case devant elle. */
   damagePerSecond: number;
-  /** Temps pour avancer d'une case une fois la roche percée (s). */
+  /** Temps pour rouler d'une case dans le tunnel, à l'aller comme au retour (s). */
   moveTime: number;
+  /** Charbon emporté par la foreuse à chaque sortie (unités prises dans la base). */
+  tankUnits: number;
   /** Longueurs de tunnel proposées dans son panneau (0 = sans limite). */
   lengths: number[];
 }
@@ -106,7 +108,7 @@ export interface MachineDef {
   railSwitch?: boolean;
   /** Niveaux d'amélioration, du niveau de base (1) au niveau maximal. */
   levels?: MachineLevel[];
-  /** Foreuse de percement : avance toute seule en creusant un tunnel droit. */
+  /** Foreuse de percement : base fixe d'où sort une foreuse qui perce un tunnel droit. */
   borer?: BorerSpec;
 }
 
@@ -310,10 +312,10 @@ export const MACHINES: MachineDef[] = [
   {
     id: 'borer',
     name: 'Foreuse de percement',
-    summary: 'Creuse toute seule un tunnel droit devant elle et révèle ce qu’elle traverse. Brûle du charbon.',
+    summary: 'Base fixe d’où sort une foreuse qui perce seule un tunnel droit, puis revient faire le plein. Brûle du charbon.',
     category: 'extraction',
     description:
-      "Véhicule à tête rotative : avance tout droit en perçant la roche, jusqu'au basalte. Les minerais tombent derrière elle, dans le tunnel. Réglez la longueur et démarrez-la avec E ; elle s'arrête d'elle-même au bout, sans charbon ou devant un obstacle.",
+      "La base reste où vous la posez ; la foreuse en sort pour percer tout droit devant la flèche, jusqu'au basalte, et y revient quand elle n'a plus de charbon ou ne peut plus percer. Les minerais tombent derrière elle, dans le tunnel. Chargez la base en charbon, réglez la longueur et démarrez-la avec E.",
     price: 1200,
     w: 1,
     h: 1,
@@ -322,7 +324,7 @@ export const MACHINES: MachineDef[] = [
     stats: { speed: 6, power: 0, capacity: 0, efficiency: 1, level: 1 },
     fuel: { res: 'coal', secondsPerUnit: 20, maxUnits: 20 },
     unlock: { pickaxeTier: 3, text: 'Nécessite la Pioche en fer' },
-    borer: { tier: 3, damagePerSecond: 6, moveTime: 0.35, lengths: [10, 25, 50, 0] },
+    borer: { tier: 3, damagePerSecond: 6, moveTime: 0.35, tankUnits: 2, lengths: [10, 25, 50, 0] },
   },
   {
     id: 'storage',

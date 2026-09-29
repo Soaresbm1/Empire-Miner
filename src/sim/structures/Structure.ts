@@ -21,8 +21,6 @@ export interface StructureContext {
   autoSell(total: number, n: number, from: Structure): void;
   /** Perce une tuile (foreuse de percement) ; les morceaux tombent en (from.x, from.y), en unités monde. */
   digTile(tx: number, ty: number, from: { x: number; y: number }): void;
-  /** Déplace une structure d'une case (foreuse de percement). */
-  moveStructure(s: Structure, x: number, y: number): void;
   /** Vrai si le joueur ou un wagonnet occupe la tuile. */
   occupied(x: number, y: number): boolean;
   /** Révèle la tuile et ses voisines (tunnel creusé loin du joueur). */

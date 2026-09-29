@@ -305,7 +305,7 @@ export class Game {
       case 'borerFuel':
         if (target instanceof TunnelBorer) {
           const n = g.fuelBorer(target);
-          if (n) this.ui.toast(`${n} charbon chargé${n > 1 ? 's' : ''} dans la foreuse de percement.`, 'good');
+          if (n) this.ui.toast(`${n} charbon chargé${n > 1 ? 's' : ''} dans la base de la foreuse de percement.`, 'good');
         }
         break;
       case 'borerStart':
@@ -553,7 +553,7 @@ export class Game {
     if (near instanceof Storage) return `${e} Ouvrir le coffre`;
     if (near instanceof ShippingCrate) return `${e} Caisse d'expédition — vente automatique`;
     if (near instanceof Drill) return `${e} Foreuse niv. ${near.level} — charbon, production, amélioration`;
-    if (near instanceof TunnelBorer) return `${e} Foreuse de percement — charbon, longueur, démarrage`;
+    if (near instanceof TunnelBorer) return `${e} Foreuse de percement — charbon, longueur, départ, rappel`;
     if (near instanceof Sorter) return `${e} Trieur — choisir le minerai trié`;
     if (near instanceof RailStation) return `${e} ${near.def.name}`;
     if (near instanceof RailSwitch) return `${e} Aiguillage — choisir la branche`;
@@ -729,7 +729,7 @@ export class Game {
       return `<b>Wagonnet</b> — ${wagon.stopped ? "à l'arrêt" : 'en route'}${wagon.rider ? ' · vous êtes à bord' : ''}<br>Chargement : ${kg(wagon.weight())} / ${kg(
         wagon.capacity,
       )} · ${wagon.delivered} minerai(s) livré(s)<br><span class="muted">[${this.input.label('KeyF')}] monter / descendre</span>`;
-    const s = g.structures.at(tx, ty);
+    const s = g.structures.at(tx, ty) ?? g.borerAt(tx, ty) ?? undefined;
     if (s instanceof RailStation)
       return `<b>${s.def.name}</b><br>${kg(s.weight())} / ${kg(s.capacity)} en attente<br><span class="muted">[${this.input.label('KeyE')}] ouvrir</span>`;
     if (s instanceof Rail) return `<b>Rails</b><br><span class="muted">Posez-y un wagonnet ; il fait l'aller-retour jusqu'aux bouts de la ligne.</span>`;
@@ -766,8 +766,17 @@ export class Game {
       return `<b>Foreuse</b> niveau ${s.level} — ${st}<br>${s.sources(g).length} case(s) forée(s) · charbon : ${s.fuelUnits} · extrait : ${s.extracted}`;
     }
     if (s instanceof TunnelBorer) {
-      const st = { idle: "à l'arrêt", digging: 'perce la roche', moving: 'avance', waiting: 'attend', nofuel: 'sans charbon', blocked: `bloquée (${s.blockReason})`, done: 'tunnel terminé' }[s.status];
-      return `<b>Foreuse de percement</b> ${['→', '↓', '←', '↑'][s.dir]} — ${st}<br>Charbon : ${s.fuelUnits} · creusé : ${s.totalDug} cases`;
+      const st = {
+        idle: 'rangée dans sa base',
+        moving: 'sort vers le front',
+        digging: 'perce la roche',
+        returning: 'rentre à la base',
+        waiting: `attend (${s.blockReason})`,
+        nofuel: 'plus de charbon',
+        blocked: `rentrée (${s.blockReason})`,
+        done: 'tunnel terminé',
+      }[s.status];
+      return `<b>Foreuse de percement</b> ${['→', '↓', '←', '↑'][s.dir]} — ${st}<br>Base : ${s.fuelUnits} charbon · tunnel : ${s.tunnel} cases`;
     }
     if (s instanceof Storage) return `<b>Coffre</b><br>${kg(s.weight())} / ${kg(s.capacity)}`;
     if (s instanceof ShippingCrate)

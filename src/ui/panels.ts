@@ -8,7 +8,7 @@ import { MACHINES, MachineDef, conveyorThroughput, kitName, parseKit } from '../
 import { RESOURCES, getResource } from '../data/resources';
 import { BAGS, JACKHAMMER, PICKAXES } from '../data/tools';
 import type { GameState } from '../sim/GameState';
-import type { TunnelBorer } from '../sim/structures/Borer';
+import type { BorerStatus, ReturnReason, TunnelBorer } from '../sim/structures/Borer';
 import type { Drill } from '../sim/structures/Drill';
 import type { ShippingCrate } from '../sim/structures/ShippingCrate';
 import type { Sorter } from '../sim/structures/Sorter';
@@ -150,7 +150,8 @@ function machineSpecs(m: MachineDef): [string, string][] {
     return [
       ['Tunnel', "jusqu'à 50 cases, ou sans limite"],
       ['Roche', "jusqu'au basalte"],
-      ['Charbon', `1 unité / ${m.fuel.secondsPerUnit} s`],
+      ['Charbon', `1 unité / ${m.fuel.secondsPerUnit} s de perçage`],
+      ['Plein', `${m.borer.tankUnits} unités par sortie, puis retour à la base`],
     ];
   const out: [string, string][] = [];
   if (s.speed) out.push(['Cadence', `${num(s.speed * 60, 0)} /min`]);
@@ -489,43 +490,61 @@ export function drillPanel(g: GameState, d: Drill): string {
 
 // ------------------------------------------------------------------ foreuse de percement
 
-const BORER_STATUS: Record<string, [string, string]> = {
-  idle: ["À l'arrêt", 'warn'],
+const BORER_STATUS: Record<BorerStatus, [string, string]> = {
+  idle: ['Rangée dans sa base', 'warn'],
+  moving: ['Sort vers le front de taille', 'good'],
   digging: ['Perce la roche', 'good'],
-  moving: ['Avance dans le tunnel', 'good'],
-  waiting: ['Attend : quelqu’un est sur son chemin', 'warn'],
-  nofuel: ['À l’arrêt : plus de charbon', 'bad'],
-  blocked: ['Bloquée', 'bad'],
-  done: ['Tunnel terminé', 'good'],
+  returning: ['Rentre à la base', 'warn'],
+  waiting: ['Attend', 'warn'],
+  nofuel: ['Dans sa base : plus de charbon (elle repart dès que la base en reçoit)', 'bad'],
+  blocked: ['Rentrée à la base', 'bad'],
+  done: ['Tunnel terminé, rentrée à la base', 'good'],
 };
 
-export function borerPanel(g: GameState, b: TunnelBorer): string {
+const BORER_RETURN: Record<ReturnReason, string> = {
+  fuel: 'faire le plein de charbon',
+  blocked: 'elle ne peut plus percer',
+  done: 'tunnel terminé',
+  recall: 'rappelée',
+};
+
+function borerStatusLine(b: TunnelBorer): [string, string] {
   const [label, cls] = BORER_STATUS[b.status];
+  if (b.status === 'returning' && b.returning) return [`${label} : ${BORER_RETURN[b.returning]}`, b.returning === 'blocked' ? 'bad' : cls];
+  if (b.status === 'waiting' || b.status === 'blocked') return [`${label} : ${b.blockReason}`, cls];
+  return [label, cls];
+}
+
+export function borerPanel(g: GameState, b: TunnelBorer): string {
+  const [label, cls] = borerStatusLine(b);
   const coal = g.inventory.count('coal');
   const secs = b.fuelSeconds();
   const lengthBtn = (n: number) =>
     btn('borerLength', n ? `${n} cases` : 'Sans limite', { arg: String(n), cls: `small ${b.length === n ? 'on' : 'off'}` });
-  const left = b.length ? Math.max(0, b.length - b.dug) : null;
+  const where = b.home ? 'dans sa base' : `à ${b.dist} case${b.dist > 1 ? 's' : ''} de la base`;
+  const action = b.running
+    ? btn('borerStop', 'Rappeler à la base', { cls: 'primary' })
+    : b.returning
+      ? btn('borerStart', 'Faire repartir', { cls: 'primary', disabled: b.complete })
+      : btn('borerStart', b.complete ? 'Tunnel terminé : choisissez plus long' : 'Démarrer', { cls: 'primary', disabled: b.complete });
   return `
-    <div class="status ${cls}">● ${label}${b.status === 'blocked' ? ` : ${b.blockReason}` : ''}</div>
+    <div class="status ${cls}">● ${label}</div>
     <div class="cards"><div class="card">
       ${stat('Direction', DIR_ARROWS[b.dir])}
-      ${stat('Tunnel en cours', b.running ? `${b.dug} case${b.dug > 1 ? 's' : ''}${left !== null ? ` · reste ${left}` : ''}` : '—')}
-      ${stat('Creusé au total', `${b.totalDug} cases`)}
-      ${stat('Profondeur de la machine', `${Math.floor(depthAt(b.y))} m`)}
+      ${stat('Tunnel', `${b.tunnel} case${b.tunnel > 1 ? 's' : ''}${b.length ? ` / ${b.length}` : ''}`)}
+      ${stat('La foreuse', where)}
+      ${stat('Percé au total', `${b.totalDug} cases`)}
+      ${stat('Profondeur de la base', `${Math.floor(depthAt(b.y))} m`)}
       <h4>Longueur du tunnel</h4>
       <div class="buy">${b.spec.lengths.map(lengthBtn).join('')}</div>
     </div><div class="card">
-      ${stat('Charbon chargé', `${b.fuelUnits} / ${b.fuelMax}`)}
-      ${stat('Autonomie', `${Math.floor(secs / 60)} min ${Math.floor(secs % 60)} s de travail`)}
+      ${stat('Charbon dans la base', `${b.fuelUnits} / ${b.fuelMax}`)}
+      ${stat('Plein de la foreuse', `${b.tank + (b.burn > 0 ? 1 : 0)} / ${b.tankMax}`)}
+      ${stat('Autonomie', `${Math.floor(secs / 60)} min ${Math.floor(secs % 60)} s de perçage`)}
       <div class="buy">${btn('borerFuel', `Charger le charbon du sac (${coal})`, { disabled: coal <= 0 || b.fuelUnits >= b.fuelMax })}</div>
-      <div class="buy">${
-        b.running
-          ? btn('borerStop', 'Arrêter', { cls: 'primary' })
-          : btn('borerStart', b.status === 'done' ? 'Creuser un nouveau tunnel' : 'Démarrer', { cls: 'primary', disabled: b.fuelSeconds() <= 0 })
-      }${btn('borerRotate', 'Tourner ↻')}</div>
+      <div class="buy">${action}${btn('borerRotate', 'Tourner ↻', { disabled: !b.home })}</div>
     </div></div>
-    <p class="hint">Elle perce tout droit devant sa flèche, jusqu'au basalte ; « Tourner » change son cap, même en marche. Les minerais tombent derrière elle dans le tunnel (les pierres s'effritent), les filons percés laissent leur gisement pour vos foreuses, et le tunnel apparaît sur la carte. Récupérez-la au clic droit en mode construction.</p>`;
+    <p class="hint">La base reste fixe : la foreuse en sort pour percer tout droit devant la flèche, jusqu'au basalte, puis revient faire le plein quand son charbon est vide et repart au bout du tunnel. Elle rentre aussi quand le tunnel est fini ou qu'elle ne peut plus percer (roche indestructible, machine, bord de la mine). Rouler ne consomme pas de charbon ; une base alimentée par un convoyeur ou un coffre de charbon collé la fait creuser sans s'arrêter. Les minerais tombent derrière elle, les filons percés laissent leur gisement. On ne tourne ou ne démonte la base que foreuse rangée.</p>`;
 }
 
 // ------------------------------------------------------------------ carte

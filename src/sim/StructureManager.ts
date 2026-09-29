@@ -3,12 +3,15 @@
  * et création/suppression.
  */
 import { DX, DY } from '../core/dir';
+import { TunnelBorer } from './structures/Borer';
 import { Bridge } from './structures/Bridge';
 import type { Structure, StructureContext } from './structures/Structure';
 import type { World } from './World';
 
 export class StructureManager {
   list: Structure[] = [];
+  /** Foreuses de percement (leur foreuse peut occuper des cases hors de la base). */
+  borers: TunnelBorer[] = [];
   private readonly byTile = new Map<number, Structure>();
   private nextId = 1;
   /** Ordre de mise à jour (convoyeurs aval d'abord), recalculé si le réseau change. */
@@ -22,6 +25,7 @@ export class StructureManager {
   add(s: Structure): Structure {
     s.id = this.nextId++;
     this.list.push(s);
+    if (s instanceof TunnelBorer) this.borers.push(s);
     for (let y = s.y; y < s.y + s.h; y++) for (let x = s.x; x < s.x + s.w; x++) this.byTile.set(y * this.worldW + x, s);
     this.order = null;
     return s;
@@ -31,16 +35,8 @@ export class StructureManager {
     const i = this.list.indexOf(s);
     if (i < 0) return;
     this.list.splice(i, 1);
+    if (s instanceof TunnelBorer) this.borers.splice(this.borers.indexOf(s), 1);
     for (let y = s.y; y < s.y + s.h; y++) for (let x = s.x; x < s.x + s.w; x++) this.byTile.delete(y * this.worldW + x);
-    this.order = null;
-  }
-
-  /** Déplace une structure (foreuse de percement) et met l'index à jour. */
-  move(s: Structure, x: number, y: number): void {
-    for (let yy = s.y; yy < s.y + s.h; yy++) for (let xx = s.x; xx < s.x + s.w; xx++) this.byTile.delete(yy * this.worldW + xx);
-    s.x = x;
-    s.y = y;
-    for (let yy = s.y; yy < s.y + s.h; yy++) for (let xx = s.x; xx < s.x + s.w; xx++) this.byTile.set(yy * this.worldW + xx, s);
     this.order = null;
   }
 

@@ -965,7 +965,8 @@ try {
   await page.waitForTimeout(150);
   check((await ev(() => window.__EM.state.tool)) === 'pickaxe' && (await page.textContent('#hud-equip')).includes('Pioche'), 'T repasse à la pioche');
 
-  // Foreuse de percement : posée dans la salle du fond vers l'est, 10 cases, démarrée depuis son panneau.
+  // Foreuse de percement : base posée dans la salle du fond vers l'est, 10 cases, démarrée depuis son panneau ;
+  // la foreuse sort percer le tunnel puis rentre à la base.
   await ev(() => {
     const g = window.__EM.state;
     for (let x = 54; x <= 66; x++) g.world.set(x, 26, 4);
@@ -989,6 +990,12 @@ try {
   await shot('24-borer-panel');
   await page.keyboard.press('Escape');
   await page.waitForTimeout(4000);
+  const sortie = await ev(() => {
+    const g = window.__EM.state;
+    const b = g.structures.borers[0];
+    return { dist: b.dist, base: g.structures.at(53, 26) === b, status: b.status };
+  });
+  check(sortie.dist > 0 && sortie.base, `la foreuse sort de sa base, qui reste en place (${JSON.stringify(sortie)})`);
   await teleport(56, 25);
   await ev(() => window.__EM.renderer.adjustZoom(2));
   await page.waitForTimeout(1500);
@@ -997,8 +1004,8 @@ try {
   let bore = null;
   for (let i = 0; i < 40; i++) {
     bore = await ev(() => {
-      const b = window.__EM.state.structures.list.find((s) => s.type === 'borer');
-      return { x: b.x, status: b.status, dug: b.totalDug };
+      const b = window.__EM.state.structures.borers[0];
+      return { x: b.x, home: b.home, tunnel: b.tunnel, status: b.status, dug: b.totalDug };
     });
     if (bore.status === 'done') break;
     await page.waitForTimeout(500);
@@ -1009,7 +1016,10 @@ try {
     for (let x = 54; x <= 63; x++) if (!w.isSolid(x, 26) && w.explored[w.idx(x, 26)]) open++;
     return open;
   });
-  check(bore.status === 'done' && bore.x === 63 && tunnel === 10, `la foreuse creuse seule un tunnel de 10 cases puis s'arrête (${JSON.stringify(bore)}, ${tunnel} cases ouvertes et révélées)`);
+  check(
+    bore.status === 'done' && bore.home && bore.x === 53 && bore.tunnel === 10 && tunnel === 10,
+    `la foreuse perce seule un tunnel de 10 cases puis rentre à sa base (${JSON.stringify(bore)}, ${tunnel} cases ouvertes et révélées)`,
+  );
 
   // Carte : mini-carte dans le HUD, carte complète avec M (ou clic sur la mini-carte).
   const colorsIn = (sel) =>

@@ -181,8 +181,10 @@ export class Renderer {
       for (const s of this.state.structures.list)
         if (s instanceof Drill && s.status === 'ok' && this.inView(s.x * TILE, s.y * TILE, 64))
           this.fx.emit('smoke', s.x * TILE + 11, s.y * TILE + 1, 'rgba(90,90,96,0.6)', 1, 6);
-        else if (s instanceof TunnelBorer && (s.status === 'digging' || s.status === 'moving') && this.inView(s.x * TILE, s.y * TILE, 64))
-          this.fx.emit('smoke', s.x * TILE + 8 - DX[s.dir] * 5, s.y * TILE + 2 - DY[s.dir] * 5, 'rgba(90,90,96,0.6)', 1, 6);
+        else if (s instanceof TunnelBorer && (s.status === 'digging' || s.status === 'moving' || s.status === 'returning')) {
+          const v = this.borerVehicleXY(s);
+          if (this.inView(v.x, v.y, 64)) this.fx.emit('smoke', v.x + 8 - DX[s.dir] * 5, v.y + 2 - DY[s.dir] * 5, 'rgba(90,90,96,0.6)', 1, 6);
+        }
     }
   }
 
@@ -268,6 +270,12 @@ export class Renderer {
     for (const s of state.structures.list) {
       if (s.isBelt || s.isTrack || !this.inView(s.x * TILE, s.y * TILE, 64)) continue;
       list.push({ y: (s.y + s.h) * TILE - 1, draw: () => this.drawStructure(s) });
+    }
+    // Foreuses de percement sorties de leur base (rangées, elles sont dessinées avec la base).
+    for (const b of state.structures.borers) {
+      if (b.home) continue;
+      const v = this.borerVehicleXY(b);
+      if (this.inView(v.x, v.y, 32)) list.push({ y: v.y + TILE - 1, draw: () => this.drawBorer(b, v.x, v.y) });
     }
     for (const l of state.layout.lamps)
       if (this.inView(l.x, l.y)) list.push({ y: l.y - 8, draw: () => ctx.drawImage(this.lantern, Math.round(l.x - this.lantern.width / 2), Math.round(l.y - 4)) });
@@ -677,7 +685,10 @@ export class Renderer {
 
   private drawStructure(s: Structure): void {
     if (s instanceof Drill) this.drawDrill(s);
-    else if (s instanceof TunnelBorer) this.drawBorer(s);
+    else if (s instanceof TunnelBorer) {
+      this.drawBorerBase(s);
+      if (s.home) this.drawBorer(s, s.x * TILE, s.y * TILE);
+    }
     else if (s instanceof Storage) this.drawStorage(s);
     else if (s instanceof ShippingCrate) this.drawShipping(s);
     else if (s instanceof Building) this.drawBuilding(s);
@@ -743,21 +754,83 @@ export class Renderer {
     if (active && Math.random() < 0.15) this.fx.emit('dust', x + 8, y + 13, 'rgba(160,140,120,0.5)', 1, 10);
   }
 
-  /** Foreuse de percement : caisson sur chenilles, tête de coupe rotative du côté de sa flèche. */
-  private drawBorer(b: TunnelBorer): void {
+  /** Position (coin haut gauche, unités monde) de la foreuse d'une foreuse de percement, trajet compris. */
+  private borerVehicleXY(b: TunnelBorer): { x: number; y: number } {
+    const k = b.vehiclePos();
+    return { x: Math.round((b.x + DX[b.dir] * k) * TILE), y: Math.round((b.y + DY[b.dir] * k) * TILE) };
+  }
+
+  /**
+   * Base d'une foreuse de percement : dalle d'acier avec la sortie balisée du côté de la flèche,
+   * trémie à charbon à l'arrière (niveau visible) et jauge de la réserve.
+   */
+  private drawBorerBase(b: TunnelBorer): void {
     const ctx = this.ctx;
     const x = b.x * TILE;
     const y = b.y * TILE;
+    ctx.fillStyle = 'rgba(0,0,0,0.3)';
+    ctx.fillRect(x, y + 3, 16, 14);
+    ctx.fillStyle = '#26272c';
+    ctx.fillRect(x, y + 2, 16, 14);
+    ctx.fillStyle = '#3d3e46';
+    ctx.fillRect(x + 1, y + 3, 14, 12);
+    ctx.fillStyle = '#4f505a';
+    ctx.fillRect(x + 1, y + 3, 14, 1);
+    // Sortie balisée (bandes jaunes et noires) sur le bord de la flèche.
+    ctx.save();
+    ctx.translate(x + 8, y + 9);
+    ctx.rotate((b.dir * Math.PI) / 2);
+    for (let k = 0; k < 6; k++) {
+      ctx.fillStyle = k % 2 ? '#1a1418' : '#f2c230';
+      ctx.fillRect(5, -6 + k * 2, 2, 2);
+    }
+    // Foreuse sortie : flèche peinte au sol.
+    if (!b.home) {
+      ctx.fillStyle = '#b89a3a';
+      ctx.fillRect(-4, -1, 6, 2);
+      ctx.fillRect(1, -3, 1, 6);
+      ctx.fillRect(2, -2, 1, 4);
+    }
+    ctx.restore();
+    // Trémie à charbon, au fond de la dalle.
+    ctx.fillStyle = '#1a1418';
+    ctx.fillRect(x + 3, y - 5, 10, 8);
+    ctx.fillStyle = '#6b6d77';
+    ctx.fillRect(x + 4, y - 4, 8, 6);
+    ctx.fillStyle = '#8a8c96';
+    ctx.fillRect(x + 4, y - 4, 8, 1);
+    ctx.fillStyle = '#2a2a30';
+    ctx.fillRect(x + 5, y - 3, 6, 3);
+    const fill = b.fuelMax ? b.fuelUnits / b.fuelMax : 0;
+    if (fill > 0) {
+      ctx.fillStyle = '#0e0d10';
+      const h = Math.max(1, Math.round(3 * fill));
+      ctx.fillRect(x + 5, y - h, 6, h);
+      ctx.fillStyle = '#4a4a55';
+      ctx.fillRect(x + 6, y - h, 1, 1);
+      ctx.fillRect(x + 9, y - h, 1, 1);
+    }
+    // Jauge de la réserve.
+    ctx.fillStyle = '#1a1418';
+    ctx.fillRect(x + 1, y + 15, 14, 2);
+    ctx.fillStyle = fill > 0.2 ? '#f08a24' : '#d0342c';
+    ctx.fillRect(x + 1, y + 15, Math.round(14 * Math.min(1, fill)), 2);
+  }
+
+  /** Foreuse de percement : caisson sur chenilles, tête de coupe rotative du côté de sa flèche. */
+  private drawBorer(b: TunnelBorer, x: number, y: number): void {
+    const ctx = this.ctx;
     const digging = b.status === 'digging';
-    const working = digging || b.status === 'moving';
+    const rolling = b.status === 'moving' || b.status === 'returning';
+    const working = digging || rolling;
     const jig = digging ? Math.round(Math.sin(this.time * 45) * 0.5) : 0;
-    // Ombre, chenilles (les maillons défilent quand elle avance).
+    // Ombre, chenilles (les maillons défilent quand elle roule, à l'envers au retour).
     ctx.fillStyle = 'rgba(0,0,0,0.35)';
     ctx.fillRect(x + 1, y + 13, 15, 3);
     ctx.fillStyle = '#1a1418';
     ctx.fillRect(x + 1, y + 10, 14, 5);
     ctx.fillStyle = '#5b5b63';
-    const roll = b.status === 'moving' ? Math.floor(this.time * 12) % 3 : 0;
+    const roll = rolling ? (((b.status === 'returning' ? -1 : 1) * Math.floor(this.time * 12)) % 3 + 3) % 3 : 0;
     for (let k = roll; k < 14; k += 3) ctx.fillRect(x + 1 + k, y + 13, 1, 1);
     // Caisson.
     ctx.fillStyle = '#c8472e';
@@ -975,13 +1048,17 @@ export class Renderer {
     const blink = Math.floor(this.time * 2.5) % 2 === 0;
     for (const s of state.structures.list) {
       // Foreuses : plus de charbon, sortie saturée, ou arrêt (gisement épuisé, obstacle).
+      // Foreuse de percement : sur sa base (sans charbon, rentrée bloquée) ou sur la foreuse qui attend.
       let icon: 'nofuel' | 'full' | 'stop' | null = null;
+      let at = { x: s.x * TILE, y: s.y * TILE };
       if (s instanceof Drill && s.status !== 'ok') icon = s.status === 'nofuel' ? 'nofuel' : s.status === 'full' ? 'full' : 'stop';
-      else if (s instanceof TunnelBorer && s.running)
+      else if (s instanceof TunnelBorer) {
         icon = s.status === 'nofuel' ? 'nofuel' : s.status === 'waiting' ? 'full' : s.status === 'blocked' ? 'stop' : null;
-      if (!icon || !this.inView(s.x * TILE, s.y * TILE)) continue;
-      const x = s.x * TILE + 8;
-      const y = s.y * TILE - 9 + (blink ? 0 : -1);
+        if (icon === 'full') at = this.borerVehicleXY(s);
+      }
+      if (!icon || !this.inView(at.x, at.y)) continue;
+      const x = at.x + 8;
+      const y = at.y - (s instanceof TunnelBorer && icon !== 'full' ? 14 : 9) + (blink ? 0 : -1);
       const color = icon === 'nofuel' ? '#d0342c' : icon === 'full' ? '#e0a020' : '#7a7a86';
       ctx.fillStyle = '#1a1418';
       ctx.fillRect(x - 4, y - 4, 9, 8);
@@ -1118,8 +1195,12 @@ export class Renderer {
     for (const l of state.layout.lamps) punch(l.x, l.y, 3.6 + Math.sin(this.time * 5 + l.x) * 0.08, 0.85);
     for (const s of state.structures.list) {
       if (s instanceof Drill) punch((s.x + 0.5) * TILE, (s.y + 0.5) * TILE, s.status === 'ok' ? 3.2 : 1.6, 0.8);
-      // Phare de la foreuse de percement : éclaire le front de taille.
-      else if (s instanceof TunnelBorer) punch((s.x + 0.5 + DX[s.dir] * 0.8) * TILE, (s.y + 0.5 + DY[s.dir] * 0.8) * TILE, s.running ? 3.6 : 2, 0.85);
+      // Phare de la foreuse de percement : éclaire le front de taille, où qu'elle soit ; la base a sa lampe.
+      else if (s instanceof TunnelBorer) {
+        const v = this.borerVehicleXY(s);
+        punch(v.x + (0.5 + DX[s.dir] * 0.8) * TILE, v.y + (0.5 + DY[s.dir] * 0.8) * TILE, s.running ? 3.6 : 2, 0.85);
+        if (!s.home) punch((s.x + 0.5) * TILE, (s.y + 0.5) * TILE, 1.6, 0.6);
+      }
       else if (s instanceof Storage) punch((s.x + 0.5) * TILE, (s.y + 0.5) * TILE, 1.3, 0.5);
     }
     L.globalCompositeOperation = 'source-over';

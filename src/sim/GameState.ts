@@ -172,16 +172,10 @@ export class GameState implements StructureContext {
     this.breakTile(tx, ty, from);
   }
 
-  moveStructure(s: Structure, x: number, y: number): void {
-    const ox = s.x;
-    const oy = s.y;
-    this.structures.move(s, x, y);
-    // Ce qui traînait sur la nouvelle case est repoussé derrière la machine.
-    for (const d of this.drops.list)
-      if (Math.floor(d.x / TILE) === x && Math.floor(d.y / TILE) === y) {
-        d.x = (ox + 0.5) * TILE;
-        d.y = (oy + 0.5) * TILE;
-      }
+  /** Foreuse de percement dont la foreuse, sortie de sa base, occupe la case. */
+  borerAt(x: number, y: number): TunnelBorer | null {
+    for (const b of this.structures.borers) if (b.occupies(x, y)) return b;
+    return null;
   }
 
   occupied(x: number, y: number): boolean {
@@ -250,6 +244,7 @@ export class GameState implements StructureContext {
         if (this.world.isSolid(tx, ty)) return true;
         const s = this.structures.at(tx, ty);
         if (s && s.solid) return true;
+        if (this.borerAt(tx, ty)) return true;
       }
     return false;
   }
@@ -537,18 +532,25 @@ export class GameState implements StructureContext {
         const s = this.structures.at(tx, ty);
         if (s) seen.add(s);
       }
+    /** Distance entre le joueur et le rectangle de tuiles (x, y, w, h). */
+    const gap = (x: number, y: number, w: number, h: number) =>
+      Math.hypot(Math.max(x * TILE - (p.x + p.halfW), 0, p.x - p.halfW - (x + w) * TILE), Math.max(y * TILE - (p.y + p.halfH), 0, p.y - p.halfH - (y + h) * TILE));
     for (const s of seen) {
       if ((s.isBelt && !s.configurable) || s.inert) continue;
-      const x0 = s.x * TILE;
-      const y0 = s.y * TILE;
-      const x1 = (s.x + s.w) * TILE;
-      const y1 = (s.y + s.h) * TILE;
-      const dx = Math.max(x0 - (p.x + p.halfW), 0, p.x - p.halfW - x1);
-      const dy = Math.max(y0 - (p.y + p.halfH), 0, p.y - p.halfH - y1);
-      const d = Math.hypot(dx, dy);
+      const d = gap(s.x, s.y, s.w, s.h);
       if (d <= bestD) {
         bestD = d;
         best = s;
+      }
+    }
+    // Une foreuse de percement sortie s'ouvre aussi depuis le tunnel, près de la foreuse.
+    for (const b of this.structures.borers) {
+      if (b.home) continue;
+      const t = b.tileAt(b.dist);
+      const d = gap(t.x, t.y, 1, 1);
+      if (d <= bestD) {
+        bestD = d;
+        best = b;
       }
     }
     return best;
@@ -652,6 +654,7 @@ export class GameState implements StructureContext {
       for (let x = tx; x < tx + def.w; x++) {
         if (!this.world.isOpen(x, y)) return { ok: false, reason: 'Il faut un sol dégagé' };
         if (this.structures.at(x, y)) return { ok: false, reason: 'Emplacement occupé' };
+        if (this.borerAt(x, y)) return { ok: false, reason: 'La foreuse de percement passe ici' };
       }
     if (def.needsDeposit && !this.world.depositAt(tx, ty)) return { ok: false, reason: 'Doit être posée sur un gisement exposé' };
     if (def.surfaceOnly && ty + def.h > SURFACE_ROWS) return { ok: false, reason: 'À poser en surface, au camp' };
@@ -739,6 +742,10 @@ export class GameState implements StructureContext {
     const s = this.structures.at(tx, ty);
     if (!s || !s.removable) return false;
     if (this.distanceToTile(tx, ty) > BUILD_RANGE) return false;
+    if (s instanceof TunnelBorer && !s.home) {
+      this.emit({ t: 'message', text: 'La foreuse est sortie : rappelez-la à sa base avant de la démonter.', kind: 'warn' });
+      return false;
+    }
     this.structures.remove(s);
     // Une foreuse améliorée revient dans le stock avec son niveau (kit « drill@3 »).
     this.inventory.addKit(s instanceof Drill ? kitId(s.type, s.level) : s.type);
@@ -750,6 +757,11 @@ export class GameState implements StructureContext {
   rotateAt(tx: number, ty: number): boolean {
     const s = this.structures.at(tx, ty);
     if (!s || !s.removable || !getMachine(s.type).rotatable) return false;
+    // La base d'une foreuse de percement ne tourne que foreuse rangée : c'est un nouveau tunnel.
+    if (s instanceof TunnelBorer) {
+      if (!s.home) return false;
+      s.turned();
+    }
     s.dir = ((s.dir + 1) % 4) as Dir;
     this.structures.invalidate();
     return true;

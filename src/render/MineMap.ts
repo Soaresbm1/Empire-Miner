@@ -7,6 +7,7 @@
  * joueur sont dessinés par-dessus à chaque image.
  */
 import { SURFACE_ROWS, TILE, depthAt, rowForDepth } from '../core/constants';
+import { DX, DY } from '../core/dir';
 import { AIR, BEDROCK, CLIFF, HOST_ROCKS, TREE, getBlock } from '../data/blocks';
 import { RESOURCES } from '../data/resources';
 import type { GameState } from '../sim/GameState';
@@ -267,6 +268,17 @@ export class MineMap {
       ctx.fillStyle = structureColor(s);
       const inset = s instanceof Building || s.isBelt || s.isTrack ? 0 : v.cell * 0.12;
       ctx.fillRect(px(s.x) + inset, py(s.y) + inset, Math.max(dot, s.w * v.cell - inset * 2), Math.max(dot, s.h * v.cell - inset * 2));
+    }
+    // Foreuse de percement sortie de sa base : un point au bout de son tunnel.
+    for (const b of g.structures.borers) {
+      if (b.home) continue;
+      const k = b.vehiclePos();
+      const bx = b.x + DX[b.dir] * k + 0.5;
+      const by = b.y + DY[b.dir] * k + 0.5;
+      if (!inView(bx, by)) continue;
+      const r = Math.max(dot, v.cell * 0.8);
+      ctx.fillStyle = MAP_COLORS.borer;
+      ctx.fillRect(px(bx) - r / 2, py(by) - r / 2, r, r);
     }
     for (const w of g.wagons.list) {
       const wx = w.px() / TILE;

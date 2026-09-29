@@ -56,10 +56,13 @@ Outils : `GameState.activeTool` donne les caractéristiques de l'outil en main (
 `data/tools.ts`) ; un outil large frappe la case visée et ses voisines perpendiculaires (`strikeTiles`). Le
 marteau-piqueur brûle le charbon du sac à chaque coup.
 
-Structures mobiles : la foreuse de percement (`TunnelBorer`) se déplace d'une case avec
-`StructureContext.moveStructure` (qui met l'index `StructureManager` à jour), perce avec `digTile` (même effet
-qu'un bloc miné, morceaux lâchés derrière elle), attend si `occupied` (joueur, wagonnet) et révèle le tunnel avec
-`reveal`.
+Foreuse de percement (`TunnelBorer`) : la structure est la base, fixe dans l'index `StructureManager` ; la
+foreuse qui en sort n'est pas une structure mais une position (`dist`, en cases depuis la base dans le sens de la
+flèche, plus le trajet en cours `moveT`). `StructureManager.borers` les liste pour `GameState.borerAt` (collisions
+du joueur, pose interdite, E et infobulle depuis le tunnel). Elle perce avec `digTile` (même effet qu'un bloc
+miné, morceaux lâchés derrière elle), attend si `occupied` (joueur, wagonnet), révèle le tunnel avec `reveal` et
+rentre à la base (`returning` : plus de charbon, obstacle, tunnel fini, rappel) ; rentrée faute de charbon, elle
+refait le plein (`tank`) dans la réserve de la base (`fuelUnits`) et repart.
 
 Combustible : une structure qui brûle quelque chose expose `fuelWanted()` (la ressource voulue tant que son
 réservoir n'est pas plein). Un coffre remplit d'abord le réservoir de ses voisins, puis se vide dans les
