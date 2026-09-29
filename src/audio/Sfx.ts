@@ -168,4 +168,34 @@ export class Sfx {
   discover(): void {
     [784, 988, 1175, 1568].forEach((f, i) => this.tone(f, 0.3, 'triangle', 0.1, undefined, i * 0.1));
   }
+
+  /** Blessure : choc sourd et petit cri de douleur synthétique. */
+  hurt(): void {
+    this.tone(180, 0.18, 'square', 0.12, 90);
+    this.noise(0.12, 600, 1, 0.3, 'lowpass');
+  }
+
+  /** Plafond qui craque : grondement grave et craquements épars. */
+  rumble(): void {
+    this.noise(1.2, 120, 0.7, 0.45, 'lowpass');
+    for (let i = 0; i < 5; i++) this.noise(0.06, 2200 + Math.random() * 800, 3, 0.18, 'bandpass', 0.15 + i * 0.18 + Math.random() * 0.1);
+  }
+
+  /** Éboulement : fracas de roches. */
+  collapse(): void {
+    this.noise(1.4, 200, 0.6, 0.8, 'lowpass');
+    this.tone(55, 0.8, 'sine', 0.5, 30);
+    for (let i = 0; i < 8; i++) this.noise(0.08, 900 + Math.random() * 1200, 2, 0.3, 'bandpass', i * 0.09 + Math.random() * 0.05);
+  }
+
+  /** Grisou qui s'échappe : sifflement. */
+  gas(): void {
+    this.noise(1.6, 3200, 0.9, 0.22, 'highpass');
+  }
+
+  /** Poche d'eau percée : jaillissement. */
+  flood(): void {
+    this.noise(1.1, 700, 0.8, 0.4, 'bandpass');
+    for (let i = 0; i < 6; i++) this.tone(500 + Math.random() * 700, 0.07, 'sine', 0.06, 250, 0.1 + i * 0.12);
+  }
 }

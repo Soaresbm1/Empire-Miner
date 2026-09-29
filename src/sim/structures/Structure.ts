@@ -8,6 +8,7 @@ import { DX, DY, type Dir } from '../../core/dir';
 import type { World } from '../World';
 import type { SimEvent } from '../events';
 import type { Drop, DropSystem } from '../Drops';
+import type { HazardSystem } from '../Hazards';
 
 /** Ce que la simulation met à disposition des structures. */
 export interface StructureContext {
@@ -17,6 +18,8 @@ export interface StructureContext {
   emit(e: SimEvent): void;
   /** Statistique : objets livrés dans un stockage par l'automatisation. */
   countDelivered(n: number): void;
+  /** Éboulements, grisou et eau (ventilateur, pompe). */
+  hazards: HazardSystem;
   /** Statistique : un lingot vient de sortir d'un four ou d'une fonderie. */
   countSmelted(res: string, from: Structure): void;
   /** Vente automatique (caisse d'expédition) : crédite l'argent du joueur. */

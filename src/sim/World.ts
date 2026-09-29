@@ -19,6 +19,13 @@ export class World {
   readonly explored: Uint8Array;
   /** Décor de sol (non gameplay) : 1 = chemin de terre en surface. */
   readonly floorDeco: Uint8Array;
+  /** 1 si la case a été creusée à la main (compte pour la stabilité du plafond). */
+  readonly dug: Uint8Array;
+  /** Poche cachée dans la roche : 0 = aucune, POCKET_GAS ou POCKET_WATER (voir data/hazards). */
+  readonly pocket: Uint8Array;
+  /** Grisou et eau dans les galeries (0 à 255). */
+  readonly gas: Float32Array;
+  readonly water: Float32Array;
   /** Dégâts accumulés sur les blocs partiellement minés. */
   readonly damage = new Map<number, number>();
   /** Tuiles modifiées depuis la dernière synchronisation du rendu. */
@@ -34,6 +41,10 @@ export class World {
     this.reserve = new Uint16Array(n);
     this.explored = new Uint8Array(n);
     this.floorDeco = new Uint8Array(n);
+    this.dug = new Uint8Array(n);
+    this.pocket = new Uint8Array(n);
+    this.gas = new Float32Array(n);
+    this.water = new Float32Array(n);
   }
 
   idx(x: number, y: number): number {

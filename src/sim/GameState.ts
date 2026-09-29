@@ -11,9 +11,11 @@ import { Rng } from '../core/rng';
 import { AIR, getBlock } from '../data/blocks';
 import { zoneForDepth } from '../data/depth';
 import { getMachine, kitId, kitName, MACHINES, parseKit } from '../data/machines';
+import { GAS, HEALTH, WATER } from '../data/hazards';
 import { RESOURCES, getResource, hasResource, resourceIndex } from '../data/resources';
 import { BAGS, JACKHAMMER, PICKAXES } from '../data/tools';
 import { Drop, DropSystem } from './Drops';
+import { HazardSystem } from './Hazards';
 import type { SimEvent, ToolKind } from './events';
 import { generateWorld, WorldLayout } from './generator';
 import { Inventory } from './Inventory';
@@ -75,6 +77,8 @@ export interface Stats {
   autoSold: number;
   /** Lingots sortis des fours et fonderies. */
   smelted: number;
+  /** Évanouissements (grisou, noyade, éboulement). */
+  faints: number;
 }
 
 export const PLAYER_SPEED = 72; // unités monde / s
@@ -87,6 +91,8 @@ export class GameState implements StructureContext {
   readonly seed: number;
   readonly world: World;
   readonly layout: WorldLayout;
+  /** Éboulements, grisou et eau. */
+  readonly hazards: HazardSystem;
   readonly player: Player;
   readonly inventory: Inventory;
   readonly drops = new DropSystem();
@@ -117,7 +123,12 @@ export class GameState implements StructureContext {
     collected: {},
     autoSold: 0,
     smelted: 0,
+    faints: 0,
   };
+  /** Santé du joueur (0 à HEALTH.max) ; à 0, il s'évanouit et se réveille au camp. */
+  hp = HEALTH.max;
+  private lastHurt = -99;
+  private lastHurtEvent = -99;
   events: SimEvent[] = [];
   private readonly rng: Rng;
   private lastPlayerTile = -1;
@@ -128,6 +139,7 @@ export class GameState implements StructureContext {
     this.seed = seed;
     this.layout = generateWorld(seed);
     this.world = this.layout.world;
+    this.hazards = new HazardSystem(this);
     this.rng = new Rng(seed ^ 0x5bd1e995);
     this.player = new Player(this.layout.spawn.x, this.layout.spawn.y);
     this.inventory = new Inventory(BAGS[0].capacity);
@@ -217,7 +229,58 @@ export class GameState implements StructureContext {
     this.structures.update(dt, this);
     this.wagons.update(dt, this);
     if (this.riding) this.followWagon(this.riding);
+    this.hazards.update(dt);
+    this.updateHealth(dt);
     this.updateExploration();
+  }
+
+  // ---------------------------------------------------------------- santé
+
+  /** Blesse le joueur ; à 0 point de vie, il s'évanouit. */
+  hurtPlayer(amount: number, cause: string): void {
+    if (amount <= 0 || this.hp <= 0) return;
+    this.hp = Math.max(0, this.hp - amount);
+    this.lastHurt = this.time;
+    // Dégâts continus (gaz, eau) : un événement de temps en temps suffit à l'écran et au son.
+    if (amount >= 10 || this.time - this.lastHurtEvent >= 0.4) {
+      this.lastHurtEvent = this.time;
+      this.emit({ t: 'hurt', amount, cause });
+    }
+    if (this.hp <= 0) this.faint(cause);
+  }
+
+  hurtPlayerNear(x: number, y: number, radius: number, amount: number, cause: string): void {
+    const p = this.player;
+    if (Math.max(Math.abs(p.x / TILE - (x + 0.5)), Math.abs(p.y / TILE - (y + 0.5))) <= radius) this.hurtPlayer(amount, cause);
+  }
+
+  random(): number {
+    return this.rng.float();
+  }
+
+  /** Grisou et eau profonde sous les pieds du joueur ; récupération hors de danger. */
+  private updateHealth(dt: number): void {
+    const p = this.player;
+    if (this.hazards.gasAt(p.tileX, p.tileY) >= GAS.harmful) this.hurtPlayer(GAS.dps * dt, 'grisou');
+    if (this.hazards.waterAt(p.tileX, p.tileY) >= WATER.deep) this.hurtPlayer(WATER.dps * dt, 'noyade');
+    if (this.hp < HEALTH.max && this.time - this.lastHurt >= HEALTH.regenDelay) this.hp = Math.min(HEALTH.max, this.hp + HEALTH.regen * dt);
+  }
+
+  /** Évanoui : le sac tombe sur place, le joueur se réveille au camp, en pleine forme. */
+  private faint(cause: string): void {
+    if (this.riding) this.leaveWagon();
+    const p = this.player;
+    for (const [res, n] of Object.entries(this.inventory.items)) if (n > 0) this.drops.spawn(res, n, p.x, p.y - 3);
+    this.inventory.items = {};
+    p.x = (this.layout.spawn.x + 0.5) * TILE;
+    p.y = (this.layout.spawn.y + 0.5) * TILE;
+    p.swingT = 0;
+    this.hp = HEALTH.max;
+    this.lastHurt = -99;
+    this.stats.faints++;
+    this.lastPlayerTile = -1;
+    this.emit({ t: 'faint', cause });
+    this.emit({ t: 'message', text: `Vous vous êtes évanoui (${cause}) ! On vous a remonté au camp ; votre sac est resté au fond.`, kind: 'bad' });
   }
 
   /** Profondeur actuelle du joueur (m). */
@@ -238,7 +301,7 @@ export class GameState implements StructureContext {
     p.moving = len > 0.01;
     if (!p.moving) return;
     // Ralenti pendant un coup de pioche.
-    const speed = PLAYER_SPEED * this.bag.speedMul * (p.swingT > 0 ? 0.55 : 1);
+    const speed = PLAYER_SPEED * this.bag.speedMul * (p.swingT > 0 ? 0.55 : 1) * this.hazards.speedFactor(p.tileX, p.tileY);
     this.moveAxis(mx * speed * dt, 0);
     this.moveAxis(0, my * speed * dt);
     p.walkTime += dt;
@@ -444,6 +507,8 @@ export class GameState implements StructureContext {
     this.stats.tilesMined++;
     this.emit({ t: 'break', tx, ty, block: id });
     this.lastPlayerTile = -1; // force une mise à jour de la visibilité
+    // Poche de grisou ou d'eau libérée ; plafond fragilisé par un creusement à la main.
+    this.hazards.onBroken(tx, ty, id, !from);
     return out;
   }
 

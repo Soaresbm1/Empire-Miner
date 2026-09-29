@@ -114,6 +114,15 @@ Four et fonderie (`Smelter`, une classe pour les deux, réglée par `MachineDef.
 la flèche (`frontTiles` : deux cases pour la fonderie 2×2). Le premier lingot d'un métal passe par
 `StructureContext.countSmelted`, qui l'ajoute au carnet et compte les lingots pour l'objectif.
 
+Dangers (`sim/Hazards.ts`, données dans `data/hazards.ts`) : `World` porte quatre grilles de plus, `dug` (case
+creusée à la main), `pocket` (poche cachée de grisou ou d'eau, placée par le générateur avec son propre tirage pour
+ne pas changer le terrain), `gas` et `water` (niveaux 0 à 255). `GameState.breakTile` prévient `HazardSystem.onBroken`
+(poche libérée, et case marquée creusée si ce n'est pas une machine) ; le système annonce les éboulements
+(`pending`), fait retomber les niveaux et ne parcourt que les cases touchées. Ventilateur et pompe agissent par
+`StructureContext.hazards`. La santé (`GameState.hp`) baisse avec `hurtPlayer`, remonte après un délai et
+l'évanouissement ramène le joueur au camp. Les poches ne sont pas sauvegardées (elles se recalculent depuis la
+graine) ; `dug`, le gaz, l'eau, les éboulements annoncés et la santé le sont.
+
 ## Étendre le jeu
 
 - **Nouveau minerai** : ajouter une entrée dans `src/data/resources.ts` (valeur, poids, rareté, résistance,

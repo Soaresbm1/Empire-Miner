@@ -1078,6 +1078,68 @@ try {
   check(ingots === 3, `le four fond le cuivre en lingots, récupérés dans le sac (${ingots} lingots, ${JSON.stringify(furnace)})`);
   await page.keyboard.press('Escape');
 
+  // Dangers, à 100 m : une salle creusée à la main craque sous la pioche, un étai posé à temps la retient ;
+  // une poche de grisou percée blesse le joueur et s'affiche dans le HUD.
+  const DY = S + 39;
+  await ev((y) => {
+    const g = window.__EM.state;
+    const w = g.world;
+    for (let yy = y; yy <= y + 8; yy++)
+      for (let x = 20; x <= 30; x++) {
+        w.set(x, yy, 4);
+        w.pocket[w.idx(x, yy)] = 0;
+        w.setExplored(x, yy);
+      }
+    w.set(24, y + 2, 0); // niche naturelle où se tient le joueur
+    for (let yy = y + 3; yy <= y + 4; yy++) for (let x = 22; x <= 26; x++) g.breakTile(x, yy); // 10 cases creusées
+    g.inventory.items = {};
+    g.inventory.addKit('prop', 1);
+    g.tool = 'pickaxe';
+  }, DY);
+  await teleport(24, DY + 4);
+  await page.waitForTimeout(400);
+  const crackAt = await tileScreen(24, DY + 5);
+  await page.mouse.move(crackAt.x, crackAt.y);
+  await page.mouse.down();
+  for (let i = 0; i < 20 && (await ev((y) => window.__EM.state.world.isSolid(24, y + 5), DY)); i++) await page.waitForTimeout(100);
+  await page.mouse.up();
+  await page.waitForTimeout(200);
+  const warned = await ev(() => window.__EM.state.hazards.pending.length);
+  const hudWarn = (await page.textContent('#hud-equip')) ?? '';
+  await shot('25-cave-in-warning');
+  check(warned === 1 && hudWarn.includes('plafond craque'), `creuser une grande salle en profondeur fait craquer le plafond (alerte dans le HUD : ${warned})`);
+  await page.keyboard.press('KeyB');
+  await page.waitForTimeout(100);
+  await placeAt('prop', 23, DY + 3, 0);
+  await page.keyboard.press('Escape');
+  await page.waitForTimeout(4500);
+  const held = await ev((y) => {
+    const g = window.__EM.state;
+    let rubble = 0;
+    // Tout ce qui n'est ni vide ni la roche posée (bloc n° 4) serait de l'éboulis.
+    for (let yy = y; yy <= y + 8; yy++) for (let x = 20; x <= 30; x++) if (![0, 4].includes(g.world.get(x, yy))) rubble++;
+    return { pending: g.hazards.pending.length, rubble, prop: g.structures.at(23, y + 3)?.type, hp: g.hp };
+  }, DY);
+  check(held.prop === 'prop' && held.pending === 0 && held.rubble === 0 && held.hp === 100, `un étai posé à temps empêche l'éboulement (${JSON.stringify(held)})`);
+  // Grisou : une poche cachée dans la paroi, percée à la pioche.
+  await ev((y) => {
+    const g = window.__EM.state;
+    g.world.pocket[g.world.idx(27, y + 3)] = 1;
+  }, DY);
+  await teleport(26, DY + 3);
+  await page.waitForTimeout(300);
+  const gasAt = await tileScreen(27, DY + 3);
+  await page.mouse.move(gasAt.x, gasAt.y);
+  await page.mouse.down();
+  for (let i = 0; i < 20 && (await ev((y) => window.__EM.state.world.isSolid(27, y + 3), DY)); i++) await page.waitForTimeout(100);
+  await page.mouse.up();
+  await page.waitForTimeout(1500);
+  const gassed = await ev(() => ({ hp: window.__EM.state.hp, gas: window.__EM.state.hazards.hasGas }));
+  const hudGas = (await page.textContent('#hud-equip')) ?? '';
+  await shot('25a-gas');
+  check(gassed.gas && gassed.hp < 100 && hudGas.includes('Grisou'), `une poche de grisou percée blesse le joueur et s'affiche dans le HUD (${JSON.stringify(gassed)})`);
+  await teleport(50, S + 10); // hors du nuage
+
   // Carte : mini-carte dans le HUD, carte complète avec M (ou clic sur la mini-carte).
   const colorsIn = (sel) =>
     ev((q) => {

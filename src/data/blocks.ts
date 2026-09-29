@@ -93,6 +93,23 @@ for (const r of RESOURCES) {
   });
 }
 
+/**
+ * Éboulis : roche effondrée d'un plafond mal étayé. Tendre, il se dégage vite à la pioche.
+ * Ajouté après les filons pour ne pas décaler les identifiants des sauvegardes.
+ */
+export const RUBBLE = add({
+  key: 'rubble',
+  name: 'Éboulis',
+  kind: 'rock',
+  solid: true,
+  breakable: true,
+  hp: 2,
+  tier: 1,
+  drop: { res: 'stone', min: 1, max: 1, chance: 0.6 },
+  top: '#8a7662',
+  side: '#54463a',
+});
+
 export function getBlock(id: number): BlockDef {
   return BLOCKS[id];
 }

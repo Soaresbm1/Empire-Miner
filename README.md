@@ -102,6 +102,18 @@ lettre tapée : c'est la touche marquée M, quel que soit le clavier.
   brûle que pendant la fonte. Les lingots sont poussés devant la flèche (convoyeur, coffre, caisse d'expédition) ou
   récupérés dans le sac. Four : un lingot toutes les 3 s (8 lingots par charbon) ; fonderie : toutes les 0,5 s
   (30 lingots par charbon). Objectif : fondre 10 lingots.
+- **Dangers** en profondeur, avec une **barre de santé** (on récupère hors de danger ; à 0, on s'évanouit et on se
+  réveille au camp, le sac reste là où on est tombé) :
+  - **éboulements** (dès 60 m) : une salle creusée à la main trop grande (plus de 10 cases creusées autour de la
+    dernière) fait craquer le plafond : 4 s d'alerte (zone qui clignote, poussière, grondement), puis des éboulis
+    tombent et blessent. Un **étai** (15 $, on passe dessous) consolide 3 cases autour de lui, même pendant l'alerte.
+    Les tunnels d'une case, les galeries naturelles et ceux de la foreuse de percement ne s'effondrent pas ;
+  - **grisou** (dès 120 m) : des poches cachées dans la roche (petites taches jaunâtres sur la paroi) envahissent la
+    galerie quand on les perce ; le gaz blesse, se dissipe lentement, et un **ventilateur** (180 $) le chasse en
+    quelques secondes ;
+  - **eau** (dès 70 m) : des poches (suintements bleus) inondent la galerie ; l'eau ralentit, profonde elle épuise ;
+    une **pompe** (240 $, au charbon, seulement quand elle pompe) l'assèche.
+  Le HUD affiche la santé et le danger du moment, la carte montre les galeries inondées ou envahies de grisou.
 - Le mode construction (`B`) s'ouvre même sans aucune machine en stock, pour démonter au clic droit.
 - Vente automatique : **caisse d'expédition** à poser en surface. Tout ce qui y arrive est vendu au prix du
   comptoir à chaque passage du transporteur (toutes les 15 s) ; sa capacité est limitée (120 kg), pleine elle
@@ -127,7 +139,8 @@ rentre pendant que le joueur reste au fond de la mine. Il construit ensuite chaq
 séparateur, pont, trieur, wagonnets, aiguillage), améliore une foreuse jusqu'au niveau 3 depuis son panneau,
 creuse au marteau-piqueur, lance une foreuse de percement sur 10 cases (elle sort de sa base, perce le tunnel
 puis y revient), l'améliore depuis son panneau, pose un four, le charge depuis son panneau et récupère les
-lingots, et ouvre la carte.
+lingots, fait craquer un plafond à 100 m et le retient avec un étai posé à temps, perce une poche de grisou,
+et ouvre la carte.
 
 ## Choix techniques
 

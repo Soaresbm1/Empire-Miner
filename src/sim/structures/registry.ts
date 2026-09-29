@@ -7,6 +7,7 @@ import { Drill } from './Drill';
 import { Rail, RailStation, RailSwitch } from './Rail';
 import { ShippingCrate } from './ShippingCrate';
 import { Smelter } from './Smelter';
+import { Fan, Prop, Pump } from './Safety';
 import { Sorter } from './Sorter';
 import { Splitter } from './Splitter';
 import { Storage } from './Storage';
@@ -31,4 +32,7 @@ export const STRUCTURE_FACTORIES: Record<string, Factory> = {
   shipping: { create: (x, y, d) => new ShippingCrate(x, y, d), load: (s) => ShippingCrate.load(s) },
   furnace: { create: (x, y, d) => new Smelter('furnace', x, y, d), load: (s) => Smelter.load('furnace', s) },
   foundry: { create: (x, y, d) => new Smelter('foundry', x, y, d), load: (s) => Smelter.load('foundry', s) },
+  prop: { create: (x, y) => new Prop(x, y), load: (s) => new Prop(s.x, s.y) },
+  fan: { create: (x, y) => new Fan(x, y, 0), load: (s) => new Fan(s.x, s.y, 0) },
+  pump: { create: (x, y) => new Pump(x, y), load: (s) => Pump.load(s) },
 };

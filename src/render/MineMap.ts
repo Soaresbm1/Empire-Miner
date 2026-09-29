@@ -25,6 +25,9 @@ export const MAP_COLORS = {
   drill: '#f2c230',
   borer: '#ff5a3c',
   furnace: '#d2452b',
+  safety: '#caa05a',
+  water: '#2f6fc0',
+  gas: '#9ab84a',
   belt: '#a9b0bc',
   storage: '#c08a4a',
   shipping: '#e8792a',
@@ -65,6 +68,9 @@ export function mapTileColor(world: World, x: number, y: number): RGB | null {
   if (!world.explored[i]) return null;
   const id = world.tiles[i];
   if (id === AIR) {
+    // Galerie inondée ou envahie de grisou : teintée, pour repérer les zones dangereuses.
+    if (world.water[i] > 0) return mix(floorAt(depthAt(y)), hex(MAP_COLORS.water), 0.35 + (world.water[i] / 255) * 0.5);
+    if (world.gas[i] > 0) return mix(floorAt(depthAt(y)), hex(MAP_COLORS.gas), 0.35 + (world.gas[i] / 255) * 0.5);
     const dep = world.deposit[i];
     if (dep) return hex(RESOURCES[dep - 1].light);
     if (y < SURFACE_ROWS) return world.floorDeco[i] === 1 ? DIRT : GRASS;
@@ -127,6 +133,7 @@ function structureColor(s: Structure): string {
   if (s.type === 'drill') return MAP_COLORS.drill;
   if (s.type === 'borer') return MAP_COLORS.borer;
   if (s.type === 'furnace' || s.type === 'foundry') return MAP_COLORS.furnace;
+  if (s.type === 'prop' || s.type === 'fan' || s.type === 'pump') return MAP_COLORS.safety;
   if (s.isTrack) return MAP_COLORS.track;
   if (s.isBelt) return MAP_COLORS.belt;
   if (s.type === 'shipping') return MAP_COLORS.shipping;

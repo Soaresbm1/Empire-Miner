@@ -20,4 +20,13 @@ export type SimEvent =
   | { t: 'extract'; tx: number; ty: number; res: string }
   | { t: 'crumble'; res: string; x: number; y: number }
   | { t: 'discover'; text: string }
-  | { t: 'message'; text: string; kind: 'info' | 'warn' | 'good' };
+  | { t: 'message'; text: string; kind: 'info' | 'warn' | 'good' | 'bad' }
+  /** Le joueur est blessé (au plus un événement toutes les 0,4 s pour les dégâts continus). */
+  | { t: 'hurt'; amount: number; cause: string }
+  | { t: 'faint'; cause: string }
+  /** Le plafond craque (éboulement annoncé) ou s'effondre. */
+  | { t: 'rumble'; tx: number; ty: number }
+  | { t: 'collapse'; tx: number; ty: number }
+  /** Une poche de grisou ou d'eau vient d'être percée. */
+  | { t: 'gas'; tx: number; ty: number }
+  | { t: 'flood'; tx: number; ty: number };

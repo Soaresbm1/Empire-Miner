@@ -5,11 +5,13 @@
 import { DIR_ARROWS, DX, DY } from '../core/dir';
 import { SURFACE_ROWS, depthAt } from '../core/constants';
 import { BorerLevelSpec, MACHINES, MachineDef, MachineLevel, conveyorThroughput, kitName, parseKit } from '../data/machines';
+import { GAS, WATER } from '../data/hazards';
 import { RESOURCES, getResource } from '../data/resources';
 import { BAGS, JACKHAMMER, PICKAXES } from '../data/tools';
 import type { GameState } from '../sim/GameState';
 import type { BorerStatus, ReturnReason, TunnelBorer } from '../sim/structures/Borer';
 import type { Smelter, SmelterStatus } from '../sim/structures/Smelter';
+import type { Pump, PumpStatus } from '../sim/structures/Safety';
 import type { Drill } from '../sim/structures/Drill';
 import type { ShippingCrate } from '../sim/structures/ShippingCrate';
 import type { Sorter } from '../sim/structures/Sorter';
@@ -147,6 +149,9 @@ function machineSpecs(m: MachineDef): [string, string][] {
   if (m.onTrack) return [['Vitesse', `${num(s.speed)} cases/s`], ['Capacité', kg(s.capacity)], ['Passager', 'touche F']];
   if (m.station) return [['Tampon', kg(s.capacity)], ['Transfert', `${num(s.speed)} /s`]];
   if (m.railSwitch) return [['Branches', 'tout droit, gauche, droite'], ['Mode', 'fixe ou alterné']];
+  if (m.id === 'prop') return [['Protège', '3 cases autour (7×7)'], ['Passage', 'on passe dessous']];
+  if (m.id === 'fan') return [['Portée', `${GAS.fanRadius} cases`], ['Énergie', 'aucune']];
+  if (m.id === 'pump' && m.fuel) return [['Portée', `${WATER.pumpRadius} cases`], ['Charbon', `1 unité / ${m.fuel.secondsPerUnit} s de pompage`]];
   if (m.smelter && m.fuel)
     return [
       ['Vitesse', `1 lingot / ${num(m.smelter.smeltTime)} s`],
@@ -176,6 +181,7 @@ const SHOP_GROUPS: { title: string; categories: MachineDef['category'][] }[] = [
   { title: 'Transport', categories: ['logistique'] },
   { title: 'Wagonnets et rails', categories: ['rail'] },
   { title: 'Stockage et vente', categories: ['stockage', 'vente'] },
+  { title: 'Sécurité', categories: ['securite'] },
 ];
 
 function machineRow(g: GameState, m: MachineDef, icon: (id: string) => string): string {
@@ -188,7 +194,7 @@ function machineRow(g: GameState, m: MachineDef, icon: (id: string) => string): 
     .join(', ');
   const placed = g.structures.list.filter((s) => s.type === m.id).length;
   // Les ponts se vendent par paire (une entrée + une sortie).
-  const qtys = m.conveyor ? [1, 10] : m.bridge ? [2] : m.dragPlace ? [10, 50] : [1];
+  const qtys = m.conveyor ? [1, 10] : m.bridge ? [2] : m.dragPlace ? [10, 50] : m.id === 'prop' ? [1, 5] : [1];
   const label = (q: number) => (m.bridge ? `Paire · ${money(m.price * q)}` : q > 1 ? `×${q} · ${money(m.price * q)}` : `Acheter · ${money(m.price)}`);
   const cheapest = m.price * qtys[0];
   const specs = machineSpecs(m)
@@ -672,6 +678,29 @@ export function smelterPanel(g: GameState, s: Smelter): string {
     <p class="hint">Le minerai entre par n'importe quel côté sauf la sortie ${DIR_ARROWS[s.dir]} ; le charbon entre de partout (un coffre de charbon collé le recharge). Les lingots sont poussés devant la flèche (convoyeur, coffre, caisse d'expédition). Le charbon ne brûle que pendant la fonte.</p>`;
 }
 
+// ------------------------------------------------------------------ pompe
+
+const PUMP_STATUS: Record<PumpStatus, [string, string]> = {
+  ok: ['Pompe : la galerie s’assèche', 'good'],
+  idle: ['Au repos : pas d’eau à portée', 'warn'],
+  nofuel: ['De l’eau à retirer, mais plus de charbon', 'bad'],
+};
+
+export function pumpPanel(g: GameState, p: Pump): string {
+  const [label, cls] = PUMP_STATUS[p.status];
+  const coal = g.inventory.count('coal');
+  const secs = p.fuelSeconds();
+  return `
+    <div class="status ${cls}">● ${label}</div>
+    <div class="cards"><div class="card">
+      ${stat('Charbon', `${p.fuelUnits} / ${p.fuelMax}`)}
+      ${stat('Autonomie', `${Math.floor(secs / 60)} min ${Math.floor(secs % 60)} s de pompage`)}
+      ${stat('Portée', `${WATER.pumpRadius} cases autour d'elle`)}
+      <div class="buy">${btn('pumpFuel', `Charger le charbon du sac (${coal})`, { cls: 'primary', disabled: coal <= 0 || p.fuelUnits >= p.fuelMax })}</div>
+    </div></div>
+    <p class="hint">Les poches d'eau (dès 70 m) inondent la galerie quand on les perce : l'eau ralentit, et profonde elle épuise. La pompe ne brûle son charbon que lorsqu'il y a de l'eau à retirer ; un coffre de charbon collé la recharge.</p>`;
+}
+
 // ------------------------------------------------------------------ carte
 
 /** Carte complète : le canvas est dessiné à chaque image par le jeu ; à droite, la légende. */
@@ -695,6 +724,9 @@ export function mapPanel(g: GameState, colors: Record<string, string>): string {
         ${item(sw(colors.drill), 'Foreuse')}
         ${item(sw(colors.borer), 'Foreuse de percement')}
         ${item(sw(colors.furnace), 'Four, fonderie')}
+        ${item(sw(colors.safety), 'Étai, ventilateur, pompe')}
+        ${item(sw(colors.water), 'Galerie inondée')}
+        ${item(sw(colors.gas), 'Grisou')}
         ${item(sw(colors.belt), 'Convoyeur, séparateur, trieur, pont')}
         ${item(sw(colors.storage), 'Coffre')}
         ${item(sw(colors.shipping), "Caisse d'expédition")}
@@ -725,6 +757,7 @@ export function helpPanel(keys: { move: string; label: (c: string) => string }):
     <div><h4>Wagonnet</h4><p>${k('KeyF')} : monter / descendre</p></div>
     <div><h4>Outil en main</h4><p>${k('KeyT')} : pioche ou marteau-piqueur (s'il est acheté)</p></div>
     <div><h4>Carte</h4><p><kbd>M</kbd> : carte de la mine (ou clic sur la mini-carte)</p></div>
+    <div><h4>Dangers (en profondeur)</h4><p>Plafond qui craque : posez un <b>étai</b> ou fuyez. Grisou : sortez du nuage, un <b>ventilateur</b> le chasse. Eau : une <b>pompe</b> l'assèche. À 0 de santé, on se réveille au camp, le sac reste au fond.</p></div>
     <div><h4>Four et fonderie</h4><p>Minerai (convoyeur ou ${k('KeyE')} : déposer) + charbon → lingots vendus 2,5 fois plus cher, poussés devant la flèche</p></div>
     <div><h4>Améliorer une foreuse</h4><p>${k('KeyE')} sur la foreuse : niveau 2 = cases gauche et droite, niveau 3 = aussi derrière</p></div>
     <div><h4>Menu</h4><p><kbd>Échap</kbd> : pause, sauvegarde, chargement</p></div>

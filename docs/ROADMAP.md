@@ -33,7 +33,8 @@ profondeur et roches plus dures, sauvegarde/chargement, première automatisation
 
 ## v0.5 — Énergie et contraintes
 - Générateurs (charbon), réseau électrique, consommation des machines.
-- Ventilation, eau et pompes, chaleur en profondeur, stabilité des tunnels (étais).
+- ✅ Dangers : éboulements (étais), grisou (ventilateurs), eau (pompes), santé du joueur.
+- Chaleur en profondeur, coups de grisou qui explosent près d'une flamme, détecteur de poches.
 
 ## Plus tard
 - Ressources rares et fictives au-delà de 450 m, mine agrandie ou étages multiples.

@@ -130,6 +130,12 @@ kbd {
   background: linear-gradient(135deg, var(--l) 0 25%, var(--c) 26% 70%, var(--d) 71%);
   box-shadow: 0 0 0 1.5px #120e10;
 }
+/* Santé et alerte de danger (HUD en bas à gauche). */
+.bar.health { margin-top: 6px; height: 14px; }
+.bar.health span { font-size: 11px; line-height: 13px; }
+.danger-line { color: var(--bad); font-size: 13px; margin-top: 4px; animation: danger-blink 0.9s steps(2) infinite; }
+@keyframes danger-blink { 50% { opacity: 0.55; } }
+
 /* Lingot : barre trapézoïdale, reflet sur le dessus. */
 .res.ingot {
   width: 15px; height: 8px; border-radius: 1px; vertical-align: 0;
