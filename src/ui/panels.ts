@@ -12,7 +12,6 @@ import { BAGS, JACKHAMMER, PICKAXES } from '../data/tools';
 import type { GameState } from '../sim/GameState';
 import type { BorerStatus, ReturnReason, TunnelBorer } from '../sim/structures/Borer';
 import type { Smelter, SmelterStatus } from '../sim/structures/Smelter';
-import type { Pump, PumpStatus } from '../sim/structures/Safety';
 import type { Drill } from '../sim/structures/Drill';
 import type { ShippingCrate } from '../sim/structures/ShippingCrate';
 import type { Sorter } from '../sim/structures/Sorter';
@@ -152,7 +151,7 @@ function machineSpecs(m: MachineDef): [string, string][] {
   if (m.railSwitch) return [['Branches', 'tout droit, gauche, droite'], ['Mode', 'fixe ou alterné']];
   if (m.id === 'prop') return [['Protège', '3 cases autour (7×7)'], ['Passage', 'on passe dessous']];
   if (m.id === 'fan') return [['Portée', `${GAS.fanRadius} cases`], ['Énergie', 'aucune']];
-  if (m.id === 'pump' && m.fuel) return [['Portée', `${WATER.pumpRadius} cases`], ['Charbon', `1 unité / ${m.fuel.secondsPerUnit} s de pompage`]];
+  if (m.id === 'pump') return [['Portée', `${WATER.pumpRadius} cases`], ['Énergie', 'aucune']];
   if (m.smelter && m.fuel)
     return [
       ['Vitesse', `1 lingot / ${num(m.smelter.smeltTime)} s`],
@@ -677,29 +676,6 @@ export function smelterPanel(g: GameState, s: Smelter): string {
     <h4>Recettes</h4>
     <table class="table"><tbody>${recipes}</tbody></table>
     <p class="hint">Le minerai entre par n'importe quel côté sauf la sortie ${DIR_ARROWS[s.dir]} ; le charbon entre de partout (un coffre de charbon collé le recharge). Les lingots sont poussés devant la flèche (convoyeur, coffre, caisse d'expédition). Le charbon ne brûle que pendant la fonte.</p>`;
-}
-
-// ------------------------------------------------------------------ pompe
-
-const PUMP_STATUS: Record<PumpStatus, [string, string]> = {
-  ok: ['Pompe : la galerie s’assèche', 'good'],
-  idle: ['Au repos : pas d’eau à portée', 'warn'],
-  nofuel: ['De l’eau à retirer, mais plus de charbon', 'bad'],
-};
-
-export function pumpPanel(g: GameState, p: Pump): string {
-  const [label, cls] = PUMP_STATUS[p.status];
-  const coal = g.inventory.count('coal');
-  const secs = p.fuelSeconds();
-  return `
-    <div class="status ${cls}">● ${label}</div>
-    <div class="cards"><div class="card">
-      ${stat('Charbon', `${p.fuelUnits} / ${p.fuelMax}`)}
-      ${stat('Autonomie', `${Math.floor(secs / 60)} min ${Math.floor(secs % 60)} s de pompage`)}
-      ${stat('Portée', `${WATER.pumpRadius} cases autour d'elle`)}
-      <div class="buy">${btn('pumpFuel', `Charger le charbon du sac (${coal})`, { cls: 'primary', disabled: coal <= 0 || p.fuelUnits >= p.fuelMax })}</div>
-    </div></div>
-    <p class="hint">Les poches d'eau (dès 70 m) inondent la galerie quand on les perce : l'eau ralentit, et profonde elle épuise. La pompe ne brûle son charbon que lorsqu'il y a de l'eau à retirer ; un coffre de charbon collé la recharge.</p>`;
 }
 
 // ------------------------------------------------------------------ carte

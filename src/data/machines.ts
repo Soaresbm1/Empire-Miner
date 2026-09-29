@@ -447,16 +447,15 @@ export const MACHINES: MachineDef[] = [
   {
     id: 'pump',
     name: 'Pompe',
-    summary: "Assèche les galeries inondées à 5 cases autour d'elle. Brûle du charbon quand elle pompe.",
+    summary: "Assèche les galeries inondées à 5 cases autour d'elle. Tourne toute seule, sans charbon.",
     category: 'securite',
-    description: "Pompe à vapeur pour les poches d'eau (dès 70 m). Elle ne consomme que lorsqu'il y a de l'eau à retirer ; un coffre de charbon collé la recharge.",
+    description: "Pompe pour les poches d'eau (dès 70 m). Posée près d'une galerie inondée, elle se met en marche toute seule et l'assèche en quelques secondes.",
     price: 240,
     w: 1,
     h: 1,
     solid: true,
     rotatable: false,
     stats: { speed: 0, power: 0, capacity: 0, efficiency: 1, level: 1 },
-    fuel: { res: 'coal', secondsPerUnit: 30, maxUnits: 10 },
     unlock: { pickaxeTier: 2, text: 'Nécessite la Pioche améliorée' },
   },
   {

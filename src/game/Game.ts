@@ -321,13 +321,6 @@ export class Game {
       case 'borerLength':
         if (target instanceof TunnelBorer) g.setBorerLength(target, Number(arg));
         break;
-      case 'pumpFuel':
-        if (target instanceof Pump) {
-          const k = target.addFuel(g.inventory.count('coal'));
-          g.inventory.remove('coal', k);
-          if (k) this.ui.toast(`${k} charbon chargé${k > 1 ? 's' : ''} dans la pompe.`, 'good');
-        }
-        break;
       case 'smelterFuel':
         if (target instanceof Smelter) {
           const n = g.fuelSmelter(target);
@@ -604,7 +597,6 @@ export class Game {
     else if (s instanceof Drill) this.ui.openPanel('drill', s);
     else if (s instanceof TunnelBorer) this.ui.openPanel('borer', s);
     else if (s instanceof Smelter) this.ui.openPanel('furnace', s);
-    else if (s instanceof Pump) this.ui.openPanel('pump', s);
     else if (s instanceof Sorter) this.ui.openPanel('sorter', s);
     else if (s instanceof RailStation) this.ui.openPanel('station', s);
     else if (s instanceof RailSwitch) this.ui.openPanel('switch', s);
@@ -629,7 +621,6 @@ export class Game {
     if (near instanceof Drill) return `${e} Foreuse niv. ${near.level} — charbon, production, amélioration`;
     if (near instanceof TunnelBorer) return `${e} Foreuse de percement niv. ${near.level} — charbon, départ, améliorations`;
     if (near instanceof Smelter) return `${e} ${near.def.name} — charbon, minerai, lingots`;
-    if (near instanceof Pump) return `${e} Pompe — charbon`;
     if (near instanceof Sorter) return `${e} Trieur — choisir le minerai trié`;
     if (near instanceof RailStation) return `${e} ${near.def.name}`;
     if (near instanceof RailSwitch) return `${e} Aiguillage — choisir la branche`;
@@ -860,10 +851,7 @@ export class Game {
     }
     if (s instanceof Prop) return `<b>Étai</b><br>Pas d'éboulement à ${CAVE_IN.propRadius} cases autour`;
     if (s instanceof Fan) return `<b>Ventilateur</b> — ${s.active ? 'chasse le grisou' : 'air sain'}<br>Portée : ${GAS.fanRadius} cases`;
-    if (s instanceof Pump) {
-      const st = { ok: 'pompe', idle: "pas d'eau à portée", nofuel: 'sans charbon' }[s.status];
-      return `<b>Pompe</b> — ${st}<br>Charbon : ${s.fuelUnits} · portée : ${WATER.pumpRadius} cases`;
-    }
+    if (s instanceof Pump) return `<b>Pompe</b> — ${s.status === 'ok' ? 'assèche la galerie' : "pas d'eau à portée"}<br>Portée : ${WATER.pumpRadius} cases · sans charbon`;
     if (s instanceof Smelter) {
       const st = { ok: 'fond le minerai', idle: 'attend du minerai', nofuel: 'sans charbon', full: 'sortie saturée' }[s.status];
       return `<b>${s.def.name}</b> ${['→', '↓', '←', '↑'][s.dir]} — ${st}<br>Minerai : ${s.input.length} · lingots prêts : ${s.output.length} · charbon : ${s.fuelUnits}`;

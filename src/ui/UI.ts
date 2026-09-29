@@ -11,7 +11,6 @@ import type { TunnelBorer } from '../sim/structures/Borer';
 import type { Smelter } from '../sim/structures/Smelter';
 import { GAS, HEALTH, WATER } from '../data/hazards';
 import { MARKER_KINDS } from '../sim/Markers';
-import type { Pump } from '../sim/structures/Safety';
 import { Drill } from '../sim/structures/Drill';
 import { ShippingCrate } from '../sim/structures/ShippingCrate';
 import type { Sorter } from '../sim/structures/Sorter';
@@ -20,12 +19,12 @@ import { Storage } from '../sim/structures/Storage';
 import type { Structure } from '../sim/structures/Structure';
 import { esc, kg, money, resIcon } from './format';
 import { MAP_COLORS } from '../render/MineMap';
-import { borerPanel, counterPanel, pumpPanel, smelterPanel, drillPanel, helpPanel, inventoryPanel, mapPanel, shippingPanel, sorterPanel, stationPanel, storagePanel, switchPanel, workshopPanel } from './panels';
+import { borerPanel, counterPanel, smelterPanel, drillPanel, helpPanel, inventoryPanel, mapPanel, shippingPanel, sorterPanel, stationPanel, storagePanel, switchPanel, workshopPanel } from './panels';
 
 /** Flèches dans les 8 directions, dans l'ordre des angles (est, sud-est, sud…). */
 const ARROWS8 = ['→', '↘', '↓', '↙', '←', '↖', '↑', '↗'];
 
-export type PanelKind = 'counter' | 'workshop' | 'inventory' | 'storage' | 'drill' | 'borer' | 'furnace' | 'pump' | 'shipping' | 'sorter' | 'station' | 'switch' | 'map' | 'help';
+export type PanelKind = 'counter' | 'workshop' | 'inventory' | 'storage' | 'drill' | 'borer' | 'furnace' | 'shipping' | 'sorter' | 'station' | 'switch' | 'map' | 'help';
 
 export interface UIHost {
   onAction(action: string, arg: string): void;
@@ -269,10 +268,6 @@ export class UI {
       case 'furnace':
         title = (target as Smelter).def.name;
         body = smelterPanel(g, target as Smelter);
-        break;
-      case 'pump':
-        title = getMachine('pump').name;
-        body = pumpPanel(g, target as Pump);
         break;
       case 'shipping':
         title = getMachine('shipping').name;

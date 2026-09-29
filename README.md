@@ -113,7 +113,7 @@ lettre tapée : c'est la touche marquée M, quel que soit le clavier.
     galerie quand on les perce ; le gaz blesse, se dissipe lentement, et un **ventilateur** (180 $) le chasse en
     quelques secondes ;
   - **eau** (dès 70 m) : des poches (suintements bleus) inondent la galerie ; l'eau ralentit, profonde elle épuise ;
-    une **pompe** (240 $, au charbon, seulement quand elle pompe) l'assèche.
+    une **pompe** (240 $, sans charbon : elle tourne toute seule) l'assèche.
   Le HUD affiche la santé et le danger du moment, la carte montre les galeries inondées ou envahies de grisou.
 - Le mode construction (`B`) s'ouvre même sans aucune machine en stock, pour démonter au clic droit.
 - Vente automatique : **caisse d'expédition** à poser en surface. Tout ce qui y arrive est vendu au prix du

@@ -1348,12 +1348,6 @@ export class Renderer {
     ctx.fillRect(x + 5, y - 6 + stroke, 2, 6);
     ctx.fillStyle = '#6a4424';
     ctx.fillRect(x + 2, y - 7 + stroke, 12, 2);
-    // Jauge de charbon.
-    const fuel = s.fuelMax ? (s.fuelUnits + (s.burn > 0 ? 1 : 0)) / s.fuelMax : 0;
-    ctx.fillStyle = '#1a1418';
-    ctx.fillRect(x + 1, y + 15, 14, 2);
-    ctx.fillStyle = fuel > 0.2 ? '#f08a24' : '#d0342c';
-    ctx.fillRect(x + 1, y + 15, Math.round(14 * Math.min(1, fuel)), 2);
     if (on && Math.random() < 0.25) this.fx.emit('dust', x + 12, y + 14, 'rgba(120,180,240,0.6)', 1, 18);
   }
 
@@ -1455,7 +1449,6 @@ export class Renderer {
       let icon: 'nofuel' | 'full' | 'stop' | null = null;
       let at = { x: s.x * TILE, y: s.y * TILE };
       if (s instanceof Drill && s.status !== 'ok') icon = s.status === 'nofuel' ? 'nofuel' : s.status === 'full' ? 'full' : 'stop';
-      else if (s instanceof Pump && s.status === 'nofuel') icon = 'nofuel';
       else if (s instanceof Smelter) {
         // Four sans charbon alors qu'il a du minerai, ou sortie saturée.
         icon = s.status === 'nofuel' ? 'nofuel' : s.status === 'full' ? 'full' : null;

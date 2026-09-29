@@ -239,11 +239,6 @@ export class HazardSystem {
     return this.clear(this.world.gas, this.gasTiles, x, y, GAS.fanRadius, GAS.fanDecay * dt);
   }
 
-  /** Vrai s'il y a de l'eau à portée d'une pompe en (x, y). */
-  waterNear(x: number, y: number): boolean {
-    return this.clear(this.world.water, this.waterTiles, x, y, WATER.pumpRadius, 0);
-  }
-
   /** Pompe : retire l'eau autour de (x, y). Vrai s'il y en avait. */
   pump(x: number, y: number, dt: number): boolean {
     return this.clear(this.world.water, this.waterTiles, x, y, WATER.pumpRadius, WATER.pumpDrain * dt);
@@ -259,7 +254,6 @@ export class HazardSystem {
         const i = w.idx(x + dx, y + dy);
         if (grid[i] <= 0) continue;
         any = true;
-        if (amount <= 0) return true;
         grid[i] = Math.max(0, grid[i] - amount);
         if (grid[i] === 0) set.delete(i);
       }
