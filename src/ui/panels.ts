@@ -5,7 +5,8 @@
 import { DIR_ARROWS, DX, DY } from '../core/dir';
 import { METERS_PER_TILE, SURFACE_ROWS, TILE, depthAt } from '../core/constants';
 import { BorerLevelSpec, MACHINES, MACHINE_GROUPS, MachineDef, MachineLevel, conveyorThroughput, kitName, parseKit } from '../data/machines';
-import { GAS, HEAT, WATER } from '../data/hazards';
+import { BOOTS_WATER, GEAR, GearDef, HAZARD_LABEL } from '../data/gear';
+import { CAVE_IN, GAS, HEALTH, HEAT, WATER } from '../data/hazards';
 import { MARKER_KINDS, MARKER_ORDER, MAX_MARKERS } from '../sim/Markers';
 import { RESOURCES, getResource } from '../data/resources';
 import { BAGS, JACKHAMMER, PICKAXES } from '../data/tools';
@@ -18,6 +19,7 @@ import type { Sorter } from '../sim/structures/Sorter';
 import type { RailStation, RailSwitch, SwitchSetting } from '../sim/structures/Rail';
 import type { Storage } from '../sim/structures/Storage';
 import { esc, kg, money, num, rarityTag, resIcon } from './format';
+import { icon as themeIcon } from './theme';
 import { productionStats } from './stats';
 
 const btn = (action: string, label: string, opts: { arg?: string; disabled?: boolean; cls?: string; title?: string } = {}) =>
@@ -92,10 +94,49 @@ function jackhammerCard(g: GameState): string {
     }</div></div></div>`;
 }
 
+/** Ce que la pièce change, danger par danger : « sans → avec ». */
+function gearFacts(def: GearDef): string {
+  const keep = 1 - def.absorb;
+  switch (def.hazard) {
+    case 'cavein':
+      return stat('Éboulement', `${CAVE_IN.damage} dégâts`, `${num(CAVE_IN.damage * keep, 0)}`);
+    case 'gas':
+      return stat('Grisou', `${GAS.dps} / s`, `${num(GAS.dps * keep)} / s`);
+    case 'water':
+      return `${stat('Eau profonde', `${WATER.dps} / s`, `${num(WATER.dps * keep)} / s`)}${stat('Marche dans l\'eau', `${Math.round(WATER.slowShallow * 100)} %`, `${Math.round(BOOTS_WATER.shallow * 100)} %`)}${stat(
+        'Marche en eau profonde',
+        `${Math.round(WATER.slowDeep * 100)} %`,
+        `${Math.round(BOOTS_WATER.deep * 100)} %`,
+      )}`;
+    case 'heat':
+      return stat('Chaleur', `${num(HEAT.hurtTop)} à ${num(HEAT.hurtBottom)} / s`, `${num(HEAT.hurtTop * keep, 2)} à ${num(HEAT.hurtBottom * keep, 2)} / s`);
+  }
+}
+
+/** Onglet Équipement de l'Atelier : une fiche par pièce de protection. */
+function gearShop(g: GameState): string {
+  const cards = GEAR.map((def) => {
+    const owned = g.hasGear(def.id);
+    const can = g.money >= def.price;
+    const src = themeIcon(`gear:${def.id}`);
+    const img = src ? `<img class="gear-ico" src="${src}" alt="">` : '';
+    const specs = `${stat(`${HAZARD_LABEL[def.hazard]} (dès ${def.fromDepth} m)`, `−${Math.round(def.absorb * 100)} % de dégâts`)}${gearFacts(def)}`;
+    return `<div class="card ${owned ? '' : 'highlight'}"><h3>${img}${def.name}${owned ? ' — porté' : ` <small>(${def.slotName.toLowerCase()})</small>`}</h3><p>${def.description}</p>${specs}${
+      owned
+        ? ''
+        : `<div class="buy">${btn('buyGear', `Acheter — ${money(def.price)}`, { arg: def.id, cls: 'primary', disabled: !can })}${
+            can ? '' : `<small>Il vous manque ${money(def.price - g.money)}</small>`
+          }</div>`
+    }</div>`;
+  }).join('');
+  return `<p class="shop-hint">Chaque pièce absorbe une part des dégâts d'un danger précis, dès l'achat. Dégâts en points de vie (sur ${HEALTH.max}) : « sans → avec ».</p><div class="cards gear-cards">${cards}</div>`;
+}
+
 export function workshopPanel(g: GameState, tab: string, icon: (id: string) => string = () => ''): string {
   const tabs = [
     ['tools', 'Outils'],
     ['transport', 'Transport'],
+    ['gear', 'Équipement'],
     ['machines', 'Machines'],
   ]
     .map(([id, label]) => `<button class="tab ${tab === id ? 'active' : ''}" data-action="tab" data-arg="${id}">${label}</button>`)
@@ -138,6 +179,8 @@ export function workshopPanel(g: GameState, tab: string, icon: (id: string) => s
         <div class="buy">${btn('buyBag', `Acheter — ${money(next.price)}`, { cls: 'primary', disabled: !can })}${can ? '' : `<small>Il vous manque ${money(next.price - g.money)}</small>`}</div></div>`;
     } else body += `<div class="card"><h3>Transport personnel au maximum</h3><p>Pour transporter davantage, automatisez : foreuses, convoyeurs et coffres.</p></div>`;
     body += `</div>`;
+  } else if (tab === 'gear') {
+    body = gearShop(g);
   } else {
     body = `<p class="shop-hint">Survolez une machine pour lire sa description complète.</p>${machineShop(g, icon)}`;
   }
@@ -778,7 +821,8 @@ export function helpPanel(keys: { move: string; label: (c: string) => string }):
     <div><h4>Carte</h4><p><kbd>M</kbd> : carte de la mine (ou clic sur la mini-carte)</p></div>
     <div><h4>Repères</h4><p><kbd>N</kbd> : marquer l'endroit où vous êtes ; sur la carte, un clic pose un repère. « Suivre » affiche une flèche vers lui</p></div>
     <div><h4>Dangers (en profondeur)</h4><p>Plafond qui craque : posez un <b>étai</b> ou fuyez. Grisou : sortez du nuage, un <b>ventilateur</b> le chasse. Eau : une <b>pompe</b> l'assèche. À 0 de santé, on se réveille au camp, le sac reste au fond.</p></div>
-    <div><h4>Fournaise (sous 450 m)</h4><p>Roche volcanique, plus d'or et, sous 500 m, des diamants (Pioche pro en acier). La chaleur ralentit foreuses et fours : un <b>ventilateur</b> à ${HEAT.fanRadius} cases les rafraîchit</p></div>
+    <div><h4>Équipement de protection</h4><p>À l'atelier (onglet Équipement) : <b>casque</b> contre les éboulements, <b>masque à gaz</b>, <b>cuissardes</b> pour l'eau, <b>combinaison ignifugée</b> pour la Fournaise. Chaque pièce absorbe une part des dégâts du danger qu'elle contre</p></div>
+    <div><h4>Fournaise (sous 450 m)</h4><p>Roche volcanique, plus d'or et, sous 500 m, des diamants (Pioche pro en acier). La chaleur ralentit foreuses et fours et <b>épuise le mineur</b> : un <b>ventilateur</b> à ${HEAT.fanRadius} cases rafraîchit les machines et vous laisse souffler ; la combinaison ignifugée absorbe l'essentiel</p></div>
     <div><h4>Tableau d'affichage</h4><p>${k('KeyE')} devant le tableau, entre le comptoir et l'atelier : ventes, minerai et lingots par minute, gains des 10 dernières minutes, machines à l'arrêt</p></div>
     <div><h4>Four et fonderie</h4><p>Minerai (convoyeur ou ${k('KeyE')} : déposer) + charbon → lingots vendus 2,5 fois plus cher, poussés devant la flèche</p></div>
     <div><h4>Améliorer une foreuse</h4><p>${k('KeyE')} sur la foreuse : niveau 2 = cases gauche et droite, niveau 3 = aussi derrière</p></div>

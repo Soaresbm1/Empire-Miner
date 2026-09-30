@@ -11,7 +11,8 @@ import { Rng } from '../core/rng';
 import { AIR, getBlock } from '../data/blocks';
 import { zoneForDepth } from '../data/depth';
 import { getMachine, kitId, kitName, MACHINES, parseKit } from '../data/machines';
-import { GAS, HEALTH, WATER } from '../data/hazards';
+import { CAUSE_HAZARD, GEAR, HazardKind, getGear } from '../data/gear';
+import { GAS, HEALTH, HEAT, WATER } from '../data/hazards';
 import { RESOURCES, getResource, hasResource, resourceIndex } from '../data/resources';
 import { BAGS, JACKHAMMER, PICKAXES } from '../data/tools';
 import { Drop, DropSystem } from './Drops';
@@ -115,7 +116,11 @@ export class GameState implements StructureContext {
   hasJackhammer = false;
   tool: ToolKind = 'pickaxe';
   hammerFuel = 0;
+  /** Équipement de protection acheté à l'Atelier (identifiants de `GEAR`). */
+  readonly gear = new Set<string>();
   private lastNoFuel = -99;
+  private lastHeatWarn = -99;
+  private lastShieldMsg = -99;
   time = 0;
   autoPickup: Record<string, boolean> = {};
   stats: Stats = {
@@ -169,6 +174,17 @@ export class GameState implements StructureContext {
   setBagLevel(level: number): void {
     this.bagLevel = level;
     this.inventory.capacity = BAGS[level].capacity;
+  }
+
+  hasGear(id: string): boolean {
+    return this.gear.has(id);
+  }
+
+  /** Part (0 à 1) des dégâts d'un danger absorbée par l'équipement porté. */
+  absorb(hazard: HazardKind): number {
+    let kept = 1;
+    for (const def of GEAR) if (def.hazard === hazard && this.gear.has(def.id)) kept *= 1 - def.absorb;
+    return 1 - kept;
   }
 
   // ---------------------------------------------------------------- contexte des structures
@@ -306,6 +322,16 @@ export class GameState implements StructureContext {
   /** Blesse le joueur ; à 0 point de vie, il s'évanouit. */
   hurtPlayer(amount: number, cause: string): void {
     if (amount <= 0 || this.hp <= 0) return;
+    // L'équipement absorbe une part des dégâts ; on le dit après un gros choc.
+    const hazard = CAUSE_HAZARD[cause];
+    const shield = hazard ? this.absorb(hazard) : 0;
+    if (shield > 0) {
+      if (amount >= 10 && this.time - this.lastShieldMsg >= 3) {
+        this.lastShieldMsg = this.time;
+        this.emit({ t: 'message', text: `Votre équipement amortit le choc : −${Math.round(shield * 100)} % de dégâts.`, kind: 'good' });
+      }
+      amount *= 1 - shield;
+    }
     this.hp = Math.max(0, this.hp - amount);
     this.lastHurt = this.time;
     // Dégâts continus (gaz, eau) : un événement de temps en temps suffit à l'écran et au son.
@@ -330,6 +356,21 @@ export class GameState implements StructureContext {
     const p = this.player;
     if (this.hazards.gasAt(p.tileX, p.tileY) >= GAS.harmful) this.hurtPlayer(GAS.dps * dt, 'grisou');
     if (this.hazards.waterAt(p.tileX, p.tileY) >= WATER.deep) this.hurtPlayer(WATER.dps * dt, 'noyade');
+    // Fournaise : la chaleur épuise, sauf près d'un ventilateur.
+    const heat = this.hazards.heatAt(p.tileY);
+    if (heat !== null && !this.hazards.cooled(p.tileX, p.tileY)) {
+      this.hurtPlayer((HEAT.hurtTop + (HEAT.hurtBottom - HEAT.hurtTop) * heat) * dt, 'chaleur');
+      if (this.time - this.lastHeatWarn >= 40) {
+        this.lastHeatWarn = this.time;
+        this.emit({
+          t: 'message',
+          text: this.gear.has('suit')
+            ? 'La Fournaise brûle : la combinaison tient, mais un ventilateur vous laissera souffler.'
+            : 'La chaleur vous épuise ! Une combinaison ignifugée (Atelier) ou un ventilateur tout près vous protège.',
+          kind: 'warn',
+        });
+      }
+    }
     if (this.hp < HEALTH.max && this.time - this.lastHurt >= HEALTH.regenDelay) this.hp = Math.min(HEALTH.max, this.hp + HEALTH.regen * dt);
   }
 
@@ -368,7 +409,7 @@ export class GameState implements StructureContext {
     p.moving = len > 0.01;
     if (!p.moving) return;
     // Ralenti pendant un coup de pioche.
-    const speed = PLAYER_SPEED * this.bag.speedMul * (p.swingT > 0 ? 0.55 : 1) * this.hazards.speedFactor(p.tileX, p.tileY);
+    const speed = PLAYER_SPEED * this.bag.speedMul * (p.swingT > 0 ? 0.55 : 1) * this.hazards.speedFactor(p.tileX, p.tileY, this.gear.has('boots'));
     this.moveAxis(mx * speed * dt, 0);
     this.moveAxis(0, my * speed * dt);
     p.walkTime += dt;
@@ -777,6 +818,15 @@ export class GameState implements StructureContext {
     this.hasJackhammer = true;
     this.tool = 'jackhammer';
     this.emit({ t: 'bought', name: JACKHAMMER.name });
+    return true;
+  }
+
+  /** Achète une pièce d'équipement à l'Atelier ; elle est portée aussitôt. */
+  buyGear(id: string): boolean {
+    const def = getGear(id);
+    if (this.gear.has(id) || !this.isNear('workshop') || !this.pay(def.price)) return false;
+    this.gear.add(id);
+    this.emit({ t: 'bought', name: def.name });
     return true;
   }
 

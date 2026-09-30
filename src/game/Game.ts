@@ -295,6 +295,9 @@ export class Game {
       case 'buyJackhammer':
         g.buyJackhammer();
         break;
+      case 'buyGear':
+        g.buyGear(arg);
+        break;
       case 'buyKit': {
         const [id, q] = arg.split(':');
         g.buyKit(id, Number(q));

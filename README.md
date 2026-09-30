@@ -47,7 +47,8 @@ lettre tapée : c'est la touche marquée M, quel que soit le clavier.
 - Profondeur réelle (2,5 m par rangée), jusqu'à 607 m : roche tendre → roche dure (100 m) → basalte (300 m) →
   roche volcanique (450 m, la Fournaise).
 - Ressources : pierre, charbon, cuivre, fer, argent, or, diamant (valeur, poids, rareté, résistance, profondeur).
-- Comptoir de vente et atelier en surface ; 4 pioches, 3 moyens de transport (sac, grand sac, brouette).
+- Comptoir de vente et atelier en surface ; 4 pioches, 3 moyens de transport (sac, grand sac, brouette) et 4 pièces
+  d'équipement de protection.
 - **Marteau-piqueur** (900 $, pioche en fer) : attaque la paroi sur 3 cases de large (la case visée et ses voisines,
   perpendiculairement au coup), très vite, en brûlant le charbon du sac (1 unité / 12 s de travail). `T` passe de la
   pioche au marteau ; sans charbon, on repasse automatiquement à la pioche.
@@ -116,6 +117,16 @@ lettre tapée : c'est la touche marquée M, quel que soit le clavier.
   - **eau** (dès 70 m) : des poches (suintements bleus) inondent la galerie ; l'eau ralentit, profonde elle épuise ;
     une **pompe** (240 $, sans charbon : elle tourne toute seule) l'assèche.
   Le HUD affiche la santé et le danger du moment, la carte montre les galeries inondées ou envahies de grisou.
+- **Équipement de protection** (onglet « Équipement » de l'Atelier) : une pièce par emplacement, chacune contre un
+  danger précis, portée dès l'achat, conservée si l'on s'évanouit et sauvegardée. Elle absorbe une part des dégâts :
+  - **casque renforcé** (120 $) : −65 % de dégâts d'éboulement (il ne remplace pas l'étai) ;
+  - **masque à gaz** (200 $) : −85 % de dégâts de grisou ;
+  - **cuissardes étanches** (150 $) : on marche dans l'eau peu profonde à vitesse normale, à 75 % (au lieu de 45 %)
+    dans l'eau profonde, et l'eau profonde épuise 60 % de moins ;
+  - **combinaison ignifugée** (650 $) : −85 % de dégâts de chaleur dans la Fournaise.
+  Chaque fiche montre les chiffres « sans → avec ». Les pièces se voient sur le mineur (casque d'acier, masque et
+  filtres, jambes jaunes, veste orange et salopette argentée) et s'allument sous la barre de santé, où les pièces
+  manquantes restent grisées (survol : prix et effet). Le HUD adapte ses alertes à ce que l'on porte.
 - Le mode construction (`B`) range les machines en stock par onglets (extraction, fonte, transport, rails,
   stockage, sécurité), chacune avec son icône et son stock. La fiche de la machine choisie rappelle ses règles de
   pose (sur un gisement, en surface…), et une ligne d'état dit en direct si la pose est possible là où vise la
@@ -128,8 +139,11 @@ lettre tapée : c'est la touche marquée M, quel que soit le clavier.
   **filons de diamant** (la ressource la plus précieuse, taillée seulement par la Pioche pro en acier, qui ne se
   fond pas). La chaleur y ralentit les foreuses, la foreuse de percement et les fours, de 85 % de leur cadence à
   450 m jusqu'à 50 % au fond (la température s'affiche sous la profondeur, un thermomètre signale les machines
-  ralenties). Un **ventilateur** à 4 cases les rafraîchit et leur rend leur cadence normale. Les anciennes
-  sauvegardes se chargent et la mine se prolonge simplement par le bas.
+  ralenties). Un **ventilateur** à 4 cases les rafraîchit et leur rend leur cadence normale. La chaleur
+  **épuise aussi le mineur** loin d'un ventilateur : de 0,8 point de vie par seconde à 450 m jusqu'à 3 au fond (la
+  santé ne remonte plus tant qu'il a chaud). Un ventilateur à 4 cases l'en protège (on y reprend son souffle) et la
+  combinaison ignifugée en absorbe l'essentiel. Les anciennes sauvegardes se chargent et la mine se prolonge
+  simplement par le bas.
 - **Tableau d'affichage** : un panneau de bois au milieu du camp, entre le Comptoir et l'Atelier (`E` devant lui).
   Il affiche les **statistiques de production** : trois chiffres (ventes, minerai extrait, lingots fondus par
   minute, moyennés sur les 5 dernières minutes), un histogramme des gains des 10 dernières minutes (comptoir et

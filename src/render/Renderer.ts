@@ -91,7 +91,8 @@ export class Renderer {
   profile: QualityProfile = PROFILES.high;
   private chunks: ChunkCache | null = null;
   private state: GameState | null = null;
-  private readonly player: PlayerSprites;
+  /** Le mineur habillé : une série d'images par combinaison d'équipement (créées à la demande). */
+  private readonly minerSets = new Map<string, PlayerSprites>();
   private readonly picks: HTMLCanvasElement[][];
   private readonly jacks: HTMLCanvasElement[];
   private readonly nuggets: Map<string, HTMLCanvasElement>;
@@ -111,7 +112,6 @@ export class Renderer {
     this.ctx = canvas.getContext('2d')!;
     this.light = document.createElement('canvas');
     this.lctx = this.light.getContext('2d')!;
-    this.player = buildPlayerSprites();
     this.picks = buildPickaxeSprites();
     this.jacks = buildJackhammerSprites();
     this.nuggets = buildNuggetSprites();
@@ -1583,17 +1583,30 @@ export class Renderer {
 
   // ------------------------------------------------------------------ personnage
 
+  /** Images du mineur avec l'équipement qu'il porte en ce moment. */
+  private minerSprites(): PlayerSprites {
+    const gear = this.state!.gear;
+    const key = ['helmet', 'mask', 'boots', 'suit'].map((id) => (gear.has(id) ? '1' : '0')).join('');
+    let set = this.minerSets.get(key);
+    if (!set) {
+      set = buildPlayerSprites({ helmet: gear.has('helmet'), mask: gear.has('mask'), boots: gear.has('boots'), suit: gear.has('suit') });
+      this.minerSets.set(key, set);
+    }
+    return set;
+  }
+
   private drawPlayer(): void {
     const state = this.state!;
     const p = state.player;
     const ctx = this.ctx;
-    const frames = this.player.frames[p.facing];
+    const sprites = this.minerSprites();
+    const frames = sprites.frames[p.facing];
     const walking = p.moving && p.swingT <= 0;
     // Marche à quatre images : pas, passage, pas, passage (le corps se soulève au passage).
     const frame = walking ? 1 + (Math.floor(p.walkTime * 9) % 4) : 0;
     // À l'arrêt, le mineur cligne des yeux de temps en temps.
     const blink = !walking && p.swingT <= 0 && this.time % 4.6 < 0.14;
-    const img = blink ? this.player.blink[p.facing] : frames[frame];
+    const img = blink ? sprites.blink[p.facing] : frames[frame];
     const bob = walking && frame % 2 === 0 ? -1 : 0;
     const x = Math.round(p.x - img.width / 2);
     const y = Math.round(p.y - img.height + 3 + bob);

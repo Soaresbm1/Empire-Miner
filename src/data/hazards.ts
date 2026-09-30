@@ -73,6 +73,12 @@ export const HEAT = {
   /** Température affichée (°C) en haut et au fond de la zone. */
   tempTop: 42,
   tempBottom: 68,
+  /**
+   * Le mineur souffre aussi : loin d'un ventilateur, il perd `hurtTop` points de vie par seconde
+   * en haut de la zone et `hurtBottom` au fond (la combinaison ignifugée en absorbe l'essentiel).
+   */
+  hurtTop: 0.8,
+  hurtBottom: 3,
 };
 
 export const HEALTH = {

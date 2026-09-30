@@ -9,6 +9,7 @@ import type { GameState } from '../sim/GameState';
 import { OBJECTIVES, currentObjective } from '../sim/objectives';
 import type { TunnelBorer } from '../sim/structures/Borer';
 import type { Smelter } from '../sim/structures/Smelter';
+import { GEAR, HAZARD_LABEL } from '../data/gear';
 import { GAS, HEALTH, WATER } from '../data/hazards';
 import { MARKER_KINDS } from '../sim/Markers';
 import { Drill } from '../sim/structures/Drill';
@@ -110,14 +111,18 @@ export class UI {
     const surface = g.player.tileY < 12;
     this.set('hud-money', `<span class="coin"></span>${money(g.money)}`);
     this.set('hud-income', extra.income);
-    // Fournaise : température, qui ralentit les machines.
+    // Fournaise : température, qui ralentit les machines et épuise le mineur (sauf près d'un ventilateur).
     const temp = surface ? null : g.hazards.temperature(g.player.tileY);
+    const cooled = temp !== null && g.hazards.cooled(g.player.tileX, g.player.tileY);
+    const suit = g.hasGear('suit');
     this.set(
       'hud-depth',
       surface
         ? `<span class="zone">Surface · Camp</span>`
         : `▼ <b>${Math.floor(depth)} m</b> <span class="zone" style="color:${zoneForDepth(depth).color}">${zoneForDepth(depth).name}</span>${
-            temp !== null ? `<div class="heat">Chaleur ${temp} °C : machines ralenties</div>` : ''
+            temp !== null
+              ? `<div class="heat">Chaleur ${temp} °C : machines ralenties${cooled ? ' · au frais près du ventilateur' : suit ? ' · combinaison en service' : ''}</div>`
+              : ''
           }`,
     );
     const inv = g.inventory;
@@ -133,10 +138,24 @@ export class UI {
     const quake = g.hazards.pendingNear(p.tileX, p.tileY, 4);
     const alerts: string[] = [];
     if (quake) alerts.push(`Le plafond craque : étai ou fuite ! (${Math.ceil(quake.t)} s)`);
-    if (gas >= GAS.harmful) alerts.push('Grisou : sortez du nuage !');
+    const boots = g.hasGear('boots');
+    if (gas >= GAS.harmful) alerts.push(g.hasGear('mask') ? 'Grisou : le masque vous protège, sortez du nuage' : 'Grisou : sortez du nuage !');
     else if (gas > 0) alerts.push('Traces de grisou');
-    if (water >= WATER.deep) alerts.push('Eau profonde : vous vous épuisez');
-    else if (water > 0) alerts.push("Dans l'eau : vous êtes ralenti");
+    if (water >= WATER.deep) alerts.push(boots ? 'Eau profonde : les cuissardes limitent la fatigue' : 'Eau profonde : vous vous épuisez');
+    else if (water > 0 && !boots) alerts.push("Dans l'eau : vous êtes ralenti");
+    if (temp !== null && !cooled && !suit) alerts.push('Chaleur : la santé baisse (ventilateur ou combinaison)');
+    // Pièces d'équipement : allumées si portées, sinon grisées avec le rappel de leur prix (dès qu'on descend).
+    const gearLine =
+      g.gear.size > 0 || g.stats.maxDepth >= 55
+        ? `<div class="gear-line">${GEAR.map((def) => {
+            const on = g.hasGear(def.id);
+            const src = icon(`gear:${def.id}`);
+            const tip = on
+              ? `${def.name} : ${HAZARD_LABEL[def.hazard].toLowerCase()}, −${Math.round(def.absorb * 100)} % de dégâts`
+              : `${def.name} : à l'atelier, ${money(def.price)}`;
+            return src ? `<img class="gear-ico ${on ? 'on' : 'off'}" src="${src}" alt="" title="${esc(tip)}">` : '';
+          }).join('')}</div>`
+        : '';
     const hp = g.hp / HEALTH.max;
     const health = `<div class="bar health ${hp < 0.35 ? 'full' : hp < 0.7 ? 'warn' : ''}"><div style="width:${Math.max(0, hp * 100)}%"></div><span>Santé ${Math.ceil(g.hp)} / ${HEALTH.max}</span></div>${
       alerts.length ? `<div class="danger-line">⚠ ${alerts.join(' · ')}</div>` : ''
@@ -152,7 +171,7 @@ export class UI {
       }</div>
        <div class="bar bag ${ratio >= 0.999 ? 'full' : ratio > 0.8 ? 'warn' : ''}"><div style="width:${Math.min(100, ratio * 100)}%"></div><span>${g.bag.name} ${kg(w)} / ${kg(inv.capacity)}</span></div>
        <div class="chips">${items || '<span class="muted">Sac vide</span>'}</div>
-       ${health}`,
+       ${health}${gearLine}`,
     );
     const { objective, index } = currentObjective(g);
     this.set(
