@@ -4,6 +4,7 @@ import { deserialize, serialize } from '../src/save/save';
 import { GameState } from '../src/sim/GameState';
 import type { Conveyor } from '../src/sim/structures/Conveyor';
 import { Sorter } from '../src/sim/structures/Sorter';
+import { sorterPanel } from '../src/ui/panels';
 import type { Storage } from '../src/sim/structures/Storage';
 import { teleport } from './helpers';
 
@@ -122,5 +123,139 @@ describe('trieur', () => {
     const s2 = h.structures.at(45, 4);
     expect(s2).toBeInstanceOf(Sorter);
     expect((s2 as Sorter).filter).toBe('iron');
+  });
+});
+
+describe('trieur multi-filtre', () => {
+  const total = (...stores: Storage[]) => {
+    const all: Record<string, number> = {};
+    for (const st of stores) for (const [k, v] of Object.entries(st.items)) all[k] = (all[k] ?? 0) + v;
+    return all;
+  };
+
+  it('envoie plusieurs minerais tout droit et tout le reste sur les côtés', () => {
+    const g = new GameState(12);
+    const { src, so, front, left, right } = setup(g);
+    g.toggleSorterFilter(so, 'coal');
+    g.toggleSorterFilter(so, 'iron');
+    expect(so.filters).toEqual(['coal', 'iron']);
+    expect(feed(g, src, ['coal', 'copper', 'iron', 'silver'], 40, 50)).toBe(40);
+    expect(front.items).toEqual({ coal: 10, iron: 10 });
+    expect(total(left!, right!)).toEqual({ copper: 10, silver: 10 });
+    expect(so.sortedFront).toBe(20);
+    expect(so.sortedSides).toBe(20);
+  });
+
+  it('un clic ajoute un minerai, un second clic le retire ; « aucun » vide la liste', () => {
+    const g = new GameState(12);
+    const { so } = setup(g);
+    expect(g.toggleSorterFilter(so, 'gold')).toBe(true);
+    expect(g.toggleSorterFilter(so, 'coal')).toBe(true);
+    expect(so.filters).toEqual(['coal', 'gold']); // dans l'ordre des ressources, pas des clics
+    expect(g.toggleSorterFilter(so, 'gold')).toBe(true);
+    expect(so.filters).toEqual(['coal']);
+    expect(g.toggleSorterFilter(so, 'licorne')).toBe(false);
+    expect(so.filters).toEqual(['coal']);
+    g.toggleSorterFilter(so, 'iron');
+    expect(g.setSorterFilter(so, null)).toBe(true);
+    expect(so.filters).toEqual([]);
+    expect(so.filter).toBe(null);
+  });
+
+  it('setSorterFilter garde son rôle d’avant : un seul minerai, qui remplace la liste', () => {
+    const g = new GameState(12);
+    const { so } = setup(g);
+    g.toggleSorterFilter(so, 'coal');
+    g.toggleSorterFilter(so, 'iron');
+    expect(g.setSorterFilter(so, 'gold')).toBe(true);
+    expect(so.filters).toEqual(['gold']);
+    expect(so.filter).toBe('gold');
+    expect(g.setSorterFilter(so, 'licorne')).toBe(false);
+    expect(so.filters).toEqual(['gold']);
+  });
+
+  it('les doublons et les ressources inconnues sont écartés', () => {
+    const so = new Sorter(0, 0, 0);
+    so.setFilters(['iron', 'coal', 'iron', 'licorne', 'coal']);
+    expect(so.filters).toEqual(['coal', 'iron']);
+  });
+
+  it('minerai et lingot se choisissent ensemble', () => {
+    const g = new GameState(12);
+    const { src, so, front, left, right } = setup(g);
+    g.toggleSorterFilter(so, 'iron');
+    g.toggleSorterFilter(so, 'iron_ingot');
+    feed(g, src, ['iron', 'iron_ingot', 'copper'], 30, 40);
+    expect(front.items).toEqual({ iron: 10, iron_ingot: 10 });
+    expect(total(left!, right!)).toEqual({ copper: 10 });
+  });
+
+  it('le tri reste strict pour chacun des minerais choisis quand la sortie avant est pleine', () => {
+    const g = new GameState(12);
+    const { src, so, front, left, right } = setup(g);
+    g.toggleSorterFilter(so, 'coal');
+    g.toggleSorterFilter(so, 'iron');
+    front.put('stone', 50); // coffre avant plein
+    feed(g, src, ['iron', 'copper', 'coal', 'silver'], 40, 30);
+    for (const side of [left!, right!]) {
+      expect(side.items.coal ?? 0).toBe(0);
+      expect(side.items.iron ?? 0).toBe(0);
+    }
+    expect(so.blocked).toBe(true);
+  });
+
+  it('changer la liste en cours de route ne perd rien', () => {
+    const g = new GameState(12);
+    const { src, so, front, left, right } = setup(g);
+    g.toggleSorterFilter(so, 'coal');
+    let fed = feed(g, src, ['coal', 'copper', 'iron'], 12, 3);
+    g.toggleSorterFilter(so, 'iron');
+    g.toggleSorterFilter(so, 'coal');
+    fed += feed(g, src, ['coal', 'copper', 'iron'], 12, 30);
+    const all = total(front, left!, right!);
+    const onBelts = g.structures.list.filter((x) => x.isBelt).reduce((n, x) => n + Object.values(x.contents()).reduce((a, b) => a + b, 0), 0);
+    expect((all.coal ?? 0) + (all.copper ?? 0) + (all.iron ?? 0) + onBelts).toBe(fed);
+  });
+
+  it('la sauvegarde conserve tous les filtres', () => {
+    const g = new GameState(12);
+    const { so } = setup(g);
+    g.toggleSorterFilter(so, 'gold');
+    g.toggleSorterFilter(so, 'coal');
+    const save = JSON.parse(JSON.stringify(serialize(g)));
+    const saved = save.structures.find((x: { type: string }) => x.type === 'sorter');
+    expect(saved.filters).toEqual(['coal', 'gold']);
+    expect(saved.filter).toBe('coal'); // l'ancien champ reste écrit
+    const back = deserialize(save).structures.at(45, 4) as Sorter;
+    expect(back.filters).toEqual(['coal', 'gold']);
+  });
+
+  it('une ancienne sauvegarde à filtre unique se charge, et sans filtre aussi', () => {
+    const g = new GameState(12);
+    setup(g);
+    const save = JSON.parse(JSON.stringify(serialize(g)));
+    const saved = save.structures.find((x: { type: string }) => x.type === 'sorter');
+    delete saved.filters;
+    saved.filter = 'iron';
+    expect((deserialize(save).structures.at(45, 4) as Sorter).filters).toEqual(['iron']);
+    saved.filter = null;
+    expect((deserialize(save).structures.at(45, 4) as Sorter).filters).toEqual([]);
+    saved.filters = ['licorne', 'copper', 42];
+    expect((deserialize(save).structures.at(45, 4) as Sorter).filters).toEqual(['copper']);
+  });
+
+  it('le panneau marque chaque minerai choisi et le dit au pluriel', () => {
+    const g = new GameState(12);
+    const { so } = setup(g);
+    const on = (html: string) => (html.match(/btn small on/g) ?? []).length;
+    expect(on(sorterPanel(g, so))).toBe(1); // « Aucun »
+    expect(sorterPanel(g, so)).toContain('Aucun minerai choisi');
+    g.toggleSorterFilter(so, 'coal');
+    expect(sorterPanel(g, so)).toMatch(/Charbon<\/b> part tout droit/);
+    g.toggleSorterFilter(so, 'stone');
+    const html = sorterPanel(g, so);
+    expect(on(html)).toBe(2);
+    expect(html).toContain('partent tout droit');
+    expect(html).toMatch(/data-action="sorterFilter" data-arg="coal"/);
   });
 });

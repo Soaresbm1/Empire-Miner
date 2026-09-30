@@ -75,8 +75,12 @@ lettre tapée : c'est la touche marquée M, quel que soit le clavier.
 - **Séparateur** : le minerai entre par l'arrière et ressort à tour de rôle devant, à gauche et à droite (les
   sorties bloquées ou vides sont sautées). Pour fusionner deux lignes, il suffit de faire arriver un convoyeur
   sur le côté d'un autre.
-- **Trieur** : le minerai entre par l'arrière ; le minerai choisi dans son panneau (`E`) part tout droit, tout le
-  reste part sur les côtés (à tour de rôle). Tri strict : si la sortie avant est pleine, le minerai choisi attend.
+- **Trieur** : le minerai entre par l'arrière ; les minerais choisis dans son panneau (`E`) partent tout droit, tout
+  le reste part sur les côtés (à tour de rôle). On en choisit **autant qu'on veut** : un clic ajoute un minerai, un
+  second clic le retire, « Aucun » vide la liste (minerais et lingots se choisissent séparément). Dans la mine, le
+  trieur affiche les minerais choisis (une icône, ou de petites pastilles de couleur). Tri strict : si la sortie
+  avant est pleine, les minerais choisis attendent, et tout le trieur avec eux. Les anciennes sauvegardes à filtre
+  unique se chargent telles quelles.
 - **Pont de convoyeur**, posé par paire dans la même direction (jusqu'à 5 cases d'écart) : le minerai passe
   au-dessus de ce qui se trouve entre les deux ponts, ce qui permet de croiser deux lignes. Pas à travers la roche.
 - **Wagonnets et rails** : rails posés en glissant (virages automatiques), **quai de chargement** (alimenté par le

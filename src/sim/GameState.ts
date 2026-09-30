@@ -1072,10 +1072,16 @@ export class GameState implements StructureContext {
   // ---------------------------------------------------------------- machines
 
   /** Choisit le minerai qu'un trieur envoie tout droit (null = tout va tout droit). */
+  /** Règle le trieur sur un seul minerai (ou aucun : tout va tout droit). */
   setSorterFilter(s: Sorter, res: string | null): boolean {
     if (res !== null && !hasResource(res)) return false;
-    s.filter = res;
+    s.setFilters(res === null ? [] : [res]);
     return true;
+  }
+
+  /** Ajoute un minerai à ceux que le trieur envoie tout droit, ou l'en retire s'il y est déjà. */
+  toggleSorterFilter(s: Sorter, res: string): boolean {
+    return s.toggleFilter(res);
   }
 
   /** Charge le charbon du sac dans une foreuse. */

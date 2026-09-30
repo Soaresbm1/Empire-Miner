@@ -405,22 +405,24 @@ export function switchPanel(g: GameState, sw: RailSwitch): string {
 
 export function sorterPanel(g: GameState, s: Sorter): string {
   const known = RESOURCES.filter(
-    (r) => r.id === 'stone' || r.id === 'coal' || r.id === s.filter || g.stats.discovered.includes(r.id) || (g.stats.collected[r.id] ?? 0) > 0,
+    (r) => r.id === 'stone' || r.id === 'coal' || s.filters.includes(r.id) || g.stats.discovered.includes(r.id) || (g.stats.collected[r.id] ?? 0) > 0,
   );
-  const choice = (id: string | null, label: string) =>
-    btn('sorterFilter', label, { arg: id ?? '', cls: `small ${s.filter === id ? 'on' : 'off'}` });
-  const status = s.filter
-    ? `${resIcon(s.filter)} <b>${getResource(s.filter).name}</b> part tout droit, tout le reste part sur les côtés.`
+  // « Aucun » vide la liste ; chaque minerai s'ajoute ou se retire d'un clic.
+  const choice = (id: string | null, label: string, on: boolean) => btn('sorterFilter', label, { arg: id ?? '', cls: `small ${on ? 'on' : 'off'}` });
+  const names = s.filters.map((r) => `${resIcon(r)} <b>${getResource(r).name}</b>`).join(', ');
+  const status = s.filters.length
+    ? `${names} ${s.filters.length > 1 ? 'partent' : 'part'} tout droit, tout le reste part sur les côtés.`
     : 'Aucun minerai choisi : tout va tout droit.';
   return `
     <div class="status good">${status}</div>
-    <h4>Minerai envoyé tout droit</h4>
-    <div class="buy">${choice(null, 'Aucun')}${known.map((r) => choice(r.id, `${resIcon(r.id)} ${r.name}`)).join('')}</div>
+    <h4>Minerais envoyés tout droit</h4>
+    <p class="hint">Cliquez sur un minerai pour l'ajouter, et sur un minerai choisi pour le retirer : vous pouvez en envoyer plusieurs tout droit.</p>
+    <div class="buy">${choice(null, 'Aucun', s.filters.length === 0)}${known.map((r) => choice(r.id, `${resIcon(r.id)} ${r.name}`, s.filters.includes(r.id))).join('')}</div>
     <div class="cards" style="margin-top:12px"><div class="card">
       ${stat('Triés tout droit', String(s.sortedFront))}${stat('Envoyés sur les côtés', String(s.sortedSides))}
       ${stat('Entrée', "par l'arrière (face opposée à la flèche verte)")}
     </div></div>
-    <p class="hint">Les côtés sont servis à tour de rôle ; un côté sans rien de branché est ignoré. Si la sortie avant est pleine, le minerai choisi attend : le tri reste fiable.</p>`;
+    <p class="hint">Les côtés sont servis à tour de rôle ; un côté sans rien de branché est ignoré. Si la sortie avant est pleine, les minerais choisis attendent : le tri reste fiable.</p>`;
 }
 
 // ------------------------------------------------------------------ foreuse

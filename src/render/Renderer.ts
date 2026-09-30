@@ -654,13 +654,15 @@ export class Renderer {
     pen.rivet(1, 6, '#cfd3dc');
     ctx.restore();
     if (s instanceof Sorter) {
-      // Trieur : le minerai choisi au centre, flèche verte vers l'avant, flèches grises sur les côtés.
+      // Trieur : les minerais choisis au centre, flèche verte vers l'avant, flèches grises sur les côtés.
       const [front, left, right] = s.outputs();
-      this.drawArrow(s.x * TILE + 8 + DX[front] * 6, s.y * TILE + 8 + DY[front] * 6, front, s.filter ? '#7dffa0' : '#f2e6c8');
-      if (s.filter) for (const d of [left, right]) this.drawArrow(s.x * TILE + 8 + DX[d] * 6, s.y * TILE + 8 + DY[d] * 6, d, '#a8957c');
+      const chosen = s.filters.length > 0;
+      this.drawArrow(s.x * TILE + 8 + DX[front] * 6, s.y * TILE + 8 + DY[front] * 6, front, chosen ? '#7dffa0' : '#f2e6c8');
+      if (chosen) for (const d of [left, right]) this.drawArrow(s.x * TILE + 8 + DX[d] * 6, s.y * TILE + 8 + DY[d] * 6, d, '#a8957c');
       ctx.fillStyle = '#1a1418';
       ctx.fillRect(s.x * TILE + 4, s.y * TILE + 4, 8, 8);
-      if (s.filter) ctx.drawImage(this.nuggets.get(s.filter)!, s.x * TILE + 4, s.y * TILE + 4);
+      if (s.filters.length === 1) ctx.drawImage(this.nuggets.get(s.filters[0])!, s.x * TILE + 4, s.y * TILE + 4);
+      else if (chosen) this.drawSorterSwatches(s.x * TILE, s.y * TILE, s.filters);
       else {
         ctx.fillStyle = '#f2e6c8';
         ctx.fillRect(s.x * TILE + 7, s.y * TILE + 6, 2, 3);
@@ -1082,6 +1084,35 @@ export class Renderer {
         ctx.fillRect(cx, sy > 0 ? cy : cy - L + 1, 1, L);
       }
     }
+  }
+
+  /**
+   * Plusieurs minerais choisis : une pastille de 3 × 3 pixels de la couleur de chacun (2 en rangée, 3 en
+   * triangle, 4 en carré ; au-delà de 4, la quatrième est un « + »), dans le cadre sombre du trieur.
+   */
+  private drawSorterSwatches(x: number, y: number, chosen: string[]): void {
+    const ctx = this.ctx;
+    const n = chosen.length;
+    const cells: [number, number][] =
+      n === 2 ? [[4, 6], [8, 6]] : n === 3 ? [[4, 4], [8, 4], [6, 8]] : [[4, 4], [8, 4], [4, 8], [8, 8]];
+    cells.forEach(([cx, cy], i) => {
+      const px = x + cx;
+      const py = y + cy;
+      if (i === 3 && n > 4) {
+        ctx.fillStyle = '#f2e6c8';
+        ctx.fillRect(px + 1, py, 1, 3);
+        ctx.fillRect(px, py + 1, 3, 1);
+        return;
+      }
+      const r = getResource(chosen[i]);
+      ctx.fillStyle = r.color;
+      ctx.fillRect(px, py, 3, 3);
+      ctx.fillStyle = r.light;
+      ctx.fillRect(px, py, 2, 1);
+      ctx.fillRect(px, py + 1, 1, 1);
+      ctx.fillStyle = r.dark;
+      ctx.fillRect(px + 2, py + 2, 1, 1);
+    });
   }
 
   private drawArrow(x: number, y: number, dir: Dir, color: string): void {
