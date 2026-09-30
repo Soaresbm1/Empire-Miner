@@ -65,6 +65,8 @@ const PLAYER_PALETTE: Record<string, string> = {
   u: '#dc6a48', T: '#b8412c', t: '#8a2e20', B: '#3867b0', c: '#5b8ad0', b: '#2a4f8a',
   // Ceinture, boucle, sac à dos, bottes.
   G: '#5a3d24', g: '#e0b84a', P: '#8a6236', p: '#5e4022', K: '#3b2a1f', k: '#6a4d38',
+  // Équipement : masque à gaz et ses filtres, caoutchouc jaune des cuissardes.
+  M: '#8a9880', F: '#3a403a', Z: '#e6c040', z: '#a88a14',
 };
 
 const HEAD_DOWN = ['...LYYYYy...', '..LYYWWYYy..', '.LYYYWWYYYy.', 'hYYYYYYYYYYy', '.yyyyyyyyyy.', '..SSSSSSSS..', '..SSESSESS..', '..sSSmmSSs..'];
@@ -102,13 +104,57 @@ export interface PlayerSprites {
 /** Yeux fermés : la case des yeux prend le ton d'ombre de la peau. */
 const closeEyes = (rows: string[]) => rows.map((r) => r.replace(/E/g, 's'));
 
-export function buildPlayerSprites(): PlayerSprites {
-  const down = LEGS_FRONT.map((legs) => fromArt([...HEAD_DOWN, ...BODY_DOWN, ...legs], PLAYER_PALETTE));
-  const up = LEGS_FRONT.map((legs) => fromArt([...HEAD_UP, ...BODY_UP, ...legs], PLAYER_PALETTE));
-  const right = LEGS_SIDE.map((legs) => fromArt([...HEAD_SIDE, ...BODY_SIDE, ...legs], PLAYER_PALETTE));
+/** Ce que le mineur porte (équipement de protection de l'Atelier) : chaque pièce se voit sur le personnage. */
+export interface PlayerGear {
+  helmet?: boolean;
+  mask?: boolean;
+  boots?: boolean;
+  suit?: boolean;
+}
+
+/** Casque d'acier, semelles de caoutchouc, combinaison orange et argent : seules les couleurs changent. */
+function playerPalette(gear: PlayerGear): Record<string, string> {
+  const p = { ...PLAYER_PALETTE };
+  if (gear.helmet) Object.assign(p, { L: '#eef4fb', Y: '#9db4cc', h: '#7c93ad', y: '#546a86' });
+  if (gear.boots) Object.assign(p, { K: '#6f5a10', k: '#a88a14' });
+  if (gear.suit) Object.assign(p, { u: '#f5b050', T: '#e08a28', t: '#a85c14', B: '#c8d0da', c: '#eef2f7', b: '#8a95a6' });
+  return p;
+}
+
+/** Cuissardes : les jambes (sous la ceinture) passent au jaune. */
+const waders = (legs: string[], gear: PlayerGear) => (gear.boots ? legs.map((r, i) => (i === 0 ? r : r.replace(/B/g, 'Z').replace(/b/g, 'z'))) : legs);
+
+/** Remplace des cases d'une rangée : `at` = [colonne de départ, lettres]. */
+const patch = (row: string, at: number, letters: string) => row.slice(0, at) + letters + row.slice(at + letters.length);
+
+/**
+ * Masque à gaz : de face, une pièce faciale grise et deux filtres aux joues ; de dos, la sangle ;
+ * de profil, le groin filtrant qui dépasse. Les rangées 6 et 7 sont celles du nez et de la bouche.
+ */
+const maskDown = (head: string[]) => head.map((r, i) => (i === 6 ? patch(r, 5, 'MM') : i === 7 ? patch(r, 2, 'FMMMMMMF') : r));
+const maskUp = (head: string[]) => head.map((r, i) => (i === 6 ? patch(r, 3, 'FFFFFF') : r));
+const maskSide = (head: string[]) => head.map((r, i) => (i === 6 ? patch(patch(r, 4, 'F'), 10, 'MM') : i === 7 ? patch(r, 6, 'MMMMFF') : r));
+
+/** Dessins du mineur habillé, exposés pour vérifier leurs dimensions (tests). */
+export function playerArt(gear: PlayerGear = {}) {
+  return {
+    headDown: gear.mask ? maskDown(HEAD_DOWN) : HEAD_DOWN,
+    headUp: gear.mask ? maskUp(HEAD_UP) : HEAD_UP,
+    headSide: gear.mask ? maskSide(HEAD_SIDE) : HEAD_SIDE,
+    legsFront: LEGS_FRONT.map((l) => waders(l, gear)),
+    legsSide: LEGS_SIDE.map((l) => waders(l, gear)),
+  };
+}
+
+export function buildPlayerSprites(gear: PlayerGear = {}): PlayerSprites {
+  const pal = playerPalette(gear);
+  const { headDown, headUp, headSide, legsFront, legsSide } = playerArt(gear);
+  const down = legsFront.map((legs) => fromArt([...headDown, ...BODY_DOWN, ...legs], pal));
+  const up = legsFront.map((legs) => fromArt([...headUp, ...BODY_UP, ...legs], pal));
+  const right = legsSide.map((legs) => fromArt([...headSide, ...BODY_SIDE, ...legs], pal));
   const left = right.map(mirror);
-  const blinkDown = fromArt(closeEyes([...HEAD_DOWN, ...BODY_DOWN, ...LEGS_FRONT[0]]), PLAYER_PALETTE);
-  const blinkRight = fromArt(closeEyes([...HEAD_SIDE, ...BODY_SIDE, ...LEGS_SIDE[0]]), PLAYER_PALETTE);
+  const blinkDown = fromArt(closeEyes([...headDown, ...BODY_DOWN, ...legsFront[0]]), pal);
+  const blinkRight = fromArt(closeEyes([...headSide, ...BODY_SIDE, ...legsSide[0]]), pal);
   return { frames: [right, down, left, up], blink: [blinkRight, blinkDown, mirror(blinkRight), up[0]] };
 }
 

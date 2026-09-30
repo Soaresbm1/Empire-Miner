@@ -295,6 +295,9 @@ export class Game {
       case 'buyJackhammer':
         g.buyJackhammer();
         break;
+      case 'buyGear':
+        g.buyGear(arg);
+        break;
       case 'buyKit': {
         const [id, q] = arg.split(':');
         g.buyKit(id, Number(q));
@@ -421,7 +424,8 @@ export class Game {
         if (target) g.rotateAt(target.x, target.y);
         break;
       case 'sorterFilter':
-        if (target instanceof Sorter) g.setSorterFilter(target, arg || null);
+        // « Aucun » vide la liste ; un minerai s'ajoute ou se retire (on peut en choisir plusieurs).
+        if (target instanceof Sorter) arg ? g.toggleSorterFilter(target, arg) : g.setSorterFilter(target, null);
         break;
     }
     this.flushEvents();
@@ -988,7 +992,9 @@ export class Game {
     }
     if (s instanceof Sorter)
       return `<b>Trieur</b> ${['→', '↓', '←', '↑'][s.dir]}<br>${
-        s.filter ? `${resIcon(s.filter)} ${getResource(s.filter).name} tout droit · le reste sur les côtés` : 'Aucun filtre : tout va tout droit'
+        s.filters.length
+          ? `${s.filters.map((r) => `${resIcon(r)} ${getResource(r).name}`).join(', ')} tout droit · le reste sur les côtés`
+          : 'Aucun filtre : tout va tout droit'
       }<br><span class="muted">[E] pour régler</span>`;
     if (s instanceof Splitter)
       return `<b>Séparateur</b> ${['→', '↓', '←', '↑'][s.dir]}<br>Entrée par l'arrière · sorties : devant, gauche, droite (à tour de rôle)${

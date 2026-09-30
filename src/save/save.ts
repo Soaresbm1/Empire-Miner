@@ -9,6 +9,7 @@
  * Le format est versionné (`version`) pour permettre des migrations futures.
  */
 import type { Dir } from '../core/dir';
+import { isGear } from '../data/gear';
 import { hasResource } from '../data/resources';
 import { BAGS, PICKAXES } from '../data/tools';
 import { GameState, Stats } from '../sim/GameState';
@@ -34,6 +35,8 @@ export interface SaveData {
   bagLevel: number;
   /** Outils mécaniques (absents des sauvegardes d'avant le marteau-piqueur). */
   tools?: { jackhammer: boolean; inHand: string; hammerFuel: number };
+  /** Équipement de protection acheté (absent des sauvegardes d'avant l'équipement : aucun). */
+  gear?: string[];
   inventory: Record<string, number>;
   kits: Record<string, number>;
   autoPickup: Record<string, boolean>;
@@ -89,6 +92,7 @@ export function serialize(g: GameState): SaveData {
     pickaxeLevel: g.pickaxeLevel,
     bagLevel: g.bagLevel,
     tools: { jackhammer: g.hasJackhammer, inHand: g.tool, hammerFuel: round2(g.hammerFuel) },
+    gear: [...g.gear],
     inventory: { ...g.inventory.items },
     kits: { ...g.inventory.kits },
     autoPickup: { ...g.autoPickup },
@@ -157,6 +161,7 @@ export function deserialize(data: SaveData): GameState {
   g.hasJackhammer = !!data.tools?.jackhammer;
   g.tool = g.hasJackhammer && data.tools?.inHand === 'jackhammer' ? 'jackhammer' : 'pickaxe';
   g.hammerFuel = Math.max(0, Number(data.tools?.hammerFuel ?? 0) || 0);
+  for (const id of Array.isArray(data.gear) ? data.gear : []) if (isGear(id)) g.gear.add(id);
   g.inventory.items = filterKnown(data.inventory);
   g.inventory.kits = { ...data.kits };
   g.autoPickup = { ...g.autoPickup, ...data.autoPickup };

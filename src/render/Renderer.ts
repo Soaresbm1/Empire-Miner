@@ -91,7 +91,8 @@ export class Renderer {
   profile: QualityProfile = PROFILES.high;
   private chunks: ChunkCache | null = null;
   private state: GameState | null = null;
-  private readonly player: PlayerSprites;
+  /** Le mineur habillé : une série d'images par combinaison d'équipement (créées à la demande). */
+  private readonly minerSets = new Map<string, PlayerSprites>();
   private readonly picks: HTMLCanvasElement[][];
   private readonly jacks: HTMLCanvasElement[];
   private readonly nuggets: Map<string, HTMLCanvasElement>;
@@ -111,7 +112,6 @@ export class Renderer {
     this.ctx = canvas.getContext('2d')!;
     this.light = document.createElement('canvas');
     this.lctx = this.light.getContext('2d')!;
-    this.player = buildPlayerSprites();
     this.picks = buildPickaxeSprites();
     this.jacks = buildJackhammerSprites();
     this.nuggets = buildNuggetSprites();
@@ -654,13 +654,15 @@ export class Renderer {
     pen.rivet(1, 6, '#cfd3dc');
     ctx.restore();
     if (s instanceof Sorter) {
-      // Trieur : le minerai choisi au centre, flèche verte vers l'avant, flèches grises sur les côtés.
+      // Trieur : les minerais choisis au centre, flèche verte vers l'avant, flèches grises sur les côtés.
       const [front, left, right] = s.outputs();
-      this.drawArrow(s.x * TILE + 8 + DX[front] * 6, s.y * TILE + 8 + DY[front] * 6, front, s.filter ? '#7dffa0' : '#f2e6c8');
-      if (s.filter) for (const d of [left, right]) this.drawArrow(s.x * TILE + 8 + DX[d] * 6, s.y * TILE + 8 + DY[d] * 6, d, '#a8957c');
+      const chosen = s.filters.length > 0;
+      this.drawArrow(s.x * TILE + 8 + DX[front] * 6, s.y * TILE + 8 + DY[front] * 6, front, chosen ? '#7dffa0' : '#f2e6c8');
+      if (chosen) for (const d of [left, right]) this.drawArrow(s.x * TILE + 8 + DX[d] * 6, s.y * TILE + 8 + DY[d] * 6, d, '#a8957c');
       ctx.fillStyle = '#1a1418';
       ctx.fillRect(s.x * TILE + 4, s.y * TILE + 4, 8, 8);
-      if (s.filter) ctx.drawImage(this.nuggets.get(s.filter)!, s.x * TILE + 4, s.y * TILE + 4);
+      if (s.filters.length === 1) ctx.drawImage(this.nuggets.get(s.filters[0])!, s.x * TILE + 4, s.y * TILE + 4);
+      else if (chosen) this.drawSorterSwatches(s.x * TILE, s.y * TILE, s.filters);
       else {
         ctx.fillStyle = '#f2e6c8';
         ctx.fillRect(s.x * TILE + 7, s.y * TILE + 6, 2, 3);
@@ -1082,6 +1084,35 @@ export class Renderer {
         ctx.fillRect(cx, sy > 0 ? cy : cy - L + 1, 1, L);
       }
     }
+  }
+
+  /**
+   * Plusieurs minerais choisis : une pastille de 3 × 3 pixels de la couleur de chacun (2 en rangée, 3 en
+   * triangle, 4 en carré ; au-delà de 4, la quatrième est un « + »), dans le cadre sombre du trieur.
+   */
+  private drawSorterSwatches(x: number, y: number, chosen: string[]): void {
+    const ctx = this.ctx;
+    const n = chosen.length;
+    const cells: [number, number][] =
+      n === 2 ? [[4, 6], [8, 6]] : n === 3 ? [[4, 4], [8, 4], [6, 8]] : [[4, 4], [8, 4], [4, 8], [8, 8]];
+    cells.forEach(([cx, cy], i) => {
+      const px = x + cx;
+      const py = y + cy;
+      if (i === 3 && n > 4) {
+        ctx.fillStyle = '#f2e6c8';
+        ctx.fillRect(px + 1, py, 1, 3);
+        ctx.fillRect(px, py + 1, 3, 1);
+        return;
+      }
+      const r = getResource(chosen[i]);
+      ctx.fillStyle = r.color;
+      ctx.fillRect(px, py, 3, 3);
+      ctx.fillStyle = r.light;
+      ctx.fillRect(px, py, 2, 1);
+      ctx.fillRect(px, py + 1, 1, 1);
+      ctx.fillStyle = r.dark;
+      ctx.fillRect(px + 2, py + 2, 1, 1);
+    });
   }
 
   private drawArrow(x: number, y: number, dir: Dir, color: string): void {
@@ -1583,17 +1614,30 @@ export class Renderer {
 
   // ------------------------------------------------------------------ personnage
 
+  /** Images du mineur avec l'équipement qu'il porte en ce moment. */
+  private minerSprites(): PlayerSprites {
+    const gear = this.state!.gear;
+    const key = ['helmet', 'mask', 'boots', 'suit'].map((id) => (gear.has(id) ? '1' : '0')).join('');
+    let set = this.minerSets.get(key);
+    if (!set) {
+      set = buildPlayerSprites({ helmet: gear.has('helmet'), mask: gear.has('mask'), boots: gear.has('boots'), suit: gear.has('suit') });
+      this.minerSets.set(key, set);
+    }
+    return set;
+  }
+
   private drawPlayer(): void {
     const state = this.state!;
     const p = state.player;
     const ctx = this.ctx;
-    const frames = this.player.frames[p.facing];
+    const sprites = this.minerSprites();
+    const frames = sprites.frames[p.facing];
     const walking = p.moving && p.swingT <= 0;
     // Marche à quatre images : pas, passage, pas, passage (le corps se soulève au passage).
     const frame = walking ? 1 + (Math.floor(p.walkTime * 9) % 4) : 0;
     // À l'arrêt, le mineur cligne des yeux de temps en temps.
     const blink = !walking && p.swingT <= 0 && this.time % 4.6 < 0.14;
-    const img = blink ? this.player.blink[p.facing] : frames[frame];
+    const img = blink ? sprites.blink[p.facing] : frames[frame];
     const bob = walking && frame % 2 === 0 ? -1 : 0;
     const x = Math.round(p.x - img.width / 2);
     const y = Math.round(p.y - img.height + 3 + bob);

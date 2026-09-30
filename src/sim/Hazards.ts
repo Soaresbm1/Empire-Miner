@@ -18,6 +18,7 @@
  */
 import { depthAt } from '../core/constants';
 import { RUBBLE } from '../data/blocks';
+import { BOOTS_WATER } from '../data/gear';
 import { CAVE_IN, GAS, HEAT, POCKET_GAS, POCKET_WATER, WATER } from '../data/hazards';
 import type { SimEvent } from './events';
 import type { Structure } from './structures/Structure';
@@ -81,9 +82,10 @@ export class HazardSystem {
     return this.waterTiles.size > 0;
   }
 
-  /** Vitesse de marche dans l'eau (1 = normale). */
-  speedFactor(x: number, y: number): number {
+  /** Vitesse de marche dans l'eau (1 = normale) ; les cuissardes étanches ralentissent moins. */
+  speedFactor(x: number, y: number, boots = false): number {
     const lvl = this.waterAt(x, y);
+    if (boots) return lvl >= WATER.deep ? BOOTS_WATER.deep : BOOTS_WATER.shallow;
     return lvl >= WATER.deep ? WATER.slowDeep : lvl > 0 ? WATER.slowShallow : 1;
   }
 

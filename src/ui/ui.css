@@ -210,6 +210,17 @@ kbd {
 .danger-line { color: var(--bad); font-size: 13px; margin-top: 4px; animation: danger-blink 0.9s steps(2) infinite; }
 @keyframes danger-blink { 50% { opacity: 0.55; } }
 
+/* Équipement de protection : pièces portées (allumées) ou à acheter (grisées), et fiches de l'atelier. */
+.gear-line { display: flex; gap: 8px; margin-top: 6px; }
+.gear-ico { height: 16px; width: auto; image-rendering: pixelated; }
+.gear-line .gear-ico.off { opacity: 0.3; filter: grayscale(1); }
+.gear-line .gear-ico.on { filter: drop-shadow(0 0 2px rgba(255, 220, 140, 0.4)); }
+.card h3 .gear-ico { height: 24px; vertical-align: -6px; margin-right: 6px; }
+.card h3 small { font-size: 12px; font-weight: normal; color: var(--muted); }
+/* Équipement : deux fiches par rangée, pour que les chiffres tiennent sur une ligne. */
+.cards.gear-cards { grid-template-columns: repeat(2, 1fr); }
+@media (max-width: 620px) { .cards.gear-cards { grid-template-columns: 1fr; } }
+
 /* Lingot : barre trapézoïdale, reflet sur le dessus. */
 .res.ingot {
   width: 15px; height: 8px; border-radius: 1px; vertical-align: 0;

@@ -110,12 +110,25 @@ const ICON_PALETTE: Record<string, string> = {
   R: '#e0483c', P: '#ff9d8a', r: '#8a2018',
   B: '#9a6c3c', b: '#c89a64', k: '#5a3a20', g: '#e8c050',
   T: '#7fd0f0', t: '#2f6f96',
+  // Équipement : acier, blanc, orange, masque, caoutchouc jaune.
+  S: '#c4ccd6', s: '#8f99a8', d: '#4b5566', W: '#f4f6fa',
+  O: '#f0a040', o: '#c8741a',
+  M: '#8a9880', m: '#5d6a58', F: '#3a403a',
+  Z: '#e6c040', z: '#a88a14',
 };
 
 const COIN = ['..YYYY..', '.YLLYYy.', 'YLLYYYYy', 'YLYyyYYy', 'YLYyyYYy', 'YYYYYYyy', '.YYYYyy.', '..yyyy..'];
 const HEART = ['.RR...RR.', 'RPRR.RRRR', 'RPRRRRRRR', 'RRRRRRRRr', '.RRRRRRr.', '..RRRRr..', '...RRr...', '....r....'];
 const BAG = ['..kkkkk..', '.kBBBBBk.', 'kBbbBBBBk', 'kBbBBBBBk', 'kBBBBgBBk', 'kBBBBBBBk', 'kBBBBBBBk', '.kkkkkkk.'];
 const DROP = ['...T...', '..TT...', '.TTTT..', 'TTbTTT.', 'TTTTTT.', '.TTTt..', '..tt...'];
+
+/** Équipement de protection : casque d'acier à lampe, masque à gaz, cuissardes, combinaison à bandes réfléchissantes. */
+const GEAR_ICONS: Record<string, string[]> = {
+  helmet: ['...SSS...', '..SWWSs..', '.SWSYYSs.', 'SSSSYYSSs', 'SSSSSSSss', 'ddddddddd', '.ddddddd.'],
+  mask: ['.mmmmmmm.', 'mMMMMMMMm', 'MTTMMMTTM', 'MTTMMMTTM', 'mMMMFFMMm', '.mMFFFMm.', '..mFFFm..', '...FFF...'],
+  boots: ['ZZ..ZZ...', 'ZZ..ZZ...', 'ZZ..ZZ...', 'zZ..zZ...', 'zZZZzZZZ.', 'zZZZzZZZZ', 'kkkkkkkkk'],
+  suit: ['.OOOOOOO.', 'OOOSSSOOO', 'OOOOSOOOO', 'OoSSSSSoO', '.oOOSOOo.', '.oSSSSSo.', '..ooSoo..', '...oSo...'],
+};
 
 /** Recadre l'image sur ses pixels non transparents (pour tirer une icône d'un sprite plus grand). */
 function crop(src: HTMLCanvasElement): HTMLCanvasElement {
@@ -256,6 +269,7 @@ export function installTheme(): void {
   draw('heart', HEART);
   draw('bag', BAG);
   draw('drop', DROP);
+  for (const [id, art] of Object.entries(GEAR_ICONS)) draw(`gear:${id}`, art);
   for (const [name, url] of [['coin', icons.get('coin')], ['heart', icons.get('heart')], ['bag', icons.get('bag')]] as const)
     if (url) root.setProperty(`--ico-${name}`, `url(${url})`);
 

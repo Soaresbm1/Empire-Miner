@@ -225,9 +225,9 @@ export const MACHINES: MachineDef[] = [
   {
     id: 'sorter',
     name: 'Trieur',
-    summary: "Envoie le minerai choisi tout droit, le reste sur les côtés.",
+    summary: "Envoie les minerais choisis tout droit, le reste sur les côtés.",
     category: 'logistique',
-    description: "Le minerai entre par l'arrière. Le minerai choisi (touche E) part tout droit, tout le reste part sur les côtés.",
+    description: "Le minerai entre par l'arrière. Les minerais choisis (touche E, un ou plusieurs) partent tout droit, tout le reste part sur les côtés.",
     price: 60,
     w: 1,
     h: 1,
