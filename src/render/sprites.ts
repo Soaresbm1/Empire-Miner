@@ -5,6 +5,7 @@
 import { TILE } from '../core/constants';
 import { RESOURCES } from '../data/resources';
 import { PICKAXES } from '../data/tools';
+import { INK, Pen, ramp } from './art';
 
 const OUTLINE = '#1a1418';
 
@@ -51,59 +52,110 @@ function mirror(src: HTMLCanvasElement): HTMLCanvasElement {
 
 // ------------------------------------------------------------------ personnage
 
+/**
+ * Le mineur : 12 × 18 cases, casque jaune à lampe, salopette bleue, chemise rouge, ceinture à boucle,
+ * bottes. La lumière vient d'en haut à gauche : chaque matière a un ton clair, un ton de base et une ombre.
+ */
 const PLAYER_PALETTE: Record<string, string> = {
-  Y: '#f2c230', y: '#b98a1a', L: '#fff6c0', S: '#f0c29a', s: '#c98e66', E: '#2a1f1a',
-  H: '#5a3a22', T: '#b8412c', B: '#3867b0', b: '#2a4f8a', G: '#5a3d24', g: '#e0b84a', K: '#3b2a1f',
+  // Casque : reflet, clair, base, ombre ; lampe.
+  L: '#fff2b0', Y: '#f2c230', h: '#d9a526', y: '#a87a14', W: '#fffbe6', w: '#f0a93b',
+  // Peau, cheveux, yeux, bouche.
+  S: '#f0c29a', s: '#c98e66', H: '#5a3a22', E: '#2a1f1a', m: '#b0583c',
+  // Chemise, salopette.
+  u: '#dc6a48', T: '#b8412c', t: '#8a2e20', B: '#3867b0', c: '#5b8ad0', b: '#2a4f8a',
+  // Ceinture, boucle, sac à dos, bottes.
+  G: '#5a3d24', g: '#e0b84a', P: '#8a6236', p: '#5e4022', K: '#3b2a1f', k: '#6a4d38',
 };
 
-const HEAD_DOWN = ['..YYYYYY..', '.YYYLLYYY.', '.YYYLLYYY.', 'yyyyyyyyyy', '.SSSSSSSS.', '.SESSSSES.', '.SSSSSSSS.', '..SSssSS..'];
-const BODY_DOWN = ['TTBBBBBBTT', 'STBBBBBBTS', 'STBbBBbBTS', 'S.GGgGGG.S'];
-const HEAD_UP = ['..YYYYYY..', '.YYYYYYYY.', '.YYYYYYYY.', 'yyyyyyyyyy', '.HHHHHHHH.', '.HHHHHHHH.', '.sHHHHHHs.', '..ssssss..'];
-const BODY_UP = ['TTBTTTTBTT', 'STBTTTTBTS', 'STBTTTTBTS', 'S.GGGGGG.S'];
+const HEAD_DOWN = ['...LYYYYy...', '..LYYWWYYy..', '.LYYYWWYYYy.', 'hYYYYYYYYYYy', '.yyyyyyyyyy.', '..SSSSSSSS..', '..SSESSESS..', '..sSSmmSSs..'];
+const BODY_DOWN = ['.uTBBBBBBTt.', '.uTBcBBcBTt.', '.uTBBbbBBTt.', '.SSGGggGGSS.'];
+const HEAD_UP = ['...LYYYYy...', '..LYYYYYYy..', '.LYYYYYYYYy.', 'hYYYYYYYYYYy', '.yyyyyyyyyy.', '..HHHHHHHH..', '..HHHHHHHH..', '...ssSSss...'];
+const BODY_UP = ['.uTPPPPPPTt.', '.uTPpPPpPTt.', '.uTPPPPPPTt.', '.SSGGGGGGSS.'];
+/** Marche de face ou de dos : au repos, puis deux pas et deux passages de jambe. */
 const LEGS_FRONT = [
-  ['..BBBBBB..', '..BB..BB..', '..BB..BB..', '..KK..KK..'],
-  ['..BBBBBB..', '..BB..BB..', '..KK..BB..', '......KK..'],
-  ['..BBBBBB..', '..BB..BB..', '..BB..KK..', '..KK......'],
+  ['...BBBBBB...', '...BBbbBB...', '...BB..BB...', '...BB..BB...', '..kKK..kKK..', '..KKK..KKK..'],
+  ['...BBBBBB...', '...BBbbBB...', '...BB..BB...', '...BB..kK...', '..kKK.......', '..KKK.......'],
+  ['...BBBBBB...', '...BBbbBB...', '....BBBB....', '....BBBB....', '...kKKKKk...', '...KKKKKK...'],
+  ['...BBBBBB...', '...BBbbBB...', '...BB..BB...', '...kK..BB...', '.......kKK..', '.......KKK..'],
+  ['...BBBBBB...', '...BBbbBB...', '....BBBB....', '....BBBB....', '...kKKKKk...', '...KKKKKK...'],
 ];
-const HEAD_SIDE = ['..YYYYY...', '.YYYYYYYL.', '.YYYYYYYL.', '.yyyyyyyyy', '..HHSSSSS.', '..HSSSSES.', '..HSSSSSS.', '...sSSSs..'];
-const BODY_SIDE = ['...TBBBT..', '...TBBSS..', '...TBBBT..', '...GGgG...'];
+const HEAD_SIDE = ['...LYYYYy...', '..LYYYYYYWy.', '.LYYYYYYYWWy', 'hYYYYYYYYYYy', '.yyyyyyyyyyy', '..HHSSSSSSS.', '..HHSSSSSESS', '...HsSSSSSs.'];
+const BODY_SIDE = ['.PpuBBBBTt..', '.PPuBcBBTt..', '.PPuBBBBSS..', '..GGGGGgGG..'];
 const LEGS_SIDE = [
-  ['...BBBB...', '...BB.BB..', '...BB.BB..', '...KK.KKK.'],
-  ['...BBBB...', '..BB..BB..', '.BB....BB.', '.KK....KK.'],
-  ['...BBBB...', '....BB....', '....BB....', '....KKK...'],
+  ['...BBBBBB...', '...BBBBBB...', '....BBBB....', '....BBBB....', '....kKKKK...', '....KKKKKK..'],
+  ['...BBBBBB...', '..BBB..BBB..', '..BB....BB..', '.BB......BB.', '.kK......kK.', '.KK......KKK'],
+  ['...BBBBBB...', '...BBBBBB...', '....BBBB....', '....BB.kK...', '....kKK.....', '....KKK.....'],
+  ['...BBBBBB...', '..BBBB.BBB..', '.BBB....BB..', '.BB.....BB..', '.kK.....kK..', '.KKK....KKK.'],
+  ['...BBBBBB...', '...BBBBBB...', '....BBBB....', '....kK.BB...', '.....KKK....', '.....KKK....'],
 ];
 
+/** Dessins du mineur, exposés pour vérifier leurs dimensions (tests). */
+export const PLAYER_ART = { HEAD_DOWN, BODY_DOWN, HEAD_UP, BODY_UP, LEGS_FRONT, HEAD_SIDE, BODY_SIDE, LEGS_SIDE };
+
 export interface PlayerSprites {
-  /** [direction][frame] — direction : 0 E, 1 S, 2 O, 3 N ; frame : 0 immobile, 1-2 marche. */
+  /** [direction][image] : direction 0 E, 1 S, 2 O, 3 N ; image 0 immobile, 1 à 4 marche (pas, passage, pas, passage). */
   frames: HTMLCanvasElement[][];
+  /** Immobile, yeux fermés (clignement), par direction. */
+  blink: HTMLCanvasElement[];
 }
+
+/** Yeux fermés : la case des yeux prend le ton d'ombre de la peau. */
+const closeEyes = (rows: string[]) => rows.map((r) => r.replace(/E/g, 's'));
 
 export function buildPlayerSprites(): PlayerSprites {
   const down = LEGS_FRONT.map((legs) => fromArt([...HEAD_DOWN, ...BODY_DOWN, ...legs], PLAYER_PALETTE));
   const up = LEGS_FRONT.map((legs) => fromArt([...HEAD_UP, ...BODY_UP, ...legs], PLAYER_PALETTE));
   const right = LEGS_SIDE.map((legs) => fromArt([...HEAD_SIDE, ...BODY_SIDE, ...legs], PLAYER_PALETTE));
   const left = right.map(mirror);
-  return { frames: [right, down, left, up] };
+  const blinkDown = fromArt(closeEyes([...HEAD_DOWN, ...BODY_DOWN, ...LEGS_FRONT[0]]), PLAYER_PALETTE);
+  const blinkRight = fromArt(closeEyes([...HEAD_SIDE, ...BODY_SIDE, ...LEGS_SIDE[0]]), PLAYER_PALETTE);
+  return { frames: [right, down, left, up], blink: [blinkRight, blinkDown, mirror(blinkRight), up[0]] };
 }
 
 // ------------------------------------------------------------------ pioches
 
-/** Pioche pointant vers la droite, pivot (main) en (2, 8). */
+/**
+ * Pioche pointant vers la droite, pivot (main) en (2, 8) : manche de bois veiné avec poignée de cuir,
+ * virole rivetée, tête d'acier au tranchant lumineux.
+ */
 function pickaxeArt(head: string): HTMLCanvasElement {
   const [c, ctx] = canvas(18, 18);
-  ctx.fillStyle = '#6b4526';
-  ctx.fillRect(2, 8, 11, 2);
-  ctx.fillStyle = '#8a5a33';
-  ctx.fillRect(2, 8, 11, 1);
-  // Tête en croissant, verticale au bout du manche.
-  const rows = ['...X', '..XX', '.XX.', 'XX..', 'XX..', 'XX..', '.XX.', '..XX', '...X'];
-  ctx.fillStyle = OUTLINE;
-  rows.forEach((r, y) => [...r].forEach((ch, x) => ch === 'X' && ctx.fillRect(12 + x, 4 + y, 1, 1)));
-  ctx.fillStyle = head;
-  rows.forEach((r, y) => [...r].forEach((ch, x) => ch === 'X' && x > 0 && ctx.fillRect(12 + x - 1, 4 + y, 1, 1)));
-  ctx.fillStyle = 'rgba(255,255,255,0.45)';
-  ctx.fillRect(13, 6, 1, 1);
-  ctx.fillRect(12, 8, 1, 2);
+  const pen = new Pen(ctx);
+  const h = ramp(head);
+  // Manche : contour, bois (dessus clair, dessous sombre), veines.
+  pen.rect(1, 7, 13, 4, INK);
+  pen.rect(2, 8, 11, 1, '#a8764a');
+  pen.rect(2, 9, 11, 1, '#6b4526');
+  for (const x of [6, 9, 11]) pen.px(x, 8, '#8a5a33');
+  pen.px(7, 9, '#4a2f1a');
+  pen.px(10, 9, '#4a2f1a');
+  // Poignée de cuir : bandes sombres et claires.
+  pen.rect(2, 8, 4, 2, '#3b2a1f');
+  for (const x of [2, 4]) pen.px(x, 8, '#6a4d38');
+  pen.px(5, 9, '#26191a');
+  // Virole d'acier rivetée, à la jonction avec la tête.
+  pen.rect(10, 6, 3, 6, INK);
+  pen.rect(11, 7, 1, 4, '#9aa0aa');
+  pen.px(11, 7, '#e3e7f0');
+  pen.px(11, 10, '#5b5f68');
+  // Tête en croissant, verticale au bout du manche : intérieur sombre, tranchant clair, pointes vives.
+  const rows = ['....X', '...XX', '..XX.', '.XX..', 'XX...', 'XX...', 'XX...', '.XX..', '..XX.', '...XX', '....X'];
+  const at = (x: number, y: number, col: string) => pen.px(12 + x, 3 + y, col);
+  rows.forEach((r, y) => [...r].forEach((ch, x) => ch === 'X' && at(x, y, INK)));
+  rows.forEach((r, y) => {
+    const xs = [...r].map((ch, x) => (ch === 'X' ? x : -1)).filter((x) => x >= 0);
+    xs.forEach((x, k) => {
+      if (x === 0 && y > 0 && y < rows.length - 1) return; // le contour reste visible sur le bord gauche
+      const outer = k === xs.length - 1;
+      at(x - 1 < 0 ? x : x - 1, y, xs.length === 1 ? h.hi : outer ? h.light : h.shade);
+    });
+  });
+  // Reflet sur le tranchant, et éclat au bout des pointes.
+  pen.px(15, 4, '#ffffff');
+  pen.px(15, 12, '#ffffff');
+  pen.px(12, 7, h.hi);
+  pen.px(12, 8, h.hi);
+  pen.px(12, 9, h.light);
   return c;
 }
 
@@ -185,9 +237,17 @@ const NUGGET = ['.aab.', 'aaabb', 'abbbc', '.bcc.'];
 /** Lingot : une barre trapézoïdale, le dessus éclairé. */
 const INGOT = ['.aaaa.', 'abbbbc', 'bbcccc'];
 
+/** Les ressources rares (argent, or, diamant et leurs lingots) portent un éclat blanc. */
+const SPARKLE = ['.wab.', 'aaabb', 'abbbc', '.bcc.'];
+const SPARKLE_INGOT = ['.awaa.', 'abbbbc', 'bbcccc'];
+
 export function buildNuggetSprites(): Map<string, HTMLCanvasElement> {
   const map = new Map<string, HTMLCanvasElement>();
-  for (const r of RESOURCES) map.set(r.id, fromArt(r.ingot ? INGOT : NUGGET, { a: r.light, b: r.color, c: r.dark }, '#120e10'));
+  for (const r of RESOURCES) {
+    const rare = r.rarity === 'rare' || r.rarity === 'très rare' || r.rarity === 'légendaire';
+    const art = r.ingot ? (rare ? SPARKLE_INGOT : INGOT) : rare ? SPARKLE : NUGGET;
+    map.set(r.id, fromArt(art, { a: r.light, b: r.color, c: r.dark, w: '#ffffff' }, '#120e10'));
+  }
   return map;
 }
 
@@ -231,48 +291,167 @@ export function buildCounterSprite(): HTMLCanvasElement {
   const W = 3 * TILE;
   const H = 2 * TILE + 10;
   const [c, ctx] = canvas(W, H);
-  // Murs
-  ctx.fillStyle = '#7a5231';
-  ctx.fillRect(2, 14, W - 4, H - 14);
-  for (let y = 16; y < H; y += 4) {
-    ctx.fillStyle = '#6a452a';
-    ctx.fillRect(2, y, W - 4, 1);
+  const pen = new Pen(ctx);
+  const wood = ramp('#7a5231');
+  // Mur de planches verticales : joints sombres, reflet à gauche de chaque planche, clous.
+  pen.rect(1, 13, W - 2, H - 13, INK);
+  pen.rect(2, 14, W - 4, H - 14, wood.base);
+  for (let x = 2; x < W - 2; x += 6) {
+    pen.rect(x, 14, 1, H - 14, wood.dark);
+    pen.rect(x + 1, 14, 1, H - 14, wood.light);
+    pen.px(x + 3, 21, wood.dark);
+    pen.px(x + 3, H - 7, wood.dark);
   }
-  // Comptoir
-  ctx.fillStyle = '#9b6a3e';
-  ctx.fillRect(6, H - 14, W - 12, 6);
-  ctx.fillStyle = '#b98450';
-  ctx.fillRect(6, H - 14, W - 12, 2);
-  // Pièces sur le comptoir
-  ctx.fillStyle = '#f2c230';
-  ctx.fillRect(12, H - 16, 3, 2);
-  ctx.fillRect(16, H - 17, 3, 3);
-  ctx.fillRect(30, H - 16, 3, 2);
-  // Ouverture sombre
-  ctx.fillStyle = '#2a1c14';
-  ctx.fillRect(8, 20, W - 16, H - 36);
-  // Auvent rayé
-  for (let x = 0; x < W; x += 6) {
-    ctx.fillStyle = (x / 6) % 2 ? '#e9e2d0' : '#c0392b';
-    ctx.fillRect(x, 6, 6, 10);
+  // Montants d'angle.
+  for (const x of [1, W - 4]) {
+    pen.rect(x, 13, 3, H - 13, '#4a2f1a');
+    pen.rect(x, 13, 1, H - 13, '#6e4a2c');
   }
-  ctx.fillStyle = 'rgba(0,0,0,0.25)';
-  ctx.fillRect(0, 14, W, 2);
+  // Ouverture de l'étal : étagères où brillent des bocaux et un sac.
+  pen.rect(7, 19, W - 14, H - 34, INK);
+  pen.rect(8, 20, W - 16, H - 36, '#2a1c14');
+  pen.rect(8, 20, W - 16, 2, '#160e09');
+  pen.rect(8, 26, W - 16, 1, '#5a3a22');
+  const jars = ['#c0392b', '#3f88cf', '#6fcf6a', '#f2c230', '#c0392b', '#3f88cf'];
+  jars.forEach((col, i) => {
+    const jx = 10 + i * 5;
+    if (jx > W - 14) return;
+    pen.rect(jx, 22, 3, 4, col);
+    pen.px(jx, 22, '#ffffff');
+    pen.rect(jx, 22, 3, 1, ramp(col).hi);
+  });
+  pen.rect(W - 17, 28, 6, 4, '#a8894a');
+  pen.rect(W - 17, 28, 6, 1, '#d0b070');
+  // Comptoir : plateau éclairé, pièces, balance.
+  pen.slab(5, H - 14, W - 10, 6, '#9b6a3e');
+  pen.rect(5, H - 8, W - 10, 1, '#4a2f1a');
+  for (const [cx, cy, n] of [[11, H - 16, 3], [16, H - 17, 4], [31, H - 16, 3]] as const) {
+    for (let k = 0; k < n; k++) {
+      pen.rect(cx, cy + (n - 1 - k) * 0 - k, 4, 1, k % 2 ? '#e0b030' : '#f7d14a');
+      pen.px(cx, cy - k, '#fff3b0');
+    }
+  }
+  pen.rect(W - 13, H - 19, 1, 5, '#8a8e99');
+  pen.rect(W - 16, H - 19, 7, 1, '#b4b9c4');
+  pen.rect(W - 16, H - 18, 2, 1, '#f2c230');
+  pen.rect(W - 10, H - 18, 2, 1, '#f2c230');
+  // Auvent rayé : plis éclairés, ombre portée dessous, bord festonné.
   for (let x = 0; x < W; x += 6) {
-    ctx.fillStyle = (x / 6) % 2 ? '#e9e2d0' : '#c0392b';
+    const red = (x / 6) % 2 === 0;
+    const base = red ? '#c0392b' : '#ece5d2';
+    const r = ramp(base);
+    pen.rect(x, 6, 6, 10, base);
+    pen.rect(x, 6, 6, 1, r.hi);
+    pen.rect(x, 7, 1, 9, r.light);
+    pen.rect(x + 5, 7, 1, 9, r.shade);
+    ctx.fillStyle = base;
     ctx.beginPath();
     ctx.moveTo(x, 16);
     ctx.lineTo(x + 3, 19);
     ctx.lineTo(x + 6, 16);
     ctx.fill();
+    pen.px(x + 2, 17, r.shade);
+    pen.px(x + 3, 18, r.dark);
   }
-  // Enseigne
-  ctx.fillStyle = '#3b2616';
-  ctx.fillRect(W / 2 - 8, 0, 16, 7);
-  ctx.fillStyle = '#f2c230';
-  ctx.fillRect(W / 2 - 2, 1, 4, 5);
-  ctx.fillStyle = '#a07410';
-  ctx.fillRect(W / 2 - 1, 2, 2, 3);
+  pen.rect(0, 16, W, 1, 'rgba(0,0,0,0.3)');
+  pen.rect(0, 5, W, 1, INK);
+  // Enseigne surmontée d'une pièce d'or.
+  pen.rect(W / 2 - 9, -0, 18, 8, INK);
+  pen.rect(W / 2 - 8, 1, 16, 6, '#3b2616');
+  pen.rect(W / 2 - 8, 1, 16, 1, '#5a3a22');
+  pen.rect(W / 2 - 3, 1, 6, 6, '#a07410');
+  pen.rect(W / 2 - 2, 2, 4, 4, '#f2c230');
+  pen.px(W / 2 - 2, 2, '#fff3b0');
+  pen.rect(W / 2 - 1, 3, 2, 2, '#a07410');
+  return c;
+}
+
+/** Atelier : bâtiment de pierre, toit d'ardoise, cheminée, forge ouverte et fenêtre chaude. */
+export function buildWorkshopSprite(): HTMLCanvasElement {
+  const W = 3 * TILE;
+  const H = 2 * TILE + 12;
+  const [c, ctx] = canvas(W, H);
+  const pen = new Pen(ctx);
+  // Murs de pierre : blocs irréguliers de tons variés, joints sombres.
+  pen.rect(1, 13, W - 2, H - 13, INK);
+  const stone = ramp('#84796c');
+  pen.rect(2, 14, W - 4, H - 14, stone.dark);
+  for (let row = 0, y = 14; y < H; row++, y += 5) {
+    let x = 2 - ((row * 5) % 8);
+    while (x < W - 2) {
+      const w = 5 + ((x * 3 + row * 7) % 4);
+      const bx = Math.max(2, x);
+      const bw = Math.min(W - 2, x + w) - bx;
+      if (bw > 0) {
+        const tone = Math.abs(x * 5 + row * 11) % 4;
+        pen.rect(bx, y, bw, Math.min(4, H - y), tone === 0 ? stone.light : tone === 3 ? stone.shade : stone.base);
+        pen.rect(bx, y, bw, 1, stone.hi);
+      }
+      x += w + 1;
+    }
+  }
+  // Montants d'angle en pierre de taille.
+  for (const x of [1, W - 4]) {
+    pen.rect(x, 13, 3, H - 13, '#5e574d');
+    pen.rect(x, 13, 1, H - 13, '#a09686');
+  }
+  // Toit d'ardoise : rangées d'écailles de deux tons, arête claire à gauche.
+  const roof = ramp('#443f4c');
+  ctx.fillStyle = INK;
+  ctx.beginPath();
+  ctx.moveTo(-2, 17);
+  ctx.lineTo(W / 2, 1);
+  ctx.lineTo(W + 2, 17);
+  ctx.fill();
+  ctx.fillStyle = roof.base;
+  ctx.beginPath();
+  ctx.moveTo(-1, 16);
+  ctx.lineTo(W / 2, 3);
+  ctx.lineTo(W + 1, 16);
+  ctx.fill();
+  for (let y = 5; y <= 15; y += 2) {
+    const half = ((y - 3) / 13) * (W / 2 + 1);
+    for (let x = Math.ceil(W / 2 - half); x < W / 2 + half - 1; x += 4) {
+      const alt = (((y - 5) / 2) | 0) % 2 ? 2 : 0;
+      pen.rect(x + alt, y, 3, 1, roof.light);
+      pen.px(x + alt + 3, y, roof.dark);
+    }
+  }
+  pen.rect(0, 14, W, 3, '#5b5766');
+  pen.rect(0, 14, W, 1, '#8a8598');
+  pen.rect(0, 17, W, 1, 'rgba(0,0,0,0.35)');
+  // Cheminée de pierre, coiffée et noircie.
+  pen.slab(W - 12, 0, 6, 11, '#6a5a54');
+  pen.rect(W - 13, 0, 8, 2, '#3f3230');
+  pen.rect(W - 10, 3, 1, 7, '#4a3c38');
+  // Porte ouverte sur la forge : arche de pierre, braises au sol, lueur qui monte.
+  pen.rect(W / 2 - 8, H - 20, 16, 20, INK);
+  pen.rect(W / 2 - 7, H - 19, 14, 19, '#1e1512');
+  pen.rect(W / 2 - 8, H - 20, 16, 2, '#8a8074');
+  pen.rect(W / 2 - 7, H - 7, 14, 4, '#7a3a18');
+  pen.rect(W / 2 - 6, H - 5, 12, 3, '#e8792a');
+  pen.rect(W / 2 - 4, H - 4, 8, 1, '#ffc163');
+  pen.dither(W / 2 - 7, H - 10, 14, 3, '#1e1512', '#5a2a14');
+  pen.rect(W / 2 - 3, H - 12, 6, 2, '#0a0708'); // silhouette d'enclume
+  pen.rect(W / 2 - 2, H - 10, 4, 3, '#0a0708');
+  // Fenêtre à croisillons, éclairée de l'intérieur.
+  pen.rect(5, 23, 10, 9, INK);
+  pen.rect(6, 24, 8, 7, '#f0b850');
+  pen.rect(6, 24, 8, 2, '#ffe0a0');
+  pen.rect(9, 24, 2, 7, '#5a3a22');
+  pen.rect(6, 27, 8, 1, '#5a3a22');
+  pen.rect(5, 32, 10, 1, '#5e574d');
+  // Enseigne suspendue : une enclume.
+  pen.rect(W - 18, 20, 12, 10, INK);
+  pen.rect(W - 17, 21, 10, 8, '#3b2616');
+  pen.rect(W - 17, 21, 10, 1, '#5a3a22');
+  pen.rect(W - 16, 23, 8, 2, '#b4b9c4');
+  pen.rect(W - 14, 25, 4, 3, '#8a8e99');
+  pen.px(W - 16, 23, '#ffffff');
+  // Tonneau cerclé de fer contre le mur.
+  pen.slab(W - 24, H - 10, 6, 10, '#8a5a33');
+  pen.rect(W - 24, H - 8, 6, 1, '#565a64');
+  pen.rect(W - 24, H - 3, 6, 1, '#565a64');
   return c;
 }
 
@@ -335,48 +514,6 @@ export function buildBoardSprite(): HTMLCanvasElement {
   // Punaises
   ctx.fillStyle = '#c0392b';
   for (const [x, y] of [[10, 12], [22, 11], [22, 21]]) ctx.fillRect(x, y, 2, 2);
-  return c;
-}
-
-/** Atelier : bâtiment de pierre, toit sombre, cheminée et enclume. */
-export function buildWorkshopSprite(): HTMLCanvasElement {
-  const W = 3 * TILE;
-  const H = 2 * TILE + 12;
-  const [c, ctx] = canvas(W, H);
-  // Murs de pierre
-  ctx.fillStyle = '#7d7468';
-  ctx.fillRect(2, 14, W - 4, H - 14);
-  for (let y = 14; y < H; y += 5)
-    for (let x = 2 + ((y / 5) % 2) * 4; x < W - 2; x += 8) {
-      ctx.fillStyle = '#6a6258';
-      ctx.fillRect(x, y, 7, 1);
-      ctx.fillRect(x + 7, y, 1, 5);
-    }
-  // Toit
-  ctx.fillStyle = '#3d3a44';
-  ctx.beginPath();
-  ctx.moveTo(-1, 16);
-  ctx.lineTo(W / 2, 3);
-  ctx.lineTo(W + 1, 16);
-  ctx.fill();
-  ctx.fillStyle = '#524e5b';
-  ctx.fillRect(0, 14, W, 3);
-  // Cheminée
-  ctx.fillStyle = '#5a4a40';
-  ctx.fillRect(W - 12, 0, 6, 10);
-  // Porte ouverte sur la forge
-  ctx.fillStyle = '#1e1512';
-  ctx.fillRect(W / 2 - 7, H - 18, 14, 18);
-  ctx.fillStyle = '#e8792a';
-  ctx.fillRect(W / 2 - 5, H - 7, 10, 3);
-  ctx.fillStyle = '#ffc163';
-  ctx.fillRect(W / 2 - 3, H - 6, 6, 1);
-  // Enseigne : enclume
-  ctx.fillStyle = '#3b2616';
-  ctx.fillRect(6, 20, 10, 8);
-  ctx.fillStyle = '#9aa0aa';
-  ctx.fillRect(7, 22, 8, 2);
-  ctx.fillRect(9, 24, 4, 3);
   return c;
 }
 

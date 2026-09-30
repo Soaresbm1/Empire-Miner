@@ -26,6 +26,7 @@ import { Rail, RailStation, RailSwitch, type SwitchSetting } from '../sim/struct
 import { Splitter } from '../sim/structures/Splitter';
 import { Storage } from '../sim/structures/Storage';
 import { MineMap } from '../render/MineMap';
+import { PROFILES, Quality, loadQuality, nextQuality, saveQuality } from '../render/quality';
 import { Renderer, Overlay } from '../render/Renderer';
 import { UI, PanelKind } from '../ui/UI';
 import { esc, kg, money, resIcon } from '../ui/format';
@@ -62,11 +63,13 @@ export class Game {
   private menuPan = 0;
   debug = false;
   private fps = 60;
+  private quality: Quality = loadQuality();
   /** Ventes automatiques récentes (temps de simulation, montant) pour le revenu par minute. */
   private shipLog: { t: number; total: number }[] = [];
 
   constructor(canvas: HTMLCanvasElement) {
     this.renderer = new Renderer(canvas);
+    this.renderer.setQuality(this.quality);
     this.input = new Input(canvas);
     this.ui = new UI({
       onAction: (a, arg) => this.onAction(a, arg),
@@ -74,6 +77,7 @@ export class Game {
       moveKeys: () => this.input.moveKeys(),
       machineIcon: (id) => this.renderer.machineIcon(id),
     });
+    this.ui.setMenuMotes(PROFILES[this.quality].menuMotes);
     window.addEventListener('resize', () => this.renderer.resize());
     const unlock = () => this.sfx.unlock();
     window.addEventListener('pointerdown', unlock);
@@ -242,7 +246,14 @@ export class Game {
         } catch {
           /* ignoré */
         }
-        this.ui.showPauseMenu(this.sfx.muted);
+        this.ui.showPauseMenu(this.sfx.muted, this.quality);
+        return;
+      case 'quality':
+        this.quality = nextQuality(this.quality);
+        saveQuality(this.quality);
+        this.renderer.setQuality(this.quality);
+        this.ui.setMenuMotes(PROFILES[this.quality].menuMotes);
+        this.ui.showPauseMenu(this.sfx.muted, this.quality);
         return;
       case 'quit':
         this.autoSaveNow();
@@ -460,7 +471,7 @@ export class Game {
       if (this.ui.panel) this.ui.closePanel();
       else if (paused) this.ui.hideMenu();
       else if (this.buildMode) this.setBuildMode(false);
-      else this.ui.showPauseMenu(this.sfx.muted);
+      else this.ui.showPauseMenu(this.sfx.muted, this.quality);
     }
     if (inp.wasPressed('F3')) this.debug = !this.debug;
     if (!paused) {

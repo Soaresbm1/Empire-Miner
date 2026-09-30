@@ -3,7 +3,9 @@
  */
 import './ui/ui.css';
 import { Game } from './game/Game';
+import { installTheme } from './ui/theme';
 
+installTheme();
 const canvas = document.getElementById('game') as HTMLCanvasElement;
 const game = new Game(canvas);
 game.start();
