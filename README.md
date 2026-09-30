@@ -28,6 +28,7 @@ Version autonome en un seul fichier HTML (ouvrable sans serveur) : `npm run buil
 | Sac et carnet | `I` ou `Tab` (hors construction) |
 | Mode construction | `B` — machines rangées par onglets : `Tab` (ou clic) change d'onglet, `1-9` (ou clic) choisit la machine ; clic gauche : poser (glisser pour tracer convoyeurs et rails), clic droit : démonter, `R` : tourner. Une ligne d'état dit si la pose est possible, et pourquoi sinon |
 | Pioche ↔ marteau-piqueur | `T` (une fois le marteau-piqueur acheté) |
+| Monter sur la trottinette | `Maj` **maintenue** (une fois la trottinette achetée) : on monte en appuyant, on descend en relâchant |
 | Monter / descendre d'un wagonnet | `F` |
 | Carte de la mine | `M` (ou clic sur la mini-carte) |
 | Poser un repère là où on est | `N` (sur la carte : clic) |
@@ -52,6 +53,13 @@ lettre tapée : c'est la touche marquée M, quel que soit le clavier.
 - **Marteau-piqueur** (900 $, pioche en fer) : attaque la paroi sur 3 cases de large (la case visée et ses voisines,
   perpendiculairement au coup), très vite, en brûlant le charbon du sac (1 unité / 12 s de travail). `T` passe de la
   pioche au marteau ; sans charbon, on repasse automatiquement à la pioche.
+- **Trottinette à moteur** (500 $, onglet Transport de l'Atelier) : un moyen de déplacement personnel. On monte dessus
+  en **maintenant `Maj`** et on en descend en **relâchant** la touche, sans rien à activer. En roulant, la vitesse de
+  marche est multipliée par 1,7 (elle se cumule avec celle du sac, par exemple la brouette), au camp comme dans les
+  galeries ; en contrepartie les deux mains sont au guidon, donc **pas de minage en roulant** (un coup de pioche en
+  cours est interrompu). Le mineur se tient debout sur le plateau, avec ses roues qui tournent, un peu de poussière
+  et un panache du moteur ; le HUD le rappelle (`Maj Trottinette`, allumé tant qu'on roule). L'achat est sauvegardé,
+  pas l'état « en train de rouler ». Dans un wagonnet, la trottinette est rangée.
 - **Foreuse de percement** (1 200 $, pioche en fer) : une **base fixe** et une foreuse sur chenilles qui en sort
   pour percer toute seule un tunnel droit devant la flèche de la base (10, 25, 50 cases ou sans limite), jusqu'au
   basalte. La foreuse emporte 2 unités de charbon prises dans la base (1 unité / 20 s de perçage ; rouler est

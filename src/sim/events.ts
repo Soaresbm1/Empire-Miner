@@ -29,4 +29,6 @@ export type SimEvent =
   | { t: 'collapse'; tx: number; ty: number }
   /** Une poche de grisou ou d'eau vient d'être percée. */
   | { t: 'gas'; tx: number; ty: number }
-  | { t: 'flood'; tx: number; ty: number };
+  | { t: 'flood'; tx: number; ty: number }
+  /** Le joueur monte sur sa trottinette (Maj enfoncée) ou en descend (Maj relâchée). */
+  | { t: 'mount'; on: boolean };

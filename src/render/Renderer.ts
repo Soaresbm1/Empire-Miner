@@ -43,6 +43,9 @@ import {
   buildJackhammerSprites,
   buildPickaxeSprites,
   buildPlayerSprites,
+  buildScooterSprites,
+  SCOOTER_LIFT,
+  ScooterSprites,
   buildWorkshopSprite,
 } from './sprites';
 
@@ -102,7 +105,10 @@ export class Renderer {
   private penCache: Pen | null = null;
   private readonly board: HTMLCanvasElement;
   private readonly lantern: HTMLCanvasElement;
+  private readonly scooter: ScooterSprites;
   private time = 0;
+  /** Dernier nuage de poussière laissé par la trottinette (temps du rendu). */
+  private scooterPuff = 0;
   private smokeTimer = 0;
   /** Flash rouge après une blessure (0 à 1). */
   private hurtFlash = 0;
@@ -120,6 +126,7 @@ export class Renderer {
     this.workshop = buildWorkshopSprite();
     this.board = buildBoardSprite();
     this.lantern = buildLanternSprite();
+    this.scooter = buildScooterSprites();
     this.resize();
   }
 
@@ -1632,7 +1639,9 @@ export class Renderer {
     const ctx = this.ctx;
     const sprites = this.minerSprites();
     const frames = sprites.frames[p.facing];
-    const walking = p.moving && p.swingT <= 0;
+    // Sur la trottinette (Maj), le mineur reste droit sur le plateau : pas de marche, pas de pioche.
+    const riding = state.scootering;
+    const walking = p.moving && p.swingT <= 0 && !riding;
     // Marche à quatre images : pas, passage, pas, passage (le corps se soulève au passage).
     const frame = walking ? 1 + (Math.floor(p.walkTime * 9) % 4) : 0;
     // À l'arrêt, le mineur cligne des yeux de temps en temps.
@@ -1640,13 +1649,45 @@ export class Renderer {
     const img = blink ? sprites.blink[p.facing] : frames[frame];
     const bob = walking && frame % 2 === 0 ? -1 : 0;
     const x = Math.round(p.x - img.width / 2);
-    const y = Math.round(p.y - img.height + 3 + bob);
+    const y = Math.round(p.y - img.height + 3 + bob - (riding ? SCOOTER_LIFT : 0));
     ctx.fillStyle = 'rgba(0,0,0,0.35)';
-    ctx.fillRect(Math.round(p.x - 5), Math.round(p.y + 1), 10, 3);
+    const wide = riding ? (p.facing === 0 || p.facing === 2 ? 22 : 12) : 10;
+    ctx.fillRect(Math.round(p.x - wide / 2), Math.round(p.y + 1), wide, 3);
+    if (riding) {
+      this.drawScooter(img, x, y);
+      return;
+    }
     const pickBehind = p.facing === 3;
     if (pickBehind) this.drawPickaxe();
     ctx.drawImage(img, x, y);
     if (!pickBehind) this.drawPickaxe();
+  }
+
+  /** Mineur debout sur sa trottinette : plateau et roues dessous, guidon par-dessus quand on le voit de face. */
+  private drawScooter(miner: HTMLCanvasElement, mx: number, my: number): void {
+    const p = this.state!.player;
+    const ctx = this.ctx;
+    const moving = p.moving;
+    // Les roues tournent quand on avance.
+    const wheel = moving ? Math.floor(this.time * 14) % 2 : 0;
+    const base = this.scooter.base[p.facing][wheel];
+    const bx = Math.round(p.x - base.width / 2);
+    const by = Math.round(p.y - base.height + 3);
+    ctx.drawImage(base, bx, by);
+    ctx.drawImage(miner, mx, my);
+    if (p.facing === 1) {
+      // De face, le guidon passe devant le mineur ; le bas de la colonne repose sur le plateau.
+      const bars = this.scooter.bars;
+      ctx.drawImage(bars, Math.round(p.x - bars.width / 2), by + 1 - (bars.height - 2));
+    }
+    // Poussière sous les roues arrière et petit panache du moteur, quand on roule.
+    if (moving && this.time - this.scooterPuff > 0.09) {
+      this.scooterPuff = this.time;
+      const rx = p.x - DX[p.facing] * 9;
+      const ry = p.y + 2 - DY[p.facing] * 5;
+      this.fx.emit('dust', rx, ry, 'rgba(150,130,110,0.6)', 1, 12);
+      if (Math.random() < 0.4) this.fx.emit('smoke', rx - DX[p.facing] * 2, ry - 6, 'rgba(90,90,96,0.5)', 1, 6);
+    }
   }
 
   private drawPickaxe(): void {

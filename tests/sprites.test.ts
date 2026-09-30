@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { PLAYER_ART, playerArt } from '../src/render/sprites';
+import { PLAYER_ART, SCOOTER_ART, SCOOTER_LIFT, playerArt } from '../src/render/sprites';
 
 /** Le mineur est dessiné en texte : une rangée trop courte ou trop longue décale tout le sprite. */
 describe('dessins du mineur', () => {
@@ -72,5 +72,35 @@ describe('mineur équipé', () => {
       expect(legs.slice(1).join('')).toContain('Z');
       expect(legs.slice(1).join('')).not.toMatch(/[Bb]/);
     }
+  });
+});
+
+/** La trottinette aussi est dessinée en texte : une rangée de travers décale tout le plateau. */
+describe('trottinette', () => {
+  const { side, sideB, end, endB, bars } = SCOOTER_ART;
+
+  it('toutes les rangées d’une vue ont la même largeur, et les deux images de roues la même taille', () => {
+    for (const [rows, w] of [[side, 22], [sideB, 22], [end, 10], [endB, 10], [bars, 12]] as [string[], number][])
+      for (const r of rows) expect(r.length, r).toBe(w);
+    expect(sideB.length).toBe(side.length);
+    expect(endB.length).toBe(end.length);
+  });
+
+  it('n’utilise que des lettres de la palette', () => {
+    const allowed = new Set('.SsdKkhRrGE');
+    for (const r of [...side, ...sideB, ...end, ...endB, ...bars]) for (const ch of r) expect(allowed.has(ch), `${ch} dans ${r}`).toBe(true);
+  });
+
+  it('le plateau est à la hauteur dont on soulève le mineur', () => {
+    // Sous la première rangée du plateau, il reste exactement SCOOTER_LIFT rangées (roues comprises).
+    const deck = (rows: string[]) => rows.findIndex((r) => /^\.*S{8,}\.*$/.test(r));
+    expect(side.length - deck(side)).toBe(SCOOTER_LIFT);
+    expect(end.length - deck(end)).toBe(SCOOTER_LIFT);
+  });
+
+  it('les roues tournent : les deux images ne diffèrent que par les roues', () => {
+    const diff = (a: string[], b: string[]) => a.flatMap((r, i) => (r === b[i] ? [] : [i]));
+    expect(diff(side, sideB)).toEqual([8, 9]);
+    expect(diff(end, endB)).toEqual([2]);
   });
 });

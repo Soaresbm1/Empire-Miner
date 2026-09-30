@@ -298,6 +298,9 @@ export class Game {
       case 'buyGear':
         g.buyGear(arg);
         break;
+      case 'buyScooter':
+        g.buyScooter();
+        break;
       case 'buyKit': {
         const [id, q] = arg.split(':');
         g.buyKit(id, Number(q));
@@ -546,7 +549,7 @@ export class Game {
           }
         }
       }
-      intent = { mx, my, mine, target };
+      intent = { mx, my, mine, target, ride: inp.isDown('ShiftLeft', 'ShiftRight') };
       // En construction, la ligne d'état de la barre remplace l'infobulle.
       if (mouseActive && !this.buildMode) tooltip = this.describeTile(g, mtx, mty);
     }
@@ -677,7 +680,8 @@ export class Game {
 
   private hintsHtml(): string {
     const l = (c: string) => this.input.label(c);
-    return `<span><kbd>${l('KeyB')}</kbd> Construire</span><span><kbd>${l('KeyI')}</kbd> Sac</span><span><kbd>M</kbd> Carte</span><span><kbd>N</kbd> Repère</span><span><kbd>${l('KeyH')}</kbd> Aide</span><span><kbd>Échap</kbd> Menu</span>`;
+    const scooter = this.state?.hasScooter ? `<span${this.state.scootering ? ' class="on"' : ''}><kbd>Maj</kbd> Trottinette</span>` : '';
+    return `${scooter}<span><kbd>${l('KeyB')}</kbd> Construire</span><span><kbd>${l('KeyI')}</kbd> Sac</span><span><kbd>M</kbd> Carte</span><span><kbd>N</kbd> Repère</span><span><kbd>${l('KeyH')}</kbd> Aide</span><span><kbd>Échap</kbd> Menu</span>`;
   }
 
   // ------------------------------------------------------------------ construction
@@ -1146,6 +1150,9 @@ export class Game {
         case 'hurt':
           if (e.amount >= 10) this.sfx.hurt();
           r.onHurt(e.amount);
+          break;
+        case 'mount':
+          this.sfx.mount(e.on);
           break;
         case 'faint':
           this.sfx.hurt();

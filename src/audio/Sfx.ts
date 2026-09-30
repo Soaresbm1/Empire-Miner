@@ -161,6 +161,18 @@ export class Sfx {
     this.tone(220, 0.15, 'sawtooth', 0.08, 160);
   }
 
+  /** Trottinette : le moteur démarre (monter) ou s'éteint (descendre). */
+  mount(on: boolean): void {
+    if (on) {
+      this.tone(150, 0.22, 'sawtooth', 0.06, 380);
+      this.noise(0.14, 500, 1, 0.1, 'lowpass');
+      this.tone(520, 0.05, 'square', 0.04, undefined, 0.16);
+    } else {
+      this.tone(330, 0.18, 'sawtooth', 0.05, 110);
+      this.noise(0.08, 400, 1, 0.06, 'lowpass');
+    }
+  }
+
   click(): void {
     this.tone(880, 0.04, 'square', 0.05);
   }

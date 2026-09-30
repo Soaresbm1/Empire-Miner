@@ -78,3 +78,25 @@ export const JACKHAMMER: PowerToolDef = {
   unlock: { pickaxeTier: 3, text: 'Nécessite la Pioche en fer' },
   description: "Attaque la paroi sur trois cases de large, très vite. Brûle le charbon de votre sac ; sans charbon, vous repassez à la pioche.",
 };
+
+/**
+ * Moyen de déplacement personnel, acheté à l'Atelier. On le monte en maintenant Maj et on en
+ * descend en relâchant la touche ; tant qu'on roule, la vitesse est multipliée par `speedMul`,
+ * mais les mains sont au guidon : on ne peut pas miner.
+ */
+export interface RideDef {
+  id: string;
+  name: string;
+  price: number;
+  /** Multiplicateur de vitesse de déplacement pendant que l'on roule. */
+  speedMul: number;
+  description: string;
+}
+
+export const SCOOTER: RideDef = {
+  id: 'scooter',
+  name: 'Trottinette à moteur',
+  price: 500,
+  speedMul: 1.7,
+  description: "Un petit moteur de pompe sur un plateau d'acier : on file 70 % plus vite, au camp comme dans les galeries. Les deux mains sont au guidon : impossible de miner en roulant.",
+};
