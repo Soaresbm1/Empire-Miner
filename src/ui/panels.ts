@@ -4,12 +4,10 @@
  */
 import { DIR_ARROWS, DX, DY } from '../core/dir';
 import { METERS_PER_TILE, SURFACE_ROWS, TILE, depthAt } from '../core/constants';
-import { BorerLevelSpec, MACHINES, MACHINE_GROUPS, MachineDef, MachineLevel, conveyorThroughput, kitName, parseKit } from '../data/machines';
-import { BOOTS_WATER, GEAR, GearDef, HAZARD_LABEL } from '../data/gear';
-import { CAVE_IN, GAS, HEALTH, HEAT, WATER } from '../data/hazards';
+import { BorerLevelSpec, MachineLevel, kitName } from '../data/machines';
+import { HEAT } from '../data/hazards';
 import { MARKER_KINDS, MARKER_ORDER, MAX_MARKERS } from '../sim/Markers';
 import { RESOURCES, getResource } from '../data/resources';
-import { BAGS, JACKHAMMER, PICKAXES, SCOOTER } from '../data/tools';
 import type { GameState } from '../sim/GameState';
 import type { BorerStatus, ReturnReason, TunnelBorer } from '../sim/structures/Borer';
 import type { Smelter, SmelterStatus } from '../sim/structures/Smelter';
@@ -19,13 +17,8 @@ import type { Sorter } from '../sim/structures/Sorter';
 import type { RailStation, RailSwitch, SwitchSetting } from '../sim/structures/Rail';
 import type { Storage } from '../sim/structures/Storage';
 import { esc, kg, money, num, rarityTag, resIcon } from './format';
-import { icon as themeIcon } from './theme';
 import { productionStats } from './stats';
-
-const btn = (action: string, label: string, opts: { arg?: string; disabled?: boolean; cls?: string; title?: string } = {}) =>
-  `<button class="btn ${opts.cls ?? ''}" data-action="${action}"${opts.arg !== undefined ? ` data-arg="${esc(opts.arg)}"` : ''}${
-    opts.disabled ? ' disabled' : ''
-  }${opts.title ? ` title="${esc(opts.title)}"` : ''}>${label}</button>`;
+import { btn, stat } from './widgets';
 
 function sortedItems(items: Record<string, number>): [string, number][] {
   return Object.entries(items)
@@ -64,230 +57,8 @@ export function boardPanel(g: GameState): string {
 
 // ------------------------------------------------------------------ atelier
 
-function stat(label: string, from: string, to?: string): string {
-  return `<div class="stat"><span>${label}</span><b>${from}${to && to !== from ? ` <em>→ ${to}</em>` : ''}</b></div>`;
-}
-
-function ladder(names: string[], current: number): string {
-  return `<div class="ladder">${names
-    .map((n, i) => `<span class="${i < current ? 'owned' : i === current ? 'current' : ''}">${n}</span>`)
-    .join('<i>›</i>')}</div>`;
-}
-
-/** Carte de la trottinette à moteur dans l'onglet Transport de l'Atelier. */
-function scooterCard(g: GameState): string {
-  const s = SCOOTER;
-  const pct = `${Math.round(s.speedMul * 100)} %`;
-  if (g.hasScooter)
-    return `<h4>Moyen de déplacement</h4><div class="cards"><div class="card"><h3>${s.name} — acquise</h3>
-      <p>Maintenez <kbd>Maj</kbd> pour monter dessus, relâchez pour en descendre. Vous ne pouvez pas miner en roulant.</p>
-      ${stat('Vitesse de marche', pct)}${stat('Commande', 'Maj maintenue')}</div></div>`;
-  const can = g.money >= s.price;
-  return `<h4>Moyen de déplacement</h4><div class="cards"><div class="card highlight"><h3>${s.name}</h3><p>${s.description}</p>
-    ${stat('Vitesse de marche', '100 %', pct)}${stat('Commande', 'maintenir Maj (relâcher : on descend)')}${stat('Minage', 'impossible en roulant')}
-    <div class="buy">${btn('buyScooter', `Acheter — ${money(s.price)}`, { cls: 'primary', disabled: !can })}${can ? '' : `<small>Il vous manque ${money(s.price - g.money)}</small>`}</div></div></div>`;
-}
-
-/** Carte du marteau-piqueur dans l'onglet Outils de l'Atelier. */
-function jackhammerCard(g: GameState): string {
-  const j = JACKHAMMER;
-  const specs = `${stat('Niveau', String(j.tier))}${stat('Cases par coup', `${j.width} (la visée et ses voisines)`)}
-    ${stat("Durée d'un coup", `${num(j.swingTime, 2)} s`)}${stat('Puissance', `${num((j.damage * j.width) / j.swingTime, 0)} /s sur ${j.width} cases`)}
-    ${stat('Charbon', `1 unité / ${j.fuel.secondsPerUnit} s de travail, pris dans le sac`)}`;
-  if (g.hasJackhammer) {
-    const inHand = g.tool === 'jackhammer';
-    return `<h4>Outils mécaniques</h4><div class="cards"><div class="card ${inHand ? 'highlight' : ''}"><h3>${j.name} — acquis</h3>
-      <p>${inHand ? 'En main.' : 'Rangé : vous tenez la pioche.'} Touche <kbd>T</kbd> pour passer de la pioche au marteau-piqueur.</p>${specs}
-      ${stat('Charbon dans le sac', String(g.inventory.count(j.fuel.res)))}</div></div>`;
-  }
-  const locked = g.pickaxe.tier < j.unlock.pickaxeTier;
-  const can = !locked && g.money >= j.price;
-  return `<h4>Outils mécaniques</h4><div class="cards"><div class="card ${locked ? 'locked' : 'highlight'}"><h3>${j.name}</h3><p>${j.description}</p>${specs}
-    <div class="buy">${btn('buyJackhammer', `Acheter — ${money(j.price)}`, { cls: 'primary', disabled: !can })}${
-      locked ? `<small class="lock">🔒 ${j.unlock.text}</small>` : g.money < j.price ? `<small>Il vous manque ${money(j.price - g.money)}</small>` : ''
-    }</div></div></div>`;
-}
-
-/** Ce que la pièce change, danger par danger : « sans → avec ». */
-function gearFacts(def: GearDef): string {
-  const keep = 1 - def.absorb;
-  switch (def.hazard) {
-    case 'cavein':
-      return stat('Éboulement', `${CAVE_IN.damage} dégâts`, `${num(CAVE_IN.damage * keep, 0)}`);
-    case 'gas':
-      return stat('Grisou', `${GAS.dps} / s`, `${num(GAS.dps * keep)} / s`);
-    case 'water':
-      return `${stat('Eau profonde', `${WATER.dps} / s`, `${num(WATER.dps * keep)} / s`)}${stat('Marche dans l\'eau', `${Math.round(WATER.slowShallow * 100)} %`, `${Math.round(BOOTS_WATER.shallow * 100)} %`)}${stat(
-        'Marche en eau profonde',
-        `${Math.round(WATER.slowDeep * 100)} %`,
-        `${Math.round(BOOTS_WATER.deep * 100)} %`,
-      )}`;
-    case 'heat':
-      return stat('Chaleur', `${num(HEAT.hurtTop)} à ${num(HEAT.hurtBottom)} / s`, `${num(HEAT.hurtTop * keep, 2)} à ${num(HEAT.hurtBottom * keep, 2)} / s`);
-  }
-}
-
-/** Onglet Équipement de l'Atelier : une fiche par pièce de protection. */
-function gearShop(g: GameState): string {
-  const cards = GEAR.map((def) => {
-    const owned = g.hasGear(def.id);
-    const can = g.money >= def.price;
-    const src = themeIcon(`gear:${def.id}`);
-    const img = src ? `<img class="gear-ico" src="${src}" alt="">` : '';
-    const specs = `${stat(`${HAZARD_LABEL[def.hazard]} (dès ${def.fromDepth} m)`, `−${Math.round(def.absorb * 100)} % de dégâts`)}${gearFacts(def)}`;
-    return `<div class="card ${owned ? '' : 'highlight'}"><h3>${img}${def.name}${owned ? ' — porté' : ` <small>(${def.slotName.toLowerCase()})</small>`}</h3><p>${def.description}</p>${specs}${
-      owned
-        ? ''
-        : `<div class="buy">${btn('buyGear', `Acheter — ${money(def.price)}`, { arg: def.id, cls: 'primary', disabled: !can })}${
-            can ? '' : `<small>Il vous manque ${money(def.price - g.money)}</small>`
-          }</div>`
-    }</div>`;
-  }).join('');
-  return `<p class="shop-hint">Chaque pièce absorbe une part des dégâts d'un danger précis, dès l'achat. Dégâts en points de vie (sur ${HEALTH.max}) : « sans → avec ».</p><div class="cards gear-cards">${cards}</div>`;
-}
-
-export function workshopPanel(g: GameState, tab: string, icon: (id: string) => string = () => ''): string {
-  const tabs = [
-    ['tools', 'Outils'],
-    ['transport', 'Transport'],
-    ['gear', 'Équipement'],
-    ['machines', 'Machines'],
-  ]
-    .map(([id, label]) => `<button class="tab ${tab === id ? 'active' : ''}" data-action="tab" data-arg="${id}">${label}</button>`)
-    .join('');
-  let body = '';
-  if (tab === 'tools') {
-    const cur = g.pickaxe;
-    const next = PICKAXES[g.pickaxeLevel + 1];
-    body = ladder(
-      PICKAXES.map((p) => p.name),
-      g.pickaxeLevel,
-    );
-    body += `<div class="cards">`;
-    body += `<div class="card"><h3>Actuelle : ${cur.name}</h3><p>${cur.description}</p>
-      ${stat('Niveau', String(cur.tier))}${stat('Dégâts par coup', String(cur.damage))}${stat('Durée d\'un coup', `${num(cur.swingTime, 2)} s`)}
-      ${stat('Puissance', `${num(cur.damage / cur.swingTime)} /s`)}</div>`;
-    if (next) {
-      const can = g.money >= next.price;
-      body += `<div class="card highlight"><h3>${next.name}</h3><p>${next.description}</p>
-        ${stat('Niveau', String(cur.tier), String(next.tier))}${stat('Dégâts par coup', String(cur.damage), String(next.damage))}
-        ${stat('Durée d\'un coup', `${num(cur.swingTime, 2)} s`, `${num(next.swingTime, 2)} s`)}
-        ${stat('Puissance', `${num(cur.damage / cur.swingTime)} /s`, `${num(next.damage / next.swingTime)} /s`)}
-        <div class="buy">${btn('buyPickaxe', `Acheter — ${money(next.price)}`, { cls: 'primary', disabled: !can })}${can ? '' : `<small>Il vous manque ${money(next.price - g.money)}</small>`}</div></div>`;
-    } else body += `<div class="card"><h3>Meilleure pioche atteinte</h3><p>Vous avez la meilleure pioche de cette version du jeu.</p></div>`;
-    body += `</div>`;
-    body += jackhammerCard(g);
-  } else if (tab === 'transport') {
-    const cur = g.bag;
-    const next = BAGS[g.bagLevel + 1];
-    body = ladder(
-      BAGS.map((b) => b.name),
-      g.bagLevel,
-    );
-    body += `<div class="cards"><div class="card"><h3>Actuel : ${cur.name}</h3><p>${cur.description}</p>
-      ${stat('Capacité', kg(cur.capacity))}${stat('Vitesse de marche', `${Math.round(cur.speedMul * 100)} %`)}</div>`;
-    if (next) {
-      const can = g.money >= next.price;
-      body += `<div class="card highlight"><h3>${next.name}</h3><p>${next.description}</p>
-        ${stat('Capacité', kg(cur.capacity), kg(next.capacity))}${stat('Vitesse de marche', `${Math.round(cur.speedMul * 100)} %`, `${Math.round(next.speedMul * 100)} %`)}
-        <div class="buy">${btn('buyBag', `Acheter — ${money(next.price)}`, { cls: 'primary', disabled: !can })}${can ? '' : `<small>Il vous manque ${money(next.price - g.money)}</small>`}</div></div>`;
-    } else body += `<div class="card"><h3>Transport personnel au maximum</h3><p>Pour transporter davantage, automatisez : foreuses, convoyeurs et coffres.</p></div>`;
-    body += `</div>`;
-    body += scooterCard(g);
-  } else if (tab === 'gear') {
-    body = gearShop(g);
-  } else {
-    body = `<p class="shop-hint">Survolez une machine pour lire sa description complète.</p>${machineShop(g, icon)}`;
-  }
-  return `<p class="sub">Outils, équipement et machines. Les machines achetées se posent avec <kbd>B</kbd>.</p><div class="tabs">${tabs}</div>${body}`;
-}
-
-/** Chiffres utiles d'une machine, en étiquettes courtes. */
-function machineSpecs(m: MachineDef): [string, string][] {
-  const s = m.stats;
-  if (m.conveyor) return [['Vitesse', `${num(s.speed, 2)} case/s`], ['Débit', `${num(conveyorThroughput(m))} /s`]];
-  if (m.id === 'splitter') return [['Sorties', '3, à tour de rôle'], ['Débit', `${num(s.speed * s.capacity)} /s`]];
-  if (m.id === 'sorter') return [['Tout droit', 'le minerai choisi'], ['Côtés', 'tout le reste']];
-  if (m.bridge) return [['Portée', `jusqu'à ${m.bridge.range} cases`], ['Vendu', 'par paire']];
-  if (m.shipping) return [['Vente', `toutes les ${m.shipping.interval} s`], ['Capacité', kg(s.capacity)], ['Pose', 'en surface']];
-  if (m.id === 'storage') return [['Capacité', kg(s.capacity)]];
-  if (m.id === 'rail') return [['Pose', 'en glissant'], ['Virages', 'automatiques']];
-  if (m.onTrack) return [['Vitesse', `${num(s.speed)} cases/s`], ['Capacité', kg(s.capacity)], ['Passager', 'touche F']];
-  if (m.station) return [['Tampon', kg(s.capacity)], ['Transfert', `${num(s.speed)} /s`]];
-  if (m.railSwitch) return [['Branches', 'tout droit, gauche, droite'], ['Mode', 'fixe ou alterné']];
-  if (m.id === 'prop') return [['Protège', '3 cases autour (7×7)'], ['Passage', 'on passe dessous']];
-  if (m.id === 'fan') return [['Grisou', `${GAS.fanRadius} cases`], ['Chaleur', `rafraîchit à ${HEAT.fanRadius} cases`], ['Énergie', 'aucune']];
-  if (m.id === 'pump') return [['Portée', `${WATER.pumpRadius} cases`], ['Énergie', 'aucune']];
-  if (m.smelter && m.fuel)
-    return [
-      ['Vitesse', `1 lingot / ${num(m.smelter.smeltTime)} s`],
-      ['Charbon', `1 unité / ${num(m.fuel.secondsPerUnit / m.smelter.smeltTime, 0)} lingots`],
-      ['Lingot', '2,5 × le prix du minerai'],
-      ...(m.w > 1 ? [['Taille', `${m.w}×${m.h} cases`] as [string, string]] : []),
-    ];
-  if (m.borer && m.fuel)
-    return [
-      ['Tunnel', "jusqu'à 50 cases, ou sans limite"],
-      ['Roche', "jusqu'à la roche volcanique"],
-      ['Charbon', `1 unité / ${m.fuel.secondsPerUnit} s de perçage`],
-      ['Plein', `${m.levels?.[0].borer?.tankUnits ?? 0} unités par sortie, puis retour à la base`],
-      ['Améliorable', `jusqu'au niveau ${m.levels?.length ?? 1} (touche E sur la base)`],
-    ];
-  const out: [string, string][] = [];
-  if (s.speed) out.push(['Cadence', `${num(s.speed * 60, 0)} /min`]);
-  if (m.fuel) out.push(['Charbon', `1 unité / ${m.fuel.secondsPerUnit} s`], ['Réservoir', `${m.fuel.maxUnits} unités`]);
-  if (m.levels && m.levels.length > 1) out.push(['Améliorable', `jusqu'au niveau ${m.levels.length} (touche E dessus)`]);
-  if (s.power) out.push(['Consommation', `${s.power} kW`]);
-  return out;
-}
-
-const SHOP_GROUPS = MACHINE_GROUPS;
-
-function machineRow(g: GameState, m: MachineDef, icon: (id: string) => string): string {
-  const unlocked = g.isUnlocked(m.id);
-  const owned = g.inventory.kitCount(m.id);
-  // Machines améliorées démontées, rangées avec leur niveau.
-  const upgraded = Object.entries(g.inventory.kits)
-    .filter(([kit, n]) => n > 0 && parseKit(kit).machine === m.id && parseKit(kit).level > 1)
-    .map(([kit, n]) => `<b>${n}</b> niv. ${parseKit(kit).level}`)
-    .join(', ');
-  const placed = g.structures.list.filter((s) => s.type === m.id).length;
-  // Les ponts se vendent par paire (une entrée + une sortie).
-  const qtys = m.conveyor ? [1, 10] : m.bridge ? [2] : m.dragPlace ? [10, 50] : m.id === 'prop' ? [1, 5] : [1];
-  const label = (q: number) => (m.bridge ? `Paire · ${money(m.price * q)}` : q > 1 ? `×${q} · ${money(m.price * q)}` : `Acheter · ${money(m.price)}`);
-  const cheapest = m.price * qtys[0];
-  const specs = machineSpecs(m)
-    .map(([k, v]) => `<span class="spec"><i>${k}</i>${v}</span>`)
-    .join('');
-  const level = m.conveyor ? `<span class="lvl">N${m.stats.level}</span>` : '';
-  const img = icon(m.id);
-  const side = unlocked
-    ? `<div class="buy-row">${qtys.map((q) => btn('buyKit', label(q), { arg: `${m.id}:${q}`, cls: 'primary', disabled: g.money < m.price * q })).join('')}</div>
-       ${g.money < cheapest ? `<small class="miss">Il manque ${money(cheapest - g.money)}</small>` : ''}`
-    : `<small class="lock">🔒 ${m.unlock?.text}</small>`;
-  return `<div class="shop-row ${unlocked ? '' : 'locked'}" title="${esc(m.description)}">
-    <div class="shop-icon">${img ? `<img src="${img}" alt="">` : ''}</div>
-    <div class="shop-main">
-      <div class="shop-title">${m.name}${level}</div>
-      <div class="shop-sum">${m.summary}</div>
-      <div class="specs">${specs}</div>
-    </div>
-    <div class="shop-side">
-      <div class="stock">${owned ? `<b>${owned}</b> en stock` : 'Aucun en stock'}${upgraded ? ` (+ ${upgraded})` : ''}${
-        placed ? ` · <b>${placed}</b> posé${placed > 1 ? 's' : ''}` : ''
-      }</div>
-      ${side}
-    </div>
-  </div>`;
-}
-
-function machineShop(g: GameState, icon: (id: string) => string): string {
-  return SHOP_GROUPS.map((grp) => {
-    const rows = MACHINES.filter((m) => grp.categories.includes(m.category));
-    if (!rows.length) return '';
-    return `<section class="shop-group"><h4>${grp.title}</h4>${rows.map((m) => machineRow(g, m, icon)).join('')}</section>`;
-  }).join('');
-}
+/** L'Atelier a son propre module (onglets, conseil d'achat, magasin de machines). */
+export { workshopPanel } from './workshop';
 
 // ------------------------------------------------------------------ sac
 
@@ -839,6 +610,7 @@ export function helpPanel(keys: { move: string; label: (c: string) => string }):
     <div><h4>Carte</h4><p><kbd>M</kbd> : carte de la mine (ou clic sur la mini-carte)</p></div>
     <div><h4>Repères</h4><p><kbd>N</kbd> : marquer l'endroit où vous êtes ; sur la carte, un clic pose un repère. « Suivre » affiche une flèche vers lui</p></div>
     <div><h4>Dangers (en profondeur)</h4><p>Plafond qui craque : posez un <b>étai</b> ou fuyez. Grisou : sortez du nuage, un <b>ventilateur</b> le chasse. Eau : une <b>pompe</b> l'assèche. À 0 de santé, on se réveille au camp, le sac reste au fond.</p></div>
+    <div><h4>Atelier</h4><p>${k('KeyE')} devant l'atelier. <kbd>1</kbd> à <kbd>4</kbd> ou les flèches <kbd>←</kbd> <kbd>→</kbd> changent d'onglet ; la bande « Conseil » propose le prochain achat utile, et la pastille d'un onglet compte ce que vous pouvez acheter tout de suite</p></div>
     <div><h4>Équipement de protection</h4><p>À l'atelier (onglet Équipement) : <b>casque</b> contre les éboulements, <b>masque à gaz</b>, <b>cuissardes</b> pour l'eau, <b>combinaison ignifugée</b> pour la Fournaise. Chaque pièce absorbe une part des dégâts du danger qu'elle contre</p></div>
     <div><h4>Fournaise (sous 450 m)</h4><p>Roche volcanique, plus d'or et, sous 500 m, des diamants (Pioche pro en acier). La chaleur ralentit foreuses et fours et <b>épuise le mineur</b> : un <b>ventilateur</b> à ${HEAT.fanRadius} cases rafraîchit les machines et vous laisse souffler ; la combinaison ignifugée absorbe l'essentiel</p></div>
     <div><h4>Tableau d'affichage</h4><p>${k('KeyE')} devant le tableau, entre le comptoir et l'atelier : ventes, minerai et lingots par minute, gains des 10 dernières minutes, machines à l'arrêt</p></div>

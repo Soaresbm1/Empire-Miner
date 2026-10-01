@@ -50,6 +50,21 @@ lettre tapée : c'est la touche marquée M, quel que soit le clavier.
 - Ressources : pierre, charbon, cuivre, fer, argent, or, diamant (valeur, poids, rareté, résistance, profondeur).
 - Comptoir de vente et atelier en surface ; 4 pioches, 3 moyens de transport (sac, grand sac, brouette) et 4 pièces
   d'équipement de protection.
+- **L'Atelier** (`E` devant le bâtiment) est organisé pour acheter vite et sans se perdre :
+  - quatre onglets (Outils, Transport, Équipement, Machines), qu'on change avec `1` à `4`, les flèches `←` `→` ou la
+    souris. Les onglets restent **collés en haut** quand on fait défiler, et l'Atelier **se rouvre sur le dernier
+    onglet** consulté ;
+  - une bande **Conseil** propose le prochain achat utile (la pioche suivante, puis l'équipement du danger dont on
+    approche, puis le sac, le marteau-piqueur et la trottinette), avec son bouton d'achat, ou la barre qui montre où en
+    est l'argent quand il en manque ;
+  - une **pastille** sur chaque onglet compte ce qu'on peut acheter tout de suite ;
+  - Outils et Transport montrent une **bande de paliers** (icône, nom, prix : acquis, en main, suivant) puis la
+    comparaison « actuel → suivant » ; le marteau-piqueur et la trottinette ont leur fiche juste dessous ;
+  - toutes les fiches ont la même forme (icône, étiquette « en main », « acquis », « porté » ou « conseillé »,
+    chiffres « avant → après ») et un bouton grisé affiche une barre de progression et ce qu'il manque ;
+  - l'onglet Machines se **filtre par catégorie** et par « Achetables » ; chaque ligne est compacte (trois
+    caractéristiques, un bouton « Détails » pour tout voir) et les machines verrouillées tiennent sur une seule ligne.
+    Les filtres restent collés sous les onglets.
 - **Marteau-piqueur** (900 $, pioche en fer) : attaque la paroi sur 3 cases de large (la case visée et ses voisines,
   perpendiculairement au coup), très vite, en brûlant le charbon du sac (1 unité / 12 s de travail). `T` passe de la
   pioche au marteau ; sans charbon, on repasse automatiquement à la pioche.

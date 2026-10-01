@@ -22,6 +22,7 @@ import { CAVE_IN, GAS, HEAT, WATER } from '../data/hazards';
 import { Drill, reachTiles } from '../sim/structures/Drill';
 import { ShippingCrate } from '../sim/structures/ShippingCrate';
 import { Sorter } from '../sim/structures/Sorter';
+import { WORKSHOP_TABS } from '../ui/workshop';
 import { Rail, RailStation, RailSwitch, type SwitchSetting } from '../sim/structures/Rail';
 import { Splitter } from '../sim/structures/Splitter';
 import { Storage } from '../sim/structures/Storage';
@@ -301,6 +302,15 @@ export class Game {
       case 'buyScooter':
         g.buyScooter();
         break;
+      case 'shopCat':
+        this.ui.setShopCat(arg);
+        break;
+      case 'shopOnly':
+        this.ui.toggleShopOnly();
+        break;
+      case 'shopMore':
+        this.ui.toggleShopDetail(arg);
+        break;
       case 'buyKit': {
         const [id, q] = arg.split(':');
         g.buyKit(id, Number(q));
@@ -480,6 +490,12 @@ export class Game {
       else if (this.buildMode) this.setBuildMode(false);
       else this.ui.showPauseMenu(this.sfx.muted, this.quality);
     }
+    // Atelier ouvert : 1 à 4 (ou les flèches) changent d'onglet.
+    if (this.ui.panel?.kind === 'workshop' && !paused) {
+      WORKSHOP_TABS.forEach(([id], i) => inp.wasPressed(`Digit${i + 1}`, `Numpad${i + 1}`) && this.ui.setTab(id));
+      if (inp.wasPressed('ArrowRight')) this.ui.cycleTab(1);
+      if (inp.wasPressed('ArrowLeft')) this.ui.cycleTab(-1);
+    }
     if (inp.wasPressed('F3')) this.debug = !this.debug;
     if (!paused) {
       if (inp.wasPressed('KeyE')) {
@@ -634,7 +650,7 @@ export class Game {
     const s = g.nearestInteractable();
     if (!s) return;
     this.setBuildMode(false);
-    if (s instanceof Building) this.ui.openPanel(s.type === 'counter' ? 'counter' : s.type === 'board' ? 'board' : 'workshop', s, 'tools');
+    if (s instanceof Building) this.ui.openPanel(s.type === 'counter' ? 'counter' : s.type === 'board' ? 'board' : 'workshop', s);
     else if (s instanceof Storage) this.ui.openPanel('storage', s);
     else if (s instanceof ShippingCrate) this.ui.openPanel('shipping', s);
     else if (s instanceof Drill) this.ui.openPanel('drill', s);

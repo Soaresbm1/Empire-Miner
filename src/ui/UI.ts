@@ -23,6 +23,7 @@ import { icon } from './theme';
 import { MenuFx } from './menuFx';
 import { MAP_COLORS } from '../render/MineMap';
 import { QUALITY_LABEL, type Quality } from '../render/quality';
+import { WORKSHOP_TABS, isWorkshopTab } from './workshop';
 import { boardPanel, borerPanel, counterPanel, smelterPanel, drillPanel, helpPanel, inventoryPanel, mapPanel, shippingPanel, sorterPanel, stationPanel, storagePanel, switchPanel, workshopPanel } from './panels';
 
 /** Flèches dans les 8 directions, dans l'ordre des angles (est, sud-est, sud…). */
@@ -45,6 +46,12 @@ const $ = <T extends HTMLElement>(sel: string) => document.querySelector(sel) as
 
 export class UI {
   panel: { kind: PanelKind; target: Structure | null; tab: string } | null = null;
+  /** Dernier onglet de l'Atelier : on y revient à la prochaine visite. */
+  workshopTab = 'tools';
+  /** Réglages de l'onglet Machines (catégorie, « achetables seulement », détails dépliés). */
+  readonly shopView = { cat: 'all', only: false, open: new Set<string>() };
+  /** Au prochain dessin du panneau, on remonte en haut de la liste. */
+  private scrollTop = false;
   menu: 'main' | 'pause' | null = null;
   private readonly hud = $('#hud');
   private readonly panelRoot = $('#panel-root');
@@ -250,8 +257,9 @@ export class UI {
 
   // ------------------------------------------------------------------ panneaux
 
-  openPanel(kind: PanelKind, target: Structure | null = null, tab = 'tools'): void {
+  openPanel(kind: PanelKind, target: Structure | null = null, tab = kind === 'workshop' ? this.workshopTab : 'tools'): void {
     this.panel = { kind, target, tab };
+    this.scrollTop = true;
     this.panelSig = '';
     this.popNext = true;
     this.syncOverlay();
@@ -270,10 +278,36 @@ export class UI {
   }
 
   setTab(tab: string): void {
-    if (this.panel) {
-      this.panel.tab = tab;
-      this.panelSig = '';
+    if (!this.panel) return;
+    if (this.panel.kind === 'workshop') {
+      if (!isWorkshopTab(tab)) return;
+      this.workshopTab = tab;
     }
+    this.panel.tab = tab;
+    this.scrollTop = true;
+    this.panelSig = '';
+  }
+
+  /** Onglet suivant (1) ou précédent (-1) de l'Atelier, en bouclant. */
+  cycleTab(dir: 1 | -1): void {
+    if (this.panel?.kind !== 'workshop') return;
+    const i = WORKSHOP_TABS.findIndex(([id]) => id === this.panel!.tab);
+    this.setTab(WORKSHOP_TABS[(i + dir + WORKSHOP_TABS.length) % WORKSHOP_TABS.length][0]);
+  }
+
+  /** Magasin de machines : catégorie affichée (« all » : toutes). */
+  setShopCat(cat: string): void {
+    this.shopView.cat = cat;
+    this.scrollTop = true;
+  }
+
+  toggleShopOnly(): void {
+    this.shopView.only = !this.shopView.only;
+  }
+
+  /** Déplie ou replie le détail d'une machine. */
+  toggleShopDetail(id: string): void {
+    if (!this.shopView.open.delete(id)) this.shopView.open.add(id);
   }
 
   /** Redessine le panneau ouvert si son contenu a changé. */
@@ -296,7 +330,7 @@ export class UI {
         break;
       case 'workshop':
         title = 'Atelier';
-        body = workshopPanel(g, tab, (id) => this.host.machineIcon(id));
+        body = workshopPanel(g, tab, (id) => this.host.machineIcon(id), this.shopView);
         break;
       case 'inventory':
         title = 'Sac et carnet';
@@ -353,7 +387,8 @@ export class UI {
     this.panelRoot.innerHTML = `<div class="panel panel-${kind}${this.popNext ? ' pop' : ''}">${inner}</div>`;
     this.popNext = false;
     const pb = this.panelRoot.querySelector('.panel-body');
-    if (pb) pb.scrollTop = scroll;
+    if (pb) pb.scrollTop = this.scrollTop ? 0 : scroll;
+    this.scrollTop = false;
   }
 
   // ------------------------------------------------------------------ menus
