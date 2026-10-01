@@ -158,6 +158,66 @@ export function buildPlayerSprites(gear: PlayerGear = {}): PlayerSprites {
   return { frames: [right, down, left, up], blink: [blinkRight, blinkDown, mirror(blinkRight), up[0]] };
 }
 
+// ------------------------------------------------------------------ trottinette
+
+/**
+ * Trottinette à moteur sous le mineur : plateau d'acier, deux roues, petit moteur de laiton à l'arrière
+ * et guidon à poignées rouges. La lumière vient d'en haut à gauche comme partout ailleurs.
+ */
+const SCOOTER_PALETTE: Record<string, string> = {
+  // Acier : reflet, face, dessous ; pneu et reflet du pneu ; moyeu ; poignées ; moteur et laiton.
+  S: '#dfe5ee', s: '#aab3c2', d: '#6b7689', K: '#2f2e36', k: '#5a5a66', h: '#e6c040',
+  R: '#e0483c', r: '#9a2a20', G: '#e0b84a', E: '#454b58',
+};
+
+/** Hauteur dont le mineur est surélevé sur son plateau (pixels). */
+export const SCOOTER_LIFT = 4;
+
+const pad = (n: number) => '.'.repeat(n);
+
+/** De profil, tournée vers la droite : `frame` (0 ou 1) fait tourner le reflet des roues. */
+function scooterSideArt(frame: 0 | 1): string[] {
+  const top = frame ? 'KKhK' : 'KKKK';
+  const mid = frame ? 'KKKK' : 'KhhK';
+  return [
+    pad(15) + 'RRRRRR' + pad(1),
+    pad(15) + 'rrrrrr' + pad(1),
+    pad(17) + 'Ss' + pad(3),
+    pad(17) + 'Ss' + pad(3),
+    pad(4) + 'GG' + pad(11) + 'Ss' + pad(3),
+    pad(3) + 'EEEE' + pad(10) + 'Ss' + pad(3),
+    'ddd' + 'EEEE' + pad(10) + 'Ss' + pad(3),
+    pad(2) + 'S'.repeat(18) + pad(2),
+    pad(2) + top + 's'.repeat(10) + top + pad(2),
+    pad(2) + mid + pad(10) + mid + pad(2),
+    pad(2) + '.KK.' + pad(10) + '.KK.' + pad(2),
+  ];
+}
+
+/** De face ou de dos : le plateau vu par le bout et la roue sous les pieds. */
+function scooterEndArt(frame: 0 | 1): string[] {
+  return ['SSSSSSSSSS', 'ssssssssss', frame ? '...KKkK...' : '...KkkK...', '...KKKK...'];
+}
+
+/** Guidon vu de face (à dessiner par-dessus le mineur) : barre, poignées et colonne de direction. */
+const SCOOTER_BARS = ['.RRSSSSSSRR.', '.rr..Ss..rr.', ...Array.from({ length: 5 }, () => '.....Ss.....')];
+
+/** Dessins de la trottinette, exposés pour vérifier leurs dimensions (tests). */
+export const SCOOTER_ART = { side: scooterSideArt(0), sideB: scooterSideArt(1), end: scooterEndArt(0), endB: scooterEndArt(1), bars: SCOOTER_BARS };
+
+export interface ScooterSprites {
+  /** [direction][image de roue] : direction 0 E, 1 S, 2 O, 3 N ; le plateau et les roues, à dessiner sous le mineur. */
+  base: HTMLCanvasElement[][];
+  /** Guidon vu de face, à dessiner par-dessus le mineur (direction sud seulement). */
+  bars: HTMLCanvasElement;
+}
+
+export function buildScooterSprites(): ScooterSprites {
+  const side = ([0, 1] as const).map((f) => fromArt(scooterSideArt(f), SCOOTER_PALETTE));
+  const end = ([0, 1] as const).map((f) => fromArt(scooterEndArt(f), SCOOTER_PALETTE));
+  return { base: [side, end, side.map(mirror), end], bars: fromArt(SCOOTER_BARS, SCOOTER_PALETTE) };
+}
+
 // ------------------------------------------------------------------ pioches
 
 /**

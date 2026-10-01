@@ -484,3 +484,6 @@ kbd {
   .hud-br { display: none; }
   .money { font-size: 20px; }
 }
+
+/* Trottinette : le conseil de la barre de touches s'allume tant qu'on roule. */
+.hud-br span.on, .hud-br span.on kbd { color: var(--good); }

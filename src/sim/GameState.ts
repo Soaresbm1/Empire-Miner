@@ -14,7 +14,7 @@ import { getMachine, kitId, kitName, MACHINES, parseKit } from '../data/machines
 import { CAUSE_HAZARD, GEAR, HazardKind, getGear } from '../data/gear';
 import { GAS, HEALTH, HEAT, WATER } from '../data/hazards';
 import { RESOURCES, getResource, hasResource, resourceIndex } from '../data/resources';
-import { BAGS, JACKHAMMER, PICKAXES } from '../data/tools';
+import { BAGS, JACKHAMMER, PICKAXES, SCOOTER } from '../data/tools';
 import { Drop, DropSystem } from './Drops';
 import { HazardSystem } from './Hazards';
 import { MARKER_KINDS, Marker, MarkerBook, MarkerKind } from './Markers';
@@ -47,6 +47,8 @@ export interface PlayerIntent {
   mine: boolean;
   /** Tuile visée (souris ou direction). */
   target: { tx: number; ty: number } | null;
+  /** Touche Maj maintenue : le joueur monte sur sa trottinette s'il en a une. */
+  ride?: boolean;
 }
 
 export const NO_INTENT: PlayerIntent = { mx: 0, my: 0, mine: false, target: null };
@@ -116,6 +118,9 @@ export class GameState implements StructureContext {
   hasJackhammer = false;
   tool: ToolKind = 'pickaxe';
   hammerFuel = 0;
+  /** Trottinette à moteur achetée à l'Atelier, et vrai tant que le joueur la chevauche (Maj maintenue). */
+  hasScooter = false;
+  scootering = false;
   /** Équipement de protection acheté à l'Atelier (identifiants de `GEAR`). */
   readonly gear = new Set<string>();
   private lastNoFuel = -99;
@@ -251,8 +256,18 @@ export class GameState implements StructureContext {
     this.time += dt;
     this.stats.playTime += dt;
     if (!this.riding) {
+      // Maj maintenue : on monte sur la trottinette (relâchée : on en descend). Les mains sont au
+      // guidon, donc plus de minage, et un coup de pioche en cours est interrompu.
+      const ride = this.hasScooter && !!intent.ride;
+      if (ride && !this.scootering) this.cancelSwing();
+      if (ride !== this.scootering) this.emit({ t: 'mount', on: ride });
+      this.scootering = ride;
       this.updateMovement(dt, intent);
-      this.updateMining(dt, intent);
+      if (!this.scootering) this.updateMining(dt, intent);
+    } else if (this.scootering) {
+      // Monté dans un wagonnet : la trottinette est rangée.
+      this.scootering = false;
+      this.emit({ t: 'mount', on: false });
     }
     for (const d of this.drops.update(dt, this.world)) this.emit({ t: 'crumble', res: d.res, x: d.x, y: d.y });
     this.updatePickup(dt);
@@ -409,7 +424,7 @@ export class GameState implements StructureContext {
     p.moving = len > 0.01;
     if (!p.moving) return;
     // Ralenti pendant un coup de pioche.
-    const speed = PLAYER_SPEED * this.bag.speedMul * (p.swingT > 0 ? 0.55 : 1) * this.hazards.speedFactor(p.tileX, p.tileY, this.gear.has('boots'));
+    const speed = PLAYER_SPEED * this.bag.speedMul * (this.scootering ? SCOOTER.speedMul : 1) * (p.swingT > 0 ? 0.55 : 1) * this.hazards.speedFactor(p.tileX, p.tileY, this.gear.has('boots'));
     this.moveAxis(mx * speed * dt, 0);
     this.moveAxis(0, my * speed * dt);
     p.walkTime += dt;
@@ -503,6 +518,14 @@ export class GameState implements StructureContext {
     }
     this.hammerFuel -= seconds;
     return true;
+  }
+
+  /** Interrompt le coup en cours (le joueur monte sur sa trottinette). */
+  private cancelSwing(): void {
+    const p = this.player;
+    p.swingT = 0;
+    p.swingHitPending = false;
+    p.swingTarget = null;
   }
 
   private updateMining(dt: number, intent: PlayerIntent): void {
@@ -808,6 +831,14 @@ export class GameState implements StructureContext {
     if (!next || !this.isNear('workshop') || !this.pay(next.price)) return false;
     this.setBagLevel(this.bagLevel + 1);
     this.emit({ t: 'bought', name: next.name });
+    return true;
+  }
+
+  /** Achète la trottinette à moteur à l'Atelier ; on la monte ensuite en maintenant Maj. */
+  buyScooter(): boolean {
+    if (this.hasScooter || !this.isNear('workshop') || !this.pay(SCOOTER.price)) return false;
+    this.hasScooter = true;
+    this.emit({ t: 'bought', name: SCOOTER.name });
     return true;
   }
 

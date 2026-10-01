@@ -9,7 +9,7 @@ import { BOOTS_WATER, GEAR, GearDef, HAZARD_LABEL } from '../data/gear';
 import { CAVE_IN, GAS, HEALTH, HEAT, WATER } from '../data/hazards';
 import { MARKER_KINDS, MARKER_ORDER, MAX_MARKERS } from '../sim/Markers';
 import { RESOURCES, getResource } from '../data/resources';
-import { BAGS, JACKHAMMER, PICKAXES } from '../data/tools';
+import { BAGS, JACKHAMMER, PICKAXES, SCOOTER } from '../data/tools';
 import type { GameState } from '../sim/GameState';
 import type { BorerStatus, ReturnReason, TunnelBorer } from '../sim/structures/Borer';
 import type { Smelter, SmelterStatus } from '../sim/structures/Smelter';
@@ -72,6 +72,20 @@ function ladder(names: string[], current: number): string {
   return `<div class="ladder">${names
     .map((n, i) => `<span class="${i < current ? 'owned' : i === current ? 'current' : ''}">${n}</span>`)
     .join('<i>›</i>')}</div>`;
+}
+
+/** Carte de la trottinette à moteur dans l'onglet Transport de l'Atelier. */
+function scooterCard(g: GameState): string {
+  const s = SCOOTER;
+  const pct = `${Math.round(s.speedMul * 100)} %`;
+  if (g.hasScooter)
+    return `<h4>Moyen de déplacement</h4><div class="cards"><div class="card"><h3>${s.name} — acquise</h3>
+      <p>Maintenez <kbd>Maj</kbd> pour monter dessus, relâchez pour en descendre. Vous ne pouvez pas miner en roulant.</p>
+      ${stat('Vitesse de marche', pct)}${stat('Commande', 'Maj maintenue')}</div></div>`;
+  const can = g.money >= s.price;
+  return `<h4>Moyen de déplacement</h4><div class="cards"><div class="card highlight"><h3>${s.name}</h3><p>${s.description}</p>
+    ${stat('Vitesse de marche', '100 %', pct)}${stat('Commande', 'maintenir Maj (relâcher : on descend)')}${stat('Minage', 'impossible en roulant')}
+    <div class="buy">${btn('buyScooter', `Acheter — ${money(s.price)}`, { cls: 'primary', disabled: !can })}${can ? '' : `<small>Il vous manque ${money(s.price - g.money)}</small>`}</div></div></div>`;
 }
 
 /** Carte du marteau-piqueur dans l'onglet Outils de l'Atelier. */
@@ -179,6 +193,7 @@ export function workshopPanel(g: GameState, tab: string, icon: (id: string) => s
         <div class="buy">${btn('buyBag', `Acheter — ${money(next.price)}`, { cls: 'primary', disabled: !can })}${can ? '' : `<small>Il vous manque ${money(next.price - g.money)}</small>`}</div></div>`;
     } else body += `<div class="card"><h3>Transport personnel au maximum</h3><p>Pour transporter davantage, automatisez : foreuses, convoyeurs et coffres.</p></div>`;
     body += `</div>`;
+    body += scooterCard(g);
   } else if (tab === 'gear') {
     body = gearShop(g);
   } else {
@@ -818,6 +833,7 @@ export function helpPanel(keys: { move: string; label: (c: string) => string }):
     <div><h4>Sac</h4><p>${k('KeyI')} ou <kbd>Tab</kbd></p></div>
     <div><h4>Construire</h4><p>${k('KeyB')} : mode construction. <kbd>Tab</kbd> change d'onglet, <kbd>1-9</kbd> choisit la machine. <kbd>Clic gauche</kbd> poser (glisser pour tracer des convoyeurs), <kbd>clic droit</kbd> démonter, ${k('KeyR')} tourner</p></div>
     <div><h4>Zoom</h4><p>Molette de la souris</p></div>
+    <div><h4>Trottinette</h4><p>Achetée à l'atelier (onglet Transport) : maintenez <kbd>Maj</kbd> pour rouler vite, relâchez pour descendre. Pas de minage en roulant</p></div>
     <div><h4>Wagonnet</h4><p>${k('KeyF')} : monter / descendre</p></div>
     <div><h4>Outil en main</h4><p>${k('KeyT')} : pioche ou marteau-piqueur (s'il est acheté)</p></div>
     <div><h4>Carte</h4><p><kbd>M</kbd> : carte de la mine (ou clic sur la mini-carte)</p></div>
