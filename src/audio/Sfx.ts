@@ -161,6 +161,24 @@ export class Sfx {
     this.tone(220, 0.15, 'sawtooth', 0.08, 160);
   }
 
+  /** Corde de rappel : crissement du mousqueton au départ, claquement quand elle lâche, souffle à l'arrivée. */
+  rope(phase: 'start' | 'cancel' | 'up' | 'down'): void {
+    if (phase === 'start') {
+      this.tone(900, 0.05, 'square', 0.05);
+      this.tone(1350, 0.06, 'square', 0.04, undefined, 0.07);
+      this.noise(0.5, 1800, 3, 0.04, 'bandpass', 0.1);
+    } else if (phase === 'cancel') {
+      this.tone(300, 0.14, 'sawtooth', 0.06, 130);
+      this.noise(0.1, 700, 1, 0.08);
+    } else {
+      // Le tirage de corde : un souffle qui monte (remontée) ou qui tombe (descente), puis un toc.
+      const up = phase === 'up';
+      this.noise(0.4, up ? 700 : 1400, 0.8, 0.14, 'lowpass');
+      this.tone(up ? 260 : 520, 0.35, 'triangle', 0.09, up ? 620 : 240);
+      this.tone(180, 0.1, 'sine', 0.2, 90, 0.38);
+    }
+  }
+
   /** Trottinette : le moteur démarre (monter) ou s'éteint (descendre). */
   mount(on: boolean): void {
     if (on) {

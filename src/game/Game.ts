@@ -302,6 +302,9 @@ export class Game {
       case 'buyScooter':
         g.buyScooter();
         break;
+      case 'buyRope':
+        g.buyRope(Number(arg) || 1);
+        break;
       case 'shopCat':
         this.ui.setShopCat(arg);
         break;
@@ -525,6 +528,8 @@ export class Game {
       if (inp.wasTyped('n') && !this.ui.panel) this.markHere(g);
       if (inp.wasPressed('KeyB') && !this.ui.panel) this.setBuildMode(!this.buildMode);
       if (inp.wasPressed('KeyT') && !this.ui.panel) g.toggleTool();
+      // V : corde de rappel (remonter au camp depuis la mine, redescendre au point d'accroche depuis le camp).
+      if (inp.wasPressed('KeyV') && !this.ui.panel && !this.buildMode) g.useRope();
     }
     if (inp.wheel && !this.ui.blocking) this.renderer.adjustZoom(-inp.wheel);
 
@@ -696,8 +701,10 @@ export class Game {
 
   private hintsHtml(): string {
     const l = (c: string) => this.input.label(c);
+    const g = this.state;
+    const rope = g && (g.ropes > 0 || g.ropeAnchor) ? `<span${g.ropeT > 0 ? ' class="on"' : ''}><kbd>${l('KeyV')}</kbd> ${g.atCamp ? (g.ropeAnchor ? 'Redescendre' : 'Corde') : 'Remonter'}${g.ropes > 0 ? ` <b>×${g.ropes}</b>` : ''}</span>` : '';
     const scooter = this.state?.hasScooter ? `<span${this.state.scootering ? ' class="on"' : ''}><kbd>Maj</kbd> Trottinette</span>` : '';
-    return `${scooter}<span><kbd>${l('KeyB')}</kbd> Construire</span><span><kbd>${l('KeyI')}</kbd> Sac</span><span><kbd>M</kbd> Carte</span><span><kbd>N</kbd> Repère</span><span><kbd>${l('KeyH')}</kbd> Aide</span><span><kbd>Échap</kbd> Menu</span>`;
+    return `${rope}${scooter}<span><kbd>${l('KeyB')}</kbd> Construire</span><span><kbd>${l('KeyI')}</kbd> Sac</span><span><kbd>M</kbd> Carte</span><span><kbd>N</kbd> Repère</span><span><kbd>${l('KeyH')}</kbd> Aide</span><span><kbd>Échap</kbd> Menu</span>`;
   }
 
   // ------------------------------------------------------------------ construction
@@ -1169,6 +1176,14 @@ export class Game {
           break;
         case 'mount':
           this.sfx.mount(e.on);
+          break;
+        case 'rope':
+          this.sfx.rope(e.phase);
+          // L'arrivée (au camp ou dans la mine) : la caméra suit tout de suite, un nuage de poussière marque le saut.
+          if (e.phase === 'up' || e.phase === 'down') {
+            r.fx.emit('dust', g.player.x, g.player.y, 'rgba(150,130,110,0.7)', 10, 30);
+            r.snapCamera();
+          }
           break;
         case 'faint':
           this.sfx.hurt();

@@ -11,7 +11,7 @@
 import type { Dir } from '../core/dir';
 import { isGear } from '../data/gear';
 import { hasResource } from '../data/resources';
-import { BAGS, PICKAXES } from '../data/tools';
+import { BAGS, PICKAXES, ROPE } from '../data/tools';
 import { GameState, Stats } from '../sim/GameState';
 import { STRUCTURE_FACTORIES } from '../sim/structures/registry';
 import { Wagon, type WagonSave } from '../sim/Wagons';
@@ -35,6 +35,8 @@ export interface SaveData {
   bagLevel: number;
   /** Outils mécaniques (absents des sauvegardes d'avant le marteau-piqueur). */
   tools?: { jackhammer: boolean; inHand: string; hammerFuel: number; scooter?: boolean };
+  /** Cordes de rappel et point d'accroche (absents des anciennes sauvegardes : aucune corde). */
+  rope?: { count: number; anchor: [number, number] | null };
   /** Équipement de protection acheté (absent des sauvegardes d'avant l'équipement : aucun). */
   gear?: string[];
   inventory: Record<string, number>;
@@ -93,6 +95,7 @@ export function serialize(g: GameState): SaveData {
     bagLevel: g.bagLevel,
     tools: { jackhammer: g.hasJackhammer, inHand: g.tool, hammerFuel: round2(g.hammerFuel), scooter: g.hasScooter },
     gear: [...g.gear],
+    rope: { count: g.ropes, anchor: g.ropeAnchor ? [g.ropeAnchor.tx, g.ropeAnchor.ty] : null },
     inventory: { ...g.inventory.items },
     kits: { ...g.inventory.kits },
     autoPickup: { ...g.autoPickup },
@@ -163,6 +166,9 @@ export function deserialize(data: SaveData): GameState {
   g.hammerFuel = Math.max(0, Number(data.tools?.hammerFuel ?? 0) || 0);
   g.hasScooter = data.tools?.scooter === true;
   for (const id of Array.isArray(data.gear) ? data.gear : []) if (isGear(id)) g.gear.add(id);
+  g.ropes = Math.min(ROPE.maxStock, Math.max(0, Math.floor(Number(data.rope?.count ?? 0)) || 0));
+  const a = data.rope?.anchor;
+  g.ropeAnchor = Array.isArray(a) && Number.isInteger(a[0]) && Number.isInteger(a[1]) && w.inBounds(a[0], a[1]) ? { tx: a[0], ty: a[1] } : null;
   g.inventory.items = filterKnown(data.inventory);
   g.inventory.kits = { ...data.kits };
   g.autoPickup = { ...g.autoPickup, ...data.autoPickup };

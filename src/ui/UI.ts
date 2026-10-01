@@ -175,7 +175,9 @@ export class UI {
               g.tool === 'jackhammer' ? ` · charbon dans le sac : ${g.inventory.count('coal')}` : ''
             }</div>`
           : ''
-      }${g.scootering ? '<div class="fuel-line">Trottinette en marche · minage impossible</div>' : ''}</div>
+      }${g.scootering ? '<div class="fuel-line">Trottinette en marche · minage impossible</div>' : ''}${
+        g.ropeT > 0 ? `<div class="fuel-line rope-line">${g.ropeDir === 'down' ? 'Descente' : 'Remontée'} : ne bougez plus… ${Math.ceil(g.ropeT)} s</div>` : ''
+      }</div>
        <div class="bar bag ${ratio >= 0.999 ? 'full' : ratio > 0.8 ? 'warn' : ''}"><div style="width:${Math.min(100, ratio * 100)}%"></div><span>${g.bag.name} ${kg(w)} / ${kg(inv.capacity)}</span></div>
        <div class="chips">${items || '<span class="muted">Sac vide</span>'}</div>
        ${health}${gearLine}`,

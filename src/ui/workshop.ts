@@ -5,10 +5,11 @@
  * pastille avec le nombre d'achats possibles tout de suite ; l'onglet Machines se filtre par
  * catégorie et se lit en lignes compactes (le détail se déplie).
  */
+import { depthAt } from '../core/constants';
 import { BOOTS_WATER, GEAR, GearDef, HAZARD_LABEL } from '../data/gear';
 import { CAVE_IN, GAS, HEALTH, HEAT, WATER } from '../data/hazards';
 import { MACHINES, MACHINE_GROUPS, MachineDef, conveyorThroughput, parseKit } from '../data/machines';
-import { BAGS, JACKHAMMER, PICKAXES, SCOOTER } from '../data/tools';
+import { BAGS, JACKHAMMER, PICKAXES, ROPE, SCOOTER } from '../data/tools';
 import type { GameState } from '../sim/GameState';
 import { esc, kg, money, num } from './format';
 import { icon as themeIcon } from './theme';
@@ -75,6 +76,9 @@ export function offers(g: GameState): Offer[] {
   const bag = BAGS[g.bagLevel + 1];
   if (bag)
     out.push({ key: `bag${g.bagLevel + 1}`, tab: 'transport', name: bag.name, price: bag.price, action: 'buyBag', reason: `Capacité ${kg(g.bag.capacity)} → ${kg(bag.capacity)} : moins d'allers-retours.`, icon: 'bag' });
+  // Dès qu'on descend assez bas, remonter à pied devient long : une corde de rappel en réserve.
+  if (g.ropes === 0 && g.stats.maxDepth >= ROPE.adviseDepth)
+    out.push({ key: 'rope', tab: 'transport', name: ROPE.name, price: ROPE.price, action: 'buyRope', arg: '1', reason: 'Remontez au camp avec tout votre sac, sans marcher (touche V).', icon: 'tool:rope' });
   if (!g.hasJackhammer && g.pickaxe.tier >= JACKHAMMER.unlock.pickaxeTier)
     out.push({ key: 'jackhammer', tab: 'tools', name: JACKHAMMER.name, price: JACKHAMMER.price, action: 'buyJackhammer', reason: 'Mine sur trois cases de large, très vite.', icon: 'tool:jackhammer' });
   if (!g.hasScooter)
@@ -218,6 +222,27 @@ function toolsTab(g: GameState): string {
 
 // ------------------------------------------------------------------ transport
 
+/** Fiche de la corde de rappel : stock, point d'accroche et boutons d'achat (une corde, ou le lot). */
+function ropeCard(g: GameState): string {
+  const r = ROPE;
+  const full = g.ropes >= r.maxStock;
+  const room = r.maxStock - g.ropes;
+  const one = btn('buyRope', `1 corde — ${money(r.price)}`, { arg: '1', cls: 'primary', disabled: full || g.money < r.price });
+  const pack = btn('buyRope', `Lot de ${r.pack.qty} — ${money(r.pack.price)}`, { arg: String(r.pack.qty), cls: 'primary', disabled: room < r.pack.qty || g.money < r.pack.price, title: `${money(Math.round(r.pack.price / r.pack.qty))} la corde` });
+  const where = g.ropeAnchor ? `accrochée à ${Math.floor(depthAt(g.ropeAnchor.ty))} m` : 'aucune accrochée';
+  const rows = `${stat('En stock', `${g.ropes} sur ${r.maxStock}`)}${stat('Manœuvre', `${r.channel} s sans bouger`)}${stat('Redescente', 'gratuite, au point où la corde est accrochée')}${stat('Corde accrochée', where)}`;
+  const note = full ? '<small>Vous portez le maximum de cordes.</small>' : g.money < r.price ? `<small>Il vous manque ${money(r.price - g.money)}</small>` : '';
+  return card({
+    icon: 'tool:rope',
+    title: r.name,
+    tag: g.ropes > 0 ? `${g.ropes} en stock` : 'touche V',
+    desc: r.description,
+    rows,
+    state: g.ropes > 0 ? 'plain' : 'buy',
+    buy: `<div class="buy">${one}${pack}${note}</div>`,
+  });
+}
+
 function transportTab(g: GameState): string {
   const cur = g.bag;
   const next = BAGS[g.bagLevel + 1];
@@ -255,7 +280,7 @@ function transportTab(g: GameState): string {
         state: 'buy',
         buy: buyBlock(g, s.price, 'buyScooter'),
       });
-  return `${st}<div class="cards">${now}${nxt}</div><h4>Moyen de déplacement</h4><div class="cards one">${scooter}</div>`;
+  return `${st}<div class="cards">${now}${nxt}</div><h4>Moyen de déplacement</h4><div class="cards one">${scooter}</div><h4>Retour au camp</h4><div class="cards one">${ropeCard(g)}</div>`;
 }
 
 // ------------------------------------------------------------------ équipement

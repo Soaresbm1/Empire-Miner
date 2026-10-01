@@ -14,7 +14,7 @@ import { getMachine, kitId, kitName, MACHINES, parseKit } from '../data/machines
 import { CAUSE_HAZARD, GEAR, HazardKind, getGear } from '../data/gear';
 import { GAS, HEALTH, HEAT, WATER } from '../data/hazards';
 import { RESOURCES, getResource, hasResource, resourceIndex } from '../data/resources';
-import { BAGS, JACKHAMMER, PICKAXES, SCOOTER } from '../data/tools';
+import { BAGS, JACKHAMMER, PICKAXES, ROPE, SCOOTER } from '../data/tools';
 import { Drop, DropSystem } from './Drops';
 import { HazardSystem } from './Hazards';
 import { MARKER_KINDS, Marker, MarkerBook, MarkerKind } from './Markers';
@@ -121,6 +121,12 @@ export class GameState implements StructureContext {
   /** Trottinette à moteur achetée à l'Atelier, et vrai tant que le joueur la chevauche (Maj maintenue). */
   hasScooter = false;
   scootering = false;
+  /** Cordes de rappel en stock, case où la dernière a été accrochée (point de retour) et temps restant de la manœuvre. */
+  ropes = 0;
+  ropeAnchor: { tx: number; ty: number } | null = null;
+  ropeT = 0;
+  /** Sens de la manœuvre en cours : remonter au camp ou redescendre au point d'accroche. */
+  ropeDir: 'up' | 'down' | null = null;
   /** Équipement de protection acheté à l'Atelier (identifiants de `GEAR`). */
   readonly gear = new Set<string>();
   private lastNoFuel = -99;
@@ -264,10 +270,14 @@ export class GameState implements StructureContext {
       this.scootering = ride;
       this.updateMovement(dt, intent);
       if (!this.scootering) this.updateMining(dt, intent);
-    } else if (this.scootering) {
-      // Monté dans un wagonnet : la trottinette est rangée.
-      this.scootering = false;
-      this.emit({ t: 'mount', on: false });
+      this.updateRope(dt, intent);
+    } else {
+      // Monté dans un wagonnet : la trottinette et la corde sont rangées.
+      if (this.scootering) {
+        this.scootering = false;
+        this.emit({ t: 'mount', on: false });
+      }
+      if (this.ropeT > 0) this.cancelRope('Dans un wagonnet : la corde est rangée.');
     }
     for (const d of this.drops.update(dt, this.world)) this.emit({ t: 'crumble', res: d.res, x: d.x, y: d.y });
     this.updatePickup(dt);
@@ -349,6 +359,7 @@ export class GameState implements StructureContext {
     }
     this.hp = Math.max(0, this.hp - amount);
     this.lastHurt = this.time;
+    if (this.ropeT > 0 && amount >= ROPE.interruptDamage) this.cancelRope('Le choc vous fait lâcher la corde !');
     // Dégâts continus (gaz, eau) : un événement de temps en temps suffit à l'écran et au son.
     if (amount >= 10 || this.time - this.lastHurtEvent >= 0.4) {
       this.lastHurtEvent = this.time;
@@ -392,6 +403,8 @@ export class GameState implements StructureContext {
   /** Évanoui : le sac tombe sur place, le joueur se réveille au camp, en pleine forme. */
   private faint(cause: string): void {
     if (this.riding) this.leaveWagon();
+    this.ropeT = 0;
+    this.ropeDir = null;
     const p = this.player;
     for (const [res, n] of Object.entries(this.inventory.items)) if (n > 0) this.drops.spawn(res, n, p.x, p.y - 3);
     this.inventory.items = {};
@@ -518,6 +531,125 @@ export class GameState implements StructureContext {
     }
     this.hammerFuel -= seconds;
     return true;
+  }
+
+  // ---------------------------------------------------------------- corde de rappel
+
+  /** Au camp (surface) : là où l'on redescend plutôt que l'on remonte. */
+  get atCamp(): boolean {
+    return this.player.tileY < SURFACE_ROWS;
+  }
+
+  /**
+   * Touche V : commence la manœuvre (remonter depuis la mine, redescendre depuis le camp), ou l'annule
+   * si elle est en cours. Renvoie ce qui s'est passé, pour l'interface et les tests.
+   */
+  useRope(): 'start' | 'cancel' | 'refused' {
+    if (this.ropeT > 0) {
+      this.cancelRope('Vous rangez la corde.');
+      return 'cancel';
+    }
+    const refuse = (text: string) => {
+      this.emit({ t: 'message', text, kind: 'warn' });
+      return 'refused' as const;
+    };
+    if (this.riding) return refuse('Descendez du wagonnet pour utiliser la corde.');
+    if (this.hp <= 0) return 'refused';
+    if (this.atCamp) {
+      if (!this.ropeAnchor) return refuse(this.ropes > 0 ? 'Vous êtes déjà au camp : la corde servira pour remonter de la mine.' : 'Aucune corde accrochée dans la mine. Elles s’achètent à l’Atelier.');
+      this.ropeDir = 'down';
+    } else {
+      if (this.ropes <= 0) return refuse('Vous n’avez pas de corde de rappel : elles s’achètent à l’Atelier.');
+      this.ropeDir = 'up';
+    }
+    this.ropeT = ROPE.channel;
+    this.cancelSwing();
+    this.emit({ t: 'rope', phase: 'start' });
+    this.emit({ t: 'message', text: this.ropeDir === 'up' ? `Vous vous suspendez à la corde : ne bougez plus ${ROPE.channel} s.` : `Vous vous encordez pour redescendre : ne bougez plus ${ROPE.channel} s.`, kind: 'info' });
+    return 'start';
+  }
+
+  private cancelRope(text: string): void {
+    this.ropeT = 0;
+    this.ropeDir = null;
+    this.emit({ t: 'rope', phase: 'cancel' });
+    this.emit({ t: 'message', text, kind: 'warn' });
+  }
+
+  /** Fait avancer la manœuvre ; bouger, miner ou monter sur la trottinette l'annule. */
+  private updateRope(dt: number, intent: PlayerIntent): void {
+    if (this.ropeT <= 0) return;
+    if (Math.abs(intent.mx) + Math.abs(intent.my) > 0.01 || intent.mine) return this.cancelRope('Vous avez bougé : la corde est rangée.');
+    this.ropeT -= dt;
+    if (this.ropeT > 0) return;
+    this.ropeT = 0;
+    const dir = this.ropeDir;
+    this.ropeDir = null;
+    if (dir === 'up') this.ropeUp();
+    else if (dir === 'down') this.ropeDown();
+  }
+
+  /** Remonte au camp avec tout son sac ; la corde reste accrochée là où l'on était. */
+  private ropeUp(): void {
+    const p = this.player;
+    const from = { tx: p.tileX, ty: p.tileY };
+    this.ropes--;
+    this.ropeAnchor = from;
+    // Un seul repère « Corde de rappel » : l'ancien disparaît.
+    for (const m of [...this.markers.list]) if (m.label === ROPE.name) this.markers.remove(m.id);
+    this.markers.add('base', from.tx, from.ty, ROPE.name);
+    this.teleportTo(this.layout.spawn.x, this.layout.spawn.y);
+    this.emit({ t: 'rope', phase: 'up' });
+    this.emit({ t: 'message', text: `Vous voilà au camp, sac intact. La corde reste accrochée à ${Math.floor(depthAt(from.ty))} m (touche V pour y redescendre).`, kind: 'good' });
+  }
+
+  /** Redescend au point d'accroche, ou à la case libre la plus proche si le passage s'est refermé. */
+  private ropeDown(): void {
+    const a = this.ropeAnchor;
+    if (!a) return;
+    const spot = this.freeSpotNear(a.tx, a.ty, 3);
+    if (!spot) {
+      this.emit({ t: 'rope', phase: 'cancel' });
+      this.emit({ t: 'message', text: 'Le passage est bouché là-bas : la corde reste accrochée, il faudra y aller à pied.', kind: 'warn' });
+      return;
+    }
+    this.teleportTo(spot.tx, spot.ty);
+    this.ropeAnchor = null;
+    for (const m of [...this.markers.list]) if (m.label === ROPE.name) this.markers.remove(m.id);
+    this.emit({ t: 'rope', phase: 'down' });
+    this.emit({ t: 'message', text: `Vous redescendez à ${Math.floor(depthAt(spot.ty))} m. La corde est décrochée.`, kind: 'good' });
+  }
+
+  /** Case dégagée la plus proche de (tx, ty), dans un rayon de `radius` cases. */
+  private freeSpotNear(tx: number, ty: number, radius: number): { tx: number; ty: number } | null {
+    const p = this.player;
+    let best: { tx: number; ty: number } | null = null;
+    let bestD = Infinity;
+    for (let dy = -radius; dy <= radius; dy++)
+      for (let dx = -radius; dx <= radius; dx++) {
+        const x = tx + dx;
+        const y = ty + dy;
+        if (!this.world.inBounds(x, y)) continue;
+        const cx = (x + 0.5) * TILE;
+        const cy = (y + 0.5) * TILE;
+        if (this.isBlocked(cx - p.halfW, cy - p.halfH, cx + p.halfW - 0.001, cy + p.halfH - 0.001)) continue;
+        const d = dx * dx + dy * dy;
+        if (d < bestD) {
+          bestD = d;
+          best = { tx: x, ty: y };
+        }
+      }
+    return best;
+  }
+
+  /** Place le joueur au centre d'une case (corde de rappel). */
+  private teleportTo(tx: number, ty: number): void {
+    const p = this.player;
+    p.x = (tx + 0.5) * TILE;
+    p.y = (ty + 0.5) * TILE;
+    p.swingT = 0;
+    p.moving = false;
+    this.lastPlayerTile = -1;
   }
 
   /** Interrompt le coup en cours (le joueur monte sur sa trottinette). */
@@ -831,6 +963,17 @@ export class GameState implements StructureContext {
     if (!next || !this.isNear('workshop') || !this.pay(next.price)) return false;
     this.setBagLevel(this.bagLevel + 1);
     this.emit({ t: 'bought', name: next.name });
+    return true;
+  }
+
+  /** Achète des cordes de rappel à l'Atelier : une seule, ou le lot de plusieurs (moins cher à l'unité). */
+  buyRope(qty = 1): boolean {
+    const pack = qty >= ROPE.pack.qty;
+    const n = pack ? ROPE.pack.qty : 1;
+    if (!this.isNear('workshop') || this.ropes + n > ROPE.maxStock) return false;
+    if (!this.pay(pack ? ROPE.pack.price : ROPE.price)) return false;
+    this.ropes += n;
+    this.emit({ t: 'bought', name: n > 1 ? `${ROPE.name} ×${n}` : ROPE.name });
     return true;
   }
 

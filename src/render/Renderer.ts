@@ -8,6 +8,7 @@ import { AIR, getBlock } from '../data/blocks';
 import { CAVE_IN, GAS, HEALTH, POCKET_WATER } from '../data/hazards';
 import { getMachine } from '../data/machines';
 import { getResource } from '../data/resources';
+import { ROPE } from '../data/tools';
 import { FADE_TIME } from '../sim/Drops';
 import type { GameState } from '../sim/GameState';
 import { Bridge } from '../sim/structures/Bridge';
@@ -1649,7 +1650,10 @@ export class Renderer {
     const img = blink ? sprites.blink[p.facing] : frames[frame];
     const bob = walking && frame % 2 === 0 ? -1 : 0;
     const x = Math.round(p.x - img.width / 2);
-    const y = Math.round(p.y - img.height + 3 + bob - (riding ? SCOOTER_LIFT : 0));
+    // Suspendu à la corde de rappel : le mineur est soulevé de quelques pixels et se balance un peu.
+    const hanging = state.ropeT > 0;
+    const hang = hanging ? 3 + Math.round(Math.sin(this.time * 5)) : 0;
+    const y = Math.round(p.y - img.height + 3 + bob - (riding ? SCOOTER_LIFT : 0) - hang);
     ctx.fillStyle = 'rgba(0,0,0,0.35)';
     const wide = riding ? (p.facing === 0 || p.facing === 2 ? 22 : 12) : 10;
     ctx.fillRect(Math.round(p.x - wide / 2), Math.round(p.y + 1), wide, 3);
@@ -1657,10 +1661,33 @@ export class Renderer {
       this.drawScooter(img, x, y);
       return;
     }
+    if (hanging) this.drawRopeAbove(p.x, y + 5);
     const pickBehind = p.facing === 3;
     if (pickBehind) this.drawPickaxe();
     ctx.drawImage(img, x, y);
     if (!pickBehind) this.drawPickaxe();
+    if (hanging) this.drawRopeProgress(p.x, p.y);
+  }
+
+  /** La corde de rappel : deux tons de brin en alternance, qui monte en s'effaçant. */
+  private drawRopeAbove(x: number, from: number): void {
+    const ctx = this.ctx;
+    for (let i = 0; i < 26; i++) {
+      ctx.globalAlpha = 1 - i / 28;
+      ctx.fillStyle = i % 2 ? '#b89260' : '#7a5530';
+      ctx.fillRect(Math.round(x) - 1, from - (i + 1) * 3, 2, 3);
+    }
+    ctx.globalAlpha = 1;
+  }
+
+  /** Petite jauge sous les pieds : où en est la manœuvre (le temps restant, à l'envers). */
+  private drawRopeProgress(x: number, y: number): void {
+    const ctx = this.ctx;
+    const ratio = Math.max(0, Math.min(1, 1 - this.state!.ropeT / ROPE.channel));
+    ctx.fillStyle = '#120e10';
+    ctx.fillRect(Math.round(x) - 9, Math.round(y) + 5, 18, 4);
+    ctx.fillStyle = '#e8c050';
+    ctx.fillRect(Math.round(x) - 8, Math.round(y) + 6, Math.round(16 * ratio), 2);
   }
 
   /** Mineur debout sur sa trottinette : plateau et roues dessous, guidon par-dessus quand on le voit de face. */

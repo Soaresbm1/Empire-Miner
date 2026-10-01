@@ -127,6 +127,7 @@ const DROP = ['...T...', '..TT...', '.TTTT..', 'TTbTTT.', 'TTTTTT.', '.TTTt..', 
 /** Marteau-piqueur (poignée en haut, corps orange, burin en bas) et trottinette à moteur (de profil, guidon à droite). */
 const TOOL_ICONS: Record<string, string[]> = {
   jackhammer: ['.dd...dd.', '.dSSSSSd.', '..oOOOo..', '..oOWOo..', '..oOOOo..', '...sSs...', '...sSs...', '....S....', '....S....', '....s....'],
+  rope: ['..kkkk...', '.kBbBBk..', 'kBbkkBBk.', 'kBk..kBBk', 'kBBk.kBk.', '.kBBBBk..', '..kbBk...', '...kBk...', '....kb...'],
   scooter: ['.......RR.', '.......Sd.', '.......S..', '..OO...S..', '.OOOO..S..', 'SSSSSSSSS.', '.KK....KK.'],
 };
 
