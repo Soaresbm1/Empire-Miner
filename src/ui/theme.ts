@@ -115,12 +115,20 @@ const ICON_PALETTE: Record<string, string> = {
   O: '#f0a040', o: '#c8741a',
   M: '#8a9880', m: '#5d6a58', F: '#3a403a',
   Z: '#e6c040', z: '#a88a14',
+  // Trottinette : pneu.
+  K: '#2f2e36',
 };
 
 const COIN = ['..YYYY..', '.YLLYYy.', 'YLLYYYYy', 'YLYyyYYy', 'YLYyyYYy', 'YYYYYYyy', '.YYYYyy.', '..yyyy..'];
 const HEART = ['.RR...RR.', 'RPRR.RRRR', 'RPRRRRRRR', 'RRRRRRRRr', '.RRRRRRr.', '..RRRRr..', '...RRr...', '....r....'];
 const BAG = ['..kkkkk..', '.kBBBBBk.', 'kBbbBBBBk', 'kBbBBBBBk', 'kBBBBgBBk', 'kBBBBBBBk', 'kBBBBBBBk', '.kkkkkkk.'];
 const DROP = ['...T...', '..TT...', '.TTTT..', 'TTbTTT.', 'TTTTTT.', '.TTTt..', '..tt...'];
+
+/** Marteau-piqueur (poignée en haut, corps orange, burin en bas) et trottinette à moteur (de profil, guidon à droite). */
+const TOOL_ICONS: Record<string, string[]> = {
+  jackhammer: ['.dd...dd.', '.dSSSSSd.', '..oOOOo..', '..oOWOo..', '..oOOOo..', '...sSs...', '...sSs...', '....S....', '....S....', '....s....'],
+  scooter: ['.......RR.', '.......Sd.', '.......S..', '..OO...S..', '.OOOO..S..', 'SSSSSSSSS.', '.KK....KK.'],
+};
 
 /** Équipement de protection : casque d'acier à lampe, masque à gaz, cuissardes, combinaison à bandes réfléchissantes. */
 const GEAR_ICONS: Record<string, string[]> = {
@@ -270,6 +278,7 @@ export function installTheme(): void {
   draw('bag', BAG);
   draw('drop', DROP);
   for (const [id, art] of Object.entries(GEAR_ICONS)) draw(`gear:${id}`, art);
+  for (const [id, art] of Object.entries(TOOL_ICONS)) draw(`tool:${id}`, art);
   for (const [name, url] of [['coin', icons.get('coin')], ['heart', icons.get('heart')], ['bag', icons.get('bag')]] as const)
     if (url) root.setProperty(`--ico-${name}`, `url(${url})`);
 
