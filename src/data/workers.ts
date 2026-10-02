@@ -24,7 +24,7 @@ export const WORKER_JOBS: readonly WorkerJobDef[] = [
     id: 'driller',
     name: 'Foreur',
     description:
-      "Pose des foreuses à charbon sur les gisements au sol : d'abord les petits minerais, puis de plus précieux à chaque amélioration. Prend les foreuses de votre stock, à défaut les achète lui-même.",
+      "Pose des foreuses à charbon sur les gisements au sol : d'abord les petits minerais, puis de plus précieux à chaque amélioration. Prend les foreuses de votre stock, à défaut les achète lui-même, puis les ravitaille en charbon pris dans les coffres.",
     color: '#4a8fe0',
   },
   {

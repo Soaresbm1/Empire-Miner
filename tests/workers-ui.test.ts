@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { TILE } from '../src/core/constants';
 import { DRILLER_LEVELS, WORKERS, WORKER_JOBS } from '../src/data/workers';
 import { GameState } from '../src/sim/GameState';
+import { Drill } from '../src/sim/structures/Drill';
 import { Storage } from '../src/sim/structures/Storage';
 import { cargoLine, stuckWorkers, workerAt, workerStatus, workerTooltip } from '../src/ui/crew';
 import { helpPanel, storagePanel } from '../src/ui/panels';
@@ -354,5 +355,23 @@ describe('foreur : fiche d’équipe', () => {
     expect(workerStatus(g, d).text).toContain('foreuse');
     expect(stuckWorkers(g)).toEqual([{ text: 'Foreur : plus de foreuse en stock ni assez d’argent', n: 1 }]);
     expect(workerTooltip(g, d)).toContain('Foreur');
+  });
+
+  it('le foreur ravitaille aussi : phrases de tâche et blocage « plus de charbon » à son nom', () => {
+    const g = rich();
+    const d = g.workers.add('driller', g);
+    expect(workerStatus(g, d).text).toContain('ou une foreuse sans charbon');
+    const drill = g.structures.add(new Drill(56, 9, 1));
+    d.task = { kind: 'take', x: 46, y: 10 };
+    expect(workerStatus(g, d).text).toBe('Va chercher du charbon');
+    d.task = { kind: 'fuel', x: drill.x, y: drill.y };
+    expect(workerStatus(g, d)).toEqual({ text: 'Ravitaille une foreuse en charbon', tone: 'ok' });
+    d.task = null;
+    d.flag = 'nocoal';
+    expect(workerStatus(g, d).text).toContain('Plus de charbon dans les coffres');
+    expect(stuckWorkers(g)).toEqual([{ text: 'Foreur : plus de charbon dans les coffres', n: 1 }]);
+    const r = g.workers.add('refueler', g);
+    r.flag = 'nocoal';
+    expect(stuckWorkers(g)).toContainEqual({ text: 'Ravitailleur : plus de charbon dans les coffres', n: 1 });
   });
 });

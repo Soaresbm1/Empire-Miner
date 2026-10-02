@@ -121,7 +121,8 @@ describe('foreur : il pose des foreuses sur les gisements', () => {
     expect(drills(g)[0].y).toBe(Y);
     expect(g.inventory.kitCount('drill')).toBe(0);
     expect(g.money).toBe(5000); // un kit du stock : aucun achat
-    expect(w.flag).toBeNull();
+    // Plus rien à poser, et aucun coffre n'a de charbon pour sa foreuse neuve : il le signale.
+    expect(w.flag).toBe('nocoal');
   });
 
   it('le niveau décide des minerais : cuivre au niveau 1, fer au 2, or au 3, diamant au 4 — jamais la pierre', () => {
@@ -170,7 +171,7 @@ describe('foreur : il pose des foreuses sur les gisements', () => {
     run(g, 30);
     expect(drills(g)).toHaveLength(1);
     expect(g.money).toBe(DRILLER.moneyReserve);
-    expect(w.flag).toBeNull();
+    expect(w.flag).toBe('nocoal'); // la foreuse neuve attend du charbon
   });
 
   it('un kit en stock passe avant l’achat (et un kit rendu plus tard est utilisé)', () => {
@@ -354,5 +355,100 @@ describe('foreur : sauvegarde', () => {
     expect(deserialize(data).workers.list[0].level).toBe(1);
     data.workers[0].level = 'abc';
     expect(deserialize(data).workers.list[0].level).toBe(1);
+  });
+});
+
+describe('foreur : il met du charbon dans les foreuses', () => {
+  function withCoal(coal = 30): { g: GameState; chest: Storage } {
+    const g = camp();
+    const chest = g.structures.add(new Storage(46, S + 14, 1)) as Storage;
+    chest.put('coal', coal);
+    return { g, chest };
+  }
+
+  it('il prend du charbon dans un coffre pour une foreuse qui en réclame (la vôtre comme la sienne)', () => {
+    const { g, chest } = withCoal(20);
+    const d = g.structures.add(new Drill(52, Y, 1)) as Drill;
+    const w = g.workers.add('driller', g);
+    run(g, 30);
+    expect(d.fuelUnits).toBe(d.fuelMax);
+    expect(chest.items.coal).toBe(20 - d.fuelMax);
+    expect(w.flag).toBeNull();
+  });
+
+  it('il pose une foreuse sur le gisement puis la ravitaille', () => {
+    const { g, chest } = withCoal(20);
+    const w = g.workers.add('driller', g);
+    deposit(g, 'copper');
+    g.inventory.addKit('drill', 1);
+    run(g, 60);
+    expect(drills(g)).toHaveLength(1);
+    const d = drills(g)[0];
+    expect(d.fuelUnits).toBeGreaterThan(0);
+    expect(chest.items.coal ?? 0).toBeLessThan(20);
+    expect(w.flag).toBeNull();
+    expect(g.events.some((e) => e.t === 'worker' && e.kind === 'fuel')).toBe(true);
+  });
+
+  it('le charbon passe avant la pose : une foreuse vide est servie avant de chercher un nouveau gisement', () => {
+    const { g } = withCoal(20);
+    const d = g.structures.add(new Drill(52, Y, 1)) as Drill;
+    const w = g.workers.add('driller', g);
+    deposit(g, 'copper', 48, Y);
+    g.inventory.addKit('drill', 1);
+    run(g, 0.5);
+    expect(w.task?.kind).toBe('take');
+    expect(d.fuelUnits).toBe(0);
+  });
+
+  it('il ne s’occupe que des foreuses à charbon : ni four ni autre machine', () => {
+    const { g, chest } = withCoal(20);
+    g.pickaxeLevel = 1;
+    g.inventory.addKit('furnace', 1);
+    const furnace = g.place('furnace', 57, 8, 1) as unknown as { fuelUnits: number };
+    expect(furnace).toBeTruthy();
+    g.workers.add('driller', g);
+    run(g, 30);
+    expect(furnace.fuelUnits).toBe(0);
+    expect(chest.items.coal).toBe(20);
+  });
+
+  it('une foreuse déjà à moitié pleine n’est pas rechargée, et une autre ouvrière qui y va ne fait pas doublon', () => {
+    const { g, chest } = withCoal(30);
+    const d = g.structures.add(new Drill(52, Y, 1)) as Drill;
+    d.fuelUnits = Math.ceil(d.fuelMax * 0.6);
+    const before = d.fuelUnits;
+    g.workers.add('driller', g);
+    run(g, 20);
+    expect(d.fuelUnits).toBe(before);
+    expect(chest.items.coal).toBe(30);
+    // Un foreur et un ravitailleur, une seule foreuse vide : une seule tournée de charbon.
+    d.fuelUnits = 0;
+    g.workers.add('refueler', g);
+    run(g, 30);
+    expect(d.fuelUnits).toBe(d.fuelMax);
+    expect(chest.items.coal).toBe(30 - d.fuelMax);
+  });
+
+  it('sans charbon dans les coffres, il signale « plus de charbon » (sauf s’il a encore un gisement à équiper)', () => {
+    const g = camp();
+    g.structures.add(new Storage(46, S + 14, 1));
+    g.structures.add(new Drill(52, Y, 1));
+    const w = g.workers.add('driller', g);
+    run(g, 10);
+    expect(w.flag).toBe('nocoal');
+    // Un gisement et un kit : il pose d'abord (pas de blocage affiché), puis le blocage revient.
+    deposit(g, 'copper', 48, Y);
+    g.inventory.addKit('drill', 1);
+    let t = 0;
+    while (w.task?.kind !== 'place' && t < 5) {
+      run(g, 0.1);
+      t += 0.1;
+    }
+    expect(w.task?.kind).toBe('place');
+    expect(w.flag).toBeNull();
+    run(g, 30);
+    expect(drills(g)).toHaveLength(2);
+    expect(w.flag).toBe('nocoal');
   });
 });

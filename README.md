@@ -234,7 +234,10 @@ lettre tapée : c'est la touche marquée M, quel que soit le clavier.
   ligne) : le **niveau 1** (gratuit) équipe les petits minerais (charbon, cuivre), pose en 3 s ; le **niveau 2**
   (400 $) ajoute le fer et pose en 2,2 s ; le **niveau 3** (900 $, pioche de niveau 3) ajoute l'argent et l'or ; le
   **niveau 4** (2 200 $, pioche de niveau 4) ajoute le diamant ; chaque niveau marche aussi plus vite (×1,15, ×1,3, ×1,5).
-  Il ne pose pas sur la pierre. Les foreuses posées se rechargent par un ravitailleur et se vident par un ramasseur. Ils
+  Il ne pose pas sur la pierre. **Il met aussi du charbon dans les foreuses** : comme un ravitailleur, mais pour les
+  foreuses à charbon seulement (les vôtres comme les siennes, dès que leur réservoir est à moitié vide), il prend le charbon
+  dans un coffre et le porte à la foreuse ; il le fait **avant** de chercher un nouveau gisement, et signale « plus de
+  charbon dans les coffres » quand il n'y en a plus. Les foreuses posées se vident par un ramasseur. Ils
   marchent de case en case par le plus court chemin, en évitant la roche, les machines, le grisou et l'eau profonde.
   **Sans limite de distance** : pour un tas, un coffre, du charbon, une machine ou leur poste, ils cherchent aussi loin
   qu'il faut (jusqu'au fond de la mine, avec une longue marche à la clé) ; seuls un passage coupé ou l'absence de cible

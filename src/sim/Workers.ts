@@ -507,11 +507,25 @@ export class WorkerSystem {
   }
 
   /**
-   * Foreur : un gisement de son niveau (minerais jusqu'au `maxTier` de son niveau, pas la pierre) où poser une foreuse :
-   * exposé, pas déjà couvert par une foreuse, pas encore visé par un autre foreur, qui ne bouche aucun passage. Il va au
-   * plus proche. Sans foreuse (stock vide, pas assez d'argent), il le signale.
+   * Foreur : d'abord du charbon pour les foreuses qui en réclament (comme un ravitailleur, mais pour elles seules), puis
+   * un gisement où poser une foreuse.
    */
   private thinkDriller(w: Worker, g: GameState): boolean {
+    // Le charbon d'abord : une foreuse posée sans combustible ne produit rien (celles du joueur comme les siennes).
+    if (this.thinkFuel(w, g)) return true;
+    const fuelFlag = w.flag;
+    if (this.thinkPlace(w, g)) return true;
+    // Rien à poser : un blocage de charbon reste visible tant qu'aucune autre cause (plus de foreuse) ne l'emporte.
+    if (w.flag === null) w.flag = fuelFlag;
+    return false;
+  }
+
+  /**
+   * Un gisement de son niveau (minerais jusqu'au `maxTier` de son niveau, pas la pierre) où poser une foreuse : exposé,
+   * pas déjà couvert par une foreuse, pas encore visé par un autre foreur, qui ne bouche aucun passage. Il va au plus
+   * proche. Sans foreuse (stock vide, pas assez d'argent), il le signale.
+   */
+  private thinkPlace(w: Worker, g: GameState): boolean {
     const world = g.world;
     const width = world.w;
     const lvl = drillerLevel(w.level);
@@ -563,17 +577,32 @@ export class WorkerSystem {
     return false;
   }
 
-  /** Machines qui réclament du charbon et dont le réservoir est à moitié vide ou moins. */
+  /**
+   * Machines qui réclament du charbon et dont le réservoir est à moitié vide ou moins. Le ravitailleur les sert toutes ;
+   * le foreur seulement les foreuses à charbon.
+   */
   private needy(w: Worker, g: GameState): FuelMachine[] {
     const claimed = this.list.filter((o) => o !== w && o.task?.kind === 'fuel').map((o) => o.task as { x: number; y: number });
     return g.structures.list.filter(
       (s): s is FuelMachine =>
-        isFuelMachine(s) && s.fuelWanted() !== null && s.fuelUnits <= s.fuelMax * WORKERS.fuelLow && !claimed.some((c) => c.x === s.x && c.y === s.y),
+        isFuelMachine(s) &&
+        (w.job !== 'driller' || s instanceof Drill) &&
+        s.fuelWanted() !== null &&
+        s.fuelUnits <= s.fuelMax * WORKERS.fuelLow &&
+        !claimed.some((c) => c.x === s.x && c.y === s.y),
     );
   }
 
   /** Ravitailleur : du charbon à porter aux machines, sinon à aller chercher dans un coffre. */
   private thinkRefueler(w: Worker, g: GameState): boolean {
+    return this.thinkFuel(w, g);
+  }
+
+  /**
+   * Du charbon à porter aux machines qui en réclament (celles de son métier, voir `needy`), sinon à aller chercher dans un
+   * coffre. Renvoie faux s'il n'y a rien à faire ; `flag` dit alors si c'est faute de charbon (`nocoal`) ou de chemin (`lost`).
+   */
+  private thinkFuel(w: Worker, g: GameState): boolean {
     const needy = this.needy(w, g);
     if (!needy.length) {
       w.flag = null;

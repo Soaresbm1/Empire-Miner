@@ -1700,7 +1700,6 @@ try {
       const chest = g.place('storage', 46, Y, 0);
       chest.put('coal', 30);
       g.workers.add('picker', g);
-      g.workers.add('refueler', g);
       window.__EM.renderer.snapCamera();
     });
     await page.keyboard.press('KeyX');
@@ -1714,6 +1713,17 @@ try {
     }
     check(placed, 'le foreur a posé une foreuse à charbon sur le gisement de cuivre');
     check((await ev(() => window.__EM.state.inventory.kitCount('drill'))) === 0, 'il a utilisé le kit de foreuse du stock');
+    // Sans ravitailleur : c'est le foreur qui prend du charbon dans le coffre et le met dans sa foreuse.
+    let fueled = false;
+    try {
+      await page.waitForFunction(() => (window.__EM.state.structures.list.find((s) => s.type === 'drill')?.fuelUnits ?? 0) > 0, undefined, { timeout: 30000, polling: 250 });
+      fueled = true;
+    } catch {
+      /* mesuré plus bas */
+    }
+    check(fueled, 'le foreur met lui-même du charbon dans la foreuse qu’il vient de poser (sans ravitailleur)');
+    check((await ev(() => window.__EM.state.storages()[0].items.coal ?? 0)) < 30, 'ce charbon vient du coffre');
+    await ev(() => { const g = window.__EM.state; g.workers.add('refueler', g); });
     await shot('38-driller-placed');
     let emptied = false;
     try {
@@ -1730,7 +1740,7 @@ try {
     } catch {
       /* mesuré plus bas */
     }
-    check(emptied, 'le ravitailleur recharge la foreuse et le ramasseur range sa production dans le coffre');
+    check(emptied, 'le ramasseur range la production de la foreuse dans le coffre');
     await page.keyboard.press('KeyX');
   }
 

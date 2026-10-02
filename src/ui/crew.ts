@@ -25,14 +25,14 @@ const FLAG_TEXT: Record<WorkerFlag, string> = {
   nodrill: "Des gisements l'attendent, mais plus de foreuse en stock ni assez d'argent pour en acheter : achetez des foreuses à l'Atelier.",
 };
 
-/** Les blocages en quelques mots, pour la liste « machines à surveiller » du Tableau d'affichage. */
+/** Les blocages en quelques mots, pour la liste « machines à surveiller » du Tableau d'affichage (précédés du métier). */
 const FLAG_BOARD: Record<WorkerFlag, string> = {
-  nostore: "Ramasseur : aucun coffre n'accepte ce minerai",
-  full: 'Ramasseur : les coffres sont pleins',
-  noroute: 'Ramasseur : aucun chemin vers un coffre',
-  nocoal: 'Ravitailleur : plus de charbon dans les coffres',
-  lost: 'Ravitailleur : machine inaccessible',
-  nodrill: 'Foreur : plus de foreuse en stock ni assez d’argent',
+  nostore: "aucun coffre n'accepte ce minerai",
+  full: 'les coffres sont pleins',
+  noroute: 'aucun chemin vers un coffre',
+  nocoal: 'plus de charbon dans les coffres',
+  lost: 'machine inaccessible',
+  nodrill: 'plus de foreuse en stock ni assez d’argent',
 };
 
 /** Ce que fait l'ouvrier, en une phrase. */
@@ -40,7 +40,7 @@ export function workerStatus(g: GameState, w: Worker): WorkerStatus {
   const t = w.task;
   if (!t) {
     if (w.flag) return { text: FLAG_TEXT[w.flag], tone: 'warn' };
-    if (w.job === 'driller') return { text: `Cherche un gisement à équiper (${oresOf(w.level) || 'aucun'})`, tone: 'idle' };
+    if (w.job === 'driller') return { text: `Cherche un gisement à équiper (${oresOf(w.level) || 'aucun'}) ou une foreuse sans charbon`, tone: 'idle' };
     return { text: w.job === 'picker' ? 'Attend des minerais par terre ou à prendre dans les machines' : 'Toutes les machines ont du charbon', tone: 'idle' };
   }
   switch (t.kind) {
@@ -53,7 +53,7 @@ export function workerStatus(g: GameState, w: Worker): WorkerStatus {
     case 'take':
       return { text: 'Va chercher du charbon', tone: 'ok' };
     case 'fuel':
-      return { text: 'Ravitaille une machine', tone: 'ok' };
+      return { text: g.structures.at(t.x, t.y)?.type === 'drill' ? 'Ravitaille une foreuse en charbon' : 'Ravitaille une machine', tone: 'ok' };
     case 'place': {
       const res = g.world.depositAt(t.x, t.y);
       return { text: res ? `Va poser une foreuse sur un gisement de ${getResource(res).name.toLowerCase()}` : 'Va poser une foreuse', tone: 'ok' };
@@ -96,7 +96,7 @@ export function stuckWorkers(g: GameState): { text: string; n: number }[] {
   const found = new Map<string, number>();
   for (const w of g.workers.list) {
     if (w.task || !w.flag) continue;
-    const text = FLAG_BOARD[w.flag];
+    const text = `${getJob(w.job).name} : ${FLAG_BOARD[w.flag]}`;
     found.set(text, (found.get(text) ?? 0) + 1);
   }
   return [...found].map(([text, n]) => ({ text, n }));
