@@ -1254,7 +1254,11 @@ try {
   await page.waitForTimeout(500);
   const boardText = await ev(() => document.querySelector('.panel-board')?.textContent ?? '');
   check(/Marché/.test(boardText) && /Production/.test(boardText), "le Tableau d'affichage a les onglets Marché et Production");
-  check((await page.locator('.panel-board svg.spark').count()) === 3, 'une courbe par minerai connu (charbon, cuivre, fer)');
+  // La mine est tirée au hasard : d'autres minerais (or…) ont pu être découverts en route, d'où « au moins » ces trois-là.
+  const sparkNames = () => page.$$eval('.panel-board svg.spark', (els) => els.map((e) => e.getAttribute('aria-label') ?? ''));
+  const hasCurves = (names) => ['Charbon', 'Cuivre', 'Fer'].every((n) => names.some((l) => l.startsWith(n)));
+  const curves = await sparkNames();
+  check(hasCurves(curves), `une courbe par minerai connu, dont charbon, cuivre et fer (${curves.length} courbes)`);
   check(/Forte demande de cuivre/.test(boardText), "l'événement en cours est listé, avec le conseil de vente");
   await shot('27-market-board');
   await page.keyboard.press('Digit2');
@@ -1262,7 +1266,7 @@ try {
   check(/Gains des 10 dernières minutes/.test(await ev(() => document.querySelector('.panel-board')?.textContent ?? '')), "la touche 2 ouvre l'onglet Production");
   await page.keyboard.press('ArrowLeft');
   await page.waitForTimeout(300);
-  check((await page.locator('.panel-board svg.spark').count()) === 3, 'la flèche gauche revient au Marché');
+  check(hasCurves(await sparkNames()), 'la flèche gauche revient au Marché');
   await page.keyboard.press('Escape');
   await page.waitForTimeout(250);
   await ev(() => {
@@ -1358,7 +1362,7 @@ try {
       const t = window.__crewTest;
       return { fuel: f.fuelUnits, left: t.piles.filter((id) => g.drops.list.some((d) => d.id === id)).length, gained: t.stock() + g.stats.autoSold - t.before };
     }, staged);
-    check(done && res.left === 0 && res.gained >= 3, `le ramasseur a ramassé les deux tas et les a rangés dans un coffre ou une caisse (${res.gained} unités de plus en stock, ${res.left} tas restants)`);
+    check(done && res.left === 0 && res.gained >= 3, `le ramasseur a ramassé les deux tas et les a rangés dans un coffre (${res.gained} unités de plus en stock, ${res.left} tas restants)`);
     check(res.fuel > 0, `le ravitailleur recharge le four (${res.fuel} unités)`);
     await shot('29-crew-working');
   }
