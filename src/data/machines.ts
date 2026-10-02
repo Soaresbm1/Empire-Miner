@@ -40,6 +40,8 @@ export interface BorerSpec {
   lengths: number[];
   /** Minerai que la base peut garder (benne vidée au retour), en morceaux. */
   store: number;
+  /** Résistance (points de dégâts) d'un bloc indestructible pour la tête qui perce tout (niveau 5). */
+  unbreakableHp: number;
 }
 
 export interface MachineGroup {
@@ -85,6 +87,11 @@ export interface BorerLevelSpec {
   width: 1 | 3;
   /** Benne : morceaux de minerai ramassés et ramenés à la base (0 = pas de benne). */
   hopper: number;
+  /**
+   * Tête qui perce tout : tous les blocs, y compris le diamant et la roche indestructible (socle rocheux, falaise).
+   * Seul le bord du monde l'arrête. Sans elle, la foreuse s'arrête devant ce qui dépasse son `tier`.
+   */
+  breakAll?: boolean;
 }
 
 export interface BridgeSpec {
@@ -362,7 +369,7 @@ export const MACHINES: MachineDef[] = [
     summary: 'Base fixe d’où sort une foreuse qui perce seule un tunnel droit, puis revient faire le plein. Brûle du charbon.',
     category: 'extraction',
     description:
-      "La base reste où vous la posez ; la foreuse en sort pour percer tout droit devant la flèche, jusque dans la roche volcanique, et y revient quand elle n'a plus de charbon ou ne peut plus percer. Les minerais tombent derrière elle, dans le tunnel. Chargez la base en charbon, réglez la longueur et démarrez-la avec E.",
+      "La base reste où vous la posez ; la foreuse en sort pour percer tout droit devant la flèche, jusque dans la roche volcanique (et, au niveau 5, absolument tout), et y revient quand elle n'a plus de charbon ou ne peut plus percer. Les minerais tombent derrière elle, dans le tunnel. Chargez la base en charbon, réglez la longueur et démarrez-la avec E.",
     price: 1200,
     w: 1,
     h: 1,
@@ -371,7 +378,7 @@ export const MACHINES: MachineDef[] = [
     stats: { speed: 6, power: 0, capacity: 0, efficiency: 1, level: 1 },
     fuel: { res: 'coal', secondsPerUnit: 20, maxUnits: 20 },
     unlock: { pickaxeTier: 3, text: 'Nécessite la Pioche en fer' },
-    borer: { tier: 3, lengths: [10, 25, 50, 0], store: 120 },
+    borer: { tier: 3, lengths: [10, 25, 50, 0], store: 120, unbreakableHp: 30 },
     // Améliorations achetées sur la base (foreuse rangée) ; chaque niveau garde les précédents.
     levels: [
       {
@@ -400,6 +407,14 @@ export const MACHINES: MachineDef[] = [
         price: 1800,
         summary: 'Ramasse le minerai percé (30 morceaux) et le ramène à la base, qui le pousse dans un convoyeur ou un coffre collé.',
         borer: { damagePerSecond: 12, moveTime: 0.22, tankUnits: 4, width: 3, hopper: 30 },
+      },
+      {
+        level: 5,
+        name: 'Tête de diamant',
+        price: 3500,
+        unlock: { pickaxeTier: 4, text: 'Nécessite la Pioche pro en acier' },
+        summary: 'Perce absolument tout, toujours tout droit : diamant, roche indestructible, falaises… jusqu’au bord de la mine.',
+        borer: { damagePerSecond: 12, moveTime: 0.22, tankUnits: 4, width: 3, hopper: 30, breakAll: true },
       },
     ],
   },

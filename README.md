@@ -93,7 +93,7 @@ lettre tapée : c'est la touche marquée M, quel que soit le clavier.
   l'Atelier dès 80 m de profondeur. L'achat, le stock et le point d'accroche sont sauvegardés, pas la manœuvre en cours.
 - **Foreuse de percement** (1 200 $, pioche en fer) : une **base fixe** et une foreuse sur chenilles qui en sort
   pour percer toute seule un tunnel droit devant la flèche de la base (10, 25, 50 cases ou sans limite), jusqu'au
-  basalte. La foreuse emporte 2 unités de charbon prises dans la base (1 unité / 20 s de perçage ; rouler est
+  basalte et à la roche volcanique (au niveau 5, tout). La foreuse emporte 2 unités de charbon prises dans la base (1 unité / 20 s de perçage ; rouler est
   gratuit) et **revient à la base** quand elle n'a plus de charbon (elle refait le plein et repart au bout du
   tunnel), quand elle ne peut plus percer (roche indestructible ou trop dure, machine, bord de la mine), quand le
   tunnel est fini ou quand on la rappelle. Une base alimentée par un convoyeur ou un coffre de charbon collé la fait
@@ -106,6 +106,11 @@ lettre tapée : c'est la touche marquée M, quel que soit le clavier.
   - niveau 4, **benne à minerai** (1 800 $) : ramasse le minerai percé (30 morceaux, la pierre reste au sol) et le ramène
     à la base, qui le pousse dans un convoyeur ou un coffre collé (ou on le récupère depuis son panneau) ; le charbon
     ramené remplit la réserve de la base. Benne pleine, elle rentre la vider et repart.
+  - niveau 5, **tête de diamant** (3 500 $, pioche pro en acier) : elle **perce absolument tout**, toujours tout droit —
+    les filons de diamant, la roche indestructible (socle rocheux, falaise, arbre) devant elle **et sur les côtés** de la
+    tête large. Un bloc indestructible résiste 30 points (environ 2,5 s de plus qu'une roche tendre à ce rythme) ; les
+    dents de la tête sont serties de diamant bleu. Seuls la **dernière rangée de la carte** (« bord de la mine ») et une
+    **machine posée** sur le chemin l'arrêtent encore. Elle garde la benne, la tête large et le moteur renforcé.
 - Première automatisation : **foreuse à charbon → convoyeurs → coffre**, avec minerais visibles sur les
   convoyeurs, capacité et débit réels (saturation possible), alimentation en charbon manuelle ou par convoyeur.
 - Trois niveaux de **convoyeurs** : de base (2,25 objets/s), **rapide** (×2, pioche améliorée) et **express**

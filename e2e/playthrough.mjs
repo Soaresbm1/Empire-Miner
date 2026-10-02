@@ -1501,6 +1501,73 @@ try {
     check((await ev(() => window.__EM.speed)) === 1, 'santé basse : le jeu repasse tout seul à ×1');
     await ev(() => { window.__EM.state.hp = 100; });
   }
+
+  // Foreuse de percement, niveau 5 « tête de diamant » : elle perce tout, toujours tout droit (diamant, socle rocheux, falaise, arbre).
+  {
+    const B = { AIR: 0, BEDROCK: 1, CLIFF: 2, TREE: 3, SOFT: 4, DIAMOND: 14 };
+    const at = { x: 70, y: 80 }; // en profondeur, loin de tout ce que le parcours a posé
+    await ev(([at, B]) => {
+      const g = window.__EM.state;
+      g.money = 50000;
+      g.pickaxeLevel = 3;
+      g.inventory.addKit('borer', 1);
+      g.inventory.add('coal', 20);
+      for (let x = at.x - 3; x <= at.x; x++) for (const y of [at.y - 1, at.y, at.y + 1]) g.world.set(x, y, B.AIR);
+      for (let x = at.x + 1; x <= at.x + 30; x++) for (const y of [at.y - 1, at.y, at.y + 1]) g.world.set(x, y, B.SOFT);
+      g.world.set(at.x + 3, at.y, B.DIAMOND);
+      g.world.set(at.x + 4, at.y - 1, B.DIAMOND);
+      g.world.set(at.x + 6, at.y, B.BEDROCK);
+      g.world.set(at.x + 7, at.y + 1, B.BEDROCK);
+      g.world.set(at.x + 9, at.y, B.CLIFF);
+      g.world.set(at.x + 11, at.y, B.TREE);
+      g.player.x = (at.x - 1 + 0.5) * 16;
+      g.player.y = (at.y + 0.5) * 16;
+      g.place('borer', at.x, at.y, 0);
+      window.__EM.renderer.snapCamera();
+    }, [at, B]);
+    await page.waitForTimeout(500);
+    await page.keyboard.press('KeyE');
+    await page.waitForTimeout(450);
+    check(/Foreuse de percement/.test(await ev(() => document.querySelector('.panel')?.textContent ?? '')), 'le panneau de la foreuse de percement s’ouvre (niveau 5)');
+    await page.click('[data-action="borerFuel"]');
+    await page.waitForTimeout(200);
+    for (let i = 2; i <= 5; i++) {
+      await page.click('[data-action="borerUpgrade"]');
+      await page.waitForTimeout(250);
+    }
+    const lvl5 = await ev(() => window.__EM.state.structures.borers.at(-1).level);
+    const text5 = await ev(() => document.querySelector('.panel')?.textContent ?? '');
+    check(lvl5 === 5 && /Tête de diamant/.test(text5) && /perce tout/.test(text5), `quatre améliorations au clic jusqu'à la tête de diamant (niveau ${lvl5})`);
+    check(!(await page.$('[data-action="borerUpgrade"]')), 'plus de bouton d’amélioration au niveau maximal');
+    await shot('34-borer-level5-panel');
+    await page.click('[data-action="borerLength"][data-arg="25"]');
+    await page.waitForTimeout(150);
+    await page.click('[data-action="borerStart"]');
+    await page.waitForTimeout(300);
+    await page.keyboard.press('Escape');
+    await page.waitForTimeout(300);
+    let reached = false;
+    try {
+      await page.waitForFunction((at) => window.__EM.state.structures.borers.some((b) => b.x === at.x && b.y === at.y && b.tunnel >= 14), at, { timeout: 90000, polling: 500 });
+      reached = true;
+    } catch {
+      /* mesuré plus bas */
+    }
+    const tun = await ev(([at, B]) => {
+      const g = window.__EM.state;
+      const b = g.structures.borers.find((o) => o.x === at.x && o.y === at.y);
+      return {
+        status: b.status,
+        reason: b.blockReason,
+        tunnel: b.tunnel,
+        row: [...Array(14).keys()].map((k) => g.world.get(at.x + 1 + k, at.y) === B.AIR),
+        sides: [g.world.get(at.x + 4, at.y - 1) === B.AIR, g.world.get(at.x + 7, at.y + 1) === B.AIR],
+      };
+    }, [at, B]);
+    check(reached && tun.row.every(Boolean), `la foreuse perce tout le tunnel : diamant, socle rocheux, falaise et arbre (${tun.tunnel} cases, ${tun.status})`);
+    check(tun.sides.every(Boolean), 'la tête large perce aussi le diamant et le socle rocheux des côtés');
+    await shot('35-borer-level5-tunnel');
+  }
 } catch (e) {
   failures++;
   console.error(e);

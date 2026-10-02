@@ -52,6 +52,10 @@ import {
   buildWorkshopSprite,
 } from './sprites';
 
+/** Dents de la tête de coupe de la foreuse de percement : acier, ou diamant bleu glacier (niveau 5). */
+const STEEL_TEETH = ['#c7ccd6', '#6a6f78'];
+const DIAMOND_TEETH = ['#9ff0fa', '#2f7f92'];
+
 export interface Overlay {
   /** Tuile visée par la pioche. */
   target: { tx: number; ty: number; ok: boolean } | null;
@@ -384,7 +388,9 @@ export class Renderer {
       const tx = i % w.w;
       const ty = (i / w.w) | 0;
       if (!this.inView(tx * TILE, ty * TILE)) continue;
-      const hp = getBlock(w.tiles[i]).hp || 1;
+      const b = getBlock(w.tiles[i]);
+      // Un bloc indestructible n'est attaqué que par la tête de diamant de la foreuse de percement.
+      const hp = (b.breakable ? b.hp : getMachine('borer').borer!.unbreakableHp) || 1;
       const stage = Math.min(3, Math.floor((dmg / hp) * 4));
       this.ctx.drawImage(this.cracks[stage], tx * TILE, ty * TILE);
     }
@@ -1006,6 +1012,8 @@ export class Renderer {
     ctx.translate(x + 8, y + 8);
     ctx.rotate((b.dir * Math.PI) / 2);
     const phase = working ? Math.floor(b.activeTime * 18) : 0;
+    // Tête de diamant (niveau 5) : les dents sont serties de diamant bleu glacier.
+    const teeth = b.stats.breakAll ? DIAMOND_TEETH : STEEL_TEETH;
     // Tête large (niveau 3+) : une barre porte deux fraises qui mordent dans les cases voisines.
     if (b.stats.width > 1) {
       ctx.fillStyle = '#1a1418';
@@ -1014,7 +1022,7 @@ export class Renderer {
       ctx.fillRect(5, -20, 1, 40);
       for (const side of [-1, 1]) {
         for (let k = 0; k < 5; k++) {
-          ctx.fillStyle = (k + phase) % 2 ? '#c7ccd6' : '#6a6f78';
+          ctx.fillStyle = (k + phase) % 2 ? teeth[0] : teeth[1];
           ctx.fillRect(7 + jig, side * 11 - 5 + k * 2, 3, 2);
           if ((k + phase) % 2) ctx.fillRect(10 + jig, side * 11 - 5 + k * 2, 1, 1);
         }
@@ -1025,7 +1033,7 @@ export class Renderer {
     ctx.fillStyle = '#4a4b52';
     ctx.fillRect(4, -2, 2, 4);
     for (let k = 0; k < 6; k++) {
-      ctx.fillStyle = (k + phase) % 2 ? '#c7ccd6' : '#6a6f78';
+      ctx.fillStyle = (k + phase) % 2 ? teeth[0] : teeth[1];
       ctx.fillRect(6 + jig, -6 + k * 2, 3, 2);
       if ((k + phase) % 2) ctx.fillRect(9 + jig, -6 + k * 2, 1, 1); // dents
     }

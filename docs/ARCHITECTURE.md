@@ -66,7 +66,10 @@ charbon ou pour vider sa benne, elle refait le plein (`tank`) dans la réserve d
 Ses niveaux (`MachineDef.levels[].borer`) règlent vitesse, charbon emporté, largeur du front (`faceTiles`) et benne
 (`load`, vidée dans le stock de la base `store`, que la base pousse dans les structures collées). `digTile` renvoie
 les morceaux lâchés pour que la benne les ramasse. Le niveau suit le kit au démontage (`borer@4`), comme la foreuse
-à charbon ; `GameState.upgradeMachine` / `upgradeBlocker` servent aux deux.
+à charbon ; `GameState.upgradeMachine` / `upgradeBlocker` servent aux deux. Le niveau 5 (`breakAll`) change la règle de
+`cutBlocker` : au lieu de refuser ce qui est indestructible ou au-delà du `tier` de la machine, elle ne refuse plus que
+le bord du monde (`onWorldEdge`, dernière rangée de la carte) ; un bloc indestructible se perce en `spec.unbreakableHp`
+points de dégâts (`cutHp`), le rendu des fissures en tient compte. Les côtés de la tête large suivent la même règle.
 
 Combustible : une structure qui brûle quelque chose expose `fuelWanted()` (la ressource voulue tant que son
 réservoir n'est pas plein). Un coffre remplit d'abord le réservoir de ses voisins, puis se vide dans les

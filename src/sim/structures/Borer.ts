@@ -12,9 +12,11 @@
  * (convoyeur, coffre de charbon collé) la fait creuser sans intervention.
  *
  * Améliorations (achetées sur la base, foreuse rangée) : moteur renforcé (perce et
- * roule plus vite, plus de charbon emporté), tête large (tunnel de 3 cases) et benne
+ * roule plus vite, plus de charbon emporté), tête large (tunnel de 3 cases), benne
  * à minerai (le minerai percé est ramené à la base, qui le pousse dans un convoyeur
- * ou un coffre collé ; le charbon ramené remplit la réserve de la base).
+ * ou un coffre collé ; le charbon ramené remplit la réserve de la base) et tête de
+ * diamant (elle perce tous les blocs, même le diamant et la roche indestructible ;
+ * seul le bord du monde l'arrête, et elle va toujours tout droit).
  */
 import { TILE } from '../../core/constants';
 import { DX, DY, type Dir } from '../../core/dir';
@@ -131,6 +133,25 @@ export class TunnelBorer extends Structure {
   /** Case à `k` cases de la base, dans le sens de sa flèche. */
   tileAt(k: number): { x: number; y: number } {
     return { x: this.x + DX[this.dir] * k, y: this.y + DY[this.dir] * k };
+  }
+
+  /** Bord du monde : la rangée de cases qui ferme la mine de chaque côté. Même la tête de diamant ne le perce pas. */
+  private onWorldEdge(ctx: StructureContext, x: number, y: number): boolean {
+    const w = ctx.world;
+    return x <= 0 || y <= 0 || x >= w.w - 1 || y >= w.h - 1;
+  }
+
+  /** Pourquoi la tête ne peut pas percer ce bloc (null : elle le peut). */
+  private cutBlocker(ctx: StructureContext, x: number, y: number, block: BlockDef): string | null {
+    if (this.stats.breakAll) return this.onWorldEdge(ctx, x, y) ? 'bord de la mine' : null;
+    if (!block.breakable) return `${block.name.toLowerCase()} indestructible`;
+    if (block.tier > this.spec.tier) return `${block.name.toLowerCase()} trop dur`;
+    return null;
+  }
+
+  /** Dégâts à infliger pour percer ce bloc (un bloc indestructible a une résistance fixe pour la tête de diamant). */
+  private cutHp(block: BlockDef): number {
+    return block.breakable ? block.hp : this.spec.unbreakableHp;
   }
 
   /** Front de taille à `k` cases de la base : la case du tunnel, puis à gauche et à droite (tête large). */
@@ -325,15 +346,15 @@ export class TunnelBorer extends Structure {
     if (ctx.structureAt(nx, ny)?.solid) return this.goHome(ctx, 'blocked', 'une machine barre le passage');
     const block = getBlock(w.get(nx, ny));
     if (w.isSolid(nx, ny)) {
-      if (!block.breakable) return this.goHome(ctx, 'blocked', `${block.name.toLowerCase()} indestructible`);
-      if (block.tier > this.spec.tier) return this.goHome(ctx, 'blocked', `${block.name.toLowerCase()} trop dur`);
+      const why = this.cutBlocker(ctx, nx, ny, block);
+      if (why) return this.goHome(ctx, 'blocked', why);
       return this.drill(dt, ctx, nx, ny, block);
     }
-    // Tête large : les côtés du front sont percés avant d'avancer (sauf roche indestructible ou trop dure).
+    // Tête large : les côtés du front sont percés avant d'avancer (sauf ce que la tête ne peut pas percer).
     for (const t of sides) {
       if (!w.inBounds(t.x, t.y) || !w.isSolid(t.x, t.y)) continue;
       const b = getBlock(w.get(t.x, t.y));
-      if (b.breakable && b.tier <= this.spec.tier) return this.drill(dt, ctx, t.x, t.y, b);
+      if (!this.cutBlocker(ctx, t.x, t.y, b)) return this.drill(dt, ctx, t.x, t.y, b);
     }
     if (ctx.occupied(nx, ny)) return this.wait('quelqu’un est sur son chemin');
     this.status = 'moving';
@@ -364,7 +385,7 @@ export class TunnelBorer extends Structure {
     this.activeTime += dt;
     this.heat = ctx.hazards.heatFactor(tx, ty);
     this.work += this.stats.damagePerSecond * dt * this.heat;
-    if (this.work < block.hp) {
+    if (this.work < this.cutHp(block)) {
       ctx.world.damage.set(i, this.work); // fissures visibles sur la paroi attaquée
       return;
     }
