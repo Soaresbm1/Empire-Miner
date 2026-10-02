@@ -12,6 +12,11 @@ import { getMachine } from '../../data/machines';
 import { getResource, hasResource, resourceIndex } from '../../data/resources';
 import { Structure, StructureContext, StructureSave } from './Structure';
 
+/** Liste de minerais acceptés propre : doublons et ressources inconnues écartés, dans l'ordre des ressources. */
+export function normalizeAllow(list: readonly string[]): string[] {
+  return [...new Set(list)].filter(hasResource).sort((a, b) => resourceIndex(a) - resourceIndex(b));
+}
+
 export class Storage extends Structure {
   readonly type = 'storage';
   items: Record<string, number> = {};
@@ -37,7 +42,7 @@ export class Storage extends Structure {
 
   /** Remplace les minerais acceptés (doublons et ressources inconnues écartés, ordre des ressources). */
   setAllow(list: readonly string[]): void {
-    this.allow = [...new Set(list)].filter(hasResource).sort((a, b) => resourceIndex(a) - resourceIndex(b));
+    this.allow = normalizeAllow(list);
   }
 
   /** Ajoute le minerai à ceux que le coffre accepte, ou l'en retire. Depuis « tout accepter », choisir un minerai ne garde que lui. */

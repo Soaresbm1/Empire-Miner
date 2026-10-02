@@ -72,6 +72,12 @@ export interface Overlay {
   interact: Structure | null;
   /** Foreuse dont on montre les cases forées (proche du joueur ou visée). */
   reach?: Drill | null;
+  /** Mode « Régler les coffres » : coffres choisis (cases), coffre sous la souris et rectangle en cours (pixels du monde). */
+  chests?: {
+    selected: { tx: number; ty: number }[];
+    hover: { tx: number; ty: number } | null;
+    rect: { x0: number; y0: number; x1: number; y1: number } | null;
+  };
 }
 
 interface Drawable {
@@ -2010,6 +2016,7 @@ export class Renderer {
       ctx.globalAlpha = 1;
     }
     if (o.reach) this.drawReach(o.reach);
+    if (o.chests) this.drawChestPicks(o.chests);
     if (o.removeHint) {
       ctx.strokeStyle = `rgba(255,120,60,${0.6 + Math.sin(t * 8) * 0.3})`;
       ctx.lineWidth = 1;
@@ -2028,6 +2035,47 @@ export class Renderer {
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
       ctx.fillText('E', Math.round(bx) + 0.5, Math.round(by) + 0.5);
+    }
+  }
+
+  /** Coffres choisis (cadre bleu qui respire, coin coché), coffre visé (cadre blanc) et rectangle de sélection. */
+  private drawChestPicks(c: NonNullable<Overlay['chests']>): void {
+    const ctx = this.ctx;
+    const pulse = 0.7 + Math.sin(this.time * 6) * 0.25;
+    for (const { tx, ty } of c.selected) {
+      const x = tx * TILE;
+      const y = ty * TILE;
+      ctx.fillStyle = 'rgba(110,200,255,0.28)';
+      ctx.fillRect(x, y, TILE, TILE);
+      ctx.strokeStyle = `rgba(150,225,255,${pulse})`;
+      ctx.lineWidth = 1;
+      ctx.strokeRect(x + 0.5, y + 0.5, TILE - 1, TILE - 1);
+      // Petite coche en haut à gauche : lisible même quand tous les coffres se touchent.
+      ctx.fillStyle = '#1a1418';
+      ctx.fillRect(x + 1, y + 1, 5, 5);
+      ctx.fillStyle = '#8fdcff';
+      ctx.fillRect(x + 2, y + 3, 1, 1);
+      ctx.fillRect(x + 3, y + 4, 1, 1);
+      ctx.fillRect(x + 4, y + 2, 1, 2);
+    }
+    if (c.hover) {
+      ctx.strokeStyle = `rgba(255,255,255,${0.55 + Math.sin(this.time * 8) * 0.25})`;
+      ctx.lineWidth = 1;
+      ctx.strokeRect(c.hover.tx * TILE - 0.5, c.hover.ty * TILE - 0.5, TILE + 1, TILE + 1);
+    }
+    if (c.rect) {
+      const x = Math.min(c.rect.x0, c.rect.x1);
+      const y = Math.min(c.rect.y0, c.rect.y1);
+      const w = Math.abs(c.rect.x1 - c.rect.x0);
+      const h = Math.abs(c.rect.y1 - c.rect.y0);
+      ctx.fillStyle = 'rgba(150,225,255,0.2)';
+      ctx.fillRect(x, y, w, h);
+      ctx.strokeStyle = 'rgba(190,235,255,0.95)';
+      ctx.lineWidth = 1 / this.zoom;
+      ctx.setLineDash([3, 2]);
+      ctx.strokeRect(x, y, w, h);
+      ctx.setLineDash([]);
+      ctx.lineWidth = 1;
     }
   }
 

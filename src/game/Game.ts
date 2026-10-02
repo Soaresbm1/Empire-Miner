@@ -32,6 +32,7 @@ import { MineMap } from '../render/MineMap';
 import { PROFILES, Quality, loadQuality, nextQuality, saveQuality } from '../render/quality';
 import { Renderer, Overlay } from '../render/Renderer';
 import { UI, PanelKind } from '../ui/UI';
+import { allowWords, chestBar, chestsInRect, pickChests, toggleDraft } from '../ui/chestFilter';
 import { esc, kg, money, resIcon } from '../ui/format';
 
 const AUTOSAVE_EVERY = 60;
@@ -59,6 +60,12 @@ export class Game {
   /** Hauteur de la barre de construction (la plus grande de la session) : la caméra remonte d'autant. */
   private buildInset = 0;
   private dragLast: { tx: number; ty: number } | null = null;
+  /** Mode « Régler les coffres » (touche C) : coffres choisis, réglage à leur appliquer, glissé en cours, coffre visé. */
+  private chestMode = false;
+  private readonly chestSel = new Set<Storage>();
+  private chestDraft: string[] = [];
+  private chestDrag: { wx: number; wy: number; sx: number; sy: number } | null = null;
+  private chestHover: Storage | null = null;
   private autosave = AUTOSAVE_EVERY;
   private confirmNew = false;
   private lastDeniedToast = -10;
@@ -109,6 +116,7 @@ export class Game {
   private showMainMenu(): void {
     this.mode = 'menu';
     this.buildMode = false;
+    this.setChestMode(false);
     this.ui.closePanel();
     this.ui.showHud(false);
     if (!this.menuState) {
@@ -133,6 +141,7 @@ export class Game {
     this.acc = 0;
     this.autosave = AUTOSAVE_EVERY;
     this.buildMode = false;
+    this.setChestMode(false);
     this.confirmNew = false;
     this.shipLog = [];
     this.renderer.setState(state);
@@ -356,6 +365,24 @@ export class Game {
         // « Tout » vide la liste ; un minerai s'ajoute ou se retire (on peut en choisir plusieurs).
         if (target instanceof Storage) arg ? g.toggleStorageAllow(target, arg) : g.clearStorageAllow(target);
         break;
+      case 'chestMode':
+        this.setChestMode(true, target instanceof Storage ? target : undefined);
+        break;
+      case 'chestClose':
+        this.setChestMode(false);
+        break;
+      case 'chestDraft':
+        this.chestDraft = toggleDraft(this.chestDraft, arg);
+        break;
+      case 'chestAll':
+        for (const s of g.storages()) this.chestSel.add(s);
+        break;
+      case 'chestNone':
+        this.chestSel.clear();
+        break;
+      case 'chestApply':
+        this.applyChestDraft(g);
+        break;
       case 'shipDeposit':
         if (target instanceof ShippingCrate) {
           const n = g.shipDepositAll(target);
@@ -513,6 +540,7 @@ export class Game {
       if (this.ui.panel) this.ui.closePanel();
       else if (paused) this.ui.hideMenu();
       else if (this.buildMode) this.setBuildMode(false);
+      else if (this.chestMode) this.setChestMode(false);
       else this.ui.showPauseMenu(this.sfx.muted, this.quality);
     }
     // Atelier ou Tableau d'affichage ouvert : les chiffres (ou les flèches) changent d'onglet.
@@ -550,10 +578,14 @@ export class Game {
       if (inp.wasTyped('m')) this.togglePanel('map');
       if (inp.wasTyped('n') && !this.ui.panel) this.markHere(g);
       if (inp.wasPressed('KeyB') && !this.ui.panel) this.setBuildMode(!this.buildMode);
+      if (inp.wasPressed('KeyC') && !this.ui.panel) this.setChestMode(!this.chestMode);
+      if (this.chestMode && inp.wasPressed('Enter', 'NumpadEnter')) this.applyChestDraft(g);
       if (inp.wasPressed('KeyT') && !this.ui.panel) g.toggleTool();
       // V : corde de rappel (remonter au camp depuis la mine, redescendre au point d'accroche depuis le camp).
       if (inp.wasPressed('KeyV') && !this.ui.panel && !this.buildMode) g.useRope();
     }
+    // Un panneau ou un menu qui s'ouvre referme le mode « Régler les coffres ».
+    if (this.chestMode && this.ui.blocking) this.setChestMode(false);
     if (inp.wheel && !this.ui.blocking) this.renderer.adjustZoom(-inp.wheel);
 
     // --- intention du joueur
@@ -573,6 +605,8 @@ export class Game {
       let mine = false;
       if (this.buildMode) {
         this.updateBuild(g, mtx, mty, mouseActive, overlay);
+      } else if (this.chestMode) {
+        this.updateChests(g, mtx, mty, mouseActive, overlay);
       } else {
         if (mouseActive && g.world.isSolid(mtx, mty) && g.distanceToTile(mtx, mty) <= g.pickaxe.reach + 2.5) {
           const b = getBlock(g.world.get(mtx, mty));
@@ -595,7 +629,7 @@ export class Game {
       }
       intent = { mx, my, mine, target, ride: inp.isDown('ShiftLeft', 'ShiftRight') };
       // En construction, la ligne d'état de la barre remplace l'infobulle.
-      if (mouseActive && !this.buildMode) tooltip = this.describeTile(g, mtx, mty);
+      if (mouseActive && !this.buildMode && !this.chestDrag) tooltip = this.describeTile(g, mtx, mty);
     }
     const near = g.nearestInteractable();
     if (!this.ui.blocking && near) overlay.interact = near;
@@ -652,7 +686,7 @@ export class Game {
       income: this.incomeHtml(g),
     });
     // La barre cache le bas de l'écran : on garde le joueur au centre de ce qui reste visible.
-    this.buildInset = this.buildMode ? Math.max(this.buildInset, this.ui.buildBarHeight) : 0;
+    this.buildInset = this.buildMode || this.chestMode ? Math.max(this.buildInset, this.ui.buildBarHeight) : 0;
     this.renderer.bottomInset = this.buildInset;
     if (this.debug) this.drawDebug(g);
   }
@@ -727,7 +761,8 @@ export class Game {
     const g = this.state;
     const rope = g && (g.ropes > 0 || g.ropeAnchor) ? `<span${g.ropeT > 0 ? ' class="on"' : ''}><kbd>${l('KeyV')}</kbd> ${g.atCamp ? (g.ropeAnchor ? 'Redescendre' : 'Corde') : 'Remonter'}${g.ropes > 0 ? ` <b>×${g.ropes}</b>` : ''}</span>` : '';
     const scooter = this.state?.hasScooter ? `<span${this.state.scootering ? ' class="on"' : ''}><kbd>Maj</kbd> Trottinette</span>` : '';
-    return `${rope}${scooter}<span><kbd>${l('KeyB')}</kbd> Construire</span><span><kbd>${l('KeyI')}</kbd> Sac</span><span><kbd>M</kbd> Carte</span><span><kbd>N</kbd> Repère</span><span><kbd>${l('KeyH')}</kbd> Aide</span><span><kbd>Échap</kbd> Menu</span>`;
+    const chests = g && g.storages().length > 1 ? `<span${this.chestMode ? ' class="on"' : ''}><kbd>${l('KeyC')}</kbd> Coffres</span>` : '';
+    return `${rope}${scooter}<span><kbd>${l('KeyB')}</kbd> Construire</span>${chests}<span><kbd>${l('KeyI')}</kbd> Sac</span><span><kbd>M</kbd> Carte</span><span><kbd>N</kbd> Repère</span><span><kbd>${l('KeyH')}</kbd> Aide</span><span><kbd>Échap</kbd> Menu</span>`;
   }
 
   // ------------------------------------------------------------------ construction
@@ -791,8 +826,103 @@ export class Game {
     // Sans kit en stock, le mode construction sert encore à démonter (clic droit) et à tourner.
     if (on && this.state && !this.availableKits(this.state).length)
       this.ui.toast("Aucune machine en stock : clic droit pour démonter. Achetez-en à l'Atelier (surface).", 'info');
+    if (on) this.setChestMode(false);
     this.buildMode = on;
     this.dragLast = null;
+  }
+
+  // ------------------------------------------------------------------ réglage de plusieurs coffres
+
+  /**
+   * Entre dans le mode « Régler les coffres » (ou le quitte). Depuis le panneau d'un coffre, son réglage devient le modèle
+   * et il est déjà choisi : on n'a plus qu'à désigner les autres.
+   */
+  private setChestMode(on: boolean, from?: Storage): void {
+    if (on) {
+      this.setBuildMode(false);
+      this.ui.closePanel();
+    }
+    this.chestMode = on;
+    this.chestDrag = null;
+    this.chestHover = null;
+    this.chestSel.clear();
+    if (on && from) {
+      this.chestDraft = [...from.allow];
+      this.chestSel.add(from);
+    }
+  }
+
+  /** Sélection au clic (un coffre) ou au glisser (tous ceux de la zone) ; clic droit : tout désélectionner. */
+  private updateChests(g: GameState, mtx: number, mty: number, mouseActive: boolean, overlay: Overlay): void {
+    const inp = this.input;
+    if (this.chestSel.size) {
+      const live = new Set<unknown>(g.structures.list);
+      for (const s of this.chestSel) if (!live.has(s)) this.chestSel.delete(s);
+    }
+    const under = mouseActive ? g.structures.at(mtx, mty) : undefined;
+    this.chestHover = under instanceof Storage ? under : null;
+    if (mouseActive && inp.consumeRightPress()) this.chestSel.clear();
+    if (inp.consumeLeftPress()) {
+      const pw = this.renderer.screenToWorld(inp.leftPressX, inp.leftPressY);
+      this.chestDrag = { wx: pw.x, wy: pw.y, sx: inp.leftPressX, sy: inp.leftPressY };
+    }
+    let rect: { x0: number; y0: number; x1: number; y1: number } | null = null;
+    const d = this.chestDrag;
+    if (d) {
+      const cur = this.renderer.screenToWorld(inp.mouseX, inp.mouseY);
+      const moved = Math.hypot(inp.mouseX - d.sx, inp.mouseY - d.sy) > 6;
+      if (inp.left) {
+        if (moved) rect = { x0: d.wx, y0: d.wy, x1: cur.x, y1: cur.y };
+      } else {
+        this.chestDrag = null;
+        const tx0 = Math.floor(d.wx / TILE);
+        const ty0 = Math.floor(d.wy / TILE);
+        if (moved) pickChests(this.chestSel, chestsInRect(g, tx0, ty0, Math.floor(cur.x / TILE), Math.floor(cur.y / TILE)));
+        else {
+          const hit = g.structures.at(tx0, ty0);
+          if (hit instanceof Storage) pickChests(this.chestSel, [hit]);
+        }
+      }
+    }
+    overlay.chests = {
+      selected: [...this.chestSel].map((s) => ({ tx: s.x, ty: s.y })),
+      hover: this.chestHover ? { tx: this.chestHover.x, ty: this.chestHover.y } : null,
+      rect,
+    };
+  }
+
+  /** Donne le réglage choisi à tous les coffres sélectionnés. */
+  private applyChestDraft(g: GameState): void {
+    const list = [...this.chestSel].filter((s) => g.structures.list.includes(s));
+    if (!list.length) {
+      this.ui.toast("Choisissez d'abord des coffres : clic sur un coffre, ou glissez un rectangle.", 'warn');
+      this.sfx.error();
+      return;
+    }
+    const changed = g.setStoragesAllow(list, this.chestDraft);
+    if (!changed) {
+      this.ui.toast(`${list.length > 1 ? `Ces ${list.length} coffres étaient déjà réglés` : 'Ce coffre était déjà réglé'} ainsi.`, 'info');
+      return;
+    }
+    this.sfx.place();
+    const many = changed > 1;
+    const verb = many ? 'acceptent' : 'accepte';
+    const what = this.chestDraft.length ? `${verb} seulement ${allowWords(this.chestDraft)}` : `${verb} tout`;
+    const already = list.length - changed;
+    this.ui.toast(
+      `${changed} coffre${many ? 's' : ''} réglé${many ? 's' : ''} : ${many ? 'ils' : 'il'} ${what}.${already ? ` (${already} déjà réglé${already > 1 ? 's' : ''} ainsi)` : ''}`,
+      'good',
+    );
+  }
+
+  private chestBarHtml(g: GameState): string {
+    return chestBar(g, {
+      total: g.storages().length,
+      selected: this.chestSel.size,
+      draft: this.chestDraft,
+      hover: this.chestHover ? { chest: this.chestHover, picked: this.chestSel.has(this.chestHover) } : null,
+      label: (c) => this.input.label(c),
+    });
   }
 
   private updateBuild(g: GameState, mtx: number, mty: number, mouseActive: boolean, overlay: Overlay): void {
@@ -939,6 +1069,7 @@ export class Game {
   }
 
   private buildBarHtml(g: GameState): string {
+    if (this.chestMode) return this.chestBarHtml(g);
     if (!this.buildMode) return '';
     const l = (c: string) => this.input.label(c);
     const icon = (machine: string, cls = '') => {

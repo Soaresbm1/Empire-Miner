@@ -137,6 +137,13 @@ sans lui, le marché repart à 100 % au pas du temps de jeu, sans rejouer le pas
 Filtre de coffre : `Storage.allow` (minerais acceptés, vide = tout) est pris en compte par `room()`, d'où `canAccept`,
 `accept` (convoyeurs), `put` (dépôt manuel, ouvriers) : tout ce qui entre passe par le filtre, ce qui est déjà dedans
 reste et peut sortir. Réglé depuis le panneau du coffre (`toggleStorageAllow`), sauvegardé (champ facultatif `allow`).
+Réglage de plusieurs coffres : mode `chestMode` de `Game` (touche C), un état d'interface qui ne touche pas la
+simulation avant « Appliquer ». `chestSel` (ensemble de `Storage`) est rempli par `updateChests` : un clic bref bascule le
+coffre visé, un glissé de plus de 6 pixels choisit ceux du rectangle (`chestsInRect`, `pickChests` : si tous y étaient
+déjà, il les retire). `chestDraft` est le réglage à appliquer ; `GameState.setStoragesAllow(coffres, liste)` le copie sur
+chacun (normalisé par `normalizeAllow`) et compte ceux qui ont changé. La barre (`ui/chestFilter.ts`, injectée dans
+`#hud-build` comme celle de la construction) et les puces du panneau d'un coffre partagent `filterChips`. Le rendu reçoit
+`Overlay.chests` (coffres choisis, coffre visé, rectangle en pixels du monde). Pas de portée : un coffre se règle de loin.
 
 Ouvriers (`sim/Workers.ts`, réglages dans `data/workers.ts`) : `GameState.workers` (un `WorkerSystem`) garde les
 ouvriers, mis à jour à chaque tick. Chacun a une tâche (`WorkerTask` : marcher vers un tas, un coffre, une machine…)

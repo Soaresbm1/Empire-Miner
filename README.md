@@ -25,6 +25,7 @@ Version autonome en un seul fichier HTML (ouvrable sans serveur) : `npm run buil
 | Se déplacer | `ZQSD` (AZERTY) / `WASD` (QWERTY) ou flèches |
 | Miner | maintenir le **clic gauche** sur une paroi proche, ou `Espace` pour frapper devant soi |
 | Interagir (comptoir, atelier, coffre, foreuse) | `E` |
+| Régler plusieurs coffres (sélection au clic ou au rectangle) | `C` |
 | Sac et carnet | `I` ou `Tab` (hors construction) |
 | Mode construction | `B` — machines rangées par onglets : `Tab` (ou clic) change d'onglet, `1-9` (ou clic) choisit la machine ; clic gauche : poser (glisser pour tracer convoyeurs et rails), clic droit : démonter, `R` : tourner. Une ligne d'état dit si la pose est possible, et pourquoi sinon |
 | Pioche ↔ marteau-piqueur | `T` (une fois le marteau-piqueur acheté) |
@@ -136,6 +137,14 @@ lettre tapée : c'est la touche marquée M, quel que soit le clavier.
   comme devant un coffre plein ; « Tout déposer » garde dans le sac ce que le coffre refuse). Ce qui est déjà dedans y
   reste et peut toujours en sortir. Un coffre pour le cuivre, un pour le charbon, un pour tout le reste : les ouvriers
   rangent chaque chose au bon endroit. Le réglage est sauvegardé ; un ancien coffre accepte tout.
+- **Régler plusieurs coffres d'un coup** (touche `C`, ou « Sélectionner plusieurs coffres » dans le panneau d'un coffre,
+  qui reprend alors son réglage comme modèle) : une barre propose d'abord le réglage à appliquer (mêmes puces « Tout »,
+  « Cuivre »…), puis on désigne les coffres, **où qu'ils soient à l'écran** : un **clic** en choisit un (second clic :
+  le retire), un **glissé** de souris trace un rectangle qui choisit tous les coffres de la zone (si tous y étaient déjà,
+  il les retire), « Tous les coffres » et « Aucun » aident quand le camp est grand, le **clic droit** vide la sélection.
+  Les coffres choisis sont cerclés de bleu et cochés ; « Appliquer à N coffres » (ou `Entrée`) leur donne le réglage et
+  la sélection reste, pour recommencer avec un autre réglage. `Échap`, `C` ou l'ouverture d'un panneau quitte le mode ;
+  rien n'est miné ni posé pendant ce temps.
 - Un **coffre de charbon collé à une foreuse** la recharge automatiquement (en priorité sur les convoyeurs).
   Une foreuse posée sur du charbon qui remplit un coffre devant elle s'alimente donc toute seule.
 - **Foreuse améliorable** sur place (`E` sur la foreuse) : niveau 2 (280 $) = elle fore aussi les cases à gauche

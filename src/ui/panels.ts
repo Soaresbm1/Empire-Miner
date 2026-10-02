@@ -17,6 +17,7 @@ import type { ShippingCrate } from '../sim/structures/ShippingCrate';
 import type { Sorter } from '../sim/structures/Sorter';
 import type { RailStation, RailSwitch, SwitchSetting } from '../sim/structures/Rail';
 import type { Storage } from '../sim/structures/Storage';
+import { filterChips } from './chestFilter';
 import { esc, kg, money, num, rarityTag, resIcon } from './format';
 import { BOARD_TABS, counterBanner, isBoardTab, marketTab, priceCell } from './market';
 import { productionStats } from './stats';
@@ -125,15 +126,16 @@ export function storagePanel(g: GameState, s: Storage): string {
     )
     .join('');
   // Ce que le coffre accepte : « Tout », ou les minerais choisis (on en ajoute ou retire d'un clic).
-  const known = RESOURCES.filter(
-    (r) => r.id === 'stone' || r.id === 'coal' || s.allow.includes(r.id) || (s.items[r.id] ?? 0) > 0 || g.stats.discovered.includes(r.id) || (g.stats.collected[r.id] ?? 0) > 0,
-  );
-  const choice = (id: string, label: string, on: boolean) => btn('storageAllow', label, { arg: id, cls: `small ${on ? 'on' : 'off'}` });
   const accepts = s.allow.length
     ? `<div class="status good">Accepte seulement : ${s.allow.map((r) => `${resIcon(r)} <b>${getResource(r).name}</b>`).join(', ')}.</div>`
     : '<div class="status good">Accepte tout.</div>';
+  const several = g.storages().length > 1;
   const filter = `${accepts}<p class="hint">Convoyeurs, ouvriers et dépôt du sac ne lui apportent que ce qu'il accepte ; ce qui est déjà dedans y reste. Cliquez sur un minerai pour l'ajouter, et sur un minerai choisi pour le retirer.</p>
-    <div class="buy">${choice('', 'Tout', s.allow.length === 0)}${known.map((r) => choice(r.id, `${resIcon(r.id)} ${r.name}`, s.allow.includes(r.id))).join('')}</div>`;
+    ${filterChips(g, s.allow, 'storageAllow', s.items)}${
+      several
+        ? `<p class="hint">Beaucoup de coffres à régler ? ${btn('chestMode', 'Sélectionner plusieurs coffres', { cls: 'small' })} pour leur donner ce réglage d'un coup.</p>`
+        : ''
+    }`;
   const depositable = Object.keys(g.inventory.items).some((res) => s.accepts(res));
   return `
     <div class="bar big"><div style="width:${Math.min(100, (w / s.capacity) * 100)}%"></div><span>${kg(w)} / ${kg(s.capacity)}</span></div>
@@ -631,6 +633,7 @@ export function helpPanel(keys: { move: string; label: (c: string) => string }):
     <div><h4>Interagir</h4><p>${k('KeyE')} près du comptoir, de l'atelier, d'un coffre ou d'une foreuse</p></div>
     <div><h4>Sac</h4><p>${k('KeyI')} ou <kbd>Tab</kbd></p></div>
     <div><h4>Construire</h4><p>${k('KeyB')} : mode construction. <kbd>Tab</kbd> change d'onglet, <kbd>1-9</kbd> choisit la machine. <kbd>Clic gauche</kbd> poser (glisser pour tracer des convoyeurs), <kbd>clic droit</kbd> démonter, ${k('KeyR')} tourner</p></div>
+    <div><h4>Régler plusieurs coffres</h4><p>${k('KeyC')} : choisissez ce que les coffres acceptent (puces « Tout », « Cuivre »…), puis désignez les coffres : un <kbd>clic</kbd> en choisit un, un <kbd>glissé</kbd> en choisit tous ceux d'une zone, le <kbd>clic droit</kbd> vide la sélection. <kbd>Entrée</kbd> applique le réglage à tous les coffres choisis. Dans un coffre ouvert, « Sélectionner plusieurs coffres » reprend son réglage comme modèle</p></div>
     <div><h4>Zoom</h4><p>Molette de la souris</p></div>
     <div><h4>Trottinette</h4><p>Achetée à l'atelier (onglet Transport) : maintenez <kbd>Maj</kbd> pour rouler vite, relâchez pour descendre. Pas de minage en roulant</p></div>
     <div><h4>Cours du marché</h4><p>Les prix de vente montent et descendent, avec des événements (« forte demande de cuivre »). Le comptoir et les caisses d'expédition paient au cours du moment : les courbes sont au <b>Tableau d'affichage</b> (${k('KeyE')} devant, onglet Marché). Stockez dans un coffre, vendez à la hausse</p></div>
