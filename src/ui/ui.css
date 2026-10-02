@@ -37,6 +37,7 @@ html, body {
   cursor: crosshair;
 }
 
+#game.paused { filter: saturate(0.55) brightness(0.9); }
 #ui { position: fixed; inset: 0; pointer-events: none; scrollbar-color: #6b5039 #120e10; }
 #ui ::-webkit-scrollbar { width: 12px; }
 #ui ::-webkit-scrollbar-track { background: #120e10; box-shadow: inset 0 0 0 2px #2a1f18; }
@@ -90,6 +91,19 @@ kbd {
 .depth .zone { color: var(--muted); font-size: 13px; margin-left: 4px; }
 .depth .heat { font-size: 12px; color: #ff9a5a; }
 
+/* Vitesse de jeu, dans le cadre en haut à gauche : pause, ×1, ×2, ×4. (Pas au centre : on y trace des convoyeurs à la souris.) */
+.speed { margin-top: 5px; max-width: 200px; }
+.speedbar { display: flex; gap: 4px; }
+.sp { flex: 1; min-width: 0; height: 24px; padding: 0 4px; border: 0; border-radius: 2px; background: #2a2024; color: var(--muted); font: 700 14px var(--font); cursor: pointer; box-shadow: inset 0 2px 0 #4a3a42, 0 0 0 2px #120e10; }
+.sp:hover { color: var(--text); box-shadow: inset 0 2px 0 #6a5a62, 0 0 0 2px #120e10; }
+.sp.on { background: #3b2d20; color: var(--gold); box-shadow: inset 0 0 0 2px var(--gold), 0 0 0 2px #120e10; }
+.speedbar.fast .sp.on { color: #8fdcff; box-shadow: inset 0 0 0 2px #6ec8ff, 0 0 0 2px #120e10, 0 0 10px rgba(110, 200, 255, 0.35); background: #1f2c36; }
+.sp-pause { position: relative; }
+.sp-pause i { position: absolute; left: 50%; top: 50%; width: 4px; height: 12px; margin: -6px 0 0 -6px; background: currentColor; box-shadow: 8px 0 0 currentColor; }
+.speedbar.paused .sp-pause { box-shadow: inset 0 0 0 2px var(--gold), 0 0 0 2px #120e10, 0 0 12px rgba(242, 194, 48, 0.45); }
+.sp-note { display: block; margin-top: 5px; font-size: 12px; line-height: 1.25; text-shadow: 1px 1px 0 #000; }
+.sp-note.pause { color: var(--gold); }
+.sp-note.slow { color: var(--warn); }
 .hud-tr { position: absolute; top: 12px; right: 12px; max-width: 330px; font-size: 15px; line-height: 1.3; display: flex; flex-direction: column; align-items: flex-end; gap: 8px; }
 /* Mini-carte : fenêtre de la mine autour du joueur ; un clic ouvre la carte complète. */
 .minimap { position: relative; padding: 4px; cursor: pointer; }

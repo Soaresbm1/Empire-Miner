@@ -1451,6 +1451,56 @@ try {
     await page.waitForTimeout(250);
     check(!(await ev(() => window.__EM.chestMode)) && !(await page.$('.menu')), 'Échap quitte le mode sans ouvrir le menu pause');
   }
+
+  // Vitesse de jeu et pause : X change de vitesse, P arrête le temps, le bandeau se clique ; le temps de jeu suit.
+  {
+    await ev(() => {
+      const g = window.__EM.state;
+      g.hp = 100;
+      g.player.x = 50.5 * 16;
+      g.player.y = 10.5 * 16;
+      window.__EM.renderer.snapCamera();
+    });
+    await page.waitForTimeout(400);
+    // Secondes de jeu écoulées par seconde d'horloge (le camp est chargé : on reste large sur les vitesses rapides).
+    const rate = async (ms = 2500) => {
+      const t0 = await ev(() => window.__EM.state.time);
+      const w0 = Date.now();
+      await page.waitForTimeout(ms);
+      return ((await ev(() => window.__EM.state.time)) - t0) / ((Date.now() - w0) / 1000);
+    };
+    check(!!(await page.$('.speedbar')), 'le bandeau de vitesse est affiché');
+    const r1 = await rate();
+    check(r1 > 0.8 && r1 < 1.2, `à vitesse normale, une seconde de jeu par seconde (${r1.toFixed(2)})`);
+    await page.keyboard.press('KeyX');
+    await page.waitForTimeout(300);
+    const r2 = await rate();
+    check((await ev(() => window.__EM.speed)) === 2 && r2 > 1.5, `X passe à ×2 : le temps de jeu va plus vite (${r2.toFixed(2)})`);
+    await page.keyboard.press('KeyX');
+    await page.waitForTimeout(300);
+    const r4 = await rate();
+    check((await ev(() => window.__EM.speed)) === 4 && r4 > 2.2, `X passe à ×4 : encore plus vite (${r4.toFixed(2)})`);
+    await shot('32-speed-x4');
+    await page.keyboard.press('KeyP');
+    await page.waitForTimeout(300);
+    const p0 = await ev(() => window.__EM.state.time);
+    await page.waitForTimeout(1200);
+    const p1 = await ev(() => window.__EM.state.time);
+    check(p0 === p1 && (await ev(() => window.__EM.userPaused)), `P met en pause : le temps de jeu s'arrête (${p0.toFixed(2)} → ${p1.toFixed(2)})`);
+    check(/En pause/.test(await page.textContent('#hud-speed')), 'le bandeau dit « En pause »');
+    await shot('33-speed-pause');
+    await page.click('[data-action="speed"][data-arg="1"]');
+    await page.waitForTimeout(300);
+    const r5 = await rate(2000);
+    check(!(await ev(() => window.__EM.userPaused)) && (await ev(() => window.__EM.speed)) === 1 && r5 > 0.8 && r5 < 1.2, `un clic sur ×1 reprend à vitesse normale (${r5.toFixed(2)})`);
+    // Danger : à ×4, une santé basse ramène à ×1 et refuse ×4.
+    await page.click('[data-action="speed"][data-arg="4"]');
+    await page.waitForTimeout(250);
+    await ev(() => { window.__EM.state.hp = 15; });
+    await page.waitForTimeout(400);
+    check((await ev(() => window.__EM.speed)) === 1, 'santé basse : le jeu repasse tout seul à ×1');
+    await ev(() => { window.__EM.state.hp = 100; });
+  }
 } catch (e) {
   failures++;
   console.error(e);

@@ -33,6 +33,8 @@ import { PROFILES, Quality, loadQuality, nextQuality, saveQuality } from '../ren
 import { Renderer, Overlay } from '../render/Renderer';
 import { UI, PanelKind } from '../ui/UI';
 import { allowWords, chestBar, chestsInRect, pickChests, toggleDraft } from '../ui/chestFilter';
+import { Speed, advance, isSpeed, keepsUp, nextSpeed, smoothRate, speedDanger } from './speed';
+import { speedBar } from '../ui/speedBar';
 import { esc, kg, money, resIcon } from '../ui/format';
 
 const AUTOSAVE_EVERY = 60;
@@ -66,6 +68,10 @@ export class Game {
   private chestDraft: string[] = [];
   private chestDrag: { wx: number; wy: number; sx: number; sy: number } | null = null;
   private chestHover: Storage | null = null;
+  /** Vitesse de jeu (×1, ×2, ×4), pause du joueur (P) et vitesse réellement obtenue, lissée. Rien de tout cela n'est sauvegardé. */
+  private speed: Speed = 1;
+  private userPaused = false;
+  private simRate = 1;
   private autosave = AUTOSAVE_EVERY;
   private confirmNew = false;
   private lastDeniedToast = -10;
@@ -142,6 +148,9 @@ export class Game {
     this.autosave = AUTOSAVE_EVERY;
     this.buildMode = false;
     this.setChestMode(false);
+    this.speed = 1;
+    this.userPaused = false;
+    this.simRate = 1;
     this.confirmNew = false;
     this.shipLog = [];
     this.renderer.setState(state);
@@ -365,6 +374,12 @@ export class Game {
         // « Tout » vide la liste ; un minerai s'ajoute ou se retire (on peut en choisir plusieurs).
         if (target instanceof Storage) arg ? g.toggleStorageAllow(target, arg) : g.clearStorageAllow(target);
         break;
+      case 'speed': {
+        const n = Number(arg);
+        if (n === 0) this.togglePause();
+        else if (isSpeed(n)) this.setSpeed(n, g);
+        break;
+      }
       case 'chestMode':
         this.setChestMode(true, target instanceof Storage ? target : undefined);
         break;
@@ -579,6 +594,8 @@ export class Game {
       if (inp.wasTyped('n') && !this.ui.panel) this.markHere(g);
       if (inp.wasPressed('KeyB') && !this.ui.panel) this.setBuildMode(!this.buildMode);
       if (inp.wasPressed('KeyC') && !this.ui.panel) this.setChestMode(!this.chestMode);
+      if (inp.wasPressed('KeyP')) this.togglePause();
+      if (inp.wasPressed('KeyX')) this.setSpeed(nextSpeed(this.speed), g);
       if (this.chestMode && inp.wasPressed('Enter', 'NumpadEnter')) this.applyChestDraft(g);
       if (inp.wasPressed('KeyT') && !this.ui.panel) g.toggleTool();
       // V : corde de rappel (remonter au camp depuis la mine, redescendre au point d'accroche depuis le camp).
@@ -640,14 +657,7 @@ export class Game {
 
     // --- simulation (pas fixe)
     if (!paused) {
-      this.acc += dt;
-      let steps = 0;
-      while (this.acc >= SIM_DT && steps < 8) {
-        g.update(SIM_DT, intent);
-        this.acc -= SIM_DT;
-        steps++;
-      }
-      if (steps === 8) this.acc = 0;
+      if (!this.userPaused) this.runSim(g, dt, intent);
       this.flushEvents();
       this.autosave -= dt;
       if (this.autosave <= 0) {
@@ -676,6 +686,7 @@ export class Game {
     }
 
     // --- rendu
+    this.renderer.canvas.classList.toggle('paused', this.userPaused);
     this.renderer.update(dt, true);
     this.renderer.draw(overlay);
     this.ui.setTooltip(tooltip, inp.mouseX, inp.mouseY);
@@ -684,6 +695,13 @@ export class Game {
       build: this.buildBarHtml(g),
       hints: this.hintsHtml(),
       income: this.incomeHtml(g),
+      speed: speedBar({
+        speed: this.speed,
+        paused: this.userPaused,
+        rate: this.simRate,
+        keepsUp: keepsUp(this.speed, this.simRate),
+        keys: { pause: this.input.label('KeyP'), speed: this.input.label('KeyX') },
+      }),
     });
     // La barre cache le bas de l'écran : on garde le joueur au centre de ce qui reste visible.
     this.buildInset = this.buildMode || this.chestMode ? Math.max(this.buildInset, this.ui.buildBarHeight) : 0;
@@ -762,7 +780,7 @@ export class Game {
     const rope = g && (g.ropes > 0 || g.ropeAnchor) ? `<span${g.ropeT > 0 ? ' class="on"' : ''}><kbd>${l('KeyV')}</kbd> ${g.atCamp ? (g.ropeAnchor ? 'Redescendre' : 'Corde') : 'Remonter'}${g.ropes > 0 ? ` <b>×${g.ropes}</b>` : ''}</span>` : '';
     const scooter = this.state?.hasScooter ? `<span${this.state.scootering ? ' class="on"' : ''}><kbd>Maj</kbd> Trottinette</span>` : '';
     const chests = g && g.storages().length > 1 ? `<span${this.chestMode ? ' class="on"' : ''}><kbd>${l('KeyC')}</kbd> Coffres</span>` : '';
-    return `${rope}${scooter}<span><kbd>${l('KeyB')}</kbd> Construire</span>${chests}<span><kbd>${l('KeyI')}</kbd> Sac</span><span><kbd>M</kbd> Carte</span><span><kbd>N</kbd> Repère</span><span><kbd>${l('KeyH')}</kbd> Aide</span><span><kbd>Échap</kbd> Menu</span>`;
+    return `${rope}${scooter}<span><kbd>${l('KeyB')}</kbd> Construire</span>${chests}<span><kbd>${l('KeyI')}</kbd> Sac</span><span${this.userPaused ? ' class="on"' : ''}><kbd>${l('KeyP')}</kbd> Pause</span><span${this.speed > 1 ? ' class="on"' : ''}><kbd>${l('KeyX')}</kbd> Vitesse</span><span><kbd>M</kbd> Carte</span><span><kbd>N</kbd> Repère</span><span><kbd>${l('KeyH')}</kbd> Aide</span><span><kbd>Échap</kbd> Menu</span>`;
   }
 
   // ------------------------------------------------------------------ construction
@@ -829,6 +847,49 @@ export class Game {
     if (on) this.setChestMode(false);
     this.buildMode = on;
     this.dragLast = null;
+  }
+
+  // ------------------------------------------------------------------ vitesse de jeu et pause
+
+  /**
+   * Avance la simulation d'une image : `dt` secondes d'horloge valent `dt × vitesse` secondes de jeu, par pas fixes.
+   * À vitesse accélérée, un budget de calcul évite que l'image se fige : si l'ordinateur ne suit pas, le jeu tourne
+   * moins vite que demandé (le bandeau le dit) plutôt que de saccader.
+   */
+  private runSim(g: GameState, dt: number, intent: PlayerIntent): void {
+    if (this.speed > 1) {
+      const why = speedDanger(g);
+      if (why) {
+        this.speed = 1;
+        this.ui.toast(`Danger (${why}) : retour à la vitesse normale.`, 'warn');
+      }
+    }
+    const time = { acc: this.acc };
+    const steps = advance(g, time, dt, this.speed, intent);
+    this.acc = time.acc;
+    this.simRate = smoothRate(this.simRate, steps, SIM_DT, dt);
+  }
+
+  /** Pause (P) : la simulation s'arrête, mais on peut construire, acheter et ouvrir les panneaux. */
+  private togglePause(): void {
+    this.userPaused = !this.userPaused;
+    this.sfx.click();
+  }
+
+  /** Change de vitesse (et reprend si le jeu était en pause) ; refusé là où aller plus vite serait dangereux. */
+  private setSpeed(speed: Speed, g: GameState | null = this.state): void {
+    if (speed > 1 && g) {
+      const why = speedDanger(g);
+      if (why) {
+        this.ui.toast(`Pas de vitesse rapide ici (${why}).`, 'warn');
+        this.sfx.error();
+        return;
+      }
+    }
+    this.speed = speed;
+    this.userPaused = false;
+    this.simRate = speed;
+    this.sfx.click();
   }
 
   // ------------------------------------------------------------------ réglage de plusieurs coffres

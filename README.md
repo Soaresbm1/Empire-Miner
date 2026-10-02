@@ -26,6 +26,8 @@ Version autonome en un seul fichier HTML (ouvrable sans serveur) : `npm run buil
 | Miner | maintenir le **clic gauche** sur une paroi proche, ou `Espace` pour frapper devant soi |
 | Interagir (comptoir, atelier, coffre, foreuse) | `E` |
 | Régler plusieurs coffres (sélection au clic ou au rectangle) | `C` |
+| Pause | `P` |
+| Vitesse de jeu suivante (×1 → ×2 → ×4) | `X` |
 | Sac et carnet | `I` ou `Tab` (hors construction) |
 | Mode construction | `B` — machines rangées par onglets : `Tab` (ou clic) change d'onglet, `1-9` (ou clic) choisit la machine ; clic gauche : poser (glisser pour tracer convoyeurs et rails), clic droit : démonter, `R` : tourner. Une ligne d'état dit si la pose est possible, et pourquoi sinon |
 | Pioche ↔ marteau-piqueur | `T` (une fois le marteau-piqueur acheté) |
@@ -145,6 +147,13 @@ lettre tapée : c'est la touche marquée M, quel que soit le clavier.
   Les coffres choisis sont cerclés de bleu et cochés ; « Appliquer à N coffres » (ou `Entrée`) leur donne le réglage et
   la sélection reste, pour recommencer avec un autre réglage. `Échap`, `C` ou l'ouverture d'un panneau quitte le mode ;
   rien n'est miné ni posé pendant ce temps.
+- **Vitesse de jeu et pause** : le bandeau en haut de l'écran (⏸ ×1 ×2 ×4, cliquable) et les touches `X` (vitesse
+  suivante, la dernière revient à ×1) et `P` (pause). À ×2 et ×4, **tout** va plus vite — machines, convoyeurs, ouvriers,
+  marché et mineur — pour attendre sans s'ennuyer. **En pause**, le temps de jeu s'arrête (l'image se grise) mais on peut
+  encore **construire**, acheter, ouvrir les panneaux et régler les coffres : le moment de planifier. Le jeu **repasse
+  tout seul à ×1** (avec un message) dès que ça devient dangereux — santé sous 40 %, plafond qui craque à côté, grisou,
+  eau profonde — et refuse alors la vitesse rapide. Si l'ordinateur ne suit pas, le bandeau dit à quelle vitesse le jeu
+  tourne vraiment (« tourne à ×2,6 ») plutôt que de saccader. La vitesse n'est pas sauvegardée : on repart à ×1.
 - Un **coffre de charbon collé à une foreuse** la recharge automatiquement (en priorité sur les convoyeurs).
   Une foreuse posée sur du charbon qui remplit un coffre devant elle s'alimente donc toute seule.
 - **Foreuse améliorable** sur place (`E` sur la foreuse) : niveau 2 (280 $) = elle fore aussi les cases à gauche

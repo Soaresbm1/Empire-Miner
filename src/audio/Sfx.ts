@@ -2,6 +2,8 @@
  * Effets sonores synthétisés avec la Web Audio API (aucun fichier audio).
  * L'AudioContext n'est créé qu'après une interaction de l'utilisateur.
  */
+const MAX_VOICES = 36;
+
 export class Sfx {
   private ctx: AudioContext | null = null;
   private master: GainNode | null = null;
@@ -9,6 +11,8 @@ export class Sfx {
   private ambient: { gain: GainNode; filter: BiquadFilterNode } | null = null;
   muted = false;
   private lastPickup = 0;
+  /** Sons en cours : au-delà de `MAX_VOICES`, les nouveaux sont ignorés (le jeu accéléré en déclencherait des centaines). */
+  private voices = 0;
 
   /** À appeler depuis un gestionnaire d'événement utilisateur. */
   unlock(): void {
@@ -58,7 +62,7 @@ export class Sfx {
   }
 
   private tone(freq: number, dur: number, type: OscillatorType, vol: number, slideTo?: number, delay = 0): void {
-    if (!this.ctx || !this.master) return;
+    if (!this.ctx || !this.master || this.voices >= MAX_VOICES) return;
     const t = this.ctx.currentTime + delay;
     const osc = this.ctx.createOscillator();
     const g = this.ctx.createGain();
@@ -69,12 +73,14 @@ export class Sfx {
     g.gain.exponentialRampToValueAtTime(vol, t + 0.005);
     g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
     osc.connect(g).connect(this.master);
+    this.voices++;
+    osc.onended = () => this.voices--;
     osc.start(t);
     osc.stop(t + dur + 0.02);
   }
 
   private noise(dur: number, freq: number, q: number, vol: number, type: BiquadFilterType = 'bandpass', delay = 0): void {
-    if (!this.ctx || !this.master || !this.noiseBuf) return;
+    if (!this.ctx || !this.master || !this.noiseBuf || this.voices >= MAX_VOICES) return;
     const t = this.ctx.currentTime + delay;
     const src = this.ctx.createBufferSource();
     src.buffer = this.noiseBuf;
@@ -87,6 +93,8 @@ export class Sfx {
     g.gain.setValueAtTime(vol, t);
     g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
     src.connect(f).connect(g).connect(this.master);
+    this.voices++;
+    src.onended = () => this.voices--;
     src.start(t, Math.random() * 0.5);
     src.stop(t + dur + 0.02);
   }
