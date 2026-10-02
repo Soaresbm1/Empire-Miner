@@ -1,5 +1,5 @@
 /**
- * Bandeau de vitesse du HUD (haut, au centre) : pause, ×1, ×2, ×4. Rien ici ne modifie la partie.
+ * Bandeau de vitesse du HUD (dans le cadre en haut à gauche) : pause, ×1, ×2, ×4. Rien ici ne modifie la partie.
  */
 import { SPEEDS, type Speed } from '../game/speed';
 
@@ -22,9 +22,9 @@ export function speedBar(v: SpeedView): string {
       `<button class="sp ${!v.paused && v.speed === s ? 'on' : ''}" data-action="speed" data-arg="${s}" title="${s === 1 ? 'Vitesse normale' : `Vitesse ×${s}`} (${v.keys.speed} : vitesse suivante)">×${s}</button>`,
   ).join('');
   const note = v.paused
-    ? `<span class="sp-note pause">En pause : construire (B) et acheter restent possibles</span>`
+    ? `<span class="sp-note pause">En pause : on peut construire (B) et acheter</span>`
     : v.speed > 1 && !v.keepsUp
       ? `<span class="sp-note slow" title="L'ordinateur ne suit pas la vitesse demandée">tourne à ×${fmt(v.rate)}</span>`
       : '';
-  return `<div class="speedbar hud-box ${v.paused ? 'paused' : v.speed > 1 ? 'fast' : ''}">${pause}${speeds}</div>${note}`;
+  return `<div class="speedbar ${v.paused ? 'paused' : v.speed > 1 ? 'fast' : ''}">${pause}${speeds}</div>${note}`;
 }

@@ -168,7 +168,7 @@ describe('vitesse de jeu : bandeau', () => {
     const html = speedBar(view({ speed: 4 }));
     expect(html).toMatch(/class="sp on" data-action="speed" data-arg="4"/);
     expect(html).toMatch(/class="sp " data-action="speed" data-arg="1"/);
-    expect(html).toContain('speedbar hud-box fast');
+    expect(html).toContain('speedbar fast');
     expect(speedBar(view())).not.toContain(' fast');
   });
 
@@ -176,7 +176,7 @@ describe('vitesse de jeu : bandeau', () => {
     const html = speedBar(view({ speed: 2, paused: true }));
     expect(html).toMatch(/class="sp sp-pause on"/);
     expect(html).not.toMatch(/class="sp on" data-action="speed" data-arg="2"/);
-    expect(html).toContain('speedbar hud-box paused');
+    expect(html).toContain('speedbar paused');
     expect(html).toContain('En pause');
     expect(html).toContain('Reprendre (P)');
   });
