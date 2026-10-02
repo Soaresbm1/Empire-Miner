@@ -137,6 +137,15 @@ sans lui, le marché repart à 100 % au pas du temps de jeu, sans rejouer le pas
 Filtre de coffre : `Storage.allow` (minerais acceptés, vide = tout) est pris en compte par `room()`, d'où `canAccept`,
 `accept` (convoyeurs), `put` (dépôt manuel, ouvriers) : tout ce qui entre passe par le filtre, ce qui est déjà dedans
 reste et peut sortir. Réglé depuis le panneau du coffre (`toggleStorageAllow`), sauvegardé (champ facultatif `allow`).
+Vitesse de jeu et pause (`game/speed.ts`, `ui/speedBar.ts`) : la simulation ne change pas, elle avance toujours par pas de
+SIM_DT ; `advance(g, time, dt, speed, intent)` ajoute `dt × vitesse` à l'accumulateur et fait autant de pas que nécessaire
+(au plus `stepCap(speed)` : 8, 16, 32). À vitesse accélérée, un budget de calcul par image (`SPEED_LIMITS.budgetMs`) coupe la
+boucle si l'ordinateur ne suit pas, et le retard est oublié ; `smoothRate` mesure la vitesse réellement obtenue (le bandeau
+l'affiche sous 80 % de la demande). La pause du joueur (`userPaused`, touche P) saute seulement `advance` : événements,
+panneaux, construction et sauvegarde automatique (à l'horloge réelle) continuent. `speedDanger(g)` (santé basse, éboulement
+annoncé, grisou, eau profonde) ramène à ×1 et refuse les vitesses rapides. Le son plafonne ses voix simultanées. Ni la vitesse
+ni la pause ne sont sauvegardées.
+
 Réglage de plusieurs coffres : mode `chestMode` de `Game` (touche C), un état d'interface qui ne touche pas la
 simulation avant « Appliquer ». `chestSel` (ensemble de `Storage`) est rempli par `updateChests` : un clic bref bascule le
 coffre visé, un glissé de plus de 6 pixels choisit ceux du rectangle (`chestsInRect`, `pickChests` : si tous y étaient

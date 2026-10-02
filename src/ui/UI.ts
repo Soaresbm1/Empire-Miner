@@ -116,11 +116,12 @@ export class UI {
     this.hud.classList.toggle('hidden', !v);
   }
 
-  updateHud(g: GameState, extra: { prompt: string; build: string; hints: string; income: string }): void {
+  updateHud(g: GameState, extra: { prompt: string; build: string; hints: string; income: string; speed: string }): void {
     const depth = depthAt(g.player.tileY);
     const surface = g.player.tileY < 12;
     this.set('hud-money', `<span class="coin"></span>${money(g.money)}`);
     this.set('hud-income', extra.income);
+    this.set('hud-speed', extra.speed);
     this.set('hud-market', hudMarket(g));
     // Fournaise : température, qui ralentit les machines et épuise le mineur (sauf près d'un ventilateur).
     const temp = surface ? null : g.hazards.temperature(g.player.tileY);
