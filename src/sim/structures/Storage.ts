@@ -3,16 +3,26 @@
  * Si un convoyeur est collé au coffre (sans pointer vers lui), le coffre s'y vide :
  * il peut ainsi servir de tampon au milieu d'une chaîne.
  * Il recharge aussi en combustible (charbon) les foreuses collées, en priorité.
+ *
+ * On peut lui choisir ce qu'il accepte (`allow`) : convoyeurs, dépôt du joueur et ouvriers ne lui apportent alors
+ * que ces minerais. Ce qui est déjà dedans y reste et peut toujours en sortir.
  */
 import { DX, DY, type Dir } from '../../core/dir';
 import { getMachine } from '../../data/machines';
-import { getResource } from '../../data/resources';
+import { getResource, hasResource, resourceIndex } from '../../data/resources';
 import { Structure, StructureContext, StructureSave } from './Structure';
+
+/** Liste de minerais acceptés propre : doublons et ressources inconnues écartés, dans l'ordre des ressources. */
+export function normalizeAllow(list: readonly string[]): string[] {
+  return [...new Set(list)].filter(hasResource).sort((a, b) => resourceIndex(a) - resourceIndex(b));
+}
 
 export class Storage extends Structure {
   readonly type = 'storage';
   items: Record<string, number> = {};
   readonly capacity: number;
+  /** Minerais acceptés, dans l'ordre des ressources (vide : tout est accepté). */
+  allow: string[] = [];
 
   constructor(x: number, y: number, dir: Dir) {
     super(x, y, dir);
@@ -25,7 +35,26 @@ export class Storage extends Structure {
     return w;
   }
 
+  /** Ce minerai est-il autorisé dans ce coffre (indépendamment de la place) ? */
+  accepts(res: string): boolean {
+    return this.allow.length === 0 || this.allow.includes(res);
+  }
+
+  /** Remplace les minerais acceptés (doublons et ressources inconnues écartés, ordre des ressources). */
+  setAllow(list: readonly string[]): void {
+    this.allow = normalizeAllow(list);
+  }
+
+  /** Ajoute le minerai à ceux que le coffre accepte, ou l'en retire. Depuis « tout accepter », choisir un minerai ne garde que lui. */
+  toggleAllow(res: string): boolean {
+    if (!hasResource(res)) return false;
+    this.setAllow(this.allow.includes(res) ? this.allow.filter((r) => r !== res) : [...this.allow, res]);
+    return true;
+  }
+
+  /** Nombre d'unités de ce minerai que le coffre peut encore recevoir (0 s'il le refuse). */
   room(res: string): number {
+    if (!this.accepts(res)) return 0;
     return Math.max(0, Math.floor((this.capacity - this.weight() + 1e-6) / getResource(res).weight));
   }
 
@@ -90,12 +119,13 @@ export class Storage extends Structure {
   }
 
   serialize(): StructureSave {
-    return { ...super.serialize(), items: { ...this.items } };
+    return { ...super.serialize(), items: { ...this.items }, allow: [...this.allow] };
   }
 
   static load(s: StructureSave): Storage {
     const st = new Storage(s.x, s.y, s.dir);
     st.items = { ...((s.items as Record<string, number>) ?? {}) };
+    st.setAllow(Array.isArray(s.allow) ? s.allow.filter((r): r is string => typeof r === 'string') : []);
     return st;
   }
 }

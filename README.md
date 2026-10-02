@@ -25,6 +25,7 @@ Version autonome en un seul fichier HTML (ouvrable sans serveur) : `npm run buil
 | Se déplacer | `ZQSD` (AZERTY) / `WASD` (QWERTY) ou flèches |
 | Miner | maintenir le **clic gauche** sur une paroi proche, ou `Espace` pour frapper devant soi |
 | Interagir (comptoir, atelier, coffre, foreuse) | `E` |
+| Régler plusieurs coffres (sélection au clic ou au rectangle) | `C` |
 | Sac et carnet | `I` ou `Tab` (hors construction) |
 | Mode construction | `B` — machines rangées par onglets : `Tab` (ou clic) change d'onglet, `1-9` (ou clic) choisit la machine ; clic gauche : poser (glisser pour tracer convoyeurs et rails), clic droit : démonter, `R` : tourner. Une ligne d'état dit si la pose est possible, et pourquoi sinon |
 | Pioche ↔ marteau-piqueur | `T` (une fois le marteau-piqueur acheté) |
@@ -130,6 +131,20 @@ lettre tapée : c'est la touche marquée M, quel que soit le clavier.
 - Un **coffre** se vide dans tout convoyeur collé qui ne pointe pas vers lui (tampon au milieu d'une chaîne,
   ou dépôt manuel qui repart sur les convoyeurs) ; une **foreuse** pousse sa production devant sa flèche en
   priorité, sinon dans n'importe quel convoyeur collé.
+- On **choisit ce qu'un coffre accepte** (panneau du coffre, `E` : « Tout », ou un ou plusieurs minerais d'un clic ;
+  les minerais choisis s'affichent sur une petite étiquette au coin du couvercle et dans l'infobulle). Convoyeurs,
+  dépôt du sac et ouvriers ne lui apportent alors que ces minerais (un convoyeur chargé d'un minerai refusé attend,
+  comme devant un coffre plein ; « Tout déposer » garde dans le sac ce que le coffre refuse). Ce qui est déjà dedans y
+  reste et peut toujours en sortir. Un coffre pour le cuivre, un pour le charbon, un pour tout le reste : les ouvriers
+  rangent chaque chose au bon endroit. Le réglage est sauvegardé ; un ancien coffre accepte tout.
+- **Régler plusieurs coffres d'un coup** (touche `C`, ou « Sélectionner plusieurs coffres » dans le panneau d'un coffre,
+  qui reprend alors son réglage comme modèle) : une barre propose d'abord le réglage à appliquer (mêmes puces « Tout »,
+  « Cuivre »…), puis on désigne les coffres, **où qu'ils soient à l'écran** : un **clic** en choisit un (second clic :
+  le retire), un **glissé** de souris trace un rectangle qui choisit tous les coffres de la zone (si tous y étaient déjà,
+  il les retire), « Tous les coffres » et « Aucun » aident quand le camp est grand, le **clic droit** vide la sélection.
+  Les coffres choisis sont cerclés de bleu et cochés ; « Appliquer à N coffres » (ou `Entrée`) leur donne le réglage et
+  la sélection reste, pour recommencer avec un autre réglage. `Échap`, `C` ou l'ouverture d'un panneau quitte le mode ;
+  rien n'est miné ni posé pendant ce temps.
 - Un **coffre de charbon collé à une foreuse** la recharge automatiquement (en priorité sur les convoyeurs).
   Une foreuse posée sur du charbon qui remplit un coffre devant elle s'alimente donc toute seule.
 - **Foreuse améliorable** sur place (`E` sur la foreuse) : niveau 2 (280 $) = elle fore aussi les cases à gauche
@@ -188,14 +203,14 @@ lettre tapée : c'est la touche marquée M, quel que soit le clavier.
   300 $, 600 $, 1 000 $, 1 500 $, 2 200 $ puis 3 000 $, six au plus, avec la Pioche améliorée), sans salaire. Chacun
   a un **métier**, qu'on change gratuitement à tout moment. Le **ramasseur** va chercher les minerais laissés par
   terre (restes de la foreuse de percement, éboulements, tas oubliés, jusqu'au fond de la mine par le puits) et les
-  range dans le coffre le plus proche, à défaut dans une caisse d'expédition (qui les vend) ; il porte 15 kg et laisse la
-  pierre. Le **ravitailleur** prend du charbon dans les coffres et recharge les foreuses, les fours et les foreuses
+  range dans le coffre le plus proche **qui accepte ce minerai** (chaque coffre se règle : il ne prend jamais un tas
+  qu'aucun coffre n'accepte, et ne range jamais dans une caisse d'expédition) ; il porte 15 kg et laisse la pierre. Le **ravitailleur** prend du charbon dans les coffres et recharge les foreuses, les fours et les foreuses
   de percement dont le réservoir est à moitié vide ou moins (une machine collée à un coffre se sert déjà seule). Ils
   marchent de case en case par le plus court chemin (90 cases au plus), en évitant la roche, les machines, le
   grisou et l'eau profonde, ne visent jamais le même tas ou la même machine, contournent un passage qui se ferme et
   attendent près de l'entrée de la mine quand il n'y a rien à faire. Le panneau montre ce que fait chacun (« Rapporte
   sa charge au coffre »…) et sa charge ; congédier demande confirmation (sans remboursement, la charge reste par
-  terre). Un ouvrier bloqué (« aucun coffre accessible », « plus de charbon dans les coffres ») est signalé au
+  terre). Un ouvrier bloqué (« aucun coffre n'accepte ce minerai », « plus de charbon dans les coffres ») est signalé au
   Tableau d'affichage et par un point d'exclamation au-dessus de lui ; ils apparaissent aussi sur la carte (points
   vert et orange). Casque vert pour le ramasseur, orange pour le ravitailleur. Les ouvriers sont sauvegardés
   (métier, position, charge) ; les anciennes sauvegardes n'en ont pas.

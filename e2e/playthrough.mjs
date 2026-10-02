@@ -1254,7 +1254,11 @@ try {
   await page.waitForTimeout(500);
   const boardText = await ev(() => document.querySelector('.panel-board')?.textContent ?? '');
   check(/Marché/.test(boardText) && /Production/.test(boardText), "le Tableau d'affichage a les onglets Marché et Production");
-  check((await page.locator('.panel-board svg.spark').count()) === 3, 'une courbe par minerai connu (charbon, cuivre, fer)');
+  // La mine est tirée au hasard : d'autres minerais (or…) ont pu être découverts en route, d'où « au moins » ces trois-là.
+  const sparkNames = () => page.$$eval('.panel-board svg.spark', (els) => els.map((e) => e.getAttribute('aria-label') ?? ''));
+  const hasCurves = (names) => ['Charbon', 'Cuivre', 'Fer'].every((n) => names.some((l) => l.startsWith(n)));
+  const curves = await sparkNames();
+  check(hasCurves(curves), `une courbe par minerai connu, dont charbon, cuivre et fer (${curves.length} courbes)`);
   check(/Forte demande de cuivre/.test(boardText), "l'événement en cours est listé, avec le conseil de vente");
   await shot('27-market-board');
   await page.keyboard.press('Digit2');
@@ -1262,7 +1266,7 @@ try {
   check(/Gains des 10 dernières minutes/.test(await ev(() => document.querySelector('.panel-board')?.textContent ?? '')), "la touche 2 ouvre l'onglet Production");
   await page.keyboard.press('ArrowLeft');
   await page.waitForTimeout(300);
-  check((await page.locator('.panel-board svg.spark').count()) === 3, 'la flèche gauche revient au Marché');
+  check(hasCurves(await sparkNames()), 'la flèche gauche revient au Marché');
   await page.keyboard.press('Escape');
   await page.waitForTimeout(250);
   await ev(() => {
@@ -1358,9 +1362,94 @@ try {
       const t = window.__crewTest;
       return { fuel: f.fuelUnits, left: t.piles.filter((id) => g.drops.list.some((d) => d.id === id)).length, gained: t.stock() + g.stats.autoSold - t.before };
     }, staged);
-    check(done && res.left === 0 && res.gained >= 3, `le ramasseur a ramassé les deux tas et les a rangés dans un coffre ou une caisse (${res.gained} unités de plus en stock, ${res.left} tas restants)`);
+    check(done && res.left === 0 && res.gained >= 3, `le ramasseur a ramassé les deux tas et les a rangés dans un coffre (${res.gained} unités de plus en stock, ${res.left} tas restants)`);
     check(res.fuel > 0, `le ravitailleur recharge le four (${res.fuel} unités)`);
     await shot('29-crew-working');
+  }
+
+  // Filtre de coffre : le panneau règle ce que le coffre accepte (clic sur un minerai, puis sur « Tout »).
+  if (staged) {
+    await ev((p) => {
+      const g = window.__EM.state;
+      g.player.x = (p.cx + 0.5) * 16;
+      g.player.y = (p.cy + 1.6) * 16;
+      window.__EM.renderer.snapCamera();
+    }, staged);
+    await page.waitForTimeout(400);
+    await page.keyboard.press('KeyE');
+    await page.waitForTimeout(450);
+    const chestText = await ev(() => document.querySelector('.panel-storage')?.textContent ?? '');
+    check(/Ce que ce coffre accepte/.test(chestText) && /Accepte tout/.test(chestText), 'le panneau du coffre propose de choisir ce qu’il accepte');
+    await page.click('[data-action="storageAllow"][data-arg="copper"]');
+    await page.waitForTimeout(300);
+    const allowed = await ev((p) => [...window.__EM.state.structures.at(p.cx, p.cy).allow], staged);
+    check(JSON.stringify(allowed) === '["copper"]', `un clic sur le cuivre : le coffre n'accepte plus que du cuivre (${JSON.stringify(allowed)})`);
+    check(/Accepte seulement/.test(await ev(() => document.querySelector('.panel-storage')?.textContent ?? '')), 'le panneau dit « Accepte seulement : cuivre »');
+    await shot('30-chest-filter');
+    await page.click('[data-action="storageAllow"][data-arg=""]');
+    await page.waitForTimeout(300);
+    const cleared = await ev((p) => [...window.__EM.state.structures.at(p.cx, p.cy).allow], staged);
+    check(cleared.length === 0, 'le bouton « Tout » remet le coffre à « accepte tout »');
+    await page.keyboard.press('Escape');
+    await page.waitForTimeout(250);
+  }
+
+  // Régler plusieurs coffres : touche C, réglage choisi dans la barre, rectangle tracé à la souris, bouton « Appliquer ».
+  if (staged) {
+    const grid = await ev(() => {
+      const g = window.__EM.state;
+      g.inventory.addKit('storage', 12);
+      g.player.x = 24.5 * 16;
+      g.player.y = 10.5 * 16;
+      const mine = [];
+      for (let y = 8; y <= 10; y++) for (let x = 20; x <= 24; x++) if (g.canPlace('storage', x, y).ok) mine.push(g.place('storage', x, y, 1));
+      g.player.x = 27.5 * 16;
+      window.__EM.renderer.snapCamera();
+      const xs = mine.map((c) => c.x), ys = mine.map((c) => c.y);
+      return { n: mine.length, x0: Math.min(...xs), x1: Math.max(...xs), y0: Math.min(...ys), y1: Math.max(...ys) };
+    });
+    check(grid.n >= 4, `une grille de coffres est posée pour tester la sélection (${grid.n} coffres)`);
+    await page.waitForTimeout(300);
+    await page.keyboard.press('KeyC');
+    await page.waitForTimeout(1200);
+    check(!!(await page.$('.chestbar')) && (await ev(() => window.__EM.chestMode)), 'la touche C ouvre le mode « Régler les coffres » et sa barre');
+    await page.click('[data-action="chestDraft"][data-arg="copper"]');
+    await page.waitForTimeout(150);
+    await page.click('[data-action="chestDraft"][data-arg="iron"]');
+    await page.waitForTimeout(250);
+    const px = (tx, ty) =>
+      ev(([tx, ty]) => {
+        const p = window.__EM.renderer.worldToScreen(tx * 16, ty * 16);
+        const r = document.getElementById('game').getBoundingClientRect();
+        return { x: p.x + r.left, y: p.y + r.top };
+      }, [tx, ty]);
+    const a = await px(grid.x0, grid.y0);
+    const b = await px(grid.x1 + 1, grid.y1 + 1);
+    await page.mouse.move(a.x - 4, a.y - 4);
+    await page.mouse.down();
+    await page.mouse.move((a.x + b.x) / 2, (a.y + b.y) / 2, { steps: 6 });
+    await page.mouse.move(b.x + 4, b.y + 4, { steps: 6 });
+    await page.waitForTimeout(150);
+    await shot('31-chest-multi-drag');
+    await page.mouse.up();
+    await page.waitForTimeout(250);
+    const picked = await ev(() => window.__EM.chestSel.size);
+    check(picked === grid.n, `le rectangle tracé à la souris choisit les ${grid.n} coffres de la zone (${picked})`);
+    const before = await ev((p) => [...window.__EM.state.structures.at(p.cx, p.cy).allow], staged);
+    await page.click('[data-action="chestApply"]');
+    await page.waitForTimeout(300);
+    const applied = await ev((g) => {
+      const gs = window.__EM.state;
+      const inside = gs.storages().filter((s) => s.x >= g.x0 && s.x <= g.x1 && s.y >= g.y0 && s.y <= g.y1);
+      return { inside: inside.length, ok: inside.filter((s) => s.allow.join('+') === 'copper+iron').length };
+    }, grid);
+    check(applied.inside === grid.n && applied.ok === grid.n, `« Appliquer » règle les ${grid.n} coffres choisis sur cuivre + fer (${applied.ok}/${applied.inside})`);
+    const after = await ev((p) => [...window.__EM.state.structures.at(p.cx, p.cy).allow], staged);
+    check(JSON.stringify(after) === JSON.stringify(before), 'un coffre hors de la zone n’est pas touché');
+    await shot('31-chest-multi');
+    await page.keyboard.press('Escape');
+    await page.waitForTimeout(250);
+    check(!(await ev(() => window.__EM.chestMode)) && !(await page.$('.menu')), 'Échap quitte le mode sans ouvrir le menu pause');
   }
 } catch (e) {
   failures++;

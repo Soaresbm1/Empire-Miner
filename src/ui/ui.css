@@ -165,6 +165,16 @@ kbd {
 .bb-status.remove { border-color: var(--warn); color: var(--warn); }
 .bb-keys { display: flex; flex-wrap: wrap; gap: 3px 14px; margin-top: 6px; font-size: 12px; color: var(--muted); }
 .bb-empty { padding: 4px 2px; font-size: 14px; }
+/* Mode « Régler les coffres » : même cadre que la barre de construction. */
+.chestbar .cb-step { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; margin-top: 4px; font-size: 14px; }
+.chestbar .cb-step > b:first-child { min-width: 140px; color: var(--gold); font-size: 14px; }
+.chestbar .cb-count { margin-right: auto; padding: 0 6px; font-size: 13px; color: var(--muted); }
+.chestbar .cb-count b { color: #8fdcff; font-size: 15px; }
+.chestbar .buy { margin-top: 0; }
+.chestbar .cb-apply { display: flex; margin-top: 6px; }
+.chestbar .cb-apply .btn { flex: 1; }
+.chestbar .bb-status { margin-top: 6px; }
+
 /* Pendant la construction, la barre donne déjà les touches ; sur un écran étroit, la
    santé et le sac passent au-dessus d'elle. */
 #hud.building .hud-br { display: none; }

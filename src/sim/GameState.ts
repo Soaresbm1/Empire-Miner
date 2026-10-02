@@ -35,7 +35,7 @@ import { Drill } from './structures/Drill';
 import { ShippingCrate } from './structures/ShippingCrate';
 import type { Sorter } from './structures/Sorter';
 import { STRUCTURE_FACTORIES } from './structures/registry';
-import { Storage } from './structures/Storage';
+import { Storage, normalizeAllow } from './structures/Storage';
 import type { Structure, StructureContext } from './structures/Structure';
 import { revealAround } from './visibility';
 import { Wagon, WagonSystem } from './Wagons';
@@ -1315,6 +1315,33 @@ export class GameState implements StructureContext {
   /** Ajoute un minerai à ceux que le trieur envoie tout droit, ou l'en retire s'il y est déjà. */
   toggleSorterFilter(s: Sorter, res: string): boolean {
     return s.toggleFilter(res);
+  }
+
+  /** Ajoute un minerai à ceux qu'un coffre accepte, ou l'en retire. */
+  toggleStorageAllow(s: Storage, res: string): boolean {
+    return s.toggleAllow(res);
+  }
+
+  /** Le coffre accepte de nouveau tout. */
+  clearStorageAllow(s: Storage): void {
+    s.setAllow([]);
+  }
+
+  /** Tous les coffres posés (pas les caisses d'expédition). */
+  storages(): Storage[] {
+    return this.structures.list.filter((s): s is Storage => s instanceof Storage);
+  }
+
+  /** Règle plusieurs coffres d'un coup sur la même liste (vide : tout accepter) ; renvoie combien ont changé. */
+  setStoragesAllow(list: readonly Storage[], allow: readonly string[]): number {
+    const wanted = normalizeAllow(allow);
+    let changed = 0;
+    for (const s of list) {
+      if (s.allow.length === wanted.length && s.allow.every((r, i) => r === wanted[i])) continue;
+      s.setAllow(wanted);
+      changed++;
+    }
+    return changed;
   }
 
   /** Charge le charbon du sac dans une foreuse. */

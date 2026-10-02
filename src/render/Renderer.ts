@@ -72,6 +72,12 @@ export interface Overlay {
   interact: Structure | null;
   /** Foreuse dont on montre les cases forées (proche du joueur ou visée). */
   reach?: Drill | null;
+  /** Mode « Régler les coffres » : coffres choisis (cases), coffre sous la souris et rectangle en cours (pixels du monde). */
+  chests?: {
+    selected: { tx: number; ty: number }[];
+    hover: { tx: number; ty: number } | null;
+    rect: { x0: number; y0: number; x1: number; y1: number } | null;
+  };
 }
 
 interface Drawable {
@@ -1519,6 +1525,40 @@ export class Renderer {
     ctx.fillRect(x + 1, y + 15, 14, 2);
     ctx.fillStyle = fill > 0.9 ? '#d0342c' : '#6fcf6a';
     ctx.fillRect(x + 1, y + 15, Math.round(14 * Math.min(1, fill)), 2);
+    if (s.allow.length) this.drawChestTag(x, y, s.allow);
+  }
+
+  /**
+   * Étiquette d'un coffre réglé sur certains minerais : une petite plaque de papier au coin du couvercle, avec une
+   * pastille de la couleur de chacun (une grande pour un seul, jusqu'à quatre ; au-delà, la quatrième est un « + »).
+   */
+  private drawChestTag(x: number, y: number, allow: string[]): void {
+    const ctx = this.ctx;
+    ctx.fillStyle = INK;
+    ctx.fillRect(x + 9, y - 8, 7, 7);
+    ctx.fillStyle = '#e8d8b0';
+    ctx.fillRect(x + 10, y - 7, 5, 5);
+    const n = allow.length;
+    const swatch = (res: string, px: number, py: number, size: number) => {
+      const r = getResource(res);
+      ctx.fillStyle = r.color;
+      ctx.fillRect(px, py, size, size);
+      ctx.fillStyle = r.light;
+      ctx.fillRect(px, py, size - 1, 1);
+      ctx.fillStyle = r.dark;
+      ctx.fillRect(px + size - 1, py + size - 1, 1, 1);
+    };
+    if (n === 1) return swatch(allow[0], x + 11, y - 6, 3);
+    const cells: [number, number][] = [[10, -7], [13, -7], [10, -4], [13, -4]];
+    cells.slice(0, Math.min(n, 4)).forEach(([cx, cy], i) => {
+      if (i === 3 && n > 4) {
+        ctx.fillStyle = INK;
+        ctx.fillRect(x + cx, y + cy + 1, 2, 1);
+        ctx.fillRect(x + cx, y + cy, 1, 2);
+        return;
+      }
+      swatch(allow[i], x + cx, y + cy, 2);
+    });
   }
 
   /** Caisse d'expédition : caisse verte ouverte, panneau à pièce et minuteur du transporteur. */
@@ -1976,6 +2016,7 @@ export class Renderer {
       ctx.globalAlpha = 1;
     }
     if (o.reach) this.drawReach(o.reach);
+    if (o.chests) this.drawChestPicks(o.chests);
     if (o.removeHint) {
       ctx.strokeStyle = `rgba(255,120,60,${0.6 + Math.sin(t * 8) * 0.3})`;
       ctx.lineWidth = 1;
@@ -1994,6 +2035,47 @@ export class Renderer {
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
       ctx.fillText('E', Math.round(bx) + 0.5, Math.round(by) + 0.5);
+    }
+  }
+
+  /** Coffres choisis (cadre bleu qui respire, coin coché), coffre visé (cadre blanc) et rectangle de sélection. */
+  private drawChestPicks(c: NonNullable<Overlay['chests']>): void {
+    const ctx = this.ctx;
+    const pulse = 0.7 + Math.sin(this.time * 6) * 0.25;
+    for (const { tx, ty } of c.selected) {
+      const x = tx * TILE;
+      const y = ty * TILE;
+      ctx.fillStyle = 'rgba(110,200,255,0.28)';
+      ctx.fillRect(x, y, TILE, TILE);
+      ctx.strokeStyle = `rgba(150,225,255,${pulse})`;
+      ctx.lineWidth = 1;
+      ctx.strokeRect(x + 0.5, y + 0.5, TILE - 1, TILE - 1);
+      // Petite coche en haut à gauche : lisible même quand tous les coffres se touchent.
+      ctx.fillStyle = '#1a1418';
+      ctx.fillRect(x + 1, y + 1, 5, 5);
+      ctx.fillStyle = '#8fdcff';
+      ctx.fillRect(x + 2, y + 3, 1, 1);
+      ctx.fillRect(x + 3, y + 4, 1, 1);
+      ctx.fillRect(x + 4, y + 2, 1, 2);
+    }
+    if (c.hover) {
+      ctx.strokeStyle = `rgba(255,255,255,${0.55 + Math.sin(this.time * 8) * 0.25})`;
+      ctx.lineWidth = 1;
+      ctx.strokeRect(c.hover.tx * TILE - 0.5, c.hover.ty * TILE - 0.5, TILE + 1, TILE + 1);
+    }
+    if (c.rect) {
+      const x = Math.min(c.rect.x0, c.rect.x1);
+      const y = Math.min(c.rect.y0, c.rect.y1);
+      const w = Math.abs(c.rect.x1 - c.rect.x0);
+      const h = Math.abs(c.rect.y1 - c.rect.y0);
+      ctx.fillStyle = 'rgba(150,225,255,0.2)';
+      ctx.fillRect(x, y, w, h);
+      ctx.strokeStyle = 'rgba(190,235,255,0.95)';
+      ctx.lineWidth = 1 / this.zoom;
+      ctx.setLineDash([3, 2]);
+      ctx.strokeRect(x, y, w, h);
+      ctx.setLineDash([]);
+      ctx.lineWidth = 1;
     }
   }
 

@@ -18,7 +18,7 @@ export interface WorkerStatus {
 export function workerStatus(g: GameState, w: Worker): WorkerStatus {
   const t = w.task;
   if (!t) {
-    if (w.flag === 'nostore') return { text: 'Aucun coffre accessible : il garde sa charge. Posez un coffre au camp.', tone: 'warn' };
+    if (w.flag === 'nostore') return { text: "Aucun coffre n'accepte ce minerai : réglez un coffre ou posez-en un.", tone: 'warn' };
     if (w.flag === 'nocoal') return { text: 'Plus de charbon dans les coffres : déposez-en dans un coffre.', tone: 'warn' };
     if (w.flag === 'lost') return { text: 'La machine à recharger est inaccessible.', tone: 'warn' };
     return { text: w.job === 'picker' ? 'Attend des minerais par terre' : 'Toutes les machines ont du charbon', tone: 'idle' };
@@ -54,7 +54,7 @@ export function stuckWorkers(g: GameState): { text: string; n: number }[] {
   const found = new Map<string, number>();
   for (const w of g.workers.list) {
     if (w.task || !w.flag) continue;
-    const text = w.flag === 'nostore' ? 'Ramasseur : aucun coffre accessible' : w.flag === 'nocoal' ? 'Ravitailleur : plus de charbon dans les coffres' : 'Ravitailleur : machine inaccessible';
+    const text = w.flag === 'nostore' ? "Ramasseur : aucun coffre n'accepte ce minerai" : w.flag === 'nocoal' ? 'Ravitailleur : plus de charbon dans les coffres' : 'Ravitailleur : machine inaccessible';
     found.set(text, (found.get(text) ?? 0) + 1);
   }
   return [...found].map(([text, n]) => ({ text, n }));
