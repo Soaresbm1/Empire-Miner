@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { GEAR } from '../src/data/gear';
 import { MACHINES } from '../src/data/machines';
-import { BAGS, JACKHAMMER, PICKAXES, SCOOTER } from '../src/data/tools';
+import { BAGS, JACKHAMMER, PICKAXES, ROPE, SCOOTER } from '../src/data/tools';
 import { GameState } from '../src/sim/GameState';
 import { DEFAULT_VIEW, ShopView, WORKSHOP_TABS, offers, tabBadges, workshopAdvice, workshopPanel } from '../src/ui/workshop';
 
@@ -241,5 +241,58 @@ describe('atelier : onglet Machines', () => {
     expect(html).toContain('<b>3</b> en stock');
     expect(html).toContain('data-arg="conveyor:10"');
     expect(buys(html)).toBeGreaterThan(MACHINES.length / 2);
+  });
+});
+
+describe('atelier : corde de rappel', () => {
+  /** Tout est acheté sauf la corde et le marteau-piqueur, et on est descendu assez bas. */
+  function deep(): GameState {
+    const g = complete();
+    g.hasJackhammer = false;
+    g.stats.maxDepth = ROPE.adviseDepth + 20;
+    return g;
+  }
+
+  it('l’Atelier conseille la corde dès qu’on descend assez bas, avant le marteau-piqueur', () => {
+    const g = deep();
+    expect(workshopAdvice(g)).toMatchObject({ action: 'buyRope', arg: '1', tab: 'transport', price: ROPE.price });
+    g.ropes = 1;
+    expect(workshopAdvice(g)!.action).toBe('buyJackhammer');
+    g.ropes = 0;
+    g.stats.maxDepth = ROPE.adviseDepth - 5;
+    expect(workshopAdvice(g)!.action).toBe('buyJackhammer'); // trop près de la surface : pas la peine
+  });
+
+  it('la fiche de l’onglet Transport propose une corde ou le lot, et montre le stock', () => {
+    const g = new GameState(4);
+    g.money = 1000;
+    const html = workshopPanel(g, 'transport');
+    expect(html).toContain(ROPE.name);
+    expect(html).toContain(`data-action="buyRope" data-arg="1"`);
+    expect(html).toContain(`data-action="buyRope" data-arg="${ROPE.pack.qty}"`);
+    expect(html).toContain(`Lot de ${ROPE.pack.qty}`);
+    expect(html).toContain(`0 sur ${ROPE.maxStock}`);
+    expect(html).not.toMatch(/data-action="buyRope"[^>]*disabled/);
+  });
+
+  it('les boutons se grisent sans argent, et quand le lot dépasserait le stock maximal', () => {
+    const g = new GameState(4);
+    g.money = 10;
+    expect(count(workshopPanel(g, 'transport'), /data-action="buyRope"[^>]*disabled/g)).toBe(2);
+    g.money = 1000;
+    g.ropes = ROPE.maxStock - 1;
+    const html = workshopPanel(g, 'transport');
+    expect(html).toMatch(/data-action="buyRope" data-arg="5" disabled/);
+    expect(html).not.toMatch(/data-action="buyRope" data-arg="1" disabled/);
+    g.ropes = ROPE.maxStock;
+    expect(count(workshopPanel(g, 'transport'), /data-action="buyRope"[^>]*disabled/g)).toBe(2);
+    expect(workshopPanel(g, 'transport')).toContain('le maximum de cordes');
+  });
+
+  it('la fiche dit où la corde est accrochée', () => {
+    const g = new GameState(4);
+    expect(workshopPanel(g, 'transport')).toContain('aucune accrochée');
+    g.ropeAnchor = { tx: 30, ty: 40 };
+    expect(workshopPanel(g, 'transport')).toContain('accrochée à 72 m'.replace('72', String(Math.floor((40 - 12 + 1) * 2.5))));
   });
 });

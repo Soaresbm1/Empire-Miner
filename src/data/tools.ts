@@ -100,3 +100,38 @@ export const SCOOTER: RideDef = {
   speedMul: 1.7,
   description: "Un petit moteur de pompe sur un plateau d'acier : on file 70 % plus vite, au camp comme dans les galeries. Les deux mains sont au guidon : impossible de miner en roulant.",
 };
+
+/**
+ * Corde de rappel : une corde à usage unique, achetée à l'Atelier. On se suspend quelques secondes
+ * sans bouger, puis on remonte à la surface, à la verticale de l'endroit quitté, avec son sac. La corde
+ * reste accrochée à cet endroit : depuis la surface, on y redescend gratuitement (touche V dans les deux sens).
+ */
+export interface RopeDef {
+  id: string;
+  name: string;
+  /** Prix d'une corde. */
+  price: number;
+  /** Lot de plusieurs cordes, un peu moins cher à l'unité. */
+  pack: { qty: number; price: number };
+  /** Cordes qu'on peut porter. */
+  maxStock: number;
+  /** Temps passé suspendu avant de partir (s) : il faut rester immobile. */
+  channel: number;
+  /** Un choc d'au moins ce nombre de points de vie (éboulement…) interrompt la manœuvre. */
+  interruptDamage: number;
+  /** Profondeur à partir de laquelle l'Atelier la conseille (m). */
+  adviseDepth: number;
+  description: string;
+}
+
+export const ROPE: RopeDef = {
+  id: 'rope',
+  name: 'Corde de rappel',
+  price: 90,
+  pack: { qty: 5, price: 400 },
+  maxStock: 9,
+  channel: 3,
+  interruptDamage: 10,
+  adviseDepth: 80,
+  description: "Accrochez-la, ne bougez plus pendant trois secondes, et vous voilà à la surface, juste au-dessus d'où vous étiez, avec tout votre sac. La corde reste en place : redescendez au même endroit depuis la surface, sans payer de nouveau.",
+};

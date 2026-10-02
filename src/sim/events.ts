@@ -31,4 +31,6 @@ export type SimEvent =
   | { t: 'gas'; tx: number; ty: number }
   | { t: 'flood'; tx: number; ty: number }
   /** Le joueur monte sur sa trottinette (Maj enfoncée) ou en descend (Maj relâchée). */
-  | { t: 'mount'; on: boolean };
+  | { t: 'mount'; on: boolean }
+  /** Corde de rappel : début de la manœuvre, annulation, arrivée au camp (« up ») ou retour au point d'accroche (« down »). */
+  | { t: 'rope'; phase: 'start' | 'cancel' | 'up' | 'down' };

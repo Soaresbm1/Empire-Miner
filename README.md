@@ -29,6 +29,7 @@ Version autonome en un seul fichier HTML (ouvrable sans serveur) : `npm run buil
 | Mode construction | `B` — machines rangées par onglets : `Tab` (ou clic) change d'onglet, `1-9` (ou clic) choisit la machine ; clic gauche : poser (glisser pour tracer convoyeurs et rails), clic droit : démonter, `R` : tourner. Une ligne d'état dit si la pose est possible, et pourquoi sinon |
 | Pioche ↔ marteau-piqueur | `T` (une fois le marteau-piqueur acheté) |
 | Monter sur la trottinette | `Maj` **maintenue** (une fois la trottinette achetée) : on monte en appuyant, on descend en relâchant |
+| Corde de rappel (remonter à la surface, ou redescendre) | `V` (une fois la corde achetée) : rester immobile 3 s |
 | Monter / descendre d'un wagonnet | `F` |
 | Carte de la mine | `M` (ou clic sur la mini-carte) |
 | Poser un repère là où on est | `N` (sur la carte : clic) |
@@ -75,6 +76,18 @@ lettre tapée : c'est la touche marquée M, quel que soit le clavier.
   cours est interrompu). Le mineur se tient debout sur le plateau, avec ses roues qui tournent, un peu de poussière
   et un panache du moteur ; le HUD le rappelle (`Maj Trottinette`, allumé tant qu'on roule). L'achat est sauvegardé,
   pas l'état « en train de rouler ». Dans un wagonnet, la trottinette est rangée.
+- **Corde de rappel** (90 $ pièce, ou 400 $ le lot de 5, onglet Transport de l'Atelier ; 9 au plus) : le **retour rapide
+  au camp**. Dans la mine, `V` : le mineur se suspend à la corde et doit rester **immobile 3 secondes** (une jauge sous ses
+  pieds et le HUD comptent le temps) : on le **voit monter avec la corde**, de plus en plus vite, jusqu'à sortir de l'écran
+  (son ombre reste au sol), puis il ressort **à la surface, à la verticale de l'endroit où il était** (pas au milieu du
+  camp ; à la case libre la plus proche si un arbre ou un bâtiment prend la place), **avec tout son sac**, contrairement
+  à un évanouissement. À la descente, il s'enfonce dans un trou ouvert à ses pieds, puis se pose au point d'accroche.
+  La corde reste **accrochée là où il était**, un repère « Corde de rappel » la marque sur la carte, et depuis la surface un
+  nouvel appui sur `V` le **redescend gratuitement** au même endroit (ou à la case libre la plus proche si le passage s'est
+  refermé ; si tout est bouché, la corde reste accrochée). Bouger, miner, monter dans un wagonnet ou encaisser un gros
+  choc (éboulement…) annule la manœuvre sans consommer la corde ; le gaz, l'eau et la chaleur, qui font mal en continu,
+  ne l'interrompent pas (ils ne soignent pas pour autant : mieux vaut s'encorder avant). Une corde est conseillée par
+  l'Atelier dès 80 m de profondeur. L'achat, le stock et le point d'accroche sont sauvegardés, pas la manœuvre en cours.
 - **Foreuse de percement** (1 200 $, pioche en fer) : une **base fixe** et une foreuse sur chenilles qui en sort
   pour percer toute seule un tunnel droit devant la flèche de la base (10, 25, 50 cases ou sans limite), jusqu'au
   basalte. La foreuse emporte 2 unités de charbon prises dans la base (1 unité / 20 s de perçage ; rouler est
