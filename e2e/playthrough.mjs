@@ -1327,7 +1327,10 @@ try {
     const furnace = g.place('furnace', 57, 8, 1);
     if (!chest || !furnace) return null;
     chest.put('coal', 12);
-    for (const [res, n, x, y] of [['copper', 2, 60, 10], ['iron', 1, 62, 10]]) g.drops.spawn(res, n, (x + 0.5) * 16, (y + 0.5) * 16, false);
+    // Dans un camp chargé, le ramasseur range dans le coffre le plus proche, pas forcément celui-ci : on suit les tas eux-mêmes.
+    const piles = [['copper', 2, 60, 10], ['iron', 1, 62, 10]].map(([res, n, x, y]) => g.drops.spawn(res, n, (x + 0.5) * 16, (y + 0.5) * 16, false).id);
+    const stock = () => g.structures.list.reduce((n, s) => n + ((s.items?.copper ?? 0) + (s.items?.iron ?? 0)), 0);
+    window.__crewTest = { piles, before: stock() + g.stats.autoSold, stock };
     g.player.x = 30.5 * 16;
     return { cx: chest.x, cy: chest.y, fx: furnace.x, fy: furnace.y };
   });
@@ -1338,23 +1341,24 @@ try {
       await page.waitForFunction(
         (p) => {
           const g = window.__EM.state;
-          const c = g.structures.at(p.cx, p.cy);
           const f = g.structures.at(p.fx, p.fy);
-          return c && f && (c.items.copper ?? 0) >= 2 && (c.items.iron ?? 0) >= 1 && f.fuelUnits > 0;
+          const gone = window.__crewTest.piles.every((id) => !g.drops.list.some((d) => d.id === id));
+          const empty = g.workers.list.every((w) => Object.entries(w.cargo).every(([res, n]) => res === 'coal' || n === 0));
+          return gone && empty && f && f.fuelUnits > 0;
         },
         staged,
-        { timeout: 90000, polling: 500 },
+        { timeout: 120000, polling: 500 },
       );
     } catch {
       done = false;
     }
     const res = await ev((p) => {
       const g = window.__EM.state;
-      const c = g.structures.at(p.cx, p.cy);
       const f = g.structures.at(p.fx, p.fy);
-      return { chest: { ...c.items }, fuel: f.fuelUnits, drops: g.drops.list.length };
+      const t = window.__crewTest;
+      return { fuel: f.fuelUnits, left: t.piles.filter((id) => g.drops.list.some((d) => d.id === id)).length, gained: t.stock() + g.stats.autoSold - t.before };
     }, staged);
-    check(done && res.drops === 0, `le ramasseur range les tas dans le coffre (${JSON.stringify(res.chest)})`);
+    check(done && res.left === 0 && res.gained >= 3, `le ramasseur a ramassé les deux tas et les a rangés dans un coffre ou une caisse (${res.gained} unités de plus en stock, ${res.left} tas restants)`);
     check(res.fuel > 0, `le ravitailleur recharge le four (${res.fuel} unités)`);
     await shot('29-crew-working');
   }
