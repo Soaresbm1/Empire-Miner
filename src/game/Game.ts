@@ -347,6 +347,9 @@ export class Game {
         if (isJob(job)) g.setWorkerJob(Number(id), job);
         break;
       }
+      case 'workerUpgrade':
+        g.upgradeWorker(Number(arg));
+        break;
       case 'fireWorker':
         if (this.ui.confirmFire(Number(arg))) g.fireWorker(Number(arg));
         break;
@@ -1420,7 +1423,7 @@ export class Game {
           break;
         case 'worker':
           // Un petit éclat à l'endroit du geste, et un tintement discret si l'ouvrier est près du joueur.
-          r.fx.emit('spark', e.x, e.y - 8, e.kind === 'fuel' ? '#e8662a' : e.kind === 'store' ? '#f2c230' : '#d8f5c0', 4, 22);
+          r.fx.emit('spark', e.x, e.y - 8, e.kind === 'fuel' ? '#e8662a' : e.kind === 'store' ? '#f2c230' : e.kind === 'place' ? '#8fb8ff' : '#d8f5c0', e.kind === 'place' ? 8 : 4, 22);
           if (Math.hypot(e.x - g.player.x, e.y - g.player.y) < 14 * TILE) this.sfx.worker(e.kind);
           break;
         case 'message':

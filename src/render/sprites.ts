@@ -111,13 +111,17 @@ export interface PlayerGear {
   boots?: boolean;
   suit?: boolean;
   /** Ouvrier : les couleurs de son métier (casque, chemise et salopette) à la place de celles du mineur. */
-  crew?: 'picker' | 'refueler';
+  crew?: 'picker' | 'refueler' | 'driller';
 }
 
-/** Ramasseur : casque vert, chemise claire, salopette brune. Ravitailleur : casque orange, chemise grise, salopette charbon. */
-const CREW_COLORS: Record<'picker' | 'refueler', Record<string, string>> = {
+/**
+ * Ramasseur : casque vert, chemise claire, salopette brune. Ravitailleur : casque orange, chemise grise, salopette
+ * charbon. Foreur : casque bleu, chemise blanche, salopette bleu nuit.
+ */
+const CREW_COLORS: Record<'picker' | 'refueler' | 'driller', Record<string, string>> = {
   picker: { L: '#d8f5c0', Y: '#6cc04a', h: '#4e9a34', y: '#346e22', u: '#e9ecea', T: '#bfc7c3', t: '#8c9692', B: '#8a6236', c: '#b08350', b: '#5e4022' },
   refueler: { L: '#ffd2b0', Y: '#e8662a', h: '#c24a18', y: '#8a3010', u: '#8a8a98', T: '#62626f', t: '#42424e', B: '#3b3b44', c: '#5a5a66', b: '#26262c' },
+  driller: { L: '#cfe6ff', Y: '#4a8fe0', h: '#2f6fb8', y: '#1f4a80', u: '#f2f4f8', T: '#c9d0dc', t: '#939cac', B: '#2c3a5c', c: '#44587f', b: '#1a2440' },
 };
 
 /** Casque d'acier, semelles de caoutchouc, combinaison orange et argent : seules les couleurs changent. */

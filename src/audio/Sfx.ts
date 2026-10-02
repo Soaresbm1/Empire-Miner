@@ -158,8 +158,11 @@ export class Sfx {
   }
 
   /** Geste d'un ouvrier : ramasser (clic), déposer (tintement), recharger (souffle de charbon). */
-  worker(kind: 'pick' | 'store' | 'fuel'): void {
-    if (kind === 'pick') this.tone(560, 0.06, 'square', 0.04, 760);
+  worker(kind: 'pick' | 'store' | 'fuel' | 'place'): void {
+    if (kind === 'place') {
+      this.tone(150, 0.1, 'square', 0.06, 90);
+      this.noise(0.08, 700, 1, 0.1, 'lowpass');
+    } else if (kind === 'pick') this.tone(560, 0.06, 'square', 0.04, 760);
     else if (kind === 'store') [880, 1175].forEach((f, i) => this.tone(f, 0.08, 'triangle', 0.05, undefined, i * 0.05));
     else this.noise(0.18, 500, 1, 0.08, 'lowpass');
   }
