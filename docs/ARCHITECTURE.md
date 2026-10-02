@@ -149,6 +149,14 @@ panneaux, construction et sauvegarde automatique (à l'horloge réelle) continue
 annoncé, grisou, eau profonde) ramène à ×1 et refuse les vitesses rapides. Le son plafonne ses voix simultanées. Ni la vitesse
 ni la pause ne sont sauvegardées.
 
+Zoom de la carte complète (`render/MineMap.ts`) : la carte garde un `zoomCell` (taille d'une tuile en pixels du canvas,
+`null` = cadrage automatique « tout voir ») et un `center` (en cases). `drawFull` calcule `fitCell` (tout voir) et `maxCell`
+(`MAP_MAX_CELL` = 40 px CSS), borne le zoom, puis cadre la vue sur le centre avec `clampAxis` (ramenée dans le monde, ou
+centrée s'il est plus petit que la vue). `zoomAround` (pure) garde la case sous le curseur immobile ; `zoomAt`, `zoomBy`,
+`panBy`, `resetView`, `centerOnPlayer` sont les points d'entrée. Côté interface (`UI.listenMap`), le canvas n'a plus de
+`data-action` : un appui sans mouvement (moins de 5 px) envoie `mapClick` au relâchement, un glissé envoie `mapDrag` (en pixels
+du canvas, sans son), la molette `mapWheel`. `Game` ouvre toujours la carte sur « tout voir ».
+
 Réglage de plusieurs coffres : mode `chestMode` de `Game` (touche C), un état d'interface qui ne touche pas la
 simulation avant « Appliquer ». `chestSel` (ensemble de `Storage`) est rempli par `updateChests` : un clic bref bascule le
 coffre visé, un glissé de plus de 6 pixels choisit ceux du rectangle (`chestsInRect`, `pickChests` : si tous y étaient

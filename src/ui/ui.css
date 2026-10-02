@@ -520,7 +520,10 @@ kbd {
 
 /* Carte complète (touche M). */
 .map-layout { display: grid; grid-template-columns: 1fr 240px; gap: 14px; align-items: start; }
-.map-canvas { display: block; width: 100%; height: min(calc(100vh - 205px), 600px); background: #0b0a0d; border: 2px solid var(--line); border-radius: 5px; image-rendering: pixelated; }
+.map-main { min-width: 0; }
+.map-zoom { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 6px; }
+.map-zoom .hint { margin: 0 0 0 4px; font-size: 12px; }
+.map-canvas { display: block; width: 100%; height: min(calc(100vh - 235px), 570px); touch-action: none; background: #0b0a0d; border: 2px solid var(--line); border-radius: 5px; image-rendering: pixelated; }
 .map-side h4 { margin-top: 0; }
 .map-note { margin: 0 0 10px; font-size: 12px; }
 .map-legend { list-style: none; margin: 0 0 10px; padding: 0; display: grid; gap: 4px; font-size: 14px; }

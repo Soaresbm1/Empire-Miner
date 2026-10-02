@@ -156,6 +156,35 @@ export function viewTileAt(v: View, px: number, py: number): { x: number; y: num
   return { x: Math.floor(v.x0 + (px - v.ox) / v.cell), y: Math.floor(v.y0 + (py - v.oy) / v.cell) };
 }
 
+/** Taille maximale d'une tuile sur la carte complète (px CSS) : au-delà, la carte ne zoome plus. */
+export const MAP_MAX_CELL = 40;
+
+/** Début d'une vue de longueur `view` dans un monde de longueur `total` : ramené dans le monde, ou centré s'il est plus petit. */
+export function clampAxis(start: number, view: number, total: number): number {
+  if (view >= total) return (total - view) / 2;
+  return Math.min(Math.max(start, 0), total - view);
+}
+
+/**
+ * Zoom de la carte complète autour du point (px, py) du canvas : la case sous ce point ne bouge pas. Renvoie la nouvelle
+ * taille de tuile et le centre de la vue (en cases), ou `null` pour revenir au cadrage automatique (tout voir).
+ */
+export function zoomAround(
+  v: View,
+  px: number,
+  py: number,
+  factor: number,
+  limits: { fitCell: number; maxCell: number; width: number; height: number },
+): { cell: number; cx: number; cy: number } | null {
+  const tx = v.x0 + (px - v.ox) / v.cell;
+  const ty = v.y0 + (py - v.oy) / v.cell;
+  const cell = Math.min(limits.maxCell, Math.max(limits.fitCell, v.cell * factor));
+  if (cell <= limits.fitCell * 1.001) return null;
+  const x0 = tx - px / cell;
+  const y0 = ty - py / cell;
+  return { cell, cx: x0 + limits.width / cell / 2, cy: y0 + limits.height / cell / 2 };
+}
+
 /** Symbole d'un repère : losange (filon), carré (base), triangle (danger), étoile à quatre branches (repère). */
 export function markerShape(ctx: CanvasRenderingContext2D, kind: MarkerKind, cx: number, cy: number, r: number, color: string): void {
   ctx.fillStyle = color;
@@ -189,6 +218,11 @@ export class MineMap {
   private image: ImageData | null = null;
   private frame: Bounds = { x0: 0, y0: 0, x1: 0, y1: 0 };
   private timer = 0;
+  /** Zoom de la carte complète : taille d'une tuile en pixels du canvas (null : cadrage automatique) et centre de la vue (cases). */
+  private zoomCell: number | null = null;
+  private center: { x: number; y: number } | null = null;
+  /** Dernier cadrage de la carte complète : tuile la plus petite (tout voir), la plus grande, et taille du canvas. */
+  private limits = { fitCell: 1, maxCell: 1, width: 1, height: 1 };
 
   /** Refait l'image du terrain quelques fois par seconde (le monde change peu d'une image à l'autre). */
   update(g: GameState, dt: number, force = false): void {
@@ -244,13 +278,27 @@ export class MineMap {
     const fw = f.x1 - f.x0 + 1 + pad * 2;
     const fh = f.y1 - f.y0 + 1 + pad;
     // Zoom qui fait tenir le cadre, puis vue centrée dessus qui remplit tout le canvas.
-    const cell = Math.min(canvas.width / fw, canvas.height / fh, 10 * dpr);
+    const fitCell = Math.min(canvas.width / fw, canvas.height / fh, 10 * dpr);
+    const maxCell = Math.max(fitCell, MAP_MAX_CELL * dpr);
+    this.limits = { fitCell, maxCell, width: canvas.width, height: canvas.height };
+    const cell = this.zoomCell === null ? fitCell : Math.min(maxCell, Math.max(fitCell, this.zoomCell));
+    if (this.zoomCell !== null && cell <= fitCell * 1.001) this.resetView();
+    const zoomed = this.zoomCell !== null;
     const vw = canvas.width / cell;
     const vh = canvas.height / cell;
     // Centrée sur le cadre sans sortir du monde ; si le monde est plus étroit que la vue, il est centré.
     const W = g.world.w;
-    const vx0 = vw >= W ? (W - vw) / 2 : Math.min(Math.max((f.x0 + f.x1 + 1) / 2 - vw / 2, 0), W - vw);
-    const view: View = { x0: vx0, y0: f.y0, cell, ox: 0, oy: 0 };
+    let vx0 = vw >= W ? (W - vw) / 2 : Math.min(Math.max((f.x0 + f.x1 + 1) / 2 - vw / 2, 0), W - vw);
+    let vy0 = f.y0;
+    if (zoomed) {
+      // Zoomée : la vue suit le centre choisi (molette, glissé), sans sortir du monde.
+      const c = this.center ?? { x: (f.x0 + f.x1 + 1) / 2, y: (f.y0 + f.y1 + 1) / 2 };
+      vx0 = clampAxis(c.x - vw / 2, vw, W);
+      vy0 = clampAxis(c.y - vh / 2, vh, g.world.h);
+      this.center = { x: vx0 + vw / 2, y: vy0 + vh / 2 };
+    }
+    this.zoomCell = zoomed ? cell : null;
+    const view: View = { x0: vx0, y0: vy0, cell, ox: 0, oy: 0 };
     this.drawTerrain(ctx, view, vw, vh);
     // Zones de profondeur : surface, roche dure, basalte, roche volcanique.
     ctx.font = `${Math.round(11 * dpr)}px "Pixelify Sans", monospace`;
@@ -273,9 +321,76 @@ export class MineMap {
       ctx.fillStyle = '#f0a33a';
       ctx.fillText(label, view.ox + 4 * dpr, y - 2 * dpr);
     }
-    this.drawThings(ctx, g, view, vw, vh, time, Math.max(2 * dpr, cell * 0.6));
-    this.drawMarkers(ctx, g, view, vw, vh, time, Math.max(3.5 * dpr, cell * 0.9), true);
+    this.drawThings(ctx, g, view, vw, vh, time, Math.min(Math.max(2 * dpr, cell * 0.6), 7 * dpr));
+    // Les repères restent lisibles à fort zoom : leur symbole ne grossit pas avec les tuiles.
+    this.drawMarkers(ctx, g, view, vw, vh, time, Math.min(9 * dpr, Math.max(3.5 * dpr, cell * 0.9)), true);
+    if (zoomed) this.drawZoomBadge(ctx, canvas, cell / fitCell);
     this.fullView = view;
+  }
+
+  /** Petite pastille « ×2,5 » en haut à droite de la carte zoomée. */
+  private drawZoomBadge(ctx: CanvasRenderingContext2D, canvas: HTMLCanvasElement, zoom: number): void {
+    const dpr = window.devicePixelRatio || 1;
+    const text = `Zoom ×${zoom.toLocaleString('fr-FR', { maximumFractionDigits: 1 })}`;
+    ctx.font = `${Math.round(12 * dpr)}px "Pixelify Sans", monospace`;
+    ctx.textBaseline = 'middle';
+    ctx.textAlign = 'right';
+    const w = ctx.measureText(text).width + 12 * dpr;
+    const h = 20 * dpr;
+    const x = canvas.width - 8 * dpr;
+    const y = 8 * dpr;
+    ctx.fillStyle = 'rgba(10,8,12,0.78)';
+    ctx.fillRect(x - w, y, w, h);
+    ctx.fillStyle = '#8fdcff';
+    ctx.fillText(text, x - 6 * dpr, y + h / 2 + dpr * 0.5);
+    ctx.textAlign = 'left';
+  }
+
+  // ------------------------------------------------------------------ zoom de la carte complète
+
+  /** La carte complète est-elle zoomée (sinon : tout est visible) ? */
+  get zoomed(): boolean {
+    return this.zoomCell !== null;
+  }
+
+  /** Zoom actuel par rapport à « tout voir » (1 = tout voir). */
+  get zoomLevel(): number {
+    return this.zoomCell === null ? 1 : this.zoomCell / this.limits.fitCell;
+  }
+
+  /** Zoome (facteur > 1) ou dézoome autour du point (px, py) du canvas : la case sous ce point ne bouge pas. */
+  zoomAt(px: number, py: number, factor: number): void {
+    const v = this.fullView;
+    if (!v) return;
+    const z = zoomAround(v, px, py, factor, this.limits);
+    if (!z) return this.resetView();
+    this.zoomCell = z.cell;
+    this.center = { x: z.cx, y: z.cy };
+  }
+
+  /** Zoome autour du centre du canvas (boutons et touches). */
+  zoomBy(factor: number): void {
+    this.zoomAt(this.limits.width / 2, this.limits.height / 2, factor);
+  }
+
+  /** Décale la vue de (dx, dy) pixels du canvas (glissé de la souris) ; sans effet quand tout est visible. */
+  panBy(dx: number, dy: number): void {
+    const v = this.fullView;
+    if (!v || this.zoomCell === null || !this.center) return;
+    this.center = { x: this.center.x - dx / v.cell, y: this.center.y - dy / v.cell };
+  }
+
+  /** Tout voir : retour au cadrage automatique. */
+  resetView(): void {
+    this.zoomCell = null;
+    this.center = null;
+  }
+
+  /** Centre la vue sur le joueur ; si tout était visible, zoome d'abord un peu. */
+  centerOnPlayer(g: GameState): void {
+    if (this.zoomCell === null) this.zoomCell = Math.min(this.limits.maxCell, this.limits.fitCell * 3);
+    if (this.zoomCell <= this.limits.fitCell * 1.001) return;
+    this.center = { x: g.player.x / TILE, y: g.player.y / TILE };
   }
 
   /** Case de la carte complète sous le point (px, py) du canvas (pixels du canvas), ou null. */
@@ -354,13 +469,15 @@ export class MineMap {
       ctx.fillRect(px(s.x) + inset, py(s.y) + inset, Math.max(dot, s.w * v.cell - inset * 2), Math.max(dot, s.h * v.cell - inset * 2));
     }
     // Foreuse de percement sortie de sa base : un point au bout de son tunnel.
+    // À fort zoom, les points (foreuse sortie, wagonnets, ouvriers, joueur) ne grossissent pas avec les tuiles.
+    const cap = 12 * (window.devicePixelRatio || 1);
     for (const b of g.structures.borers) {
       if (b.home) continue;
       const k = b.vehiclePos();
       const bx = b.x + DX[b.dir] * k + 0.5;
       const by = b.y + DY[b.dir] * k + 0.5;
       if (!inView(bx, by)) continue;
-      const r = Math.max(dot, v.cell * 0.8);
+      const r = Math.max(dot, Math.min(v.cell * 0.8, cap));
       ctx.fillStyle = MAP_COLORS.borer;
       ctx.fillRect(px(bx) - r / 2, py(by) - r / 2, r, r);
     }
@@ -368,7 +485,7 @@ export class MineMap {
       const wx = w.px() / TILE;
       const wy = w.py() / TILE;
       if (!inView(wx, wy)) continue;
-      const r = Math.max(dot, v.cell * 0.7);
+      const r = Math.max(dot, Math.min(v.cell * 0.7, cap));
       ctx.fillStyle = MAP_COLORS.wagon;
       ctx.fillRect(px(wx) - r / 2, py(wy) - r / 2, r, r);
     }
@@ -377,7 +494,7 @@ export class MineMap {
       const wx = w.x / TILE;
       const wy = w.y / TILE;
       if (!inView(wx, wy)) continue;
-      const r = Math.max(dot, v.cell * 0.7);
+      const r = Math.max(dot, Math.min(v.cell * 0.7, cap));
       ctx.fillStyle = '#120e10';
       ctx.fillRect(px(wx) - r / 2 - 1, py(wy) - r / 2 - 1, r + 2, r + 2);
       ctx.fillStyle = getJob(w.job).color;
@@ -386,7 +503,7 @@ export class MineMap {
     // Joueur : point blanc cerclé de noir, avec une onde qui pulse.
     const cx = px(g.player.x / TILE);
     const cy = py(g.player.y / TILE);
-    const r = Math.max(dot * 1.3, v.cell * 0.6);
+    const r = Math.max(dot * 1.3, Math.min(v.cell * 0.6, cap * 0.75));
     const pulse = (time * 1.4) % 1;
     ctx.strokeStyle = `rgba(255,255,255,${0.8 * (1 - pulse)})`;
     ctx.lineWidth = Math.max(1, r * 0.35);

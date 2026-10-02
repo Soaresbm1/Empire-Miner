@@ -588,12 +588,18 @@ export function mapPanel(g: GameState, colors: Record<string, string>): string {
     })
     .join('');
   return `<div class="map-layout">
-    <canvas id="map-canvas" class="map-canvas" data-action="mapClick" title="Cliquez pour poser un repère"></canvas>
+    <div class="map-main">
+      <canvas id="map-canvas" class="map-canvas" title="Clic : poser un repère · molette : zoom · glisser : déplacer la carte"></canvas>
+      <div class="map-zoom">
+        ${btn('mapZoom', '−', { arg: 'out', cls: 'small', title: 'Dézoomer (−)' })}${btn('mapZoom', '+', { arg: 'in', cls: 'small', title: 'Zoomer (+)' })}${btn('mapZoom', 'Tout voir', { arg: 'reset', cls: 'small', title: 'Voir toute la mine explorée (0)' })}${btn('mapZoom', 'Me retrouver', { arg: 'me', cls: 'small', title: 'Centrer la carte sur vous' })}
+        <span class="hint">Molette : zoom · glisser : déplacer · clic : repère</span>
+      </div>
+    </div>
     <div class="map-side">
       <h4>Repères (${g.markers.list.length} / ${MAX_MARKERS})</h4>
       <div class="marker-kinds">${kinds}</div>
       <div class="buy" style="margin-top:0">${btn('markHere', 'Marquer ma position (N)', { cls: 'small', disabled: g.markers.full && !g.markers.at(p.tileX, p.tileY) })}</div>
-      <p class="hint map-note">Cliquez sur la carte pour poser un repère du type choisi ; « Suivre » affiche une flèche vers lui dans la mine.</p>
+      <p class="hint map-note">Cliquez sur la carte pour poser un repère du type choisi ; « Suivre » affiche une flèche vers lui dans la mine. Molette ou <kbd>+</kbd> <kbd>−</kbd> pour zoomer, glissez pour déplacer la carte, <kbd>0</kbd> pour tout revoir.</p>
       ${list ? `<ul class="marker-list">${list}</ul>` : ''}
       <h4>Légende</h4>
       <ul class="map-legend">
@@ -642,7 +648,7 @@ export function helpPanel(keys: { move: string; label: (c: string) => string }):
     <div><h4>Ouvriers</h4><p>Achetés une fois à l'atelier (onglet Ouvriers). Le <b>ramasseur</b> range les minerais laissés par terre dans un coffre ; le <b>ravitailleur</b> prend le charbon des coffres pour recharger vos machines. On change leur métier quand on veut ; un ouvrier bloqué est signalé au Tableau d'affichage</p></div>
     <div><h4>Wagonnet</h4><p>${k('KeyF')} : monter / descendre</p></div>
     <div><h4>Outil en main</h4><p>${k('KeyT')} : pioche ou marteau-piqueur (s'il est acheté)</p></div>
-    <div><h4>Carte</h4><p><kbd>M</kbd> : carte de la mine (ou clic sur la mini-carte)</p></div>
+    <div><h4>Carte</h4><p><kbd>M</kbd> : carte de la mine (ou clic sur la mini-carte). <b>Molette</b> ou <kbd>+</kbd> <kbd>−</kbd> : zoom autour du curseur ; glisser : déplacer la carte ; <kbd>0</kbd> ou « Tout voir » : revoir toute la mine ; « Me retrouver » : centrer sur vous</p></div>
     <div><h4>Repères</h4><p><kbd>N</kbd> : marquer l'endroit où vous êtes ; sur la carte, un clic pose un repère. « Suivre » affiche une flèche vers lui</p></div>
     <div><h4>Dangers (en profondeur)</h4><p>Plafond qui craque : posez un <b>étai</b> ou fuyez. Grisou : sortez du nuage, un <b>ventilateur</b> le chasse. Eau : une <b>pompe</b> l'assèche. À 0 de santé, on se réveille au camp, le sac reste au fond.</p></div>
     <div><h4>Atelier</h4><p>${k('KeyE')} devant l'atelier. <kbd>1</kbd> à <kbd>4</kbd> ou les flèches <kbd>←</kbd> <kbd>→</kbd> changent d'onglet ; la bande « Conseil » propose le prochain achat utile, et la pastille d'un onglet compte ce que vous pouvez acheter tout de suite</p></div>

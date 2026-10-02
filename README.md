@@ -36,6 +36,7 @@ Version autonome en un seul fichier HTML (ouvrable sans serveur) : `npm run buil
 | Monter / descendre d'un wagonnet | `F` |
 | Carte de la mine | `M` (ou clic sur la mini-carte) |
 | Poser un repère là où on est | `N` (sur la carte : clic) |
+| Carte ouverte : zoomer / dézoomer / tout voir | molette, ou `+` `−` / `0` (glisser pour déplacer la carte) |
 | Zoom | molette |
 | Pause, sauvegarde, chargement, export | `Échap` |
 
@@ -252,6 +253,12 @@ lettre tapée : c'est la touche marquée M, quel que soit le clavier.
 - **Mini-carte** en haut à droite (la mine autour du joueur) et **carte complète** avec `M` : galeries, roche,
   filons et gisements repérés, machines, rails, wagonnets, position du joueur et zones de profondeur (100 m,
   300 m, 450 m). Seul ce que le joueur a déjà vu y apparaît.
+- **Zoom de la carte** : sur la carte complète, la **molette** zoome autour du curseur (la case visée ne bouge pas) jusqu'à
+  une tuile de 40 pixels, **glisser** déplace la carte, `+` / `−` et les boutons zooment depuis le centre, `0` ou
+  **« Tout voir »** reviennent au cadrage complet, **« Me retrouver »** centre la carte sur vous (en zoomant un peu si tout
+  était visible). Une pastille « Zoom ×4,5 » s'affiche en haut à droite ; la carte s'ouvre toujours sur « tout voir ».
+  Un clic **sans bouger** pose un repère sur la case visée, un glissé n'en pose jamais ; les repères et les points
+  (joueur, ouvriers, wagonnets) gardent une taille lisible à fort zoom.
 - **Repères** : `N` marque l'endroit où l'on se trouve, et un clic sur la carte complète pose un repère ailleurs.
   Quatre types (repère, filon, base, danger), chacun avec sa couleur et son symbole, jusqu'à 24 repères. Le nom est
   donné d'après ce qu'il y a à cet endroit (« Filon d'or », « Gisement de fer », « Fonderie », « Grisou »…), sinon
