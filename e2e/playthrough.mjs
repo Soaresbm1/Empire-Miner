@@ -1646,6 +1646,93 @@ try {
     check(spot.flag === 'nostore' && /Ramasseur/.test(tip) && /Aucun coffre n'accepte/.test(tip), `survoler un ouvrier bloqué donne la cause dans l'infobulle (${tip.replace(/\s+/g, ' ').trim().slice(0, 80)})`);
     await shot('36-worker-blocked-tooltip');
   }
+
+  // Foreur : on le recrute et on l'améliore à l'Atelier, puis il pose une foreuse sur un gisement au sol (kit du stock), un
+  // ravitailleur la recharge et un ramasseur vide ce qu'elle garde dans le coffre. Partie neuve, pour ne rien devoir à ce qui précède.
+  {
+    await ev(() => localStorage.clear());
+    await page.reload();
+    await page.waitForTimeout(800);
+    await page.click('[data-action="new"]');
+    await page.waitForTimeout(500);
+    // L'autosave de la partie précédente peut avoir été réécrite au rechargement : « Nouvelle partie » demande alors confirmation.
+    if (await page.$('[data-action="new"]')) await page.click('[data-action="new"]');
+    await page.waitForTimeout(800);
+    check((await ev(() => window.__EM.mode)) === 'playing', 'une partie neuve démarre pour le foreur');
+    await ev(() => {
+      const g = window.__EM.state;
+      g.stats.discovered = ['coal', 'copper', 'iron'];
+      g.money = 5000;
+      g.pickaxeLevel = 1;
+      const w = g.structures.list.find((s) => s.type === 'workshop');
+      g.player.x = (w.x + 1) * 16;
+      g.player.y = (w.y + w.h + 0.6) * 16;
+      window.__EM.renderer.snapCamera();
+    });
+    await page.waitForTimeout(400);
+    await page.keyboard.press('KeyE');
+    await page.waitForTimeout(450);
+    await page.keyboard.press('Digit5');
+    await page.waitForTimeout(350);
+    check((await page.$$('[data-action="hireWorker"]')).length === 3, "trois fiches de recrutement : ramasseur, foreur, ravitailleur");
+    await page.click('[data-action="hireWorker"][data-arg="driller"]');
+    await page.waitForTimeout(350);
+    const lvl1 = (await ev(() => document.querySelector('.panel-workshop')?.textContent ?? '')) ?? '';
+    check(/Niveau 1 \/ 4/.test(lvl1) && /charbon/.test(lvl1) && !/diamant/.test(lvl1), 'le foreur recruté est de niveau 1 (petits minerais seulement)');
+    await shot('37-driller-crew');
+    await page.click('[data-action="workerUpgrade"]');
+    await page.waitForTimeout(350);
+    check((await ev(() => window.__EM.state.workers.list[0].level)) === 2, "l'amélioration au clic fait passer le foreur au niveau 2");
+    check(/Niveau 2 \/ 4/.test((await ev(() => document.querySelector('.panel-workshop')?.textContent ?? '')) ?? ''), 'la fiche affiche le niveau 2');
+    await page.keyboard.press('Escape');
+    await page.waitForTimeout(250);
+    // Un gisement de cuivre (exposé, dans la salle du fond), un kit de foreuse, un coffre avec du charbon, un ramasseur et un ravitailleur.
+    await ev(() => {
+      const g = window.__EM.state;
+      const Y = 12 + 14;
+      g.world.set(50, Y, 0);
+      g.world.setDeposit(50, Y, 2, 60); // 2 : cuivre
+      g.world.explored[g.world.idx(50, Y)] = 1;
+      g.inventory.addKit('drill', 1);
+      g.inventory.addKit('storage', 1);
+      g.player.x = 47.5 * 16;
+      g.player.y = (Y + 0.5) * 16;
+      const chest = g.place('storage', 46, Y, 0);
+      chest.put('coal', 30);
+      g.workers.add('picker', g);
+      g.workers.add('refueler', g);
+      window.__EM.renderer.snapCamera();
+    });
+    await page.keyboard.press('KeyX');
+    await page.keyboard.press('KeyX');
+    let placed = false;
+    try {
+      await page.waitForFunction(() => window.__EM.state.structures.list.some((s) => s.type === 'drill'), undefined, { timeout: 30000, polling: 250 });
+      placed = true;
+    } catch {
+      /* mesuré plus bas */
+    }
+    check(placed, 'le foreur a posé une foreuse à charbon sur le gisement de cuivre');
+    check((await ev(() => window.__EM.state.inventory.kitCount('drill'))) === 0, 'il a utilisé le kit de foreuse du stock');
+    await shot('38-driller-placed');
+    let emptied = false;
+    try {
+      await page.waitForFunction(
+        () => {
+          const g = window.__EM.state;
+          const chest = g.storages()[0];
+          return (chest.items.copper ?? 0) > 0;
+        },
+        undefined,
+        { timeout: 90000, polling: 500 },
+      );
+      emptied = true;
+    } catch {
+      /* mesuré plus bas */
+    }
+    check(emptied, 'le ravitailleur recharge la foreuse et le ramasseur range sa production dans le coffre');
+    await page.keyboard.press('KeyX');
+  }
 } catch (e) {
   failures++;
   console.error(e);

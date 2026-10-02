@@ -615,6 +615,8 @@ kbd {
 .crew-state { font-size: 13px; color: var(--muted); }
 .crew-state.ok { color: var(--good); }
 .crew-state.warn { color: var(--warn); }
+.crew-level { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; font-size: 13px; color: var(--muted); margin-top: 2px; }
+.crew-level .lock { color: var(--warn); }
 .crew-cargo { display: inline-flex; gap: 4px; vertical-align: middle; margin-left: 6px; }
 .crew-act { flex: none; display: flex; flex-direction: column; gap: 4px; align-items: stretch; }
 @media (max-width: 640px) { .crew-row { flex-wrap: wrap; } .crew-act { flex-direction: row; width: 100%; } }

@@ -10,9 +10,9 @@ import { BOOTS_WATER, GEAR, GearDef, HAZARD_LABEL } from '../data/gear';
 import { CAVE_IN, GAS, HEALTH, HEAT, WATER } from '../data/hazards';
 import { MACHINES, MACHINE_GROUPS, MachineDef, conveyorThroughput, parseKit } from '../data/machines';
 import { BAGS, JACKHAMMER, PICKAXES, ROPE, SCOOTER } from '../data/tools';
-import { WORKERS, WORKER_JOBS, getJob, workerName } from '../data/workers';
+import { DRILLER, DRILLER_LEVELS, WORKERS, WORKER_JOBS, drillerLevel, getJob, workerName } from '../data/workers';
 import { PLAYER_SPEED, type GameState } from '../sim/GameState';
-import { cargoLine, workerStatus } from './crew';
+import { cargoLine, drillerFacts, oresOf, workerStatus } from './crew';
 import { esc, kg, money, num } from './format';
 import { icon as themeIcon } from './theme';
 import { btn, stat } from './widgets';
@@ -446,6 +446,19 @@ function machinesTab(g: GameState, icon: (id: string) => string, view: ShopView)
 
 // ------------------------------------------------------------------ ouvriers
 
+/** Amélioration d'un foreur : le bouton (prix, ce que ça apporte) et, s'il est grisé, pourquoi. */
+function drillerUpgrade(g: GameState, id: number): string {
+  const w = g.workers.get(id);
+  if (!w) return '';
+  if (w.level >= DRILLER_LEVELS.length) return ' <span class="tag">niveau maximal</span>';
+  const next = drillerLevel(w.level + 1);
+  const why = g.workerUpgradeBlocker(id);
+  const gain = `Niveau ${next.level} : ${oresOf(next.level)}, pose en ${next.placeTime.toLocaleString('fr-FR')} s, marche ×${next.speed.toLocaleString('fr-FR')}`;
+  return ` ${btn('workerUpgrade', `Améliorer — ${money(next.price)}`, { arg: String(id), cls: 'small primary', disabled: why !== null, title: gain })}${
+    why ? `<small class="lock"> ${why}</small>` : ''
+  }`;
+}
+
 /** Onglet Ouvriers : recruter (achat unique), puis l'équipe au travail, avec son métier et ce qu'elle fait. */
 function crewTab(g: GameState, view: ShopView): string {
   const price = g.nextWorkerPrice;
@@ -467,12 +480,15 @@ function crewTab(g: GameState, view: ShopView): string {
     .map((w) => {
       const st = workerStatus(g, w);
       const job = getJob(w.job);
-      const other = WORKER_JOBS.find((j) => j.id !== w.job)!;
       const armed = view.fire === w.id;
+      const switches = WORKER_JOBS.filter((j) => j.id !== w.job)
+        .map((j) => btn('workerJob', `Passer ${j.name.toLowerCase()}`, { arg: `${w.id}:${j.id}`, cls: 'small', title: `Changer de métier (gratuit) : ${j.name.toLowerCase()}` }))
+        .join('');
+      const level = w.job === 'driller' ? `<div class="crew-level">${drillerFacts(w.level)}${drillerUpgrade(g, w.id)}</div>` : '';
       return `<div class="crew-row">
         <div class="crew-ico">${ico(`worker:${w.job}`, 'crew-img')}</div>
-        <div class="crew-main"><div><b>${workerName(w.id)}</b> <span class="tag" style="color:${job.color}">${job.name}</span> ${cargoLine(w)}</div><span class="crew-state ${st.tone}">${st.text}</span></div>
-        <div class="crew-act">${btn('workerJob', `Passer ${other.name.toLowerCase()}`, { arg: `${w.id}:${other.id}`, cls: 'small', title: `Changer de métier (gratuit) : ${other.name.toLowerCase()}` })}${btn('fireWorker', armed ? 'Confirmer ?' : 'Congédier', {
+        <div class="crew-main"><div><b>${workerName(w.id)}</b> <span class="tag" style="color:${job.color}">${job.name}</span> ${cargoLine(w)}</div><span class="crew-state ${st.tone}">${st.text}</span>${level}</div>
+        <div class="crew-act">${switches}${btn('fireWorker', armed ? 'Confirmer ?' : 'Congédier', {
           arg: String(w.id),
           cls: `small${armed ? ' danger' : ''}`,
           title: 'Sans remboursement ; sa charge reste par terre',
@@ -485,7 +501,7 @@ function crewTab(g: GameState, view: ShopView): string {
   return `<p class="sub">Un ouvrier s'achète une seule fois, sans salaire ; le suivant coûte plus cher. On change son métier quand on veut, gratuitement.</p>
     <div class="cards">${hire}</div>
     <h4>Votre équipe : ${g.workers.count} sur ${WORKERS.max}</h4>${team}
-    <p class="hint">Le ramasseur range dans un coffre (à défaut, dans une caisse d'expédition qui vend) : posez-en un au camp. Le ravitailleur prend le charbon des coffres : gardez-y du charbon. Ils évitent le grisou et l'eau profonde.</p>`;
+    <p class="hint">Le ramasseur range dans un coffre (à défaut, dans une caisse d'expédition qui vend) : posez-en un au camp. Il vide aussi les foreuses à charbon et la base d'une foreuse de percement quand elles se remplissent. Le ravitailleur prend le charbon des coffres : gardez-y du charbon. Le foreur pose des foreuses sur les gisements au sol (une foreuse de votre stock, à défaut il l'achète en vous laissant ${money(DRILLER.moneyReserve)}) ; améliorez-le pour des minerais plus précieux. Ils évitent le grisou et l'eau profonde.</p>`;
 }
 
 // ------------------------------------------------------------------ panneau

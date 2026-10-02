@@ -15,7 +15,7 @@ import { CAUSE_HAZARD, GEAR, HazardKind, getGear } from '../data/gear';
 import { GAS, HEALTH, HEAT, WATER } from '../data/hazards';
 import { RESOURCES, getResource, hasResource, resourceIndex } from '../data/resources';
 import { BAGS, JACKHAMMER, PICKAXES, ROPE, SCOOTER } from '../data/tools';
-import { WORKERS, getJob, workerPrice, type WorkerJob } from '../data/workers';
+import { DRILLER, DRILLER_LEVELS, WORKERS, drillerLevel, getJob, workerPrice, type WorkerJob } from '../data/workers';
 import { Drop, DropSystem } from './Drops';
 import { HazardSystem } from './Hazards';
 import { MARKER_KINDS, Marker, MarkerBook, MarkerKind } from './Markers';
@@ -1026,6 +1026,53 @@ export class GameState implements StructureContext {
     return true;
   }
 
+  /** Pourquoi ce foreur ne peut pas être amélioré maintenant (null : c'est possible). */
+  workerUpgradeBlocker(id: number): string | null {
+    const w = this.workers.get(id);
+    if (!w) return 'Ouvrier introuvable';
+    if (w.job !== 'driller') return 'Seul le foreur s’améliore';
+    if (w.level >= DRILLER_LEVELS.length) return 'Niveau maximal atteint';
+    const next = drillerLevel(w.level + 1);
+    if (!this.isNear('workshop')) return 'Il faut être à l’Atelier';
+    if (next.unlock && this.pickaxe.tier < next.unlock.pickaxeTier) return next.unlock.text;
+    if (this.money < next.price) return "Pas assez d'argent";
+    return null;
+  }
+
+  /** Améliore un foreur à l'Atelier : plus de minerais, plus vite (prix croissants). */
+  upgradeWorker(id: number): boolean {
+    if (this.workerUpgradeBlocker(id)) return false;
+    const w = this.workers.get(id)!;
+    const next = drillerLevel(w.level + 1);
+    if (!this.pay(next.price)) return false;
+    w.level = next.level;
+    this.emit({ t: 'bought', name: `Foreur niveau ${next.level}` });
+    return true;
+  }
+
+  /** Un foreur peut-il se procurer une foreuse : un kit en stock, ou assez d'argent pour l'acheter en gardant sa réserve ? */
+  get drillAvailable(): boolean {
+    const id = DRILLER.machine;
+    return this.inventory.kitCount(id) > 0 || (this.isUnlocked(id) && this.money - getMachine(id).price >= DRILLER.moneyReserve);
+  }
+
+  /**
+   * Un foreur pose une foreuse à charbon en (tx, ty) : un kit du stock, à défaut il l'achète au prix de l'Atelier (s'il vous
+   * reste la réserve ensuite). Renvoie la foreuse posée, ou null (emplacement refusé, ni kit ni argent).
+   */
+  placeDrillFor(tx: number, ty: number, dir: Dir): { drill: Drill; bought: boolean } | null {
+    const id = DRILLER.machine;
+    if (this.siteProblem(id, tx, ty)) return null;
+    let bought = false;
+    if (this.inventory.kitCount(id) <= 0) {
+      if (!this.drillAvailable || !this.pay(getMachine(id).price)) return null;
+      this.inventory.addKit(id);
+      bought = true;
+    }
+    const s = this.build(id, tx, ty, dir);
+    return s instanceof Drill ? { drill: s, bought } : null;
+  }
+
   /** Change le métier d'un ouvrier (gratuit, de n'importe où). */
   setWorkerJob(id: number, job: WorkerJob): boolean {
     return this.workers.setJob(id, job);
@@ -1080,32 +1127,40 @@ export class GameState implements StructureContext {
 
   /** `kit` : identifiant de kit (machine seule, ou machine améliorée « drill@3 »). */
   canPlace(kit: string, tx: number, ty: number): { ok: boolean; reason?: string } {
-    const machineId = parseKit(kit).machine;
-    const def = getMachine(machineId);
     if (this.inventory.kitCount(kit) <= 0) return { ok: false, reason: `Aucun ${kitName(kit).toLowerCase()} en stock` };
     if (this.distanceToTile(tx, ty) > BUILD_RANGE) return { ok: false, reason: `Trop loin : approchez-vous (${BUILD_RANGE} cases au plus)` };
+    const reason = this.siteProblem(parseKit(kit).machine, tx, ty);
+    return reason ? { ok: false, reason } : { ok: true };
+  }
+
+  /**
+   * Pourquoi la machine ne peut pas être posée en (tx, ty), sans tenir compte du stock de kits ni de la portée du
+   * joueur (un ouvrier la pose lui-même) ; null quand l'emplacement convient.
+   */
+  siteProblem(machineId: string, tx: number, ty: number): string | null {
+    const def = getMachine(machineId);
     if (def.onTrack) {
-      if (!this.structures.at(tx, ty)?.isTrack) return { ok: false, reason: 'Se pose sur des rails' };
-      if (this.wagons.at(tx, ty)) return { ok: false, reason: 'Il y a déjà un wagonnet ici' };
-      return { ok: true };
+      if (!this.structures.at(tx, ty)?.isTrack) return 'Se pose sur des rails';
+      if (this.wagons.at(tx, ty)) return 'Il y a déjà un wagonnet ici';
+      return null;
     }
-    if (this.beltToReplace(machineId, tx, ty) || this.railToReplace(machineId, tx, ty)) return { ok: true };
+    if (this.beltToReplace(machineId, tx, ty) || this.railToReplace(machineId, tx, ty)) return null;
     for (let y = ty; y < ty + def.h; y++)
       for (let x = tx; x < tx + def.w; x++) {
-        if (!this.world.isOpen(x, y)) return { ok: false, reason: 'Il faut un sol dégagé : creusez d’abord la roche' };
-        if (this.structures.at(x, y)) return { ok: false, reason: 'Emplacement occupé' };
-        if (this.borerAt(x, y)) return { ok: false, reason: 'La foreuse de percement passe ici' };
+        if (!this.world.isOpen(x, y)) return 'Il faut un sol dégagé : creusez d’abord la roche';
+        if (this.structures.at(x, y)) return 'Emplacement occupé';
+        if (this.borerAt(x, y)) return 'La foreuse de percement passe ici';
       }
-    if (def.needsDeposit && !this.world.depositAt(tx, ty)) return { ok: false, reason: 'Doit être posée sur un gisement exposé' };
-    if (def.surfaceOnly && ty + def.h > SURFACE_ROWS) return { ok: false, reason: 'À poser en surface, au camp' };
+    if (def.needsDeposit && !this.world.depositAt(tx, ty)) return 'Doit être posée sur un gisement exposé';
+    if (def.surfaceOnly && ty + def.h > SURFACE_ROWS) return 'À poser en surface, au camp';
     if (def.solid) {
       const p = this.player;
       const x0 = tx * TILE;
       const y0 = ty * TILE;
       const overlap = p.x + p.halfW > x0 && p.x - p.halfW < x0 + def.w * TILE && p.y + p.halfH > y0 && p.y - p.halfH < y0 + def.h * TILE;
-      if (overlap) return { ok: false, reason: 'Vous êtes dans le passage' };
+      if (overlap) return 'Vous êtes dans le passage';
     }
-    return { ok: true };
+    return null;
   }
 
   /** Rail simple qu'un aiguillage posé en (tx, ty) remplacerait, sinon null. */
@@ -1127,6 +1182,11 @@ export class GameState implements StructureContext {
    */
   place(kit: string, tx: number, ty: number, dir: Dir): Structure | Wagon | null {
     if (!this.canPlace(kit, tx, ty).ok) return null;
+    return this.build(kit, tx, ty, dir);
+  }
+
+  /** Construit la machine du kit (le stock et l'emplacement ont déjà été vérifiés). */
+  private build(kit: string, tx: number, ty: number, dir: Dir): Structure | Wagon | null {
     const { machine: machineId, level } = parseKit(kit);
     const def = getMachine(machineId);
     if (def.onTrack) {

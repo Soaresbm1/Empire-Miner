@@ -1,13 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import { TILE } from '../src/core/constants';
-import { WORKERS } from '../src/data/workers';
+import { DRILLER_LEVELS, WORKERS } from '../src/data/workers';
 import { GameState } from '../src/sim/GameState';
 import { Storage } from '../src/sim/structures/Storage';
 import { cargoLine, stuckWorkers, workerAt, workerStatus, workerTooltip } from '../src/ui/crew';
 import { helpPanel, storagePanel } from '../src/ui/panels';
 import { productionStats } from '../src/ui/stats';
 import { WORKSHOP_TABS, offers, tabBadges, workshopAdvice, workshopPanel, DEFAULT_VIEW } from '../src/ui/workshop';
-import { run } from './helpers';
+import { goTo, run } from './helpers';
 
 function rich(): GameState {
   const g = new GameState(4);
@@ -25,13 +25,15 @@ describe('ouvriers : onglet de l’Atelier', () => {
     expect(html).toContain('touche 5');
   });
 
-  it('deux fiches de recrutement, avec le prix du prochain et un bouton d’achat', () => {
+  it('trois fiches de recrutement, avec le prix du prochain et un bouton d’achat', () => {
     const g = rich();
     const html = workshopPanel(g, 'crew');
     expect(html).toContain('Ramasseur');
     expect(html).toContain('Ravitailleur');
+    expect(html).toContain('Foreur');
     expect(html).toContain('data-action="hireWorker" data-arg="picker"');
     expect(html).toContain('data-action="hireWorker" data-arg="refueler"');
+    expect(html).toContain('data-action="hireWorker" data-arg="driller"');
     expect(html).toContain('Recruter');
     expect(html).toContain('300');
     expect(html).toContain('Votre équipe : 0 sur 6');
@@ -57,7 +59,10 @@ describe('ouvriers : onglet de l’Atelier', () => {
     const html = workshopPanel(g, 'crew');
     expect(html).toContain('Votre équipe : 2 sur 6');
     expect(html).toContain(`data-action="workerJob" data-arg="${a.id}:refueler"`);
+    expect(html).toContain(`data-action="workerJob" data-arg="${a.id}:driller"`);
     expect(html).toContain(`data-action="workerJob" data-arg="${b.id}:picker"`);
+    expect(html).toContain(`data-action="workerJob" data-arg="${b.id}:driller"`);
+    expect(html).not.toContain(`data-arg="${a.id}:picker"`);
     expect(html).toContain(`data-action="fireWorker" data-arg="${a.id}"`);
     expect(html).toContain('Congédier');
     expect(html).toContain('crew-cargo');
@@ -103,7 +108,7 @@ describe('ouvriers : ce qu’ils font', () => {
   it('une phrase par tâche, et les causes de blocage', () => {
     const g = rich();
     const w = g.workers.add('picker', g);
-    expect(workerStatus(g, w)).toEqual({ text: 'Attend des minerais par terre', tone: 'idle' });
+    expect(workerStatus(g, w)).toEqual({ text: 'Attend des minerais par terre ou à prendre dans les machines', tone: 'idle' });
     w.task = { kind: 'store', x: 46, y: 10 };
     expect(workerStatus(g, w)).toEqual({ text: 'Rapporte sa charge au coffre', tone: 'ok' });
     const d = g.drops.spawn('copper', 1, 56 * TILE, 10 * TILE, false);
@@ -261,5 +266,60 @@ describe('ouvriers : pourquoi ils sont bloqués', () => {
     w.task = { kind: 'store', x: 46, y: 10 };
     expect(workerTooltip(g, w)).not.toContain('class="bad"');
     expect(workerTooltip(g, w)).toContain('Rapporte sa charge au coffre');
+  });
+});
+
+describe('foreur : fiche d’équipe', () => {
+  it('le foreur affiche son niveau, ce qu’il équipe, et un bouton d’amélioration avec son prix', () => {
+    const g = rich();
+    goTo(g, 'workshop');
+    const d = g.workers.add('driller', g);
+    const html = workshopPanel(g, 'crew');
+    expect(html).toContain('Niveau 1 / 4');
+    expect(html).toContain('charbon');
+    expect(html).not.toContain('diamant');
+    expect(html).toContain(`data-action="workerUpgrade" data-arg="${d.id}"`);
+    expect(html).toContain('400');
+    expect(html).not.toMatch(/data-action="workerUpgrade"[^>]*disabled/);
+    // Le ramasseur n'a ni niveau ni amélioration.
+    const g2 = rich();
+    g2.workers.add('picker', g2);
+    expect(workshopPanel(g2, 'crew')).not.toContain('workerUpgrade');
+  });
+
+  it('bouton grisé, avec la raison : argent, pioche exigée, niveau maximal', () => {
+    const g = rich();
+    goTo(g, 'workshop');
+    const d = g.workers.add('driller', g);
+    g.money = 50;
+    expect(workshopPanel(g, 'crew')).toMatch(/data-action="workerUpgrade"[^>]*disabled/);
+    expect(workshopPanel(g, 'crew')).toContain("Pas assez d'argent");
+    g.money = 100_000;
+    d.level = 2;
+    g.pickaxeLevel = 1;
+    expect(workshopPanel(g, 'crew')).toMatch(/data-action="workerUpgrade"[^>]*disabled/);
+    d.level = DRILLER_LEVELS.length;
+    const max = workshopPanel(g, 'crew');
+    expect(max).toContain('niveau maximal');
+    expect(max).not.toContain('data-action="workerUpgrade"');
+    expect(max).toContain('diamant');
+  });
+
+  it('phrases du foreur : cherche, pose, vide, et le blocage « plus de foreuse »', () => {
+    const g = rich();
+    const d = g.workers.add('driller', g);
+    expect(workerStatus(g, d)).toMatchObject({ tone: 'idle' });
+    expect(workerStatus(g, d).text).toContain('Cherche un gisement');
+    d.task = { kind: 'place', x: 50, y: 20 };
+    expect(workerStatus(g, d)).toMatchObject({ tone: 'ok' });
+    expect(workerStatus(g, d).text).toContain('foreuse');
+    d.task = { kind: 'collect', x: 50, y: 20 };
+    expect(workerStatus(g, d).text).toContain('vider');
+    d.task = null;
+    d.flag = 'nodrill';
+    expect(workerStatus(g, d)).toMatchObject({ tone: 'warn' });
+    expect(workerStatus(g, d).text).toContain('foreuse');
+    expect(stuckWorkers(g)).toEqual([{ text: 'Foreur : plus de foreuse en stock ni assez d’argent', n: 1 }]);
+    expect(workerTooltip(g, d)).toContain('Foreur');
   });
 });

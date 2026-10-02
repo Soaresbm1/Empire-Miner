@@ -37,4 +37,4 @@ export type SimEvent =
   /** Événement du marché : forte demande (`up`, le cours monte) ou surproduction (le cours chute) sur un minerai. */
   | { t: 'market'; res: string; up: boolean; pct: number }
   /** Un ouvrier ramasse (« pick »), dépose (« store ») ou recharge une machine (« fuel »). */
-  | { t: 'worker'; kind: 'pick' | 'store' | 'fuel'; x: number; y: number; res: string };
+  | { t: 'worker'; kind: 'pick' | 'store' | 'fuel' | 'place'; x: number; y: number; res: string };

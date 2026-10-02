@@ -182,8 +182,20 @@ réclamé par un autre (les tas de pierre, ceux que le joueur vient de jeter et 
 ignorés), puis un coffre qui peut recevoir sa charge (jamais une caisse d'expédition) ; le ravitailleur repère les machines à combustible (`fuelWanted`,
 `fuelUnits`, `addFuel`) à moitié vides, prend du charbon dans un coffre et les recharge. Un passage qui se ferme en
 route annule la tâche et relance la réflexion ; sans rien à faire, l'ouvrier retourne à sa case d'attente près du
-puits. Il émet l'événement `worker` (éclat et son). Achat à l'Atelier : `GameState.hireWorker` (prix croissant,
-`isNear('workshop')`, pioche améliorée), `setWorkerJob`, `fireWorker`. Sauvegarde : champ facultatif `workers` (métier,
+puits. Il émet l'événement `worker` (éclat et son). **Machines qui gardent leur minerai** : `heldOre` (foreuse à charbon dont
+le tampon atteint `WORKERS.machinePickup.drill`, stock de la base d'une foreuse de percement à `borerBase`) est ce qu'un
+ramasseur peut y prendre ; il vise le tas ou la machine la plus proche, `takeHeld` retire le minerai (`TunnelBorer.takeStored`)
+et le même `planStore` choisit le coffre (mêmes règles de filtre, mêmes causes de blocage ; ce qu'aucun coffre n'accepte reste
+dans la machine). Les fours et fonderies sont exclus. **Foreur** (`thinkDriller`) : il cherche, parmi les gisements exposés
+et explorés (`world.deposit`/`reserve`/`explored`), ceux dont le minerai est au plus du palier `DRILLER_LEVELS[level].maxTier`
+(la pierre est exclue), qui ne sont pas dans la portée d'une foreuse existante (`Drill.reach()`), pas réclamés par un autre
+foreur et où `GameState.siteProblem` autorise la pose ; `blocksPassage` écarte les cases dont l'occupation couperait un
+passage (cases libres voisines qui ne se rejoignent plus dans `DRILLER.passageRadius`). Il marche jusqu'à une case voisine
+(tâche `place`) et `GameState.placeDrillFor` pose la foreuse : un kit du stock, à défaut un achat au prix de l'Atelier si
+`DRILLER.moneyReserve` reste (`drillAvailable`, sinon drapeau `nodrill`). `canPlace` est découpé en `siteProblem` + `build`
+pour que le joueur et les ouvriers partagent les mêmes règles. Niveaux : `Worker.level`, `GameState.upgradeWorker` /
+`workerUpgradeBlocker` (prix, pioche, Atelier), qui règlent aussi la durée de pose et la vitesse de marche. Achat à l'Atelier : `GameState.hireWorker` (prix croissant,
+`isNear('workshop')`, pioche améliorée), `setWorkerJob`, `fireWorker`. Sauvegarde : champ facultatif `workers` (métier, niveau,
 position, charge ; le reste se recalcule). L'interface (`ui/crew.ts`) lit les ouvriers sans les modifier ; l'onglet est
 dans `ui/workshop.ts`, le rendu dans `Renderer.drawWorker` (sprites du mineur recolorés par `PlayerGear.crew`).
 

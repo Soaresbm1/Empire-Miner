@@ -3,8 +3,8 @@
  * d'affichage). Rien ici ne modifie la partie.
  */
 import { TILE } from '../core/constants';
-import { getResource } from '../data/resources';
-import { WORKERS, getJob, workerName } from '../data/workers';
+import { RESOURCES, getResource } from '../data/resources';
+import { DRILLER_LEVELS, WORKERS, drillerLevel, getJob, workerName } from '../data/workers';
 import type { GameState } from '../sim/GameState';
 import { cargoCount, cargoWeight, type Worker, type WorkerFlag } from '../sim/Workers';
 import { kg, resIcon } from './format';
@@ -22,6 +22,7 @@ const FLAG_TEXT: Record<WorkerFlag, string> = {
   noroute: "Aucun chemin jusqu'à un coffre (roche, grisou, eau profonde ou machine en travers) : dégagez le passage.",
   nocoal: 'Plus de charbon dans les coffres : déposez-en dans un coffre.',
   lost: 'La machine à recharger est inaccessible.',
+  nodrill: "Des gisements l'attendent, mais plus de foreuse en stock ni assez d'argent pour en acheter : achetez des foreuses à l'Atelier.",
 };
 
 /** Les blocages en quelques mots, pour la liste « machines à surveiller » du Tableau d'affichage. */
@@ -31,6 +32,7 @@ const FLAG_BOARD: Record<WorkerFlag, string> = {
   noroute: 'Ramasseur : aucun chemin vers un coffre',
   nocoal: 'Ravitailleur : plus de charbon dans les coffres',
   lost: 'Ravitailleur : machine inaccessible',
+  nodrill: 'Foreur : plus de foreuse en stock ni assez d’argent',
 };
 
 /** Ce que fait l'ouvrier, en une phrase. */
@@ -38,7 +40,8 @@ export function workerStatus(g: GameState, w: Worker): WorkerStatus {
   const t = w.task;
   if (!t) {
     if (w.flag) return { text: FLAG_TEXT[w.flag], tone: 'warn' };
-    return { text: w.job === 'picker' ? 'Attend des minerais par terre' : 'Toutes les machines ont du charbon', tone: 'idle' };
+    if (w.job === 'driller') return { text: `Cherche un gisement à équiper (${oresOf(w.level) || 'aucun'})`, tone: 'idle' };
+    return { text: w.job === 'picker' ? 'Attend des minerais par terre ou à prendre dans les machines' : 'Toutes les machines ont du charbon', tone: 'idle' };
   }
   switch (t.kind) {
     case 'pick': {
@@ -51,9 +54,31 @@ export function workerStatus(g: GameState, w: Worker): WorkerStatus {
       return { text: 'Va chercher du charbon', tone: 'ok' };
     case 'fuel':
       return { text: 'Ravitaille une machine', tone: 'ok' };
+    case 'place': {
+      const res = g.world.depositAt(t.x, t.y);
+      return { text: res ? `Va poser une foreuse sur un gisement de ${getResource(res).name.toLowerCase()}` : 'Va poser une foreuse', tone: 'ok' };
+    }
+    case 'collect': {
+      const s = g.structures.at(t.x, t.y);
+      return { text: s?.type === 'borer' ? 'Va vider la base d’une foreuse de percement' : 'Va vider une foreuse', tone: 'ok' };
+    }
     case 'home':
       return { text: 'Retourne à son poste', tone: 'idle' };
   }
+}
+
+/** Minerais qu'un foreur équipe à ce niveau, en minuscules : « charbon, cuivre » (la pierre, sans valeur, est laissée). */
+export function oresOf(level: number): string {
+  const max = drillerLevel(level).maxTier;
+  return RESOURCES.filter((r) => r.deposit && r.groundLife === undefined && r.tier <= max)
+    .map((r) => r.name.toLowerCase())
+    .join(', ');
+}
+
+/** Ce que sait faire un foreur à ce niveau, en une ligne (fiche de l'équipe). */
+export function drillerFacts(level: number): string {
+  const l = drillerLevel(level);
+  return `Niveau ${l.level} / ${DRILLER_LEVELS.length} · équipe : ${oresOf(level)} · pose en ${l.placeTime.toLocaleString('fr-FR')} s · marche ×${l.speed.toLocaleString('fr-FR')}`;
 }
 
 /** Ce que l'ouvrier porte, en icônes : « 3 cuivre, 1 charbon · 7,5 kg / 15 kg » (vide s'il ne porte rien). */
