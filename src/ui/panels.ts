@@ -17,6 +17,7 @@ import type { Sorter } from '../sim/structures/Sorter';
 import type { RailStation, RailSwitch, SwitchSetting } from '../sim/structures/Rail';
 import type { Storage } from '../sim/structures/Storage';
 import { esc, kg, money, num, rarityTag, resIcon } from './format';
+import { BOARD_TABS, counterBanner, isBoardTab, marketTab, priceCell } from './market';
 import { productionStats } from './stats';
 import { btn, stat } from './widgets';
 
@@ -30,29 +31,41 @@ function sortedItems(items: Record<string, number>): [string, number][] {
 
 export function counterPanel(g: GameState): string {
   const items = sortedItems(g.inventory.items);
-  const total = items.reduce((s, [res, n]) => s + n * getResource(res).value, 0);
+  const total = items.reduce((s, [res, n]) => s + g.quote(res, n), 0);
   const rows = items
     .map(([res, n]) => {
       const r = getResource(res);
-      return `<tr><td>${resIcon(res)} ${r.name} ${rarityTag(res)}</td><td class="num">×${n}</td><td class="num">${money(r.value)}</td>
-      <td class="num gold">${money(n * r.value)}</td><td>${btn('sell', 'Vendre', { arg: res, cls: 'small' })}</td></tr>`;
+      return `<tr><td>${resIcon(res)} ${r.name} ${rarityTag(res)}</td><td class="num">×${n}</td><td class="num">${priceCell(g, res)}</td>
+      <td class="num gold">${money(g.quote(res, n))}</td><td>${btn('sell', 'Vendre', { arg: res, cls: 'small' })}</td></tr>`;
     })
     .join('');
   return `
-    <p class="sub">« Posez ça là, je vous en donne un bon prix. »</p>
+    <p class="sub">« Posez ça là, je vous en donne le prix du jour. »</p>
+    ${counterBanner(g)}
     ${
       items.length
-        ? `<table class="table"><thead><tr><th>Ressource</th><th>Qté</th><th>Prix</th><th>Total</th><th></th></tr></thead><tbody>${rows}</tbody></table>
-       <div class="panel-footer"><span>Total : <b class="gold">${money(total)}</b></span>${btn('sellAll', `Tout vendre (${money(total)})`, { cls: 'primary' })}</div>`
+        ? `<table class="table"><thead><tr><th>Ressource</th><th>Qté</th><th>Prix du jour</th><th>Total</th><th></th></tr></thead><tbody>${rows}</tbody></table>
+       <div class="panel-footer"><span>Total : <b class="gold">${money(total)}</b></span>${btn('sellAll', `Tout vendre (${money(total)})`, { cls: 'primary' })}</div>
+       <p class="hint">Les cours changent : le détail et les courbes sont au Tableau d'affichage. Un coffre permet d'attendre une hausse.</p>`
         : `<p class="empty">Votre sac est vide. Descendez à la mine et rapportez des minerais !</p>`
     }`;
 }
 
 // ------------------------------------------------------------------ tableau d'affichage
 
-/** Tableau d'affichage du camp, entre le comptoir et l'atelier : les statistiques de production. */
-export function boardPanel(g: GameState): string {
-  return `<p class="sub">Ce que produit votre mine, et ce qui se vend. Mis à jour en direct.</p>${productionStats(g)}`;
+/** Onglets du Tableau d'affichage (Marché, Production), collés en haut comme ceux de l'Atelier. */
+function boardTabs(tab: string): string {
+  return `<div class="tabs">${BOARD_TABS.map(
+    ([id, label], i) => `<button class="tab ${tab === id ? 'active' : ''}" data-action="tab" data-arg="${id}" title="${label} (touche ${i + 1})"><kbd class="tab-key">${i + 1}</kbd>${label}</button>`,
+  ).join('')}</div>`;
+}
+
+/** Tableau d'affichage du camp, entre le comptoir et l'atelier : le cours du marché, et les statistiques de production. */
+export function boardPanel(g: GameState, tab = 'market'): string {
+  const id = isBoardTab(tab) ? tab : 'market';
+  const body =
+    id === 'market' ? marketTab(g) : `<p class="sub">Ce que produit votre mine, et ce qui se vend. Mis à jour en direct.</p>${productionStats(g)}`;
+  return `<div class="shop-nav">${boardTabs(id)}</div>${body}`;
 }
 
 // ------------------------------------------------------------------ atelier
@@ -78,7 +91,7 @@ export function inventoryPanel(g: GameState): string {
     const known = n > 0 || g.stats.discovered.includes(r.id) || r.id === 'stone' || (g.stats.collected[r.id] ?? 0) > 0;
     if (!known) return `<tr class="unknown"><td>${resIcon(r.id)} ???</td><td colspan="5">Pas encore découvert</td></tr>`;
     const on = g.autoPickup[r.id];
-    return `<tr><td>${resIcon(r.id)} ${r.name} ${rarityTag(r.id)}</td><td class="num">×${n}</td><td class="num">${kg(r.weight)}</td><td class="num">${money(r.value)}</td>
+    return `<tr><td>${resIcon(r.id)} ${r.name} ${rarityTag(r.id)}</td><td class="num">×${n}</td><td class="num">${kg(r.weight)}</td><td class="num">${priceCell(g, r.id)}</td>
       <td>${btn('togglePickup', on ? 'Oui' : 'Non', { arg: r.id, cls: `small ${on ? 'on' : 'off'}`, title: 'Ramasser automatiquement' })}</td>
       <td>${n > 0 ? btn('drop', 'Jeter', { arg: r.id, cls: 'small' }) : ''}</td></tr>`;
   }).join('');
@@ -126,7 +139,7 @@ export function shippingPanel(g: GameState, c: ShippingCrate): string {
   const rows = items
     .map(([res, n]) => {
       const r = getResource(res);
-      return `<tr><td>${resIcon(res)} ${r.name}</td><td class="num">×${n}</td><td class="num gold">${money(n * r.value)}</td></tr>`;
+      return `<tr><td>${resIcon(res)} ${r.name}</td><td class="num">×${n}</td><td class="num gold">${money(g.quote(res, n))}</td></tr>`;
     })
     .join('');
   const secs = Math.max(0, Math.ceil(c.timer));
@@ -135,9 +148,9 @@ export function shippingPanel(g: GameState, c: ShippingCrate): string {
     <div class="status good">● Prochain passage du transporteur dans ${secs} s</div>
     <div class="bar big ${w / c.capacity > 0.9 ? 'full' : ''}"><div style="width:${Math.min(100, (w / c.capacity) * 100)}%"></div><span>${kg(w)} / ${kg(c.capacity)}</span></div>
     ${items.length ? `<table class="table"><tbody>${rows}</tbody></table>` : '<p class="empty">Caisse vide. Amenez-y vos minerais avec des convoyeurs.</p>'}
-    <div class="panel-footer"><span>En attente : <b class="gold">${money(c.pendingValue())}</b> · Vendu par cette caisse : <b class="gold">${money(c.soldTotal)}</b></span>
+    <div class="panel-footer"><span>En attente : <b class="gold">${money(c.pendingValue((res, n) => g.quote(res, n)))}</b> · Vendu par cette caisse : <b class="gold">${money(c.soldTotal)}</b></span>
     ${btn('shipDeposit', `Déposer mon sac (${kg(bag)})`, { cls: 'primary', disabled: g.inventory.isEmpty() })}</div>
-    <p class="hint">Tout ce qui entre ici est vendu au prix du comptoir à chaque passage. Si la caisse est pleine, elle refuse les minerais et les convoyeurs s'arrêtent.</p>`;
+    <p class="hint">Tout ce qui entre ici est vendu au cours du moment, comme au comptoir, à chaque passage. Si la caisse est pleine, elle refuse les minerais et les convoyeurs s'arrêtent.</p>`;
 }
 
 // ------------------------------------------------------------------ quais
@@ -605,6 +618,7 @@ export function helpPanel(keys: { move: string; label: (c: string) => string }):
     <div><h4>Construire</h4><p>${k('KeyB')} : mode construction. <kbd>Tab</kbd> change d'onglet, <kbd>1-9</kbd> choisit la machine. <kbd>Clic gauche</kbd> poser (glisser pour tracer des convoyeurs), <kbd>clic droit</kbd> démonter, ${k('KeyR')} tourner</p></div>
     <div><h4>Zoom</h4><p>Molette de la souris</p></div>
     <div><h4>Trottinette</h4><p>Achetée à l'atelier (onglet Transport) : maintenez <kbd>Maj</kbd> pour rouler vite, relâchez pour descendre. Pas de minage en roulant</p></div>
+    <div><h4>Cours du marché</h4><p>Les prix de vente montent et descendent, avec des événements (« forte demande de cuivre »). Le comptoir et les caisses d'expédition paient au cours du moment : les courbes sont au <b>Tableau d'affichage</b> (${k('KeyE')} devant, onglet Marché). Stockez dans un coffre, vendez à la hausse</p></div>
     <div><h4>Wagonnet</h4><p>${k('KeyF')} : monter / descendre</p></div>
     <div><h4>Outil en main</h4><p>${k('KeyT')} : pioche ou marteau-piqueur (s'il est acheté)</p></div>
     <div><h4>Carte</h4><p><kbd>M</kbd> : carte de la mine (ou clic sur la mini-carte)</p></div>

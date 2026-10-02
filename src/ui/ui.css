@@ -551,3 +551,29 @@ kbd {
 
 /* Corde de rappel : ligne d'état pendant la manœuvre. */
 .rope-line { color: var(--gold); animation: danger-blink 0.9s steps(2) infinite; }
+
+/* Cours du marché : étiquettes de prix, événements, courbes (Tableau d'affichage), ligne du HUD. */
+.mk { font-size: 14px; white-space: nowrap; }
+.mk.small { font-size: 12px; }
+.mk.up { color: var(--good); }
+.mk.down { color: var(--bad); }
+.mk.flat { color: var(--muted); }
+.mk-events { list-style: none; margin: 0 0 10px; padding: 0; font-size: 15px; }
+.mk-events li { padding: 4px 10px; border-left: 4px solid var(--line-light); margin-bottom: 4px; background: rgba(0, 0, 0, 0.25); }
+.mk-events li.up { border-color: var(--good); }
+.mk-events li.down { border-color: var(--bad); }
+.mk-events li small { color: var(--muted); font-size: 12px; margin-left: 4px; }
+.mk-events.slim { font-size: 13px; margin-bottom: 8px; }
+.mk-events.slim li { padding: 2px 8px; }
+.mk-calm { color: var(--muted); font-size: 13px; margin: 0 0 10px; }
+.mk-table td { vertical-align: middle; }
+.mk-table td small { display: block; color: var(--muted); font-size: 12px; line-height: 1.25; }
+.spark-cell { width: 176px; padding-top: 4px; padding-bottom: 4px; }
+.spark { display: block; max-width: 100%; height: auto; overflow: visible; }
+.spark .base { stroke: #6b5039; stroke-width: 1; stroke-dasharray: 3 3; }
+.spark polyline { fill: none; stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
+.spark.up polyline { stroke: var(--good); } .spark.up circle { fill: var(--good); }
+.spark.down polyline { stroke: var(--bad); } .spark.down circle { fill: var(--bad); }
+.spark.flat polyline { stroke: var(--gold); } .spark.flat circle { fill: var(--gold); }
+.market:not(:empty) { margin-top: 2px; line-height: 1.25; }
+.market .mk { font-size: 13px; }

@@ -22,6 +22,7 @@ import { ProductionLog } from './Production';
 import type { SimEvent, ToolKind } from './events';
 import { generateWorld, WorldLayout } from './generator';
 import { Inventory } from './Inventory';
+import { Market } from './Market';
 import { Player } from './Player';
 import { StructureManager } from './StructureManager';
 import { Building, BuildingType } from './structures/Building';
@@ -102,6 +103,8 @@ export class GameState implements StructureContext {
   readonly markers = new MarkerBook();
   /** Extraction, fonte et ventes minute après minute (panneau Statistiques). */
   readonly production = new ProductionLog(() => this.time);
+  /** Cours du marché : prix de vente variables, événements « forte demande de cuivre »… */
+  readonly market: Market;
   /** Type de repère choisi dans le panneau de la carte (pour le prochain repère posé). */
   markerKind: MarkerKind = 'point';
   readonly player: Player;
@@ -163,6 +166,12 @@ export class GameState implements StructureContext {
     this.seed = seed;
     this.layout = generateWorld(seed);
     this.world = this.layout.world;
+    // Les événements du marché ne concernent que des minerais que le joueur connaît déjà.
+    this.market = new Market(
+      seed,
+      (res) => this.stats.discovered.includes(res) || (this.stats.collected[res] ?? 0) > 0,
+      (e) => this.emit({ t: 'market', res: e.res, up: e.up, pct: e.pct }),
+    );
     this.hazards = new HazardSystem(this);
     this.rng = new Rng(seed ^ 0x5bd1e995);
     this.player = new Player(this.layout.spawn.x, this.layout.spawn.y);
@@ -261,6 +270,7 @@ export class GameState implements StructureContext {
   update(dt: number, intent: PlayerIntent): void {
     this.time += dt;
     this.stats.playTime += dt;
+    this.market.update(this.time);
     if (!this.riding) {
       // Maj maintenue : on monte sur la trottinette (relâchée : on en descend). Les mains sont au
       // guidon, donc plus de minage, et un coup de pioche en cours est interrompu.
@@ -919,11 +929,16 @@ export class GameState implements StructureContext {
 
   // ---------------------------------------------------------------- économie
 
+  /** Ce que rapportent `n` unités de `res` au cours du marché du moment ($, arrondi). */
+  quote(res: string, n = 1): number {
+    return this.market.quote(res, n);
+  }
+
   sell(res: string, n: number): number {
     if (!this.isNear('counter')) return 0;
     const k = this.inventory.remove(res, n);
     if (k <= 0) return 0;
-    const total = k * getResource(res).value;
+    const total = this.quote(res, k);
     this.money += total;
     this.stats.earned += total;
     this.production.addSale({ [res]: k }, total, false);
@@ -938,7 +953,7 @@ export class GameState implements StructureContext {
     const sold: Record<string, number> = {};
     for (const [res, count] of Object.entries(this.inventory.items)) {
       this.inventory.remove(res, count);
-      total += count * getResource(res).value;
+      total += this.quote(res, count);
       n += count;
       sold[res] = count;
     }

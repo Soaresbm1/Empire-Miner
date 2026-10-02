@@ -6,6 +6,11 @@ export function money(v: number): string {
   return `${Math.floor(v).toLocaleString('fr-FR')} $`;
 }
 
+/** Prix unitaire au cours du marché : une décimale au besoin (« 7,8 $ »), entier à partir de 100 $. */
+export function price(v: number): string {
+  return `${num(v, v >= 100 ? 0 : 1)}\u00a0$`;
+}
+
 export function kg(v: number): string {
   return `${(Math.round(v * 10) / 10).toLocaleString('fr-FR')} kg`;
 }

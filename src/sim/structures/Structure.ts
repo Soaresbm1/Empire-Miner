@@ -26,6 +26,8 @@ export interface StructureContext {
   countExtracted(res: string, from: Structure): void;
   /** Vente automatique (caisse d'expédition) : crédite l'argent du joueur. `items` : ce qui est parti, par ressource. */
   autoSell(total: number, n: number, from: Structure, items?: Record<string, number>): void;
+  /** Ce que rapportent `n` unités de `res` au cours du marché du moment ($, arrondi). */
+  quote(res: string, n: number): number;
   /** Perce une tuile (foreuse de percement) ; les morceaux tombent en (from.x, from.y), en unités monde. Renvoie les morceaux lâchés. */
   digTile(tx: number, ty: number, from: { x: number; y: number }): Drop[];
   /** Vrai si le joueur ou un wagonnet occupe la tuile. */

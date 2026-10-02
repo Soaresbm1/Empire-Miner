@@ -22,6 +22,7 @@ import { CAVE_IN, GAS, HEAT, WATER } from '../data/hazards';
 import { Drill, reachTiles } from '../sim/structures/Drill';
 import { ShippingCrate } from '../sim/structures/ShippingCrate';
 import { Sorter } from '../sim/structures/Sorter';
+import { BOARD_TABS, marketNews } from '../ui/market';
 import { WORKSHOP_TABS } from '../ui/workshop';
 import { Rail, RailStation, RailSwitch, type SwitchSetting } from '../sim/structures/Rail';
 import { Splitter } from '../sim/structures/Splitter';
@@ -493,9 +494,10 @@ export class Game {
       else if (this.buildMode) this.setBuildMode(false);
       else this.ui.showPauseMenu(this.sfx.muted, this.quality);
     }
-    // Atelier ouvert : 1 à 4 (ou les flèches) changent d'onglet.
-    if (this.ui.panel?.kind === 'workshop' && !paused) {
-      WORKSHOP_TABS.forEach(([id], i) => inp.wasPressed(`Digit${i + 1}`, `Numpad${i + 1}`) && this.ui.setTab(id));
+    // Atelier ou Tableau d'affichage ouvert : les chiffres (ou les flèches) changent d'onglet.
+    const tabbed = this.ui.panel?.kind === 'workshop' ? WORKSHOP_TABS : this.ui.panel?.kind === 'board' ? BOARD_TABS : null;
+    if (tabbed && !paused) {
+      tabbed.forEach(([id], i) => inp.wasPressed(`Digit${i + 1}`, `Numpad${i + 1}`) && this.ui.setTab(id));
       if (inp.wasPressed('ArrowRight')) this.ui.cycleTab(1);
       if (inp.wasPressed('ArrowLeft')) this.ui.cycleTab(-1);
     }
@@ -1166,6 +1168,10 @@ export class Game {
         case 'discover':
           this.sfx.discover();
           this.ui.toast(e.text, 'good');
+          break;
+        case 'market':
+          this.sfx.market(e.up);
+          this.ui.toast(marketNews(e), e.up ? 'good' : 'warn');
           break;
         case 'message':
           this.ui.toast(e.text, e.kind);

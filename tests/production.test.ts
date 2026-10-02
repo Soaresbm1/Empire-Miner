@@ -169,8 +169,8 @@ describe('statistiques de production dans la partie', () => {
 describe('panneau des statistiques', () => {
   it('est celui du tableau d’affichage, pas du comptoir ni de l’atelier', () => {
     const g = new GameState(4);
-    expect(boardPanel(g)).toContain('Gains des 10 dernières minutes');
-    expect(boardPanel(g)).toContain('Machines à surveiller');
+    expect(boardPanel(g, 'production')).toContain('Gains des 10 dernières minutes');
+    expect(boardPanel(g, 'production')).toContain('Machines à surveiller');
     expect(counterPanel(g)).not.toContain('Gains des');
     expect(workshopPanel(g, 'tools')).not.toContain('Gains des');
     expect(workshopPanel(g, 'tools')).not.toContain('data-arg="stats"');

@@ -144,6 +144,11 @@ export class Sfx {
     [1319, 1760].forEach((f, i) => this.tone(f, 0.12, 'triangle', 0.05, undefined, i * 0.06));
   }
 
+  /** Nouvelle du marché : deux notes qui montent (forte demande) ou qui descendent (surproduction). */
+  market(up: boolean): void {
+    (up ? [784, 1175] : [659, 440]).forEach((f, i) => this.tone(f, 0.16, 'triangle', 0.09, undefined, i * 0.1));
+  }
+
   buy(): void {
     [523, 659, 784, 1047].forEach((f, i) => this.tone(f, 0.22, 'triangle', 0.14, undefined, i * 0.08));
   }

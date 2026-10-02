@@ -39,10 +39,12 @@ export class ShippingCrate extends Structure {
     return w;
   }
 
-  /** Montant que rapportera le prochain passage ($). */
-  pendingValue(): number {
+  /**
+   * Montant que rapportera le prochain passage ($), au cours du marché que donne `quote` (le prix de base à défaut).
+   */
+  pendingValue(quote: (res: string, n: number) => number = (res, n) => getResource(res).value * n): number {
     let v = 0;
-    for (const [res, n] of Object.entries(this.items)) v += Math.round(getResource(res).value * this.def.stats.efficiency) * n;
+    for (const [res, n] of Object.entries(this.items)) v += Math.round(quote(res, n) * this.def.stats.efficiency);
     return v;
   }
 
@@ -75,7 +77,7 @@ export class ShippingCrate extends Structure {
     let n = 0;
     for (const count of Object.values(this.items)) n += count;
     if (n === 0) return;
-    const total = this.pendingValue();
+    const total = this.pendingValue((res, k) => ctx.quote(res, k));
     const sold = this.items;
     this.items = {};
     this.soldTotal += total;
