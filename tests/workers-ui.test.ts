@@ -4,7 +4,7 @@ import { WORKERS } from '../src/data/workers';
 import { GameState } from '../src/sim/GameState';
 import { Storage } from '../src/sim/structures/Storage';
 import { cargoLine, stuckWorkers, workerStatus } from '../src/ui/crew';
-import { helpPanel } from '../src/ui/panels';
+import { helpPanel, storagePanel } from '../src/ui/panels';
 import { productionStats } from '../src/ui/stats';
 import { WORKSHOP_TABS, offers, tabBadges, workshopAdvice, workshopPanel, DEFAULT_VIEW } from '../src/ui/workshop';
 import { run } from './helpers';
@@ -112,7 +112,7 @@ describe('ouvriers : ce qu’ils font', () => {
     w.task = null;
     w.flag = 'nostore';
     expect(workerStatus(g, w)).toMatchObject({ tone: 'warn' });
-    expect(workerStatus(g, w).text).toContain('Aucun coffre');
+    expect(workerStatus(g, w).text).toContain("Aucun coffre n'accepte");
     const r = g.workers.add('refueler', g);
     expect(workerStatus(g, r).text).toBe('Toutes les machines ont du charbon');
     r.flag = 'nocoal';
@@ -140,10 +140,10 @@ describe('ouvriers : ce qu’ils font', () => {
     g.workers.list[1].flag = 'nostore';
     c.flag = 'nocoal';
     const stuck = stuckWorkers(g);
-    expect(stuck).toContainEqual({ text: 'Ramasseur : aucun coffre accessible', n: 2 });
+    expect(stuck).toContainEqual({ text: "Ramasseur : aucun coffre n'accepte ce minerai", n: 2 });
     expect(stuck).toContainEqual({ text: 'Ravitailleur : plus de charbon dans les coffres', n: 1 });
     const html = productionStats(g);
-    expect(html).toContain('2 ×</b> Ramasseur : aucun coffre accessible');
+    expect(html).toContain("2 ×</b> Ramasseur : aucun coffre n'accepte ce minerai");
     expect(html).toContain('ouvrier');
   });
 
@@ -152,10 +152,10 @@ describe('ouvriers : ce qu’ils font', () => {
     g.workers.add('picker', g);
     g.drops.spawn('copper', 1, 56 * TILE, 10.5 * TILE, false);
     run(g, 15);
-    expect(productionStats(g)).toContain('Ramasseur : aucun coffre accessible');
+    expect(productionStats(g)).toContain("Ramasseur : aucun coffre n'accepte ce minerai");
     g.structures.add(new Storage(46, 10, 1));
     run(g, 15);
-    expect(productionStats(g)).not.toContain('aucun coffre accessible');
+    expect(productionStats(g)).not.toContain("aucun coffre n'accepte");
   });
 
   it('l’aide parle des ouvriers', () => {
@@ -163,5 +163,47 @@ describe('ouvriers : ce qu’ils font', () => {
     expect(html).toContain('Ouvriers');
     expect(html).toContain('ramasseur');
     expect(html).toContain('ravitailleur');
+  });
+});
+
+describe('filtre de coffre : panneau', () => {
+  function chestPanel(allow: string[] = []): { g: GameState; c: Storage; html: string } {
+    const g = rich();
+    g.stats.discovered = ['coal', 'copper', 'iron'];
+    const c = g.structures.add(new Storage(46, 10, 1)) as Storage;
+    c.setAllow(allow);
+    return { g, c, html: storagePanel(g, c) };
+  }
+
+  it('sans filtre : « Accepte tout », le bouton « Tout » est allumé, une puce par minerai connu', () => {
+    const { html } = chestPanel();
+    expect(html).toContain('Ce que ce coffre accepte');
+    expect(html).toContain('Accepte tout.');
+    expect(html).toMatch(/class="btn small on" data-action="storageAllow" data-arg=""[^>]*>Tout</);
+    for (const res of ['stone', 'coal', 'copper', 'iron']) expect(html).toContain(`data-action="storageAllow" data-arg="${res}"`);
+    expect(html).not.toContain('data-arg="gold"'); // pas encore découvert
+  });
+
+  it('avec un filtre : les minerais choisis sont allumés et nommés', () => {
+    const { html } = chestPanel(['copper', 'iron']);
+    expect(html).toContain('Accepte seulement');
+    expect(html).toMatch(/class="btn small on" data-action="storageAllow" data-arg="copper"/);
+    expect(html).toMatch(/class="btn small on" data-action="storageAllow" data-arg="iron"/);
+    expect(html).toMatch(/class="btn small off" data-action="storageAllow" data-arg="coal"/);
+    expect(html).toMatch(/class="btn small off" data-action="storageAllow" data-arg=""/);
+  });
+
+  it('un minerai déjà autorisé ou présent dans le coffre reste proposé, même non découvert', () => {
+    const { g, c } = chestPanel(['gold']);
+    c.put('gold', 1);
+    expect(storagePanel(g, c)).toContain('data-arg="gold"');
+  });
+
+  it('« Tout déposer » est grisé quand rien dans le sac n’est accepté, avec la raison', () => {
+    const { g, c } = chestPanel(['copper']);
+    g.inventory.add('coal', 2);
+    expect(storagePanel(g, c)).toMatch(/data-action="storageDeposit"[^>]*disabled[^>]*title="Rien dans votre sac que ce coffre accepte"/);
+    g.inventory.add('copper', 1);
+    expect(storagePanel(g, c)).not.toMatch(/data-action="storageDeposit"[^>]*disabled/);
   });
 });

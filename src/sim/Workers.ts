@@ -1,8 +1,8 @@
 /**
  * Ouvriers : des travailleurs achetés à l'Atelier qui font des corvées à la place du joueur.
  *
- * - Ramasseur : va chercher les minerais laissés au sol et les range dans le coffre le plus proche (à défaut,
- *   dans une caisse d'expédition, qui les vend).
+ * - Ramasseur : va chercher les minerais laissés au sol et les range dans le coffre le plus proche qui les accepte
+ *   (chaque coffre peut être réglé sur certains minerais : il ne prend jamais un tas qu'aucun coffre n'accepte).
  * - Ravitailleur : prend du charbon dans les coffres et recharge les machines qui en manquent.
  *
  * Un ouvrier se déplace de case en case (plus court chemin sur la grille, en évitant la roche, les machines, le
@@ -17,7 +17,6 @@ import { GAS, WATER } from '../data/hazards';
 import { hasResource, getResource } from '../data/resources';
 import { WORKERS, isJob, type WorkerJob } from '../data/workers';
 import type { GameState } from './GameState';
-import { ShippingCrate } from './structures/ShippingCrate';
 import { Storage } from './structures/Storage';
 import type { Structure } from './structures/Structure';
 
@@ -25,7 +24,7 @@ import type { Structure } from './structures/Structure';
 export type WorkerTask =
   /** Marche vers un tas au sol (identifiant du tas). */
   | { kind: 'pick'; drop: number }
-  /** Marche vers un coffre ou une caisse pour y déposer sa charge (case d'origine de la structure). */
+  /** Marche vers un coffre pour y déposer sa charge (case d'origine du coffre). */
   | { kind: 'store'; x: number; y: number }
   /** Ravitailleur : marche vers un coffre qui contient du charbon. */
   | { kind: 'take'; x: number; y: number }
@@ -317,11 +316,24 @@ export class WorkerSystem {
     const width = g.world.w;
     const free = WORKERS.capacity - cargoWeight(w.cargo);
     const claimed = new Set(this.list.filter((o) => o !== w && o.task?.kind === 'pick').map((o) => (o.task as { drop: number }).drop));
+    // Un tas que plus aucun coffre n'accepte (réglage des coffres, coffres pleins) reste où il est.
+    const chests = g.structures.list.filter((s): s is Storage => s instanceof Storage);
+    const wanted = new Map<string, boolean>();
+    const taken = (res: string) => {
+      let ok = wanted.get(res);
+      if (ok === undefined) wanted.set(res, (ok = chests.some((c) => c.canAccept(res))));
+      return ok;
+    };
+    let refused = false;
     if (free > 0) {
       const spots = new Map<number, number>();
       for (const d of g.drops.list) {
         const r = getResource(d.res);
         if (d.locked || d.age < 0.35 || r.groundLife !== undefined || r.weight > free || claimed.has(d.id)) continue;
+        if (!taken(d.res)) {
+          refused = true;
+          continue;
+        }
         const i = Math.floor((d.y - 1) / TILE) * width + Math.floor(d.x / TILE);
         if (!spots.has(i)) spots.set(i, d.id);
       }
@@ -337,22 +349,27 @@ export class WorkerSystem {
       }
     }
     if (cargoCount(w.cargo) > 0) return this.planStore(w, g);
-    w.flag = null;
+    // Des minerais au sol, mais aucun coffre n'en veut : on le signale au joueur.
+    w.flag = refused ? 'nostore' : null;
     return false;
   }
 
-  /** Cherche un coffre (à défaut une caisse d'expédition) qui peut recevoir quelque chose de la charge. */
+  /**
+   * Cherche un coffre qui accepte quelque chose de la charge : d'abord le plus proche des coffres réglés sur ces
+   * minerais (un coffre à charbon reçoit le charbon même si un coffre libre est plus près), à défaut le plus proche
+   * des coffres qui prennent tout. Les caisses d'expédition ne sont jamais visées.
+   */
   private planStore(w: Worker, g: GameState): boolean {
     const here = this.tileOf(w, g);
-    for (const kind of [Storage, ShippingCrate] as const) {
+    const chests = g.structures.list.filter((s): s is Storage => s instanceof Storage);
+    for (const specific of [true, false]) {
       const goals = new Map<number, Structure>();
-      for (const s of g.structures.list) {
-        if (!(s instanceof kind)) continue;
-        if (!Object.keys(w.cargo).some((res) => (w.cargo[res] ?? 0) > 0 && (s as Storage | ShippingCrate).canAccept(res))) continue;
+      for (const s of chests) {
+        if ((s.allow.length > 0) !== specific) continue;
+        if (!Object.keys(w.cargo).some((res) => (w.cargo[res] ?? 0) > 0 && s.canAccept(res))) continue;
         for (const i of around(g, s)) if (!goals.has(i)) goals.set(i, s);
       }
-      if (!goals.size) continue;
-      const path = this.finder(g).find(g, here, (i) => goals.has(i), WORKERS.reach);
+      const path = goals.size ? this.finder(g).find(g, here, (i) => goals.has(i), WORKERS.reach) : null;
       if (!path) continue;
       const target = goals.get(path.length ? path[path.length - 1] : here)!;
       w.task = { kind: 'store', x: target.x, y: target.y };
@@ -450,7 +467,7 @@ export class WorkerSystem {
 
   private doStore(w: Worker, g: GameState, x: number, y: number): void {
     const s = g.structures.at(x, y);
-    if (!(s instanceof Storage) && !(s instanceof ShippingCrate)) return;
+    if (!(s instanceof Storage)) return;
     let moved = false;
     for (const [res, n] of Object.entries(w.cargo)) {
       if (n <= 0) continue;

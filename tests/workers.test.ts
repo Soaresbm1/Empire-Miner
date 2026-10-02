@@ -204,36 +204,56 @@ describe('ramasseur', () => {
     expect(c.items.copper).toBe(1);
   });
 
-  it('sans coffre accessible, il garde sa charge, le signale, puis la livre quand un coffre apparaît', () => {
+  it('sans coffre qui accepte ce minerai, il le laisse au sol et le signale ; puis le ramasse quand un coffre apparaît', () => {
     const g = new GameState(4);
     const w = g.workers.add('picker', g);
     drop(g, 'copper', 2, 56, 10);
-    run(g, 15);
-    expect(w.cargo.copper).toBe(2);
+    run(g, 10);
+    expect(g.drops.list).toHaveLength(1); // il ne prend rien dont il ne saurait que faire
+    expect(w.cargo).toEqual({});
     expect(w.flag).toBe('nostore');
     expect(w.task).toBeNull();
     const c = chest(g);
-    run(g, 10);
+    run(g, 15);
     expect(c.items.copper).toBe(2);
     expect(w.flag).toBeNull();
   });
 
-  it('un coffre plein : il en cherche un autre, puis la caisse d’expédition qui vend', () => {
+  it('une charge que plus aucun coffre n’accepte est gardée, signalée, puis livrée quand un coffre l’accepte', () => {
+    const g = new GameState(4);
+    const c = chest(g);
+    const w = g.workers.add('picker', g);
+    drop(g, 'copper', 2, 56, 10);
+    // Le tas est ramassé, puis le joueur règle le coffre sur autre chose pendant le trajet.
+    for (let i = 0; i < 60 * 8 && !w.cargo.copper; i++) g.update(1 / 60, { mx: 0, my: 0, mine: false, target: null });
+    expect(w.cargo.copper).toBe(2);
+    c.setAllow(['iron']);
+    run(g, 15);
+    expect(w.cargo.copper).toBe(2);
+    expect(w.flag).toBe('nostore');
+    c.setAllow([]);
+    run(g, 15);
+    expect(c.items.copper).toBe(2);
+    expect(w.cargo).toEqual({});
+  });
+
+  it('un coffre plein : il en cherche un autre ; la caisse d’expédition n’est jamais visée', () => {
     const g = new GameState(4);
     const full = chest(g, 46, 10);
     full.put('stone', 100); // plein de pierre
     expect(full.canAccept('copper')).toBe(false);
     const crate = g.structures.add(new ShippingCrate(60, 10, 1)) as ShippingCrate;
-    crate.timer = 1000; // le transporteur ne passe pas pendant le test
+    crate.timer = 1000;
     const w = g.workers.add('picker', g);
     drop(g, 'copper', 2, 54, 10);
-    run(g, 20);
-    expect(w.cargo).toEqual({});
-    expect(crate.items.copper ?? 0).toBe(2);
+    run(g, 15);
+    expect(g.drops.list).toHaveLength(1); // aucun coffre n'a de place : le tas reste au sol
+    expect(crate.items).toEqual({});
+    expect(w.flag).toBe('nostore');
     const other = chest(g, 44, 10);
-    drop(g, 'copper', 1, 54, 10);
     run(g, 20);
-    expect(other.items.copper).toBe(1);
+    expect(other.items.copper).toBe(2);
+    expect(crate.items).toEqual({});
   });
 
   it('évite le grisou : ne traverse pas un nuage, et ne va pas dans un tas qui s’y trouve', () => {
@@ -283,6 +303,139 @@ describe('ramasseur', () => {
     const home = g.workers.homeTile(g, 0);
     expect(tile(w)).toEqual({ x: home % g.world.w, y: Math.floor(home / g.world.w) });
     expect(w.moving).toBe(false);
+  });
+});
+
+describe('filtre de coffre : ce que les ouvriers y rangent', () => {
+  it('chaque minerai va dans le coffre qui l’accepte, même s’il est plus loin', () => {
+    const g = new GameState(4);
+    const near = chest(g, 52, 10);
+    near.setAllow(['iron']);
+    const far = chest(g, 40, 10);
+    far.setAllow(['copper']);
+    g.workers.add('picker', g);
+    drop(g, 'copper', 2, 56, 10);
+    drop(g, 'iron', 2, 58, 10);
+    run(g, 40);
+    expect(far.items).toEqual({ copper: 2 });
+    expect(near.items).toEqual({ iron: 2 });
+    expect(g.drops.list).toHaveLength(0);
+  });
+
+  it('un coffre réglé sur un minerai passe avant un coffre libre plus proche', () => {
+    const g = new GameState(4);
+    const free = chest(g, 56, 10); // juste à côté des tas, accepte tout
+    const coal = chest(g, 40, 10); // loin, réglé sur le charbon
+    coal.setAllow(['coal']);
+    g.workers.add('picker', g);
+    drop(g, 'coal', 2, 58, 10);
+    drop(g, 'copper', 2, 60, 10);
+    run(g, 50);
+    expect(coal.items).toEqual({ coal: 2 });
+    expect(free.items).toEqual({ copper: 2 }); // le cuivre, lui, n'a pas de coffre réglé : le coffre libre le prend
+  });
+
+  it('un tas qu’aucun coffre n’accepte reste au sol, les autres sont ramassés', () => {
+    const g = new GameState(4);
+    const c = chest(g);
+    c.setAllow(['copper']);
+    const w = g.workers.add('picker', g);
+    drop(g, 'copper', 1, 56, 10);
+    drop(g, 'gold', 1, 58, 10);
+    run(g, 30);
+    expect(c.items).toEqual({ copper: 1 });
+    expect(g.drops.list.map((d) => d.res)).toEqual(['gold']);
+    expect(w.cargo).toEqual({});
+    expect(w.flag).toBe('nostore'); // l'or traîne : on le signale
+  });
+
+  it('un coffre sans filtre prend tout ; plusieurs coffres filtrés et un coffre libre : le libre prend le reste', () => {
+    const g = new GameState(4);
+    const iron = chest(g, 48, 10);
+    iron.setAllow(['iron']);
+    const rest = chest(g, 42, 10);
+    g.workers.add('picker', g);
+    drop(g, 'iron', 1, 56, 10);
+    drop(g, 'gold', 1, 58, 10);
+    run(g, 40);
+    expect(iron.items).toEqual({ iron: 1 });
+    expect(rest.items).toEqual({ gold: 1 });
+  });
+});
+
+describe('filtre de coffre : le coffre lui-même', () => {
+  it('sans filtre il accepte tout ; avec un filtre, seulement ces minerais', () => {
+    const c = new Storage(1, 1, 1);
+    expect(c.allow).toEqual([]);
+    expect(c.accepts('gold')).toBe(true);
+    c.setAllow(['gold', 'copper', 'gold', 'inconnu']);
+    expect(c.allow).toEqual(['copper', 'gold']); // sans doublon ni inconnu, dans l'ordre des ressources
+    expect(c.accepts('copper')).toBe(true);
+    expect(c.accepts('iron')).toBe(false);
+    expect(c.room('iron')).toBe(0);
+    expect(c.canAccept('iron')).toBe(false);
+    expect(c.room('copper')).toBeGreaterThan(0);
+  });
+
+  it('le dépôt manuel, les convoyeurs et les ouvriers passent tous par le filtre', () => {
+    const g = new GameState(4);
+    const c = new Storage(1, 1, 1);
+    c.setAllow(['copper']);
+    expect(c.put('iron', 5)).toBe(0);
+    expect(c.put('copper', 3)).toBe(3);
+    expect(c.accept('iron', 0, g)).toBe(false);
+    expect(c.accept('copper', 0, g)).toBe(true);
+    expect(c.items).toEqual({ copper: 4 });
+  });
+
+  it('ce qui est déjà dedans y reste, et peut toujours en sortir', () => {
+    const c = new Storage(1, 1, 1);
+    c.put('iron', 4);
+    c.setAllow(['copper']);
+    expect(c.items.iron).toBe(4);
+    expect(c.take('iron', 3)).toBe(3);
+    expect(c.items.iron).toBe(1);
+  });
+
+  it('choisir un minerai depuis « tout » ne garde que lui ; en retirer le dernier remet « tout »', () => {
+    const c = new Storage(1, 1, 1);
+    expect(c.toggleAllow('copper')).toBe(true);
+    expect(c.allow).toEqual(['copper']);
+    c.toggleAllow('coal');
+    expect(c.allow).toEqual(['coal', 'copper']);
+    c.toggleAllow('coal');
+    c.toggleAllow('copper');
+    expect(c.allow).toEqual([]);
+    expect(c.accepts('gold')).toBe(true);
+    expect(c.toggleAllow('inconnu')).toBe(false);
+  });
+
+  it('le dépôt du sac : seul ce que le coffre accepte part, le reste garde sa place dans le sac', () => {
+    const g = new GameState(4);
+    const c = g.structures.add(new Storage(46, 10, 1)) as Storage;
+    c.setAllow(['copper']);
+    g.inventory.add('copper', 2);
+    g.inventory.add('coal', 2);
+    g.storageDepositAll(c);
+    expect(c.items).toEqual({ copper: 2 });
+    expect(g.inventory.count('coal')).toBe(2);
+    expect(g.inventory.count('copper')).toBe(0);
+  });
+
+  it('le réglage est sauvegardé ; une ancienne sauvegarde de coffre accepte tout ; les valeurs absurdes sont ignorées', () => {
+    const g = new GameState(4);
+    const c = g.structures.add(new Storage(46, 10, 1)) as Storage;
+    c.setAllow(['gold', 'iron']);
+    const back = deserialize(JSON.parse(JSON.stringify(serialize(g))));
+    expect((back.structures.at(46, 10) as Storage).allow).toEqual(['iron', 'gold']);
+    const data = JSON.parse(JSON.stringify(serialize(g)));
+    const saved = data.structures.find((s: { type: string }) => s.type === 'storage');
+    delete saved.allow;
+    expect((deserialize(data).structures.at(46, 10) as Storage).allow).toEqual([]);
+    saved.allow = [3, null, 'inconnu', 'copper', 'copper'];
+    expect((deserialize(data).structures.at(46, 10) as Storage).allow).toEqual(['copper']);
+    saved.allow = 'pas une liste';
+    expect((deserialize(data).structures.at(46, 10) as Storage).allow).toEqual([]);
   });
 });
 

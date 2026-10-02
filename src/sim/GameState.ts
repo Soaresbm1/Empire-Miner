@@ -1317,6 +1317,16 @@ export class GameState implements StructureContext {
     return s.toggleFilter(res);
   }
 
+  /** Ajoute un minerai à ceux qu'un coffre accepte, ou l'en retire. */
+  toggleStorageAllow(s: Storage, res: string): boolean {
+    return s.toggleAllow(res);
+  }
+
+  /** Le coffre accepte de nouveau tout. */
+  clearStorageAllow(s: Storage): void {
+    s.setAllow([]);
+  }
+
   /** Charge le charbon du sac dans une foreuse. */
   fuelDrill(d: Drill): number {
     const fuel = d.def.fuel;

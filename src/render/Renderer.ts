@@ -1519,6 +1519,40 @@ export class Renderer {
     ctx.fillRect(x + 1, y + 15, 14, 2);
     ctx.fillStyle = fill > 0.9 ? '#d0342c' : '#6fcf6a';
     ctx.fillRect(x + 1, y + 15, Math.round(14 * Math.min(1, fill)), 2);
+    if (s.allow.length) this.drawChestTag(x, y, s.allow);
+  }
+
+  /**
+   * Étiquette d'un coffre réglé sur certains minerais : une petite plaque de papier au coin du couvercle, avec une
+   * pastille de la couleur de chacun (une grande pour un seul, jusqu'à quatre ; au-delà, la quatrième est un « + »).
+   */
+  private drawChestTag(x: number, y: number, allow: string[]): void {
+    const ctx = this.ctx;
+    ctx.fillStyle = INK;
+    ctx.fillRect(x + 9, y - 8, 7, 7);
+    ctx.fillStyle = '#e8d8b0';
+    ctx.fillRect(x + 10, y - 7, 5, 5);
+    const n = allow.length;
+    const swatch = (res: string, px: number, py: number, size: number) => {
+      const r = getResource(res);
+      ctx.fillStyle = r.color;
+      ctx.fillRect(px, py, size, size);
+      ctx.fillStyle = r.light;
+      ctx.fillRect(px, py, size - 1, 1);
+      ctx.fillStyle = r.dark;
+      ctx.fillRect(px + size - 1, py + size - 1, 1, 1);
+    };
+    if (n === 1) return swatch(allow[0], x + 11, y - 6, 3);
+    const cells: [number, number][] = [[10, -7], [13, -7], [10, -4], [13, -4]];
+    cells.slice(0, Math.min(n, 4)).forEach(([cx, cy], i) => {
+      if (i === 3 && n > 4) {
+        ctx.fillStyle = INK;
+        ctx.fillRect(x + cx, y + cy + 1, 2, 1);
+        ctx.fillRect(x + cx, y + cy, 1, 2);
+        return;
+      }
+      swatch(allow[i], x + cx, y + cy, 2);
+    });
   }
 
   /** Caisse d'expédition : caisse verte ouverte, panneau à pièce et minuteur du transporteur. */

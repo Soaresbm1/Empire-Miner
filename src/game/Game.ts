@@ -345,7 +345,16 @@ export class Game {
         if (target instanceof Storage) g.storageTakeAll(target);
         break;
       case 'storageDeposit':
-        if (target instanceof Storage) g.storageDepositAll(target);
+        if (target instanceof Storage) {
+          g.storageDepositAll(target);
+          // Ce que le coffre refuse reste dans le sac : on dit pourquoi.
+          if (target.allow.length && Object.keys(g.inventory.items).some((res) => !target.accepts(res)))
+            this.ui.toast(`Ce coffre n'accepte que : ${target.allow.map((r) => getResource(r).name.toLowerCase()).join(', ')}.`, 'warn');
+        }
+        break;
+      case 'storageAllow':
+        // « Tout » vide la liste ; un minerai s'ajoute ou se retire (on peut en choisir plusieurs).
+        if (target instanceof Storage) arg ? g.toggleStorageAllow(target, arg) : g.clearStorageAllow(target);
         break;
       case 'shipDeposit':
         if (target instanceof ShippingCrate) {
@@ -1077,7 +1086,10 @@ export class Game {
       const st = { ok: 'fond le minerai', idle: 'attend du minerai', nofuel: 'sans charbon', full: 'sortie saturée' }[s.status];
       return `<b>${s.def.name}</b> ${['→', '↓', '←', '↑'][s.dir]} — ${st}<br>Minerai : ${s.input.length} · lingots prêts : ${s.output.length} · charbon : ${s.fuelUnits}${this.heatLine(g, s.x, s.y)}`;
     }
-    if (s instanceof Storage) return `<b>Coffre</b><br>${kg(s.weight())} / ${kg(s.capacity)}`;
+    if (s instanceof Storage)
+      return `<b>Coffre</b><br>${kg(s.weight())} / ${kg(s.capacity)}${
+        s.allow.length ? `<br>Accepte seulement : ${s.allow.map((r) => `${resIcon(r)} ${getResource(r).name}`).join(', ')}` : ''
+      }`;
     if (s instanceof ShippingCrate)
       return `<b>Caisse d'expédition</b><br>${kg(s.weight())} / ${kg(s.capacity)} · ${money(s.pendingValue())} en attente<br>Passage dans ${Math.ceil(s.timer)} s`;
     if (s instanceof Building) return `<b>${s.name}</b>`;

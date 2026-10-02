@@ -1362,6 +1362,33 @@ try {
     check(res.fuel > 0, `le ravitailleur recharge le four (${res.fuel} unités)`);
     await shot('29-crew-working');
   }
+
+  // Filtre de coffre : le panneau règle ce que le coffre accepte (clic sur un minerai, puis sur « Tout »).
+  if (staged) {
+    await ev((p) => {
+      const g = window.__EM.state;
+      g.player.x = (p.cx + 0.5) * 16;
+      g.player.y = (p.cy + 1.6) * 16;
+      window.__EM.renderer.snapCamera();
+    }, staged);
+    await page.waitForTimeout(400);
+    await page.keyboard.press('KeyE');
+    await page.waitForTimeout(450);
+    const chestText = await ev(() => document.querySelector('.panel-storage')?.textContent ?? '');
+    check(/Ce que ce coffre accepte/.test(chestText) && /Accepte tout/.test(chestText), 'le panneau du coffre propose de choisir ce qu’il accepte');
+    await page.click('[data-action="storageAllow"][data-arg="copper"]');
+    await page.waitForTimeout(300);
+    const allowed = await ev((p) => [...window.__EM.state.structures.at(p.cx, p.cy).allow], staged);
+    check(JSON.stringify(allowed) === '["copper"]', `un clic sur le cuivre : le coffre n'accepte plus que du cuivre (${JSON.stringify(allowed)})`);
+    check(/Accepte seulement/.test(await ev(() => document.querySelector('.panel-storage')?.textContent ?? '')), 'le panneau dit « Accepte seulement : cuivre »');
+    await shot('30-chest-filter');
+    await page.click('[data-action="storageAllow"][data-arg=""]');
+    await page.waitForTimeout(300);
+    const cleared = await ev((p) => [...window.__EM.state.structures.at(p.cx, p.cy).allow], staged);
+    check(cleared.length === 0, 'le bouton « Tout » remet le coffre à « accepte tout »');
+    await page.keyboard.press('Escape');
+    await page.waitForTimeout(250);
+  }
 } catch (e) {
   failures++;
   console.error(e);

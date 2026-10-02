@@ -134,13 +134,17 @@ minerai, la pierre ne s'échange pas. Toute vente passe par `GameState.quote(res
 Marché du Tableau d'affichage), ligne du HUD. Sauvegarde : champ facultatif `market` (cours, courbes, événements) ;
 sans lui, le marché repart à 100 % au pas du temps de jeu, sans rejouer le passé.
 
+Filtre de coffre : `Storage.allow` (minerais acceptés, vide = tout) est pris en compte par `room()`, d'où `canAccept`,
+`accept` (convoyeurs), `put` (dépôt manuel, ouvriers) : tout ce qui entre passe par le filtre, ce qui est déjà dedans
+reste et peut sortir. Réglé depuis le panneau du coffre (`toggleStorageAllow`), sauvegardé (champ facultatif `allow`).
+
 Ouvriers (`sim/Workers.ts`, réglages dans `data/workers.ts`) : `GameState.workers` (un `WorkerSystem`) garde les
 ouvriers, mis à jour à chaque tick. Chacun a une tâche (`WorkerTask` : marcher vers un tas, un coffre, une machine…)
 et un chemin de cases. La recherche de chemin (`Pather`, largeur d'abord sur la grille, tableaux réutilisés, 4
 voisins) ne traverse que les cases franchissables (`walkable` : ni roche, ni structure pleine, ni foreuse en route, ni
 grisou ou eau profonde) et s'arrête à `WORKERS.reach` cases. Le ramasseur vise le tas le plus proche non
-réclamé par un autre (les tas de pierre et ceux que le joueur vient de jeter sont ignorés), puis un coffre qui peut
-recevoir sa charge, à défaut une caisse d'expédition ; le ravitailleur repère les machines à combustible (`fuelWanted`,
+réclamé par un autre (les tas de pierre, ceux que le joueur vient de jeter et ceux qu'aucun coffre n'accepte sont
+ignorés), puis un coffre qui peut recevoir sa charge (jamais une caisse d'expédition) ; le ravitailleur repère les machines à combustible (`fuelWanted`,
 `fuelUnits`, `addFuel`) à moitié vides, prend du charbon dans un coffre et les recharge. Un passage qui se ferme en
 route annule la tâche et relance la réflexion ; sans rien à faire, l'ouvrier retourne à sa case d'attente près du
 puits. Il émet l'événement `worker` (éclat et son). Achat à l'Atelier : `GameState.hireWorker` (prix croissant,

@@ -124,12 +124,25 @@ export function storagePanel(g: GameState, s: Storage): string {
         `<tr><td>${resIcon(res)} ${getResource(res).name}</td><td class="num">×${n}</td><td class="num">${kg(n * getResource(res).weight)}</td><td>${btn('storageTake', 'Prendre', { arg: res, cls: 'small' })}</td></tr>`,
     )
     .join('');
+  // Ce que le coffre accepte : « Tout », ou les minerais choisis (on en ajoute ou retire d'un clic).
+  const known = RESOURCES.filter(
+    (r) => r.id === 'stone' || r.id === 'coal' || s.allow.includes(r.id) || (s.items[r.id] ?? 0) > 0 || g.stats.discovered.includes(r.id) || (g.stats.collected[r.id] ?? 0) > 0,
+  );
+  const choice = (id: string, label: string, on: boolean) => btn('storageAllow', label, { arg: id, cls: `small ${on ? 'on' : 'off'}` });
+  const accepts = s.allow.length
+    ? `<div class="status good">Accepte seulement : ${s.allow.map((r) => `${resIcon(r)} <b>${getResource(r).name}</b>`).join(', ')}.</div>`
+    : '<div class="status good">Accepte tout.</div>';
+  const filter = `${accepts}<p class="hint">Convoyeurs, ouvriers et dépôt du sac ne lui apportent que ce qu'il accepte ; ce qui est déjà dedans y reste. Cliquez sur un minerai pour l'ajouter, et sur un minerai choisi pour le retirer.</p>
+    <div class="buy">${choice('', 'Tout', s.allow.length === 0)}${known.map((r) => choice(r.id, `${resIcon(r.id)} ${r.name}`, s.allow.includes(r.id))).join('')}</div>`;
+  const depositable = Object.keys(g.inventory.items).some((res) => s.accepts(res));
   return `
     <div class="bar big"><div style="width:${Math.min(100, (w / s.capacity) * 100)}%"></div><span>${kg(w)} / ${kg(s.capacity)}</span></div>
+    <h4>Ce que ce coffre accepte</h4>${filter}
+    <h4>Contenu</h4>
     ${items.length ? `<table class="table"><tbody>${rows}</tbody></table>` : '<p class="empty">Coffre vide. Reliez-le à une foreuse avec des convoyeurs, ou déposez-y votre sac.</p>'}
     <p class="hint">Un convoyeur collé au coffre qui ne pointe pas vers lui en sort les minerais automatiquement. Le charbon du coffre recharge aussi les foreuses collées.</p>
     <div class="panel-footer"><span>Votre sac : ${kg(g.inventory.weight())} / ${kg(g.inventory.capacity)}</span>
-    <span>${btn('storageDeposit', 'Tout déposer', { disabled: g.inventory.isEmpty() })} ${btn('storageTakeAll', 'Tout prendre', { cls: 'primary', disabled: !items.length })}</span></div>`;
+    <span>${btn('storageDeposit', 'Tout déposer', { disabled: !depositable, title: depositable ? undefined : 'Rien dans votre sac que ce coffre accepte' })} ${btn('storageTakeAll', 'Tout prendre', { cls: 'primary', disabled: !items.length })}</span></div>`;
 }
 
 // ------------------------------------------------------------------ caisse d'expédition
