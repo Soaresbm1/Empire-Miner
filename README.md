@@ -221,12 +221,17 @@ lettre tapée : c'est la touche marquée M, quel que soit le clavier.
   range dans le coffre le plus proche **qui accepte ce minerai** (chaque coffre se règle : il ne prend jamais un tas
   qu'aucun coffre n'accepte, et ne range jamais dans une caisse d'expédition) ; il porte 15 kg et laisse la pierre. Le **ravitailleur** prend du charbon dans les coffres et recharge les foreuses, les fours et les foreuses
   de percement dont le réservoir est à moitié vide ou moins (une machine collée à un coffre se sert déjà seule). Ils
-  marchent de case en case par le plus court chemin (90 cases au plus), en évitant la roche, les machines, le
-  grisou et l'eau profonde, ne visent jamais le même tas ou la même machine, contournent un passage qui se ferme et
-  attendent près de l'entrée de la mine quand il n'y a rien à faire. Le panneau montre ce que fait chacun (« Rapporte
+  marchent de case en case par le plus court chemin, en évitant la roche, les machines, le grisou et l'eau profonde.
+  Pour **choisir** un tas ou une machine ils ne regardent pas au-delà de 90 cases à parcourir, mais pour **rentrer**
+  (déposer leur charge, retourner à leur poste) ils cherchent aussi loin qu'il faut : un ramasseur qui a suivi une
+  traînée de minerai jusqu'au fond de la mine remonte toujours déposer sa charge, au lieu de rester coincé. Ils ne
+  visent jamais le même tas ou la même machine, contournent un passage qui se ferme et attendent près de l'entrée de la
+  mine quand il n'y a rien à faire. Le panneau montre ce que fait chacun (« Rapporte
   sa charge au coffre »…) et sa charge ; congédier demande confirmation (sans remboursement, la charge reste par
-  terre). Un ouvrier bloqué (« aucun coffre n'accepte ce minerai », « plus de charbon dans les coffres ») est signalé au
-  Tableau d'affichage et par un point d'exclamation au-dessus de lui ; ils apparaissent aussi sur la carte (points
+  terre). Un ouvrier bloqué est signalé au Tableau d'affichage et par un point d'exclamation au-dessus de lui, et
+  **survoler l'ouvrier** à la souris donne la cause et quoi faire : « aucun coffre n'accepte ce minerai » (réglage des
+  coffres), « les coffres qui acceptent ce minerai sont pleins », « aucun chemin jusqu'à un coffre » (roche, grisou, eau
+  ou machine en travers) ou « plus de charbon dans les coffres » ; ils apparaissent aussi sur la carte (points
   vert et orange). Casque vert pour le ramasseur, orange pour le ravitailleur. Les ouvriers sont sauvegardés
   (métier, position, charge) ; les anciennes sauvegardes n'en ont pas.
 - **Cours du marché** : les prix de vente montent et descendent. Chaque minerai a un **cours**, multiplicateur de

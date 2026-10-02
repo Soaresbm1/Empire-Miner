@@ -43,8 +43,13 @@ export const WORKERS = {
   speed: 54,
   /** Ce qu'un ouvrier porte (kg). */
   capacity: 15,
-  /** Un tas ou un coffre plus loin que cela (cases à parcourir) n'est pas visé. */
+  /** Un tas ou un coffre plus loin que cela (cases à parcourir) n'est pas visé quand l'ouvrier cherche du travail. */
   reach: 90,
+  /**
+   * Pour rentrer (déposer sa charge, retourner à son poste), un ouvrier cherche bien plus loin : sans cela, un ramasseur
+   * qui a suivi une traînée de minerai jusqu'au fond de la mine ne retrouverait jamais un coffre.
+   */
+  farReach: 2000,
   /** Le ravitailleur recharge une machine dont le réservoir est à moitié vide ou moins. */
   fuelLow: 0.5,
   /** Pause après un geste : ramasser, déposer, recharger (s). */

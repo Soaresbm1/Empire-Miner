@@ -169,7 +169,12 @@ Ouvriers (`sim/Workers.ts`, réglages dans `data/workers.ts`) : `GameState.worke
 ouvriers, mis à jour à chaque tick. Chacun a une tâche (`WorkerTask` : marcher vers un tas, un coffre, une machine…)
 et un chemin de cases. La recherche de chemin (`Pather`, largeur d'abord sur la grille, tableaux réutilisés, 4
 voisins) ne traverse que les cases franchissables (`walkable` : ni roche, ni structure pleine, ni foreuse en route, ni
-grisou ou eau profonde) et s'arrête à `WORKERS.reach` cases. Le ramasseur vise le tas le plus proche non
+grisou ou eau profonde) et s'arrête à `WORKERS.reach` cases pour **chercher du travail** (tas, machine, charbon) mais à
+`WORKERS.farReach` pour **rentrer** (déposer la charge dans `planStore`, livrer du charbon, retourner à la case d'attente) :
+sans cela, un ramasseur qui a suivi une traînée de minerai trop loin des coffres restait coincé avec sa charge. Quand il ne
+trouve pas de coffre, `planStore` dit pourquoi (`WorkerFlag` : `nostore` aucun coffre n'accepte, `full` ils sont pleins,
+`noroute` aucun chemin) ; `ui/crew.ts` en fait les phrases, la ligne du Tableau d'affichage et l'infobulle au survol
+(`workerAt`, `workerTooltip`). Le ramasseur vise le tas le plus proche non
 réclamé par un autre (les tas de pierre, ceux que le joueur vient de jeter et ceux qu'aucun coffre n'accepte sont
 ignorés), puis un coffre qui peut recevoir sa charge (jamais une caisse d'expédition) ; le ravitailleur repère les machines à combustible (`fuelWanted`,
 `fuelUnits`, `addFuel`) à moitié vides, prend du charbon dans un coffre et les recharge. Un passage qui se ferme en
@@ -181,8 +186,8 @@ dans `ui/workshop.ts`, le rendu dans `Renderer.drawWorker` (sprites du mineur re
 
 Repères (`sim/Markers.ts`) : `GameState.markers` (un `MarkerBook`) garde la liste, le repère suivi et
 les sauvegarde ; `GameState.addMarker` les nomme d'après le terrain et les machines. La carte complète
-convertit un clic en case (`MineMap.tileAt`, via la dernière vue dessinée) ; l'interface transmet la position du
-clic sur un canvas qui porte un `data-action`.
+convertit un clic en case (`MineMap.tileAt`, via la dernière vue dessinée, donc aussi quand la carte est zoomée) ;
+l'interface transmet la position du clic (en pixels du canvas) au relâchement, s'il n'y a pas eu de glissé.
 
 ## Étendre le jeu
 

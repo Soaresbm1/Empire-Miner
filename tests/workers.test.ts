@@ -249,11 +249,103 @@ describe('ramasseur', () => {
     run(g, 15);
     expect(g.drops.list).toHaveLength(1); // aucun coffre n'a de place : le tas reste au sol
     expect(crate.items).toEqual({});
-    expect(w.flag).toBe('nostore');
+    expect(w.flag).toBe('full'); // le coffre voudrait bien du cuivre, mais il est plein
     const other = chest(g, 44, 10);
     run(g, 20);
     expect(other.items.copper).toBe(2);
     expect(crate.items).toEqual({});
+  });
+
+  /** Galerie en serpentin sous le puits : son extrémité (10, S + 27) est à bien plus de `reach` cases à parcourir du camp. */
+  function farGallery(g: GameState): { x: number; y: number } {
+    const y1 = S + 25;
+    const y2 = S + 27;
+    for (let y = S + 12; y <= y1; y++) g.world.set(49, y, AIR);
+    for (let x = 49; x <= 90; x++) g.world.set(x, y1, AIR);
+    for (let y = y1; y <= y2; y++) g.world.set(90, y, AIR);
+    for (let x = 10; x <= 90; x++) g.world.set(x, y2, AIR);
+    return { x: 10, y: y2 };
+  }
+
+  it('un ramasseur chargé qui se retrouve loin d’un coffre rentre quand même le déposer (il ne reste pas coincé)', () => {
+    const g = new GameState(4);
+    const c = chest(g);
+    const w = g.workers.add('picker', g);
+    const far = farGallery(g);
+    w.x = (far.x + 0.5) * TILE;
+    w.y = (far.y + 0.5) * TILE;
+    w.cargo = { copper: 2 };
+    run(g, 150);
+    expect(c.items.copper).toBe(2);
+    expect(w.cargo).toEqual({});
+    expect(w.flag).toBeNull();
+  });
+
+  it('sans rien à faire, un ouvrier loin de son poste y retourne, même à plus de 90 cases', () => {
+    const g = new GameState(4);
+    const w = g.workers.add('picker', g);
+    const far = farGallery(g);
+    w.x = (far.x + 0.5) * TILE;
+    w.y = (far.y + 0.5) * TILE;
+    run(g, 150);
+    expect(tile(w).y).toBeLessThan(S);
+    expect(Math.abs(tile(w).x - g.layout.spawn.x)).toBeLessThanOrEqual(5);
+  });
+
+  it('un ramasseur chargé, coffres pleins : « coffres pleins » ; il dépose dès qu’il y a de la place', () => {
+    const g = new GameState(4);
+    const c = chest(g);
+    c.put('stone', 100);
+    const w = g.workers.add('picker', g);
+    w.cargo = { copper: 2 };
+    run(g, 10);
+    expect(w.flag).toBe('full');
+    expect(w.cargo.copper).toBe(2);
+    c.items = {};
+    run(g, 20);
+    expect(c.items.copper).toBe(2);
+    expect(w.flag).toBeNull();
+  });
+
+  it('un coffre qui accepte la charge mais qu’aucun chemin ne rejoint : « aucun chemin » (et pas « aucun coffre »)', () => {
+    const g = new GameState(4);
+    // Un coffre muré dans la roche.
+    g.structures.add(new Storage(60, S + 20, 1));
+    const w = g.workers.add('picker', g);
+    w.cargo = { copper: 2 };
+    run(g, 10);
+    expect(w.flag).toBe('noroute');
+    expect(w.cargo.copper).toBe(2);
+    // Un coffre accessible : il le trouve et livre.
+    const open = chest(g);
+    run(g, 40);
+    expect(open.items.copper).toBe(2);
+    expect(w.flag).toBeNull();
+  });
+
+  it('chargé, sans aucun coffre qui accepte sa charge : « aucun coffre n’accepte » (le réglage, pas la distance)', () => {
+    const g = new GameState(4);
+    const c = chest(g);
+    c.setAllow(['iron']);
+    const w = g.workers.add('picker', g);
+    w.cargo = { copper: 2 };
+    run(g, 10);
+    expect(w.flag).toBe('nostore');
+  });
+
+  it('un ravitailleur qui porte du charbon loin des machines les retrouve, même à plus de 90 cases', () => {
+    const g = new GameState(4);
+    g.pickaxeLevel = 1;
+    g.inventory.addKit('furnace', 1);
+    const furnace = g.place('furnace', 57, 8, 1) as unknown as { fuelUnits: number };
+    expect(furnace).toBeTruthy();
+    const w = g.workers.add('refueler', g);
+    const far = farGallery(g);
+    w.x = (far.x + 0.5) * TILE;
+    w.y = (far.y + 0.5) * TILE;
+    w.cargo = { coal: 10 };
+    run(g, 160);
+    expect(furnace.fuelUnits).toBeGreaterThan(0);
   });
 
   it('évite le grisou : ne traverse pas un nuage, et ne va pas dans un tas qui s’y trouve', () => {

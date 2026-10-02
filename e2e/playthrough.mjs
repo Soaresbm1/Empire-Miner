@@ -1618,6 +1618,34 @@ try {
     check(tun.sides.every(Boolean), 'la tête large perce aussi le diamant et le socle rocheux des côtés');
     await shot('35-borer-level5-tunnel');
   }
+
+  // Ouvrier bloqué : l'infobulle au survol dit pourquoi (ici, aucun coffre n'accepte ce qu'il porte).
+  {
+    await ev(() => {
+      const g = window.__EM.state;
+      for (const c of g.storages()) c.setAllow(['coal']);
+      g.player.x = 50.5 * 16;
+      g.player.y = 10.5 * 16;
+      const w = g.workers.add('picker', g);
+      w.x = 54.5 * 16;
+      w.y = 10.5 * 16 + 1;
+      w.cargo = { gold: 1 };
+      window.__stuckWorker = w.id;
+      window.__EM.renderer.snapCamera();
+    });
+    await page.waitForTimeout(3000);
+    const spot = await ev(() => {
+      const w = window.__EM.state.workers.get(window.__stuckWorker);
+      const p = window.__EM.renderer.worldToScreen(w.x, w.y - 6);
+      const r = document.getElementById('game').getBoundingClientRect();
+      return { x: p.x + r.left, y: p.y + r.top, flag: w.flag };
+    });
+    await page.mouse.move(spot.x, spot.y);
+    await page.waitForTimeout(400);
+    const tip = (await page.textContent('#tooltip')) ?? '';
+    check(spot.flag === 'nostore' && /Ramasseur/.test(tip) && /Aucun coffre n'accepte/.test(tip), `survoler un ouvrier bloqué donne la cause dans l'infobulle (${tip.replace(/\s+/g, ' ').trim().slice(0, 80)})`);
+    await shot('36-worker-blocked-tooltip');
+  }
 } catch (e) {
   failures++;
   console.error(e);

@@ -36,6 +36,7 @@ import { allowWords, chestBar, chestsInRect, pickChests, toggleDraft } from '../
 import { Speed, advance, isSpeed, keepsUp, nextSpeed, smoothRate, speedDanger } from './speed';
 import { speedBar } from '../ui/speedBar';
 import { esc, kg, money, resIcon } from '../ui/format';
+import { workerAt, workerTooltip } from '../ui/crew';
 
 const AUTOSAVE_EVERY = 60;
 /** Facteur de zoom de la carte complète pour un cran de molette ou un appui sur + / −. */
@@ -1235,6 +1236,8 @@ export class Game {
   private describeTile(g: GameState, tx: number, ty: number): string | null {
     const w = g.world;
     if (!w.inBounds(tx, ty) || !w.explored[w.idx(tx, ty)]) return null;
+    const worker = workerAt(g, tx, ty);
+    if (worker) return workerTooltip(g, worker);
     const wagon = g.wagons.at(tx, ty);
     if (wagon)
       return `<b>Wagonnet</b> — ${wagon.stopped ? "à l'arrêt" : 'en route'}${wagon.rider ? ' · vous êtes à bord' : ''}<br>Chargement : ${kg(wagon.weight())} / ${kg(
