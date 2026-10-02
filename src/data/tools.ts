@@ -103,8 +103,8 @@ export const SCOOTER: RideDef = {
 
 /**
  * Corde de rappel : une corde à usage unique, achetée à l'Atelier. On se suspend quelques secondes
- * sans bouger, puis on remonte au camp avec son sac. La corde reste accrochée à l'endroit quitté :
- * depuis le camp, on y redescend gratuitement (touche V dans les deux sens).
+ * sans bouger, puis on remonte à la surface, à la verticale de l'endroit quitté, avec son sac. La corde
+ * reste accrochée à cet endroit : depuis la surface, on y redescend gratuitement (touche V dans les deux sens).
  */
 export interface RopeDef {
   id: string;
@@ -133,5 +133,5 @@ export const ROPE: RopeDef = {
   channel: 3,
   interruptDamage: 10,
   adviseDepth: 80,
-  description: "Accrochez-la, ne bougez plus pendant trois secondes, et vous voilà au camp avec tout votre sac. La corde reste en place : redescendez au même endroit depuis le camp, sans payer de nouveau.",
+  description: "Accrochez-la, ne bougez plus pendant trois secondes, et vous voilà à la surface, juste au-dessus d'où vous étiez, avec tout votre sac. La corde reste en place : redescendez au même endroit depuis la surface, sans payer de nouveau.",
 };

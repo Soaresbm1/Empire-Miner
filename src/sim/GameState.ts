@@ -589,7 +589,10 @@ export class GameState implements StructureContext {
     else if (dir === 'down') this.ropeDown();
   }
 
-  /** Remonte au camp avec tout son sac ; la corde reste accrochée là où l'on était. */
+  /**
+   * Remonte à la surface avec tout son sac, à la verticale de l'endroit où l'on était (et non au milieu du camp) ;
+   * la corde reste accrochée là où l'on était.
+   */
   private ropeUp(): void {
     const p = this.player;
     const from = { tx: p.tileX, ty: p.tileY };
@@ -598,9 +601,13 @@ export class GameState implements StructureContext {
     // Un seul repère « Corde de rappel » : l'ancien disparaît.
     for (const m of [...this.markers.list]) if (m.label === ROPE.name) this.markers.remove(m.id);
     this.markers.add('base', from.tx, from.ty, ROPE.name);
-    this.teleportTo(this.layout.spawn.x, this.layout.spawn.y);
+    // Même colonne, sur la rangée du camp ; si la place est prise (arbre, falaise du bord, bâtiment), la case libre la
+    // plus proche en surface ; et au point d'apparition si rien n'est libre alentour.
+    const spawn = this.layout.spawn;
+    const top = this.freeSpotNear(from.tx, spawn.y, 6, true) ?? { tx: spawn.x, ty: spawn.y };
+    this.teleportTo(top.tx, top.ty);
     this.emit({ t: 'rope', phase: 'up' });
-    this.emit({ t: 'message', text: `Vous voilà au camp, sac intact. La corde reste accrochée à ${Math.floor(depthAt(from.ty))} m (touche V pour y redescendre).`, kind: 'good' });
+    this.emit({ t: 'message', text: `Vous voilà à la surface, juste au-dessus d’où vous étiez, sac intact. La corde reste accrochée à ${Math.floor(depthAt(from.ty))} m (touche V pour y redescendre).`, kind: 'good' });
   }
 
   /** Redescend au point d'accroche, ou à la case libre la plus proche si le passage s'est refermé. */
@@ -620,8 +627,8 @@ export class GameState implements StructureContext {
     this.emit({ t: 'message', text: `Vous redescendez à ${Math.floor(depthAt(spot.ty))} m. La corde est décrochée.`, kind: 'good' });
   }
 
-  /** Case dégagée la plus proche de (tx, ty), dans un rayon de `radius` cases. */
-  private freeSpotNear(tx: number, ty: number, radius: number): { tx: number; ty: number } | null {
+  /** Case dégagée la plus proche de (tx, ty), dans un rayon de `radius` cases (`onSurface` : jamais sous terre). */
+  private freeSpotNear(tx: number, ty: number, radius: number, onSurface = false): { tx: number; ty: number } | null {
     const p = this.player;
     let best: { tx: number; ty: number } | null = null;
     let bestD = Infinity;
@@ -630,6 +637,7 @@ export class GameState implements StructureContext {
         const x = tx + dx;
         const y = ty + dy;
         if (!this.world.inBounds(x, y)) continue;
+        if (onSurface && y >= SURFACE_ROWS) continue;
         const cx = (x + 0.5) * TILE;
         const cy = (y + 0.5) * TILE;
         if (this.isBlocked(cx - p.halfW, cy - p.halfH, cx + p.halfW - 0.001, cy + p.halfH - 0.001)) continue;

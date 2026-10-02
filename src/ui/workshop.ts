@@ -78,7 +78,7 @@ export function offers(g: GameState): Offer[] {
     out.push({ key: `bag${g.bagLevel + 1}`, tab: 'transport', name: bag.name, price: bag.price, action: 'buyBag', reason: `Capacité ${kg(g.bag.capacity)} → ${kg(bag.capacity)} : moins d'allers-retours.`, icon: 'bag' });
   // Dès qu'on descend assez bas, remonter à pied devient long : une corde de rappel en réserve.
   if (g.ropes === 0 && g.stats.maxDepth >= ROPE.adviseDepth)
-    out.push({ key: 'rope', tab: 'transport', name: ROPE.name, price: ROPE.price, action: 'buyRope', arg: '1', reason: 'Remontez au camp avec tout votre sac, sans marcher (touche V).', icon: 'tool:rope' });
+    out.push({ key: 'rope', tab: 'transport', name: ROPE.name, price: ROPE.price, action: 'buyRope', arg: '1', reason: 'Remontez à la surface avec tout votre sac, sans marcher (touche V).', icon: 'tool:rope' });
   if (!g.hasJackhammer && g.pickaxe.tier >= JACKHAMMER.unlock.pickaxeTier)
     out.push({ key: 'jackhammer', tab: 'tools', name: JACKHAMMER.name, price: JACKHAMMER.price, action: 'buyJackhammer', reason: 'Mine sur trois cases de large, très vite.', icon: 'tool:jackhammer' });
   if (!g.hasScooter)

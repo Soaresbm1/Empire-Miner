@@ -175,6 +175,97 @@ describe('corde de rappel : remonter au camp', () => {
   });
 });
 
+describe('corde de rappel : où l’on ressort', () => {
+  /** Partie avec une galerie sous la colonne `x` (profondeur Y), le joueur dedans, et une surface dégagée au-dessus. */
+  function below(x: number): GameState {
+    const g = new GameState(4);
+    g.ropes = 2;
+    for (let dx = -2; dx <= 2; dx++) {
+      g.world.set(x + dx, Y, AIR);
+      g.world.setExplored(x + dx, Y);
+      // Surface dégagée alentour : le test ne dépend pas des arbres tirés au hasard.
+      for (let y = 3; y < S; y++) g.world.set(x + dx, y, AIR);
+    }
+    teleport(g, x, Y);
+    g.events = [];
+    return g;
+  }
+  const rise = (g: GameState) => {
+    g.useRope();
+    run(g, ROPE.channel + 0.1, NO_INTENT);
+  };
+
+  it('on ressort à la verticale de l’endroit où l’on était, et non au milieu du camp', () => {
+    for (const x of [8, 20, 36, 45, 62, 80, 91]) {
+      const g = below(x);
+      rise(g);
+      expect(g.atCamp, `colonne ${x}`).toBe(true);
+      expect(g.player.tileX, `colonne ${x}`).toBe(x);
+      expect(g.player.tileY, `colonne ${x}`).toBe(g.layout.spawn.y);
+    }
+  });
+
+  it('le sac et le point d’accroche sont les mêmes qu’avant', () => {
+    const g = below(20);
+    g.inventory.add('copper', 5);
+    rise(g);
+    expect(g.inventory.count('copper')).toBe(5);
+    expect(g.ropeAnchor).toEqual({ tx: 20, ty: Y });
+    expect(messages(g).some((t) => /juste au-dessus/.test(t))).toBe(true);
+  });
+
+  it('si la place est prise (arbre, rocher), c’est la case libre la plus proche, toujours en surface', () => {
+    const g = below(20);
+    g.world.set(20, g.layout.spawn.y, HOST_ROCK_IDS[0]);
+    rise(g);
+    expect(g.atCamp).toBe(true);
+    expect(Math.abs(g.player.tileX - 20) + Math.abs(g.player.tileY - g.layout.spawn.y)).toBe(1);
+  });
+
+  it('sous la falaise du bord de la carte : la première case libre en surface', () => {
+    const g = new GameState(4);
+    g.ropes = 1;
+    g.world.set(1, Y, AIR);
+    g.world.setExplored(1, Y);
+    for (let x = 2; x <= 4; x++) for (let y = 3; y < S; y++) g.world.set(x, y, AIR);
+    teleport(g, 1, Y);
+    rise(g);
+    expect(g.atCamp).toBe(true);
+    expect(g.player.tileX).toBeGreaterThanOrEqual(2);
+    expect(g.player.tileX).toBeLessThanOrEqual(4);
+  });
+
+  it('rien de libre alentour : on revient au point d’apparition du camp', () => {
+    const g = below(20);
+    for (let x = 14; x <= 26; x++) for (let y = 2; y < S; y++) g.world.set(x, y, HOST_ROCK_IDS[0]);
+    rise(g);
+    expect(g.atCamp).toBe(true);
+    expect(g.player.tileX).toBe(g.layout.spawn.x);
+    expect(g.player.tileY).toBe(g.layout.spawn.y);
+  });
+
+  it('on ne ressort jamais sous terre, même s’il y a une caverne libre sous la rangée du camp', () => {
+    const g = below(20);
+    // Surface bouchée sur tout le rayon de recherche ; une poche d'air juste sous le sol.
+    for (let x = 14; x <= 26; x++) for (let y = 2; y < S; y++) g.world.set(x, y, HOST_ROCK_IDS[0]);
+    g.world.set(20, S, AIR);
+    g.world.set(20, S + 1, AIR);
+    rise(g);
+    expect(g.player.tileY).toBeLessThan(S);
+  });
+
+  it('puis V ramène au même endroit de la mine', () => {
+    const g = below(45);
+    rise(g);
+    g.events = [];
+    expect(g.useRope()).toBe('start');
+    run(g, ROPE.channel + 0.1, NO_INTENT);
+    expect(g.player.tileX).toBe(45);
+    expect(g.player.tileY).toBe(Y);
+    expect(g.ropes).toBe(1);
+  });
+});
+
 describe('corde de rappel : redescendre depuis le camp', () => {
   /** Remonte avec la corde, puis laisse le joueur au camp. */
   function ascended(): { g: GameState; from: { tx: number; ty: number } } {
