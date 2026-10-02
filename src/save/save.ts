@@ -20,6 +20,7 @@ import { rleDecode, rleEncode } from './codec';
 import { HEALTH } from '../data/hazards';
 import type { MarkerSave } from '../sim/Markers';
 import type { MarketSave } from '../sim/Market';
+import type { WorkerSave } from '../sim/Workers';
 import type { SlotSave } from '../sim/Production';
 
 export const SAVE_VERSION = 1;
@@ -74,6 +75,8 @@ export interface SaveData {
   production?: SlotSave[];
   /** Cours du marché, courbes et événements en cours (absents des anciennes sauvegardes : marché neuf à 100 %). */
   market?: MarketSave;
+  /** Ouvriers : métier, position et charge (absents des anciennes sauvegardes : aucun ouvrier). */
+  workers?: WorkerSave[];
 }
 
 function sparse(grid: Float32Array): [number, number][] {
@@ -119,6 +122,7 @@ export function serialize(g: GameState): SaveData {
     markers: g.markers.serialize(),
     production: g.production.serialize(),
     market: g.market.serialize(),
+    workers: g.workers.serialize(),
     hazards: {
       dug: rleEncode(w.dug),
       gas: sparse(w.gas),
@@ -197,6 +201,8 @@ export function deserialize(data: SaveData): GameState {
     const w = g.wagons.add(Wagon.load(ws));
     if (w.rider) g.riding = w;
   }
+  // Les ouvriers viennent après le monde et les machines : leur case d'attente en dépend.
+  g.workers.load(data.workers, g);
   return g;
 }
 

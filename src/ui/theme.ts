@@ -5,7 +5,7 @@
  * Le CSS prévoit des valeurs de secours : sans ces textures, l'interface reste lisible.
  */
 import { INK } from '../render/art';
-import { PICK_ANGLES, buildNuggetSprites, buildPickaxeSprites, fromArt } from '../render/sprites';
+import { PICK_ANGLES, buildNuggetSprites, buildPickaxeSprites, buildPlayerSprites, fromArt } from '../render/sprites';
 
 const icons = new Map<string, string>();
 
@@ -287,6 +287,9 @@ export function installTheme(): void {
 
   // Minerais et lingots : les mêmes sprites que dans la mine.
   for (const [id, sprite] of buildNuggetSprites()) icons.set(`res:${id}`, sprite.toDataURL());
+
+  // Ouvriers : le personnage de face, aux couleurs de son métier.
+  for (const job of ['picker', 'refueler'] as const) icons.set(`worker:${job}`, buildPlayerSprites({ crew: job }).frames[1][0].toDataURL());
 
   // Pioches : l'outil en diagonale, recadré.
   buildPickaxeSprites().forEach((angles, level) => icons.set(`pick${level}`, crop(angles[Math.round(PICK_ANGLES * 0.875)]).toDataURL()));

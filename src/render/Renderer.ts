@@ -32,6 +32,7 @@ import { ChunkCache } from './ChunkCache';
 import { Fx } from './fx';
 import { PROFILES, Quality, QualityProfile } from './quality';
 import { ROPE_LAND_TIME, landLift, ropeFrame, type RopeFrame } from './ropeAnim';
+import type { Worker } from '../sim/Workers';
 import { INK, Pen, ramp } from './art';
 import {
   PICK_ANGLES,
@@ -98,6 +99,8 @@ export class Renderer {
   private state: GameState | null = null;
   /** Le mineur habillé : une série d'images par combinaison d'équipement (créées à la demande). */
   private readonly minerSets = new Map<string, PlayerSprites>();
+  /** Images des ouvriers, par métier. */
+  private readonly crewSets = new Map<string, PlayerSprites>();
   private readonly picks: HTMLCanvasElement[][];
   private readonly jacks: HTMLCanvasElement[];
   private readonly nuggets: Map<string, HTMLCanvasElement>;
@@ -347,6 +350,7 @@ export class Renderer {
       if (!this.inView((m.x + 0.5) * TILE, (m.y + 0.5) * TILE, 24)) continue;
       list.push({ y: (m.y + 0.5) * TILE + 5, draw: () => this.drawMarkerFlag(m, state.markers.tracked === m.id) });
     }
+    for (const w of state.workers.list) if (this.inView(w.x, w.y, 24)) list.push({ y: w.y, draw: () => this.drawWorker(w) });
     if (showPlayer) list.push({ y: state.player.y, draw: () => this.drawPlayer() });
     list.sort((a, b) => a.y - b.y);
     for (const d of list) d.draw();
@@ -1636,6 +1640,50 @@ export class Renderer {
       this.minerSets.set(key, set);
     }
     return set;
+  }
+
+  /** Un ouvrier : le mineur aux couleurs de son métier, avec sa charge sur la tête et une bulle quand il est bloqué. */
+  private drawWorker(w: Worker): void {
+    const ctx = this.ctx;
+    let set = this.crewSets.get(w.job);
+    if (!set) {
+      set = buildPlayerSprites({ crew: w.job });
+      this.crewSets.set(w.job, set);
+    }
+    const frame = w.moving ? 1 + (Math.floor(w.walkTime * 9) % 4) : 0;
+    const blink = !w.moving && (this.time + w.id * 1.7) % 4.6 < 0.14;
+    const img = blink ? set.blink[w.facing] : set.frames[w.facing][frame];
+    const x = Math.round(w.x - img.width / 2);
+    const y = Math.round(w.y - img.height + 3 + (w.moving && frame % 2 === 0 ? -1 : 0));
+    ctx.fillStyle = 'rgba(0,0,0,0.35)';
+    ctx.fillRect(Math.round(w.x - 5), Math.round(w.y + 1), 10, 3);
+    ctx.drawImage(img, x, y);
+    // Charge : un petit sac au-dessus de la tête, rempli de la couleur du minerai le plus présent.
+    let best: string | null = null;
+    for (const [res, n] of Object.entries(w.cargo)) if (n > 0 && (best === null || n > w.cargo[best])) best = res;
+    if (best) {
+      const sx = Math.round(w.x) - 3;
+      ctx.fillStyle = '#3b2a1f';
+      ctx.fillRect(sx - 1, y - 6, 8, 6);
+      ctx.fillStyle = '#8a6236';
+      ctx.fillRect(sx, y - 5, 6, 4);
+      ctx.fillStyle = getResource(best).color;
+      ctx.fillRect(sx + 1, y - 6, 4, 2);
+      ctx.fillStyle = getResource(best).light;
+      ctx.fillRect(sx + 1, y - 6, 2, 1);
+    }
+    // Bloqué (rien à faire parce que quelque chose manque) : un point d'exclamation.
+    if (!w.task && w.flag) {
+      const bx = Math.round(w.x) - 4;
+      const by = y - (best ? 18 : 12);
+      ctx.fillStyle = '#120e10';
+      ctx.fillRect(bx, by, 9, 10);
+      ctx.fillStyle = '#f0a33a';
+      ctx.fillRect(bx + 1, by + 1, 7, 8);
+      ctx.fillStyle = '#120e10';
+      ctx.fillRect(bx + 4, by + 2, 1, 4);
+      ctx.fillRect(bx + 4, by + 7, 1, 1);
+    }
   }
 
   private drawPlayer(): void {

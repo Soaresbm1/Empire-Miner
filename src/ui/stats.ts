@@ -11,6 +11,7 @@ import type { Drill } from '../sim/structures/Drill';
 import type { ShippingCrate } from '../sim/structures/ShippingCrate';
 import type { Smelter } from '../sim/structures/Smelter';
 import type { Storage } from '../sim/structures/Storage';
+import { stuckWorkers } from './crew';
 import { esc, money, num, resIcon } from './format';
 
 /** Au-dessus de ce seuil (unités / min), une ligne du tableau s'affiche. */
@@ -154,9 +155,13 @@ function machineWatch(g: GameState): string {
       }
     }
   }
+  // Ouvriers qui ne peuvent pas avancer : un coffre ou du charbon manque.
+  for (const w of stuckWorkers(g)) found.set(`crew|${w.text}`, { n: w.n, text: w.text, tone: 'warn' });
   const order = { bad: 0, warn: 1, info: 2 };
   const list = [...found.values()].sort((a, b) => order[a.tone] - order[b.tone]);
-  const head = count ? `<p class="hint"><b>${running}</b> machine${running > 1 ? 's' : ''} en marche sur <b>${count}</b>.</p>` : '';
+  const crew = g.workers.count ? g.workers.list.filter((w) => w.task && w.task.kind !== 'home').length : 0;
+  const crewHint = g.workers.count ? `<p class="hint"><b>${crew}</b> ouvrier${crew > 1 ? 's' : ''} au travail sur <b>${g.workers.count}</b>.</p>` : '';
+  const head = `${count ? `<p class="hint"><b>${running}</b> machine${running > 1 ? 's' : ''} en marche sur <b>${count}</b>.</p>` : ''}${crewHint}`;
   if (!list.length)
     return count
       ? `${head}<div class="status good">● Tout tourne : aucune machine à l'arrêt.</div>`

@@ -110,7 +110,15 @@ export interface PlayerGear {
   mask?: boolean;
   boots?: boolean;
   suit?: boolean;
+  /** Ouvrier : les couleurs de son métier (casque, chemise et salopette) à la place de celles du mineur. */
+  crew?: 'picker' | 'refueler';
 }
+
+/** Ramasseur : casque vert, chemise claire, salopette brune. Ravitailleur : casque orange, chemise grise, salopette charbon. */
+const CREW_COLORS: Record<'picker' | 'refueler', Record<string, string>> = {
+  picker: { L: '#d8f5c0', Y: '#6cc04a', h: '#4e9a34', y: '#346e22', u: '#e9ecea', T: '#bfc7c3', t: '#8c9692', B: '#8a6236', c: '#b08350', b: '#5e4022' },
+  refueler: { L: '#ffd2b0', Y: '#e8662a', h: '#c24a18', y: '#8a3010', u: '#8a8a98', T: '#62626f', t: '#42424e', B: '#3b3b44', c: '#5a5a66', b: '#26262c' },
+};
 
 /** Casque d'acier, semelles de caoutchouc, combinaison orange et argent : seules les couleurs changent. */
 function playerPalette(gear: PlayerGear): Record<string, string> {
@@ -118,6 +126,7 @@ function playerPalette(gear: PlayerGear): Record<string, string> {
   if (gear.helmet) Object.assign(p, { L: '#eef4fb', Y: '#9db4cc', h: '#7c93ad', y: '#546a86' });
   if (gear.boots) Object.assign(p, { K: '#6f5a10', k: '#a88a14' });
   if (gear.suit) Object.assign(p, { u: '#f5b050', T: '#e08a28', t: '#a85c14', B: '#c8d0da', c: '#eef2f7', b: '#8a95a6' });
+  if (gear.crew) Object.assign(p, CREW_COLORS[gear.crew]);
   return p;
 }
 

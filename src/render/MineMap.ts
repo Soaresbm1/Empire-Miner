@@ -16,6 +16,7 @@ import { Building } from '../sim/structures/Building';
 import type { Structure } from '../sim/structures/Structure';
 import type { World } from '../sim/World';
 import { RGB, hex, mix, scale } from './color';
+import { getJob } from '../data/workers';
 
 /** Fond des zones inconnues. */
 export const MAP_BG = '#0b0a0d';
@@ -369,6 +370,17 @@ export class MineMap {
       if (!inView(wx, wy)) continue;
       const r = Math.max(dot, v.cell * 0.7);
       ctx.fillStyle = MAP_COLORS.wagon;
+      ctx.fillRect(px(wx) - r / 2, py(wy) - r / 2, r, r);
+    }
+    // Ouvriers : un point à la couleur de leur casque.
+    for (const w of g.workers.list) {
+      const wx = w.x / TILE;
+      const wy = w.y / TILE;
+      if (!inView(wx, wy)) continue;
+      const r = Math.max(dot, v.cell * 0.7);
+      ctx.fillStyle = '#120e10';
+      ctx.fillRect(px(wx) - r / 2 - 1, py(wy) - r / 2 - 1, r + 2, r + 2);
+      ctx.fillStyle = getJob(w.job).color;
       ctx.fillRect(px(wx) - r / 2, py(wy) - r / 2, r, r);
     }
     // Joueur : point blanc cerclé de noir, avec une onde qui pulse.
