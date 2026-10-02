@@ -31,6 +31,7 @@ import type { Structure } from '../sim/structures/Structure';
 import { ChunkCache } from './ChunkCache';
 import { Fx } from './fx';
 import { PROFILES, Quality, QualityProfile } from './quality';
+import { ROPE_LAND_TIME, landLift, ropeFrame, type RopeFrame } from './ropeAnim';
 import { INK, Pen, ramp } from './art';
 import {
   PICK_ANGLES,
@@ -113,6 +114,8 @@ export class Renderer {
   private smokeTimer = 0;
   /** Flash rouge après une blessure (0 à 1). */
   private hurtFlash = 0;
+  /** Temps restant de la petite chute qui pose le mineur à son arrivée par la corde. */
+  private landT = 0;
 
   constructor(canvas: HTMLCanvasElement) {
     this.canvas = canvas;
@@ -204,6 +207,7 @@ export class Renderer {
     this.time += dt;
     this.fx.update(dt);
     this.hurtFlash = Math.max(0, this.hurtFlash - dt * 2.5);
+    this.landT = Math.max(0, this.landT - dt);
     if (!this.state) return;
     // Plafond qui craque : poussière qui tombe et sol qui tremble.
     for (const p of this.state.hazards.pending) {
@@ -1640,8 +1644,11 @@ export class Renderer {
     const ctx = this.ctx;
     const sprites = this.minerSprites();
     const frames = sprites.frames[p.facing];
+    // Suspendu à la corde de rappel : il monte avec elle (ou s'enfonce dans un trou à la descente), la trottinette est rangée.
+    const dir = state.ropeT > 0 ? state.ropeDir : null;
+    const anim = dir ? ropeFrame(dir, ROPE.channel - state.ropeT, ROPE.channel, p.y - this.camY + 28) : null;
     // Sur la trottinette (Maj), le mineur reste droit sur le plateau : pas de marche, pas de pioche.
-    const riding = state.scootering;
+    const riding = state.scootering && !anim;
     const walking = p.moving && p.swingT <= 0 && !riding;
     // Marche à quatre images : pas, passage, pas, passage (le corps se soulève au passage).
     const frame = walking ? 1 + (Math.floor(p.walkTime * 9) % 4) : 0;
@@ -1650,34 +1657,69 @@ export class Renderer {
     const img = blink ? sprites.blink[p.facing] : frames[frame];
     const bob = walking && frame % 2 === 0 ? -1 : 0;
     const x = Math.round(p.x - img.width / 2);
-    // Suspendu à la corde de rappel : le mineur est soulevé de quelques pixels et se balance un peu.
-    const hanging = state.ropeT > 0;
-    const hang = hanging ? 3 + Math.round(Math.sin(this.time * 5)) : 0;
-    const y = Math.round(p.y - img.height + 3 + bob - (riding ? SCOOTER_LIFT : 0) - hang);
-    ctx.fillStyle = 'rgba(0,0,0,0.35)';
+    // Hauteur au-dessus du sol : la montée à la corde (avec un léger balancement), ou la petite chute de l'arrivée.
+    const lift = anim ? anim.lift + (anim.lift > 0 ? Math.sin(this.time * 5) : 0) : landLift(this.landT);
+    const y = Math.round(p.y - img.height + 3 + bob - (riding ? SCOOTER_LIFT : 0) - lift);
+    // L'ombre reste au sol : elle s'efface quand le mineur s'éloigne.
+    ctx.fillStyle = `rgba(0,0,0,${(0.35 * (anim ? anim.shadow : 1 - lift / 14)).toFixed(3)})`;
     const wide = riding ? (p.facing === 0 || p.facing === 2 ? 22 : 12) : 10;
     ctx.fillRect(Math.round(p.x - wide / 2), Math.round(p.y + 1), wide, 3);
     if (riding) {
       this.drawScooter(img, x, y);
       return;
     }
-    if (hanging) this.drawRopeAbove(p.x, y + 5);
+    if (anim && dir) {
+      this.drawRoped(img, x + (dir === 'up' ? Math.round(Math.sin(this.time * 4)) : 0), y, anim, dir);
+      return;
+    }
     const pickBehind = p.facing === 3;
-    if (pickBehind) this.drawPickaxe();
+    if (pickBehind) this.drawPickaxe(-lift);
     ctx.drawImage(img, x, y);
-    if (!pickBehind) this.drawPickaxe();
-    if (hanging) this.drawRopeProgress(p.x, p.y);
+    if (!pickBehind) this.drawPickaxe(-lift);
   }
 
-  /** La corde de rappel : deux tons de brin en alternance, qui monte en s'effaçant. */
-  private drawRopeAbove(x: number, from: number): void {
+  /**
+   * Le mineur à la corde de rappel. À la montée, il est tiré vers le haut avec la corde, de plus en plus vite,
+   * jusqu'à sortir de l'écran ; à la descente, il s'enfonce dans un trou ouvert à ses pieds (tout ce qui passe
+   * sous le sol est coupé).
+   */
+  private drawRoped(img: HTMLCanvasElement, x: number, y: number, anim: RopeFrame, dir: 'up' | 'down'): void {
     const ctx = this.ctx;
-    for (let i = 0; i < 26; i++) {
-      ctx.globalAlpha = 1 - i / 28;
+    const p = this.state!.player;
+    const px = Math.round(p.x);
+    const py = Math.round(p.y);
+    if (dir === 'down') {
+      // Le trou : une ellipse sombre qui s'ouvre, puis le mineur y glisse (le sol coupe ce qui descend dessous).
+      const w = Math.round(14 * anim.hole);
+      if (w >= 2) {
+        ctx.fillStyle = '#0b0809';
+        ctx.fillRect(px - w / 2, py, w, 4);
+        ctx.fillRect(px - w / 2 + 1, py - 1, w - 2, 1);
+        ctx.fillRect(px - w / 2 + 1, py + 4, w - 2, 1);
+      }
+      ctx.save();
+      ctx.beginPath();
+      ctx.rect(px - 40, py - 400, 80, 400 + 2);
+      ctx.clip();
+    }
+    const up = dir === 'up';
+    // Corde : elle monte jusqu'en haut de l'écran en se déroulant, ou s'efface au-dessus de lui à la descente.
+    const from = y + 5;
+    const length = (up ? Math.max(0, from + 4 - this.camY) : 78) * anim.unroll;
+    for (let off = 0, i = 0; off < length; off += 3, i++) {
+      ctx.globalAlpha = up ? 1 : Math.max(0, 1 - i / 28);
       ctx.fillStyle = i % 2 ? '#b89260' : '#7a5530';
-      ctx.fillRect(Math.round(x) - 1, from - (i + 1) * 3, 2, 3);
+      ctx.fillRect(px - 1, from - off - 3, 2, 3);
     }
     ctx.globalAlpha = 1;
+    const pickBehind = p.facing === 3;
+    const dy = y - Math.round(p.y - img.height + 3);
+    if (pickBehind) this.drawPickaxe(dy, x - Math.round(p.x - img.width / 2));
+    ctx.drawImage(img, x, y);
+    if (!pickBehind) this.drawPickaxe(dy, x - Math.round(p.x - img.width / 2));
+    if (dir === 'down') ctx.restore();
+    // Jauge sous les pieds : où en est la manœuvre.
+    this.drawRopeProgress(p.x, p.y);
   }
 
   /** Petite jauge sous les pieds : où en est la manœuvre (le temps restant, à l'envers). */
@@ -1717,12 +1759,13 @@ export class Renderer {
     }
   }
 
-  private drawPickaxe(): void {
+  /** L'outil en main ; (dx, dy) le décale avec le mineur quand il n'est plus posé au sol (corde, arrivée). */
+  private drawPickaxe(dy = 0, dx = 0): void {
     const state = this.state!;
     const p = state.player;
     // Pendant un coup, l'outil réellement utilisé (pioche de secours si le marteau n'a plus de charbon).
     const hammer = p.swingT > 0 ? p.swingTool === 'jackhammer' : state.activeTool.kind === 'jackhammer';
-    if (hammer) return this.drawJackhammer();
+    if (hammer) return this.drawJackhammer(dy, dx);
     let angle: number;
     if (p.swingT > 0) {
       const t = p.swingProgress();
@@ -1741,11 +1784,11 @@ export class Renderer {
     const img = this.picks[state.pickaxeLevel][idx];
     const hx = p.x + (p.facing === 0 ? 3 : p.facing === 2 ? -3 : p.facing === 1 ? 4 : -4);
     const hy = p.y - 7;
-    this.ctx.drawImage(img, Math.round(hx - PICK_SIZE / 2), Math.round(hy - PICK_SIZE / 2));
+    this.ctx.drawImage(img, Math.round(hx - PICK_SIZE / 2) + dx, Math.round(hy - PICK_SIZE / 2) + dy);
   }
 
   /** Marteau-piqueur : pointé vers la paroi et secoué pendant qu'il frappe, porté contre soi au repos. */
-  private drawJackhammer(): void {
+  private drawJackhammer(dy = 0, dx = 0): void {
     const p = this.state!.player;
     const working = p.swingT > 0;
     const angle = working ? p.aim : p.facing === 2 ? Math.PI * 0.62 : p.facing === 0 ? Math.PI * 0.38 : p.facing === 3 ? -Math.PI * 0.5 : Math.PI * 0.5;
@@ -1753,7 +1796,7 @@ export class Renderer {
     const jig = working ? (Math.floor(this.time * 40) % 2) * 1.2 : 0;
     const hx = p.x + (p.facing === 0 ? 3 : p.facing === 2 ? -3 : p.facing === 1 ? 4 : -4) + Math.cos(angle) * jig;
     const hy = p.y - 7 + Math.sin(angle) * jig;
-    this.ctx.drawImage(this.jacks[idx], Math.round(hx - PICK_SIZE / 2), Math.round(hy - PICK_SIZE / 2));
+    this.ctx.drawImage(this.jacks[idx], Math.round(hx - PICK_SIZE / 2) + dx, Math.round(hy - PICK_SIZE / 2) + dy);
   }
 
   // ------------------------------------------------------------------ effets
@@ -2095,6 +2138,11 @@ export class Renderer {
   /** Coup de marteau-piqueur : poussière sur la case visée et légère secousse. */
   onHurt(amount: number): void {
     this.hurtFlash = Math.min(1, this.hurtFlash + (amount >= 10 ? 1 : 0.5));
+  }
+
+  /** Arrivée par la corde de rappel : le mineur se pose au sol (petite chute) après être sorti de l'écran. */
+  onRopeArrive(): void {
+    this.landT = ROPE_LAND_TIME;
   }
 
   onRumble(tx: number, ty: number): void {

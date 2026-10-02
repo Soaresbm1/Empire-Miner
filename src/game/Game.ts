@@ -1183,6 +1183,7 @@ export class Game {
           if (e.phase === 'up' || e.phase === 'down') {
             r.fx.emit('dust', g.player.x, g.player.y, 'rgba(150,130,110,0.7)', 10, 30);
             r.snapCamera();
+            r.onRopeArrive();
           }
           break;
         case 'faint':

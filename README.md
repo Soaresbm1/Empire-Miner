@@ -78,7 +78,9 @@ lettre tapée : c'est la touche marquée M, quel que soit le clavier.
   pas l'état « en train de rouler ». Dans un wagonnet, la trottinette est rangée.
 - **Corde de rappel** (90 $ pièce, ou 400 $ le lot de 5, onglet Transport de l'Atelier ; 9 au plus) : le **retour rapide
   au camp**. Dans la mine, `V` : le mineur se suspend à la corde et doit rester **immobile 3 secondes** (une jauge sous ses
-  pieds et le HUD comptent le temps), puis il se retrouve au camp **avec tout son sac**, contrairement à un évanouissement.
+  pieds et le HUD comptent le temps) : on le **voit monter avec la corde**, de plus en plus vite, jusqu'à sortir de l'écran
+  (son ombre reste au sol), puis il se retrouve au camp **avec tout son sac**, contrairement à un évanouissement. À la
+  descente, il s'enfonce dans un trou ouvert à ses pieds, puis se pose au point d'accroche.
   La corde reste **accrochée là où il était**, un repère « Corde de rappel » la marque sur la carte, et depuis le camp un
   nouvel appui sur `V` le **redescend gratuitement** au même endroit (ou à la case libre la plus proche si le passage s'est
   refermé ; si tout est bouché, la corde reste accrochée). Bouger, miner, monter dans un wagonnet ou encaisser un gros
