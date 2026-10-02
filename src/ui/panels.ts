@@ -405,6 +405,7 @@ function borerLevelFacts(l: MachineLevel, base: BorerLevelSpec): string {
     `${s.tankUnits} charbon${s.tankUnits > 1 ? 's' : ''} par sortie`,
     s.width > 1 ? `tunnel de ${s.width} cases` : "tunnel d'1 case",
     s.hopper ? `benne de ${s.hopper}` : '',
+    s.breakAll ? 'perce tout' : '',
   ]
     .filter(Boolean)
     .join(' · ');
@@ -487,7 +488,7 @@ export function borerPanel(g: GameState, b: TunnelBorer): string {
         : ''
     }</div>
     ${borerLevels(g, b)}
-    <p class="hint">La base reste fixe : la foreuse en sort pour percer tout droit devant la flèche, jusque dans la roche volcanique (pas les filons de diamant), puis revient faire le plein quand son charbon est vide et repart au bout du tunnel. Elle rentre aussi quand le tunnel est fini ou qu'elle ne peut plus percer (roche indestructible, machine, bord de la mine). Rouler ne consomme pas de charbon ; une base alimentée par un convoyeur ou un coffre de charbon collé la fait creuser sans s'arrêter. Les minerais tombent derrière elle (dans sa benne au niveau 4), les filons percés laissent leur gisement. On ne tourne, n'améliore ou ne démonte la base que foreuse rangée.</p>`;
+    <p class="hint">La base reste fixe : la foreuse en sort pour percer tout droit devant la flèche, jusque dans la roche volcanique (pas les filons de diamant, ni la roche indestructible : sauf avec la tête de diamant du niveau 5, qui perce tout), puis revient faire le plein quand son charbon est vide et repart au bout du tunnel. Elle rentre aussi quand le tunnel est fini ou qu'elle ne peut plus percer (roche indestructible, machine, bord de la mine). Rouler ne consomme pas de charbon ; une base alimentée par un convoyeur ou un coffre de charbon collé la fait creuser sans s'arrêter. Les minerais tombent derrière elle (dans sa benne au niveau 4), les filons percés laissent leur gisement. On ne tourne, n'améliore ou ne démonte la base que foreuse rangée.</p>`;
 }
 
 // ------------------------------------------------------------------ four et fonderie

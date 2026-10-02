@@ -360,7 +360,7 @@ function machineSpecs(m: MachineDef): [string, string][] {
   if (m.borer && m.fuel)
     return [
       ['Tunnel', "jusqu'à 50 cases, ou sans limite"],
-      ['Roche', "jusqu'à la roche volcanique"],
+      ['Roche', "jusqu'à la roche volcanique (niveau 5 : tout)"],
       ['Charbon', `1 unité / ${m.fuel.secondsPerUnit} s de perçage`],
       ['Plein', `${m.levels?.[0].borer?.tankUnits ?? 0} unités par sortie, puis retour à la base`],
       ['Améliorable', `jusqu'au niveau ${m.levels?.length ?? 1} (touche E sur la base)`],

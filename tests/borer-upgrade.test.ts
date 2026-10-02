@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { SURFACE_ROWS } from '../src/core/constants';
 import type { Dir } from '../src/core/dir';
-import { AIR, BEDROCK, HOST_ROCK_IDS, ORE_BLOCK } from '../src/data/blocks';
+import { AIR, BEDROCK, CLIFF, HOST_ROCK_IDS, ORE_BLOCK, TREE } from '../src/data/blocks';
 import { getMachine } from '../src/data/machines';
 import { deserialize, serialize } from '../src/save/save';
 import { GameState } from '../src/sim/GameState';
@@ -43,21 +43,41 @@ function onGround(g: GameState, res: string): number {
 }
 
 describe('foreuse de percement : améliorations', () => {
-  it('s’améliore sur sa base, niveau par niveau, jusqu’au niveau 4', () => {
+  it('s’améliore sur sa base, niveau par niveau, jusqu’au niveau 5', () => {
     const g = new GameState(4);
     const b = setup(g);
-    expect(b.maxLevel).toBe(4);
+    expect(b.maxLevel).toBe(5);
     g.money = 100;
     expect(g.upgradeBlocker(b)).toBe("Pas assez d'argent");
     expect(g.upgradeMachine(b)).toBe(false);
-    g.money = 10_000;
+    g.money = 20_000;
+    g.pickaxeLevel = 3; // le niveau 5 demande la Pioche pro en acier
     for (const l of LEVELS.slice(1)) {
       expect(g.upgradeMachine(b)).toBe(true);
       expect(b.level).toBe(l.level);
     }
-    expect(g.money).toBe(10_000 - LEVELS.reduce((n, l) => n + l.price, 0));
+    expect(g.money).toBe(20_000 - LEVELS.reduce((n, l) => n + l.price, 0));
     expect(g.upgradeBlocker(b)).toBe('Niveau maximal atteint');
     expect(g.events.some((e) => e.t === 'bought' && e.name.includes('benne à minerai'))).toBe(true);
+    expect(g.events.some((e) => e.t === 'bought' && e.name.includes('tête de diamant'))).toBe(true);
+  });
+
+  it('le niveau 5 demande la Pioche pro en acier, en plus de l’argent', () => {
+    const g = new GameState(4);
+    const b = setup(g, 4);
+    g.money = 50_000;
+    g.pickaxeLevel = 2;
+    expect(g.pickaxe.tier).toBeLessThan(4);
+    expect(g.upgradeBlocker(b)).toBe('Nécessite la Pioche pro en acier');
+    expect(g.upgradeMachine(b)).toBe(false);
+    expect(b.level).toBe(4);
+    g.pickaxeLevel = 3;
+    expect(g.pickaxe.tier).toBe(4);
+    expect(g.upgradeBlocker(b)).toBeNull();
+    expect(g.upgradeMachine(b)).toBe(true);
+    expect(b.level).toBe(5);
+    expect(b.stats.breakAll).toBe(true);
+    expect(g.money).toBe(50_000 - LEVELS[4].price);
   });
 
   it('ne s’améliore pas pendant que la foreuse est sortie', () => {
@@ -199,5 +219,145 @@ describe('foreuse de percement : améliorations', () => {
     const again = put(g, 'borer@4', X, Y) as TunnelBorer;
     expect(again.level).toBe(4);
     expect(again.stats.width).toBe(3);
+  });
+});
+
+describe('foreuse de percement : tête de diamant (niveau 5)', () => {
+  const DIAMOND = ORE_BLOCK.diamond;
+
+  /** Temps (s) pour que la foreuse traverse la case (X + 2, Y) posée à l'avance, en tunnel d'une case. */
+  function crossing(level: number, block: number) {
+    const g = new GameState(4);
+    const b = setup(g, level);
+    g.world.set(X + 2, Y, block);
+    g.setBorerLength(b, 10);
+    b.start();
+    let t = 0;
+    for (; t < 60 && b.status !== 'done' && b.status !== 'blocked'; t += 1 / 60) run(g, 1 / 60);
+    return { g, b, t };
+  }
+
+  it('sans elle, le diamant arrête la foreuse : « trop dur »', () => {
+    const { g, b } = crossing(4, DIAMOND);
+    expect(b.status).toBe('blocked');
+    expect(b.blockReason).toContain('trop dur');
+    expect(g.world.get(X + 2, Y)).toBe(DIAMOND);
+    expect(b.tunnel).toBe(1);
+  });
+
+  it('avec elle, le diamant est percé et la foreuse continue jusqu’au bout du tunnel', () => {
+    const { g, b } = crossing(5, DIAMOND);
+    expect(b.status).toBe('done');
+    expect(b.tunnel).toBe(10);
+    expect(g.world.get(X + 2, Y)).toBe(AIR);
+    expect(onGround(g, 'diamond') + b.collected).toBeGreaterThan(0);
+  });
+
+  it('sans elle, la roche indestructible arrête la foreuse', () => {
+    for (const block of [BEDROCK, CLIFF, TREE]) {
+      const { g, b } = crossing(4, block);
+      expect(b.status).toBe('blocked');
+      expect(b.blockReason).toContain('indestructible');
+      expect(g.world.get(X + 2, Y)).toBe(block);
+    }
+  });
+
+  it('avec elle, socle rocheux, falaise et arbre se percent aussi (un peu plus lentement que la roche)', () => {
+    const soft = crossing(5, SOFT).t;
+    for (const block of [BEDROCK, CLIFF, TREE]) {
+      const { g, b, t } = crossing(5, block);
+      expect(b.status).toBe('done');
+      expect(g.world.get(X + 2, Y)).toBe(AIR);
+      expect(t).toBeGreaterThan(soft + 1.5);
+      expect(t).toBeLessThan(soft + 6);
+    }
+  });
+
+  it('le diamant est percé à la même cadence qu’une roche de même dureté (résistance 40 ; pas de pénalité cachée)', () => {
+    const diamond = crossing(5, DIAMOND).t;
+    const soft = crossing(5, SOFT).t;
+    expect(diamond).toBeGreaterThan(soft + 2);
+    expect(diamond).toBeLessThan(soft + 5);
+  });
+
+  it('la tête large perce aussi les côtés indestructibles, là où les niveaux inférieurs les épargnent', () => {
+    for (const [level, cut] of [[4, false], [5, true]] as const) {
+      const g = new GameState(4);
+      const b = setup(g, level);
+      g.world.set(X + 3, Y - 1, BEDROCK);
+      g.world.set(X + 4, Y + 1, DIAMOND);
+      g.setBorerLength(b, 6);
+      b.start();
+      runUntil(g, () => b.status === 'done');
+      expect(b.status).toBe('done');
+      expect(g.world.get(X + 3, Y - 1) === AIR).toBe(cut);
+      expect(g.world.get(X + 4, Y + 1) === AIR).toBe(cut);
+    }
+  });
+
+  it('elle va toujours tout droit : le tunnel reste sur la ligne de la base', () => {
+    const g = new GameState(4);
+    const b = setup(g, 5);
+    g.world.set(X + 3, Y, BEDROCK);
+    g.setBorerLength(b, 10);
+    b.start();
+    runUntil(g, () => b.status === 'done');
+    expect(b.tunnel).toBe(10);
+    for (let x = X + 1; x <= X + 10; x++) expect(g.world.get(x, Y)).toBe(AIR);
+    // Rien au-delà du tunnel ni sur les rangées au-dessus et au-dessous de la tête large.
+    expect(g.world.get(X + 11, Y)).toBe(SOFT);
+    expect(g.world.get(X + 4, Y - 2)).not.toBe(AIR);
+    expect(g.world.get(X + 4, Y + 2)).not.toBe(AIR);
+  });
+
+  it('le bord du monde l’arrête : la dernière rangée n’est jamais percée', () => {
+    const g = new GameState(4);
+    const edge = g.world.w - 1;
+    const bx = edge - 5;
+    for (let x = bx + 1; x < edge; x++) for (const y of [Y - 1, Y, Y + 1]) g.world.set(x, y, SOFT);
+    for (const y of [Y - 1, Y, Y + 1]) g.world.set(edge, y, BEDROCK);
+    for (let x = bx - 2; x <= bx; x++) for (const y of [Y - 1, Y, Y + 1]) g.world.set(x, y, AIR);
+    g.inventory.addKit('borer', 1);
+    teleport(g, bx - 2, Y);
+    const b = g.place('borer', bx, Y, 0) as TunnelBorer;
+    b.level = 5;
+    b.addFuel(20);
+    g.setBorerLength(b, 0);
+    b.start();
+    runUntil(g, () => b.status === 'blocked' || b.status === 'done');
+    expect(b.status).toBe('blocked');
+    expect(b.blockReason).toBe('bord de la mine');
+    for (const y of [Y - 1, Y, Y + 1]) expect(g.world.get(edge, y)).toBe(BEDROCK);
+    for (let x = bx + 1; x < edge; x++) expect(g.world.get(x, Y)).toBe(AIR);
+  });
+
+  it('une machine posée sur le chemin l’arrête quand même', () => {
+    const g = new GameState(4);
+    const b = setup(g, 5);
+    g.world.set(X + 3, Y, AIR);
+    g.inventory.addKit('storage', 1);
+    teleport(g, 50, S + 13);
+    expect(g.place('storage', X + 3, Y, 0)).toBeTruthy();
+    g.setBorerLength(b, 10);
+    b.start();
+    runUntil(g, () => b.status === 'blocked');
+    expect(b.status).toBe('blocked');
+    expect(b.blockReason).toContain('machine');
+  });
+
+  it('sauvegardée, elle garde sa tête de diamant', () => {
+    const g = new GameState(4);
+    const b = setup(g, 5);
+    expect(b.stats.breakAll).toBe(true);
+    const again = deserialize(serialize(g)).structures.borers[0];
+    expect(again.level).toBe(5);
+    expect(again.stats.breakAll).toBe(true);
+  });
+
+  it('les niveaux 1 à 4 ne percent toujours pas tout', () => {
+    for (const l of LEVELS.slice(0, 4)) expect(l.borer!.breakAll).toBeFalsy();
+    expect(LEVELS[4].borer!.breakAll).toBe(true);
+    expect(LEVELS[4].borer!.hopper).toBe(LEVELS[3].borer!.hopper); // elle garde la benne, la tête large, le moteur
+    expect(LEVELS[4].borer!.width).toBe(3);
   });
 });
