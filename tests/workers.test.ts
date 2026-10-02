@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { SURFACE_ROWS, TILE } from '../src/core/constants';
 import { AIR, HOST_ROCK_IDS } from '../src/data/blocks';
 import { GAS } from '../src/data/hazards';
-import { WORKERS, getJob, workerName, workerPrice } from '../src/data/workers';
+import { WORKERS, WORKER_JOBS, getJob, nextSlotStep, workerName, workerPrice, workerSlots } from '../src/data/workers';
 import { deserialize, serialize } from '../src/save/save';
 import { GameState } from '../src/sim/GameState';
 import { Drill } from '../src/sim/structures/Drill';
@@ -25,18 +25,23 @@ describe('ouvriers : achat', () => {
     return g;
   }
 
-  it('les prix montent à chaque ouvrier, jusqu’à six, sans salaire', () => {
+  it('les prix montent à chaque ouvrier, jusqu’à neuf, sans salaire', () => {
     const g = atWorkshop();
+    g.money = 100_000;
+    g.pickaxeLevel = 3; // toutes les places ouvertes
     let paid = 0;
     for (let i = 0; i < WORKERS.max; i++) {
       expect(g.nextWorkerPrice).toBe(WORKERS.prices[i]);
       const before = g.money;
-      expect(g.hireWorker(i % 2 ? 'refueler' : 'picker')).toBe(true);
+      expect(g.hireWorker(WORKER_JOBS[i % 3].id)).toBe(true);
       paid += before - g.money;
     }
+    expect(WORKERS.max).toBe(9);
     expect(g.workers.count).toBe(WORKERS.max);
     expect(paid).toBe(WORKERS.prices.slice(0, WORKERS.max).reduce((a, b) => a + b, 0));
+    expect(WORKERS.prices.every((p, i) => i === 0 || p > WORKERS.prices[i - 1])).toBe(true);
     expect(g.nextWorkerPrice).toBeNull();
+    expect(g.workerHireBlocker('picker')).toBe('Équipe complète');
     expect(g.hireWorker('picker')).toBe(false);
     // Achat unique : plus rien n'est débité ensuite.
     const money = g.money;
@@ -44,6 +49,69 @@ describe('ouvriers : achat', () => {
     expect(g.money).toBe(money);
     expect(workerPrice(0)).toBe(WORKERS.prices[0]);
     expect(workerPrice(WORKERS.max)).toBeNull();
+  });
+
+  it('l’équipe s’agrandit avec les pioches : trois places de plus à chaque palier, neuf au plus', () => {
+    expect([1, 2, 3, 4].map(workerSlots)).toEqual([0, 3, 6, 9]);
+    expect(workerSlots(9)).toBe(WORKERS.max);
+    const g = atWorkshop();
+    g.money = 100_000;
+    const jobs = WORKER_JOBS.map((j) => j.id);
+    g.pickaxeLevel = 1; // pioche améliorée : 3 places
+    expect(g.workerSlots).toBe(3);
+    for (let i = 0; i < 3; i++) expect(g.hireWorker(jobs[i])).toBe(true);
+    expect(g.hireWorker('picker')).toBe(false);
+    expect(g.workerHireBlocker('picker')).toBe("Nécessite la Pioche en fer pour agrandir l'équipe");
+    const money = g.money;
+    expect(g.hireWorker('picker')).toBe(false);
+    expect(g.money).toBe(money);
+    g.pickaxeLevel = 2; // pioche en fer : 6 places
+    expect(g.workerSlots).toBe(6);
+    expect(g.workerHireBlocker('picker')).toBeNull();
+    for (let i = 0; i < 3; i++) expect(g.hireWorker(jobs[i])).toBe(true);
+    expect(g.workerHireBlocker('picker')).toBe("Nécessite la Pioche pro en acier pour agrandir l'équipe");
+    g.pickaxeLevel = 3; // pioche pro : 9 places
+    for (let i = 0; i < 3; i++) expect(g.hireWorker(jobs[i])).toBe(true);
+    expect(g.workers.count).toBe(9);
+    expect(nextSlotStep(0)?.slots).toBe(3);
+    expect(nextSlotStep(3)?.slots).toBe(6);
+    expect(nextSlotStep(9)).toBeNull();
+  });
+
+  it('trois ouvriers de chaque métier au plus : ni embauche ni changement de métier au-delà', () => {
+    const g = atWorkshop();
+    g.money = 100_000;
+    g.pickaxeLevel = 3;
+    for (let i = 0; i < 3; i++) expect(g.hireWorker('picker')).toBe(true);
+    expect(g.workerCount('picker')).toBe(3);
+    expect(g.workerHireBlocker('picker')).toBe('3 ramasseurs au plus');
+    expect(g.workerHireBlocker('refueler')).toBeNull();
+    const money = g.money;
+    expect(g.hireWorker('picker')).toBe(false);
+    expect(g.money).toBe(money);
+    expect(g.hireWorker('refueler')).toBe(true);
+    const [first] = g.workers.list;
+    const refueler = g.workers.list.find((w) => w.job === 'refueler')!;
+    // Un quatrième ramasseur par changement de métier : refusé ; l'inverse est permis.
+    expect(g.setWorkerJob(refueler.id, 'picker')).toBe(false);
+    expect(refueler.job).toBe('refueler');
+    expect(g.setWorkerJob(first.id, 'driller')).toBe(true);
+    expect(g.workerCount('picker')).toBe(2);
+    expect(g.setWorkerJob(refueler.id, 'picker')).toBe(true);
+  });
+
+  it('une ancienne équipe plus grande que ses places ou son quota est conservée, sans nouvelle embauche', () => {
+    const g = atWorkshop();
+    g.pickaxeLevel = 1; // 3 places seulement
+    const data = JSON.parse(JSON.stringify(serialize(g)));
+    data.workers = Array.from({ length: 6 }, (_, i) => ({ id: i + 1, job: 'picker', x: 800, y: 160, cargo: {} }));
+    const loaded = deserialize(data);
+    expect(loaded.workers.count).toBe(6);
+    loaded.money = 100000;
+    goTo(loaded, 'workshop');
+    expect(loaded.hireWorker('refueler')).toBe(false);
+    expect(loaded.workerHireBlocker('refueler')).toBe("Nécessite la Pioche pro en acier pour agrandir l'équipe");
+    expect(loaded.workers.count).toBe(6);
   });
 
   it('il faut être à l’Atelier, avoir la pioche améliorée et assez d’argent', () => {
@@ -644,7 +712,7 @@ describe('ouvriers : sauvegarde', () => {
       { id: 1, job: 'refueler', x: 'oups', y: NaN, cargo: { inconnu: 5, coal: -3, iron: 99 } },
       { id: 'a', job: 'danseur', x: 0, y: 0, cargo: {} },
       null,
-      ...Array.from({ length: 10 }, (_, i) => ({ id: 10 + i, job: 'picker', x: 800, y: 160, cargo: {} })),
+      ...Array.from({ length: 12 }, (_, i) => ({ id: 10 + i, job: 'picker', x: 800, y: 160, cargo: {} })),
     ];
     const g = deserialize(data);
     expect(g.workers.count).toBeLessThanOrEqual(WORKERS.max);

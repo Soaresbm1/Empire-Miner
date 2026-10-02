@@ -195,7 +195,12 @@ passage (cases libres voisines qui ne se rejoignent plus dans `DRILLER.passageRa
 `DRILLER.moneyReserve` reste (`drillAvailable`, sinon drapeau `nodrill`). `canPlace` est découpé en `siteProblem` + `build`
 pour que le joueur et les ouvriers partagent les mêmes règles. Niveaux : `Worker.level`, `GameState.upgradeWorker` /
 `workerUpgradeBlocker` (prix, pioche, Atelier), qui règlent aussi la durée de pose et la vitesse de marche. Achat à l'Atelier : `GameState.hireWorker` (prix croissant,
-`isNear('workshop')`, pioche améliorée), `setWorkerJob`, `fireWorker`. Sauvegarde : champ facultatif `workers` (métier, niveau,
+`isNear('workshop')`), `setWorkerJob`, `fireWorker`. **Taille de l'équipe** : `WORKERS.max` (9) et `WORKERS.perJob` (3 par
+métier) ; les places s'ouvrent avec la pioche (`WORKER_SLOTS` : 3, 6, 9 aux paliers 2, 3, 4 ; `workerSlots`,
+`nextSlotStep`). `GameState.workerHireBlocker(métier)` donne la raison d'un refus (équipe complète, palier de pioche,
+quota du métier ; l'argent et le lieu sont vérifiés à part) ; `setWorkerJob` refuse un métier déjà plein. `WorkerSystem.add`
+reste sans plafond : une sauvegarde plus ancienne (plus de places ou de quota que maintenant) est chargée entière, on
+ne peut juste plus y recruter. Sauvegarde : champ facultatif `workers` (métier, niveau,
 position, charge ; le reste se recalcule). L'interface (`ui/crew.ts`) lit les ouvriers sans les modifier ; l'onglet est
 dans `ui/workshop.ts`, le rendu dans `Renderer.drawWorker` (sprites du mineur recolorés par `PlayerGear.crew`).
 

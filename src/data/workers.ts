@@ -43,9 +43,11 @@ export const isJob = (id: unknown): id is WorkerJob => WORKER_JOBS.some((j) => j
 
 export const WORKERS = {
   /** Ouvriers au plus. */
-  max: 6,
+  max: 9,
+  /** Ouvriers d'un même métier au plus (3 ramasseurs, 3 foreurs, 3 ravitailleurs). */
+  perJob: 3,
   /** Prix du premier, du deuxième… ouvrier (achat unique, pas de salaire). */
-  prices: [300, 600, 1000, 1500, 2200, 3000],
+  prices: [300, 600, 1000, 1500, 2200, 3000, 4000, 5200, 6500],
   /** Vitesse de marche (pixels par seconde ; le joueur va à 72). */
   speed: 54,
   /** Ce qu'un ouvrier porte (kg). */
@@ -67,9 +69,27 @@ export const WORKERS = {
   machinePickup: { drill: 3, borerBase: 5 },
   /** Attente avant de chercher du travail quand il n'y en a pas (s). */
   idleWait: 1.2,
+  /** Premier palier : les ouvriers se débloquent avec la pioche améliorée (voir `WORKER_SLOTS` pour la suite). */
   unlock: { pickaxeTier: 2, text: 'Nécessite la Pioche améliorée' },
-  names: ['Gus', 'Mina', 'Tom', 'Lila', 'Bob', 'Zoé'],
+  names: ['Gus', 'Mina', 'Tom', 'Lila', 'Bob', 'Zoé', 'Ugo', 'Rita', 'Sam'],
 } as const;
+
+/** Places dans l'équipe : chaque pioche qu'on achète en ouvre trois de plus, jusqu'à `WORKERS.max`. */
+export const WORKER_SLOTS: readonly { pickaxeTier: number; slots: number; text: string }[] = [
+  { pickaxeTier: 2, slots: 3, text: 'Nécessite la Pioche améliorée' },
+  { pickaxeTier: 3, slots: 6, text: 'Nécessite la Pioche en fer' },
+  { pickaxeTier: 4, slots: 9, text: 'Nécessite la Pioche pro en acier' },
+];
+
+/** Places ouvertes dans l'équipe avec une pioche de ce niveau (0 : les ouvriers ne sont pas encore débloqués). */
+export function workerSlots(pickaxeTier: number): number {
+  return WORKER_SLOTS.reduce((n, s) => (pickaxeTier >= s.pickaxeTier ? Math.max(n, s.slots) : n), 0);
+}
+
+/** Prochain palier qui ouvre une place de plus quand l'équipe compte `count` ouvriers (null : aucune ne manque). */
+export function nextSlotStep(count: number): (typeof WORKER_SLOTS)[number] | null {
+  return WORKER_SLOTS.find((s) => s.slots > count) ?? null;
+}
 
 /** Prix du prochain ouvrier quand on en a `count` (null : l'équipe est complète). */
 export function workerPrice(count: number): number | null {

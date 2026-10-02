@@ -215,8 +215,11 @@ lettre tapée : c'est la touche marquée M, quel que soit le clavier.
   combinaison ignifugée en absorbe l'essentiel. Les anciennes sauvegardes se chargent et la mine se prolonge
   simplement par le bas.
 - **Ouvriers** : des travailleurs qu'on **achète une seule fois** à l'Atelier (onglet Ouvriers, touche `5` ;
-  300 $, 600 $, 1 000 $, 1 500 $, 2 200 $ puis 3 000 $, six au plus, avec la Pioche améliorée), sans salaire. Chacun
-  a un **métier**, qu'on change gratuitement à tout moment. Le **ramasseur** va chercher les minerais laissés par
+  300 $, 600 $, 1 000 $, 1 500 $, 2 200 $, 3 000 $, 4 000 $, 5 200 $ puis 6 500 $), sans salaire. **L'équipe s'agrandit
+  avec vos pioches** : trois places avec la Pioche améliorée, six avec la Pioche en fer, neuf avec la Pioche pro en
+  acier — **neuf ouvriers au plus, trois par métier** (3 ramasseurs, 3 foreurs, 3 ravitailleurs ; un métier plein ne se
+  recrute plus et on ne peut plus y passer). Une ancienne équipe plus grande que ses places ou son quota est conservée.
+  Chacun a un **métier**, qu'on change gratuitement à tout moment. Le **ramasseur** va chercher les minerais laissés par
   terre (restes de la foreuse de percement, éboulements, tas oubliés, jusqu'au fond de la mine par le puits) et les
   range dans le coffre le plus proche **qui accepte ce minerai** (chaque coffre se règle : il ne prend jamais un tas
   qu'aucun coffre n'accepte, et ne range jamais dans une caisse d'expédition) ; il porte 15 kg et laisse la pierre. Il

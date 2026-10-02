@@ -1733,6 +1733,59 @@ try {
     check(emptied, 'le ravitailleur recharge la foreuse et le ramasseur range sa production dans le coffre');
     await page.keyboard.press('KeyX');
   }
+
+  // Taille de l'équipe : trois places avec la pioche améliorée, trois de plus à chaque pioche, neuf au plus, trois par métier.
+  {
+    await ev(() => {
+      const g = window.__EM.state;
+      g.money = 100000;
+      const w = g.structures.list.find((s) => s.type === 'workshop');
+      g.player.x = (w.x + 1) * 16;
+      g.player.y = (w.y + w.h + 0.6) * 16;
+      window.__EM.renderer.snapCamera();
+    });
+    await page.waitForTimeout(400);
+    await page.keyboard.press('KeyE');
+    await page.waitForTimeout(450);
+    await page.keyboard.press('Digit5');
+    await page.waitForTimeout(350);
+    const count = () => ev(() => window.__EM.state.workers.count);
+    const hire = async (job) => {
+      await page.click(`[data-action="hireWorker"][data-arg="${job}"]`);
+      await page.waitForTimeout(250);
+    };
+    check((await count()) === 3, `trois ouvriers : un de chaque métier (${await count()})`);
+    check(!(await page.$('[data-action="hireWorker"]')), "équipe pleine avec la pioche améliorée : plus de bouton de recrutement");
+    const panel3 = (await page.textContent('.panel-workshop')) ?? '';
+    check(/Votre équipe : 3 sur 3 places ouvertes/.test(panel3) && /Pioche en fer pour agrandir/.test(panel3), "l'onglet dit que la pioche en fer ouvre trois places de plus");
+    await shot('39-crew-slots-locked');
+    // Pioche en fer : six places ; deux ramasseurs de plus (trois au plus), puis le quota du métier se verrouille.
+    await ev(() => { window.__EM.state.pickaxeLevel = 2; });
+    await page.waitForTimeout(500);
+    check((await page.$$('[data-action="hireWorker"]')).length === 3, 'la pioche en fer rouvre le recrutement (trois fiches)');
+    await hire('picker');
+    await hire('picker');
+    check(!(await page.$('[data-action="hireWorker"][data-arg="picker"]')), 'trois ramasseurs : plus de recrutement de ce métier');
+    check(/3 ramasseurs au plus/.test((await page.textContent('.panel-workshop')) ?? ''), 'la fiche dit « 3 ramasseurs au plus »');
+    await hire('refueler');
+    check((await count()) === 6, `six ouvriers avec la pioche en fer (${await count()})`);
+    check(!(await page.$('[data-action="hireWorker"]')) && /Pioche pro en acier pour agrandir/.test((await page.textContent('.panel-workshop')) ?? ''), 'six places pleines : la pioche pro en acier ouvre les trois dernières');
+    // Pioche pro en acier : neuf places, trois de chaque.
+    await ev(() => { window.__EM.state.pickaxeLevel = 3; });
+    await page.waitForTimeout(500);
+    await hire('driller');
+    await hire('driller');
+    await hire('refueler');
+    const jobs = await ev(() => ['picker', 'driller', 'refueler'].map((j) => window.__EM.state.workerCount(j)));
+    check((await count()) === 9 && jobs.every((n) => n === 3), `neuf ouvriers, trois de chaque métier (${jobs.join('/')})`);
+    check(!(await page.$('[data-action="hireWorker"]')) && /équipe complète/.test((await page.textContent('.panel-workshop')) ?? ''), 'équipe complète : plus aucun recrutement possible');
+    await shot('40-crew-nine');
+    // Un métier plein ne se prend plus par changement de métier : tous les boutons « Passer … » sont grisés.
+    const enabledSwitch = await ev(() => [...document.querySelectorAll('[data-action="workerJob"]')].filter((b) => !b.disabled).length);
+    check(enabledSwitch === 0, `trois de chaque : plus aucun changement de métier possible (${enabledSwitch} bouton actif)`);
+    await page.keyboard.press('Escape');
+    await page.waitForTimeout(250);
+  }
 } catch (e) {
   failures++;
   console.error(e);

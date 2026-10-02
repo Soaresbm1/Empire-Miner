@@ -15,7 +15,7 @@ import { CAUSE_HAZARD, GEAR, HazardKind, getGear } from '../data/gear';
 import { GAS, HEALTH, HEAT, WATER } from '../data/hazards';
 import { RESOURCES, getResource, hasResource, resourceIndex } from '../data/resources';
 import { BAGS, JACKHAMMER, PICKAXES, ROPE, SCOOTER } from '../data/tools';
-import { DRILLER, DRILLER_LEVELS, WORKERS, drillerLevel, getJob, workerPrice, type WorkerJob } from '../data/workers';
+import { DRILLER, DRILLER_LEVELS, WORKERS, drillerLevel, getJob, nextSlotStep, workerPrice, workerSlots, type WorkerJob } from '../data/workers';
 import { Drop, DropSystem } from './Drops';
 import { HazardSystem } from './Hazards';
 import { MARKER_KINDS, Marker, MarkerBook, MarkerKind } from './Markers';
@@ -1017,10 +1017,32 @@ export class GameState implements StructureContext {
     return this.pickaxe.tier >= WORKERS.unlock.pickaxeTier;
   }
 
+  /** Places ouvertes dans l'équipe : trois de plus à chaque pioche (jusqu'à `WORKERS.max`). */
+  get workerSlots(): number {
+    return workerSlots(this.pickaxe.tier);
+  }
+
+  /** Combien d'ouvriers font ce métier. */
+  workerCount(job: WorkerJob): number {
+    return this.workers.list.filter((w) => w.job === job).length;
+  }
+
+  /** Pourquoi on ne peut pas recruter ce métier maintenant, hors argent et lieu (null : c'est possible). */
+  workerHireBlocker(job: WorkerJob): string | null {
+    if (this.nextWorkerPrice === null) return 'Équipe complète';
+    if (!this.workersUnlocked) return WORKERS.unlock.text;
+    if (this.workers.count >= this.workerSlots) {
+      const next = nextSlotStep(this.workers.count);
+      return next ? `${next.text} pour agrandir l'équipe` : 'Équipe complète';
+    }
+    if (this.workerCount(job) >= WORKERS.perJob) return `${WORKERS.perJob} ${getJob(job).name.toLowerCase()}s au plus`;
+    return null;
+  }
+
   /** Embauche un ouvrier à l'Atelier (achat unique, pas de salaire). */
   hireWorker(job: WorkerJob): boolean {
     const price = this.nextWorkerPrice;
-    if (price === null || !this.workersUnlocked || !this.isNear('workshop') || !this.pay(price)) return false;
+    if (price === null || this.workerHireBlocker(job) || !this.isNear('workshop') || !this.pay(price)) return false;
     this.workers.add(job, this);
     this.emit({ t: 'bought', name: `Ouvrier : ${getJob(job).name.toLowerCase()}` });
     return true;
@@ -1073,8 +1095,9 @@ export class GameState implements StructureContext {
     return s instanceof Drill ? { drill: s, bought } : null;
   }
 
-  /** Change le métier d'un ouvrier (gratuit, de n'importe où). */
+  /** Change le métier d'un ouvrier (gratuit, de n'importe où), tant que ce métier n'a pas déjà son quota. */
   setWorkerJob(id: number, job: WorkerJob): boolean {
+    if (this.workerCount(job) >= WORKERS.perJob) return false;
     return this.workers.setJob(id, job);
   }
 

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { TILE } from '../src/core/constants';
-import { DRILLER_LEVELS, WORKERS } from '../src/data/workers';
+import { DRILLER_LEVELS, WORKERS, WORKER_JOBS } from '../src/data/workers';
 import { GameState } from '../src/sim/GameState';
 import { Storage } from '../src/sim/structures/Storage';
 import { cargoLine, stuckWorkers, workerAt, workerStatus, workerTooltip } from '../src/ui/crew';
@@ -36,7 +36,8 @@ describe('ouvriers : onglet de l’Atelier', () => {
     expect(html).toContain('data-action="hireWorker" data-arg="driller"');
     expect(html).toContain('Recruter');
     expect(html).toContain('300');
-    expect(html).toContain('Votre équipe : 0 sur 6');
+    expect(html).toContain('Votre équipe : 0 sur 3 places ouvertes (9 au plus)');
+    expect(html).toContain('0 sur 3'); // ramasseurs, foreurs, ravitailleurs : trois au plus chacun
     expect(html).toContain('Personne ne travaille');
   });
 
@@ -57,7 +58,7 @@ describe('ouvriers : onglet de l’Atelier', () => {
     const b = g.workers.add('refueler', g);
     a.cargo = { copper: 2 };
     const html = workshopPanel(g, 'crew');
-    expect(html).toContain('Votre équipe : 2 sur 6');
+    expect(html).toContain('Votre équipe : 2 sur 3 places ouvertes');
     expect(html).toContain(`data-action="workerJob" data-arg="${a.id}:refueler"`);
     expect(html).toContain(`data-action="workerJob" data-arg="${a.id}:driller"`);
     expect(html).toContain(`data-action="workerJob" data-arg="${b.id}:picker"`);
@@ -79,11 +80,43 @@ describe('ouvriers : onglet de l’Atelier', () => {
 
   it('équipe complète : plus de bouton de recrutement', () => {
     const g = rich();
-    for (let i = 0; i < WORKERS.max; i++) g.workers.add('picker', g);
+    g.pickaxeLevel = 3;
+    for (let i = 0; i < WORKERS.max; i++) g.workers.add(WORKER_JOBS[i % 3].id, g);
     const html = workshopPanel(g, 'crew');
     expect(html).toContain('équipe complète');
     expect(html).not.toContain('data-action="hireWorker"');
     expect(html).toContain(`Votre équipe : ${WORKERS.max} sur ${WORKERS.max}`);
+    expect(html).not.toContain('places ouvertes');
+  });
+
+  it('l’équipe plafonnée par la pioche : bouton verrouillé avec le palier suivant', () => {
+    const g = rich(); // pioche améliorée : 3 places
+    for (let i = 0; i < 3; i++) g.workers.add(WORKER_JOBS[i].id, g);
+    const html = workshopPanel(g, 'crew');
+    expect(html).not.toContain('data-action="hireWorker"');
+    expect(html).toContain("Nécessite la Pioche en fer pour agrandir l'équipe");
+    expect(html).toContain('Votre équipe : 3 sur 3 places ouvertes (9 au plus)');
+    expect(tabBadges(g).crew).toBe(0);
+    g.pickaxeLevel = 2; // pioche en fer : 6 places
+    expect(workshopPanel(g, 'crew')).toContain('data-action="hireWorker" data-arg="picker"');
+    expect(workshopPanel(g, 'crew')).toContain('Votre équipe : 3 sur 6 places ouvertes');
+    expect(tabBadges(g).crew).toBe(1);
+  });
+
+  it('trois par métier : fiche « au complet », bouton de recrutement et changement de métier grisés', () => {
+    const g = rich();
+    g.pickaxeLevel = 3;
+    const pickers = [0, 1, 2].map(() => g.workers.add('picker', g));
+    const drill = g.workers.add('driller', g);
+    const html = workshopPanel(g, 'crew');
+    expect(html).toContain('au complet');
+    expect(html).toContain('3 ramasseurs au plus');
+    expect(html).not.toContain('data-action="hireWorker" data-arg="picker"');
+    expect(html).toContain('data-action="hireWorker" data-arg="driller"');
+    // Le foreur ne peut pas passer ramasseur (déjà trois) mais un ramasseur peut passer foreur.
+    expect(html).toMatch(new RegExp(`data-action="workerJob" data-arg="${drill.id}:picker"[^>]*disabled`));
+    expect(html).not.toMatch(new RegExp(`data-action="workerJob" data-arg="${pickers[0].id}:driller"[^>]*disabled`));
+    expect(html).toContain('Déjà 3 ramasseurs : c&#39;est le maximum');
   });
 
   it('conseil du premier ouvrier (en dernier), et pastille quand on peut en recruter un', () => {
