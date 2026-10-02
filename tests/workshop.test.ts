@@ -16,6 +16,7 @@ function complete(): GameState {
   g.hasJackhammer = true;
   g.hasScooter = true;
   for (const d of GEAR) g.gear.add(d.id);
+  g.workers.add('picker', g);
   return g;
 }
 
@@ -49,7 +50,7 @@ describe('atelier : conseil d’achat', () => {
     expect(workshopAdvice(g)).toMatchObject({ action: 'buyGear', arg: 'suit' });
   });
 
-  it('suit l’ordre sac, marteau-piqueur, trottinette, puis plus rien', () => {
+  it('suit l’ordre sac, marteau-piqueur, trottinette, premier ouvrier, puis plus rien', () => {
     const g = new GameState(4);
     g.pickaxeLevel = PICKAXES.length - 1;
     expect(workshopAdvice(g)!.action).toBe('buyBag');
@@ -60,6 +61,8 @@ describe('atelier : conseil d’achat', () => {
     g.hasJackhammer = true;
     expect(workshopAdvice(g)!.action).toBe('buyScooter');
     g.hasScooter = true;
+    expect(workshopAdvice(g)!.action).toBe('hireWorker');
+    g.workers.add('picker', g);
     expect(workshopAdvice(g)).toBeNull();
   });
 
@@ -93,7 +96,7 @@ describe('atelier : pastilles des onglets', () => {
   it('sans argent, aucune pastille', () => {
     const g = new GameState(4);
     g.money = 0;
-    expect(tabBadges(g)).toEqual({ tools: 0, transport: 0, gear: 0, machines: 0 });
+    expect(tabBadges(g)).toEqual({ tools: 0, transport: 0, gear: 0, machines: 0, crew: 0 });
     expect(workshopPanel(g, 'tools')).not.toContain('class="badge"');
   });
 
@@ -110,11 +113,11 @@ describe('atelier : pastilles des onglets', () => {
     expect(tabBadges(g).transport).toBe(1); // seul le grand sac (90 $)
   });
 
-  it('les quatre onglets sont là, numérotés de 1 à 4', () => {
+  it('les cinq onglets sont là, numérotés de 1 à 5', () => {
     const html = workshopPanel(new GameState(4), 'tools');
-    expect(WORKSHOP_TABS.map(([id]) => id)).toEqual(['tools', 'transport', 'gear', 'machines']);
-    expect(count(html, /<button class="tab[ "]/g)).toBe(4);
-    expect(count(html, /class="tab-key">[1-4]</g)).toBe(4);
+    expect(WORKSHOP_TABS.map(([id]) => id)).toEqual(['tools', 'transport', 'gear', 'machines', 'crew']);
+    expect(count(html, /<button class="tab[ "]/g)).toBe(5);
+    expect(count(html, /class="tab-key">[1-5]</g)).toBe(5);
     expect(html).toContain('tab active" data-action="tab" data-arg="tools"');
   });
 

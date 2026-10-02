@@ -1,7 +1,7 @@
 /**
  * Atelier : outils, transport, équipement et machines.
  *
- * Quatre onglets. Une bande « Conseil » propose le prochain achat utile ; chaque onglet porte une
+ * Cinq onglets (outils, transport, équipement, machines, ouvriers). Une bande « Conseil » propose le prochain achat utile ; chaque onglet porte une
  * pastille avec le nombre d'achats possibles tout de suite ; l'onglet Machines se filtre par
  * catégorie et se lit en lignes compactes (le détail se déplie).
  */
@@ -10,7 +10,9 @@ import { BOOTS_WATER, GEAR, GearDef, HAZARD_LABEL } from '../data/gear';
 import { CAVE_IN, GAS, HEALTH, HEAT, WATER } from '../data/hazards';
 import { MACHINES, MACHINE_GROUPS, MachineDef, conveyorThroughput, parseKit } from '../data/machines';
 import { BAGS, JACKHAMMER, PICKAXES, ROPE, SCOOTER } from '../data/tools';
-import type { GameState } from '../sim/GameState';
+import { WORKERS, WORKER_JOBS, getJob, workerName } from '../data/workers';
+import { PLAYER_SPEED, type GameState } from '../sim/GameState';
+import { cargoLine, workerStatus } from './crew';
 import { esc, kg, money, num } from './format';
 import { icon as themeIcon } from './theme';
 import { btn, stat } from './widgets';
@@ -22,6 +24,7 @@ export const WORKSHOP_TABS: readonly (readonly [id: string, label: string])[] = 
   ['transport', 'Transport'],
   ['gear', 'Équipement'],
   ['machines', 'Machines'],
+  ['crew', 'Ouvriers'],
 ];
 
 /** Ce que le joueur a réglé dans l'onglet Machines (gardé tant que la partie est ouverte). */
@@ -32,9 +35,11 @@ export interface ShopView {
   only: boolean;
   /** Machines dont le détail est déplié. */
   open: ReadonlySet<string>;
+  /** Onglet Ouvriers : l'ouvrier dont on a demandé le congé (il faut confirmer). */
+  fire: number | null;
 }
 
-export const DEFAULT_VIEW: ShopView = { cat: 'all', only: false, open: new Set() };
+export const DEFAULT_VIEW: ShopView = { cat: 'all', only: false, open: new Set(), fire: null };
 
 export const isWorkshopTab = (id: string): boolean => WORKSHOP_TABS.some(([t]) => t === id);
 
@@ -83,6 +88,9 @@ export function offers(g: GameState): Offer[] {
     out.push({ key: 'jackhammer', tab: 'tools', name: JACKHAMMER.name, price: JACKHAMMER.price, action: 'buyJackhammer', reason: 'Mine sur trois cases de large, très vite.', icon: 'tool:jackhammer' });
   if (!g.hasScooter)
     out.push({ key: 'scooter', tab: 'transport', name: SCOOTER.name, price: SCOOTER.price, action: 'buyScooter', reason: `Touche Maj : on file ${Math.round((SCOOTER.speedMul - 1) * 100)} % plus vite.`, icon: 'tool:scooter' });
+  const hire = g.nextWorkerPrice;
+  if (g.workers.count === 0 && g.workersUnlocked && hire !== null)
+    out.push({ key: 'worker', tab: 'crew', name: 'Premier ouvrier', price: hire, action: 'hireWorker', arg: 'picker', reason: 'Un ramasseur range les minerais laissés au sol dans un coffre ; un ravitailleur recharge vos machines en charbon.', icon: 'worker:picker' });
   return out;
 }
 
@@ -110,8 +118,9 @@ function ownedAny(g: GameState, m: MachineDef): boolean {
 
 /** Nombre d'achats possibles tout de suite dans chaque onglet (pastille de l'onglet). */
 export function tabBadges(g: GameState): Record<string, number> {
-  const badges: Record<string, number> = { tools: 0, transport: 0, gear: 0, machines: newMachines(g).length };
-  for (const o of offers(g)) if (g.money >= o.price) badges[o.tab]++;
+  const hire = g.nextWorkerPrice;
+  const badges: Record<string, number> = { tools: 0, transport: 0, gear: 0, machines: newMachines(g).length, crew: g.workersUnlocked && hire !== null && g.money >= hire ? 1 : 0 };
+  for (const o of offers(g)) if (g.money >= o.price && o.tab !== 'crew') badges[o.tab]++;
   // L'équipement qui n'est pas encore « conseillé » s'achète quand même : on le compte aussi.
   for (const def of GEAR) if (!g.hasGear(def.id) && g.money >= def.price && g.stats.maxDepth + 40 < def.fromDepth) badges.gear++;
   return badges;
@@ -435,6 +444,50 @@ function machinesTab(g: GameState, icon: (id: string) => string, view: ShopView)
   return `${groups || empty}<p class="hint">Les machines achetées se rangent dans vos kits (touche <kbd>I</kbd>) et se posent avec <kbd>B</kbd>.</p>`;
 }
 
+// ------------------------------------------------------------------ ouvriers
+
+/** Onglet Ouvriers : recruter (achat unique), puis l'équipe au travail, avec son métier et ce qu'elle fait. */
+function crewTab(g: GameState, view: ShopView): string {
+  const price = g.nextWorkerPrice;
+  const locked = !g.workersUnlocked;
+  const speed = `${Math.round((WORKERS.speed / PLAYER_SPEED) * 100)} % de la vôtre`;
+  const hire = WORKER_JOBS.map((job) =>
+    card({
+      icon: `worker:${job.id}`,
+      title: job.name,
+      tag: price === null ? 'équipe complète' : undefined,
+      desc: job.description,
+      rows: `${stat('Charge', kg(WORKERS.capacity))}${stat('Vitesse', speed)}${stat('Prix du prochain', price === null ? '—' : money(price))}`,
+      state: locked ? 'locked' : price === null ? 'owned' : 'buy',
+      buy: locked || price === null ? undefined : buyBlock(g, price, 'hireWorker', job.id, 'Recruter'),
+      lock: locked ? WORKERS.unlock.text : undefined,
+    }),
+  ).join('');
+  const rows = g.workers.list
+    .map((w) => {
+      const st = workerStatus(g, w);
+      const job = getJob(w.job);
+      const other = WORKER_JOBS.find((j) => j.id !== w.job)!;
+      const armed = view.fire === w.id;
+      return `<div class="crew-row">
+        <div class="crew-ico">${ico(`worker:${w.job}`, 'crew-img')}</div>
+        <div class="crew-main"><div><b>${workerName(w.id)}</b> <span class="tag" style="color:${job.color}">${job.name}</span> ${cargoLine(w)}</div><span class="crew-state ${st.tone}">${st.text}</span></div>
+        <div class="crew-act">${btn('workerJob', `Passer ${other.name.toLowerCase()}`, { arg: `${w.id}:${other.id}`, cls: 'small', title: `Changer de métier (gratuit) : ${other.name.toLowerCase()}` })}${btn('fireWorker', armed ? 'Confirmer ?' : 'Congédier', {
+          arg: String(w.id),
+          cls: `small${armed ? ' danger' : ''}`,
+          title: 'Sans remboursement ; sa charge reste par terre',
+        })}</div></div>`;
+    })
+    .join('');
+  const team = g.workers.count
+    ? `<div class="crew">${rows}</div>`
+    : '<p class="empty">Personne ne travaille pour vous pour l\'instant. Recrutez un premier ouvrier ci-dessus.</p>';
+  return `<p class="sub">Un ouvrier s'achète une seule fois, sans salaire ; le suivant coûte plus cher. On change son métier quand on veut, gratuitement.</p>
+    <div class="cards">${hire}</div>
+    <h4>Votre équipe : ${g.workers.count} sur ${WORKERS.max}</h4>${team}
+    <p class="hint">Le ramasseur range dans un coffre (à défaut, dans une caisse d'expédition qui vend) : posez-en un au camp. Le ravitailleur prend le charbon des coffres : gardez-y du charbon. Ils évitent le grisou et l'eau profonde.</p>`;
+}
+
 // ------------------------------------------------------------------ panneau
 
 /** Bande « Conseil » : le prochain achat utile, avec le bouton pour l'acheter ou la barre qui s'en approche. */
@@ -460,7 +513,7 @@ function tabBar(g: GameState, tab: string): string {
 
 export function workshopPanel(g: GameState, tab: string, icon: (id: string) => string = () => '', view: ShopView = DEFAULT_VIEW): string {
   const id = isWorkshopTab(tab) ? tab : 'tools';
-  const body = id === 'tools' ? toolsTab(g) : id === 'transport' ? transportTab(g) : id === 'gear' ? gearTab(g) : machinesTab(g, icon, view);
+  const body = id === 'tools' ? toolsTab(g) : id === 'transport' ? transportTab(g) : id === 'gear' ? gearTab(g) : id === 'crew' ? crewTab(g, view) : machinesTab(g, icon, view);
   // Le conseil défile avec la liste ; les onglets (et les filtres des machines) restent collés en haut.
   return `${adviceBar(g)}<div class="shop-nav">${tabBar(g, id)}${id === 'machines' ? shopFilters(g, view) : ''}</div>${body}`;
 }

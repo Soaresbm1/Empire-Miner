@@ -22,6 +22,7 @@ import { CAVE_IN, GAS, HEAT, WATER } from '../data/hazards';
 import { Drill, reachTiles } from '../sim/structures/Drill';
 import { ShippingCrate } from '../sim/structures/ShippingCrate';
 import { Sorter } from '../sim/structures/Sorter';
+import { isJob } from '../data/workers';
 import { BOARD_TABS, marketNews } from '../ui/market';
 import { WORKSHOP_TABS } from '../ui/workshop';
 import { Rail, RailStation, RailSwitch, type SwitchSetting } from '../sim/structures/Rail';
@@ -305,6 +306,17 @@ export class Game {
         break;
       case 'buyRope':
         g.buyRope(Number(arg) || 1);
+        break;
+      case 'hireWorker':
+        if (isJob(arg)) g.hireWorker(arg);
+        break;
+      case 'workerJob': {
+        const [id, job] = arg.split(':');
+        if (isJob(job)) g.setWorkerJob(Number(id), job);
+        break;
+      }
+      case 'fireWorker':
+        if (this.ui.confirmFire(Number(arg))) g.fireWorker(Number(arg));
         break;
       case 'shopCat':
         this.ui.setShopCat(arg);
@@ -1172,6 +1184,11 @@ export class Game {
         case 'market':
           this.sfx.market(e.up);
           this.ui.toast(marketNews(e), e.up ? 'good' : 'warn');
+          break;
+        case 'worker':
+          // Un petit éclat à l'endroit du geste, et un tintement discret si l'ouvrier est près du joueur.
+          r.fx.emit('spark', e.x, e.y - 8, e.kind === 'fuel' ? '#e8662a' : e.kind === 'store' ? '#f2c230' : '#d8f5c0', 4, 22);
+          if (Math.hypot(e.x - g.player.x, e.y - g.player.y) < 14 * TILE) this.sfx.worker(e.kind);
           break;
         case 'message':
           this.ui.toast(e.text, e.kind);

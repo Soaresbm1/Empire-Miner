@@ -15,6 +15,7 @@ import { CAUSE_HAZARD, GEAR, HazardKind, getGear } from '../data/gear';
 import { GAS, HEALTH, HEAT, WATER } from '../data/hazards';
 import { RESOURCES, getResource, hasResource, resourceIndex } from '../data/resources';
 import { BAGS, JACKHAMMER, PICKAXES, ROPE, SCOOTER } from '../data/tools';
+import { WORKERS, getJob, workerPrice, type WorkerJob } from '../data/workers';
 import { Drop, DropSystem } from './Drops';
 import { HazardSystem } from './Hazards';
 import { MARKER_KINDS, Marker, MarkerBook, MarkerKind } from './Markers';
@@ -38,6 +39,7 @@ import { Storage } from './structures/Storage';
 import type { Structure, StructureContext } from './structures/Structure';
 import { revealAround } from './visibility';
 import { Wagon, WagonSystem } from './Wagons';
+import { WorkerSystem } from './Workers';
 import type { World } from './World';
 
 export interface PlayerIntent {
@@ -105,6 +107,8 @@ export class GameState implements StructureContext {
   readonly production = new ProductionLog(() => this.time);
   /** Cours du marché : prix de vente variables, événements « forte demande de cuivre »… */
   readonly market: Market;
+  /** Ouvriers achetés à l'Atelier : ramasseurs et ravitailleurs. */
+  readonly workers = new WorkerSystem();
   /** Type de repère choisi dans le panneau de la carte (pour le prochain repère posé). */
   markerKind: MarkerKind = 'point';
   readonly player: Player;
@@ -271,6 +275,7 @@ export class GameState implements StructureContext {
     this.time += dt;
     this.stats.playTime += dt;
     this.market.update(this.time);
+    this.workers.update(dt, this);
     if (!this.riding) {
       // Maj maintenue : on monte sur la trottinette (relâchée : on en descend). Les mains sont au
       // guidon, donc plus de minage, et un coup de pioche en cours est interrompu.
@@ -998,6 +1003,37 @@ export class GameState implements StructureContext {
     this.ropes += n;
     this.emit({ t: 'bought', name: n > 1 ? `${ROPE.name} ×${n}` : ROPE.name });
     return true;
+  }
+
+  // ---------------------------------------------------------------- ouvriers
+
+  /** Prix du prochain ouvrier (null : l'équipe est complète). */
+  get nextWorkerPrice(): number | null {
+    return workerPrice(this.workers.count);
+  }
+
+  /** Les ouvriers se débloquent avec la pioche améliorée. */
+  get workersUnlocked(): boolean {
+    return this.pickaxe.tier >= WORKERS.unlock.pickaxeTier;
+  }
+
+  /** Embauche un ouvrier à l'Atelier (achat unique, pas de salaire). */
+  hireWorker(job: WorkerJob): boolean {
+    const price = this.nextWorkerPrice;
+    if (price === null || !this.workersUnlocked || !this.isNear('workshop') || !this.pay(price)) return false;
+    this.workers.add(job, this);
+    this.emit({ t: 'bought', name: `Ouvrier : ${getJob(job).name.toLowerCase()}` });
+    return true;
+  }
+
+  /** Change le métier d'un ouvrier (gratuit, de n'importe où). */
+  setWorkerJob(id: number, job: WorkerJob): boolean {
+    return this.workers.setJob(id, job);
+  }
+
+  /** Congédie un ouvrier, sans remboursement ; sa charge reste par terre. */
+  fireWorker(id: number): boolean {
+    return this.workers.remove(id, this);
   }
 
   /** Achète la trottinette à moteur à l'Atelier ; on la monte ensuite en maintenant Maj. */

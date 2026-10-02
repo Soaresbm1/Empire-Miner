@@ -184,6 +184,21 @@ lettre tapée : c'est la touche marquée M, quel que soit le clavier.
   santé ne remonte plus tant qu'il a chaud). Un ventilateur à 4 cases l'en protège (on y reprend son souffle) et la
   combinaison ignifugée en absorbe l'essentiel. Les anciennes sauvegardes se chargent et la mine se prolonge
   simplement par le bas.
+- **Ouvriers** : des travailleurs qu'on **achète une seule fois** à l'Atelier (onglet Ouvriers, touche `5` ;
+  300 $, 600 $, 1 000 $, 1 500 $, 2 200 $ puis 3 000 $, six au plus, avec la Pioche améliorée), sans salaire. Chacun
+  a un **métier**, qu'on change gratuitement à tout moment. Le **ramasseur** va chercher les minerais laissés par
+  terre (restes de la foreuse de percement, éboulements, tas oubliés, jusqu'au fond de la mine par le puits) et les
+  range dans le coffre le plus proche, à défaut dans une caisse d'expédition (qui les vend) ; il porte 15 kg et laisse la
+  pierre. Le **ravitailleur** prend du charbon dans les coffres et recharge les foreuses, les fours et les foreuses
+  de percement dont le réservoir est à moitié vide ou moins (une machine collée à un coffre se sert déjà seule). Ils
+  marchent de case en case par le plus court chemin (90 cases au plus), en évitant la roche, les machines, le
+  grisou et l'eau profonde, ne visent jamais le même tas ou la même machine, contournent un passage qui se ferme et
+  attendent près de l'entrée de la mine quand il n'y a rien à faire. Le panneau montre ce que fait chacun (« Rapporte
+  sa charge au coffre »…) et sa charge ; congédier demande confirmation (sans remboursement, la charge reste par
+  terre). Un ouvrier bloqué (« aucun coffre accessible », « plus de charbon dans les coffres ») est signalé au
+  Tableau d'affichage et par un point d'exclamation au-dessus de lui ; ils apparaissent aussi sur la carte (points
+  vert et orange). Casque vert pour le ramasseur, orange pour le ravitailleur. Les ouvriers sont sauvegardés
+  (métier, position, charge) ; les anciennes sauvegardes n'en ont pas.
 - **Cours du marché** : les prix de vente montent et descendent. Chaque minerai a un **cours**, multiplicateur de
   son prix de base (100 % = le prix de la fiche), qui dérive doucement toutes les 10 s autour de 100 % (en général
   de 80 à 120 %) ; un lingot suit le cours de son minerai, la pierre ne bouge pas. Toutes les 2,5 à 5 minutes, un

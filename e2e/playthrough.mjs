@@ -1286,6 +1286,78 @@ try {
   check(gained === expectedSale && expectedSale > 0, `« tout vendre » paie exactement le cours du moment (+${gained} $)`);
   await page.keyboard.press('Escape');
   await page.waitForTimeout(250);
+
+  // Ouvriers : on les recrute à l'Atelier (touche 5), un ramasseur range des tas dans un coffre, un ravitailleur recharge un four.
+  await ev(() => {
+    const g = window.__EM.state;
+    g.money = Math.max(g.money, 5000);
+    g.pickaxeLevel = Math.max(g.pickaxeLevel, 1);
+    const w = g.structures.list.find((s) => s.type === 'workshop');
+    g.player.x = (w.x + 1) * 16;
+    g.player.y = (w.y + w.h + 0.6) * 16;
+    window.__EM.renderer.snapCamera();
+  });
+  await page.waitForTimeout(400);
+  await page.keyboard.press('KeyE');
+  await page.waitForTimeout(450);
+  await page.keyboard.press('Digit5');
+  await page.waitForTimeout(350);
+  const crewText = await ev(() => document.querySelector('.panel-workshop')?.textContent ?? '');
+  check(/Ramasseur/.test(crewText) && /Ravitailleur/.test(crewText) && /Votre équipe/.test(crewText), "la touche 5 ouvre l'onglet Ouvriers");
+  const crewBefore = await ev(() => window.__EM.state.workers.count);
+  const moneyBeforeHire = (await state()).money;
+  await page.click('[data-action="hireWorker"][data-arg="picker"]');
+  await page.waitForTimeout(300);
+  await page.click('[data-action="hireWorker"][data-arg="refueler"]');
+  await page.waitForTimeout(300);
+  const crewAfter = await ev(() => window.__EM.state.workers.count);
+  check(crewAfter - crewBefore === 2, `deux ouvriers recrutés au clic (${crewAfter - crewBefore})`);
+  check(moneyBeforeHire - (await state()).money > 0, `un achat unique : ${moneyBeforeHire - (await state()).money} $ débités une fois`);
+  await shot('28-crew-tab');
+  await page.keyboard.press('Escape');
+  await page.waitForTimeout(250);
+  const staged = await ev(() => {
+    const g = window.__EM.state;
+    g.pickaxeLevel = 3;
+    g.player.x = 50.5 * 16;
+    g.player.y = 10.5 * 16;
+    g.inventory.addKit('storage', 1);
+    g.inventory.addKit('furnace', 1);
+    const chest = g.place('storage', 44, 10, 1);
+    const furnace = g.place('furnace', 57, 8, 1);
+    if (!chest || !furnace) return null;
+    chest.put('coal', 12);
+    for (const [res, n, x, y] of [['copper', 2, 60, 10], ['iron', 1, 62, 10]]) g.drops.spawn(res, n, (x + 0.5) * 16, (y + 0.5) * 16, false);
+    g.player.x = 30.5 * 16;
+    return { cx: chest.x, cy: chest.y, fx: furnace.x, fy: furnace.y };
+  });
+  check(!!staged, 'un coffre avec du charbon, un four vide et des minerais par terre sont prêts');
+  if (staged) {
+    let done = true;
+    try {
+      await page.waitForFunction(
+        (p) => {
+          const g = window.__EM.state;
+          const c = g.structures.at(p.cx, p.cy);
+          const f = g.structures.at(p.fx, p.fy);
+          return c && f && (c.items.copper ?? 0) >= 2 && (c.items.iron ?? 0) >= 1 && f.fuelUnits > 0;
+        },
+        staged,
+        { timeout: 90000, polling: 500 },
+      );
+    } catch {
+      done = false;
+    }
+    const res = await ev((p) => {
+      const g = window.__EM.state;
+      const c = g.structures.at(p.cx, p.cy);
+      const f = g.structures.at(p.fx, p.fy);
+      return { chest: { ...c.items }, fuel: f.fuelUnits, drops: g.drops.list.length };
+    }, staged);
+    check(done && res.drops === 0, `le ramasseur range les tas dans le coffre (${JSON.stringify(res.chest)})`);
+    check(res.fuel > 0, `le ravitailleur recharge le four (${res.fuel} unités)`);
+    await shot('29-crew-working');
+  }
 } catch (e) {
   failures++;
   console.error(e);

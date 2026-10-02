@@ -577,3 +577,17 @@ kbd {
 .spark.flat polyline { stroke: var(--gold); } .spark.flat circle { fill: var(--gold); }
 .market:not(:empty) { margin-top: 2px; line-height: 1.25; }
 .market .mk { font-size: 13px; }
+
+/* Ouvriers (onglet de l'Atelier) : l'équipe, ce que fait chacun, ses boutons. */
+.crew { display: flex; flex-direction: column; gap: 6px; margin-bottom: 8px; }
+.crew-row { display: flex; align-items: center; gap: 12px; padding: 6px 10px; background: rgba(0, 0, 0, 0.25); box-shadow: 0 0 0 2px #120e10, inset 0 0 0 1px #4a382b; }
+.crew-ico { flex: none; width: 36px; height: 44px; display: flex; align-items: center; justify-content: center; background: rgba(0, 0, 0, 0.3); }
+.crew-img { width: 24px; height: 36px; image-rendering: pixelated; object-fit: contain; }
+.crew-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; font-size: 15px; }
+.crew-main .tag { font-size: 13px; }
+.crew-state { font-size: 13px; color: var(--muted); }
+.crew-state.ok { color: var(--good); }
+.crew-state.warn { color: var(--warn); }
+.crew-cargo { display: inline-flex; gap: 4px; vertical-align: middle; margin-left: 6px; }
+.crew-act { flex: none; display: flex; flex-direction: column; gap: 4px; align-items: stretch; }
+@media (max-width: 640px) { .crew-row { flex-wrap: wrap; } .crew-act { flex-direction: row; width: 100%; } }

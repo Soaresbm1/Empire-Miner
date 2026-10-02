@@ -35,4 +35,6 @@ export type SimEvent =
   /** Corde de rappel : début de la manœuvre, annulation, arrivée au camp (« up ») ou retour au point d'accroche (« down »). */
   | { t: 'rope'; phase: 'start' | 'cancel' | 'up' | 'down' }
   /** Événement du marché : forte demande (`up`, le cours monte) ou surproduction (le cours chute) sur un minerai. */
-  | { t: 'market'; res: string; up: boolean; pct: number };
+  | { t: 'market'; res: string; up: boolean; pct: number }
+  /** Un ouvrier ramasse (« pick »), dépose (« store ») ou recharge une machine (« fuel »). */
+  | { t: 'worker'; kind: 'pick' | 'store' | 'fuel'; x: number; y: number; res: string };

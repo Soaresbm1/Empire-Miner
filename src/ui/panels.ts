@@ -8,6 +8,7 @@ import { BorerLevelSpec, MachineLevel, kitName } from '../data/machines';
 import { HEAT } from '../data/hazards';
 import { MARKER_KINDS, MARKER_ORDER, MAX_MARKERS } from '../sim/Markers';
 import { RESOURCES, getResource } from '../data/resources';
+import { WORKER_JOBS } from '../data/workers';
 import type { GameState } from '../sim/GameState';
 import type { BorerStatus, ReturnReason, TunnelBorer } from '../sim/structures/Borer';
 import type { Smelter, SmelterStatus } from '../sim/structures/Smelter';
@@ -595,6 +596,7 @@ export function mapPanel(g: GameState, colors: Record<string, string>): string {
         ${item(sw(colors.shipping), "Caisse d'expédition")}
         ${item(sw(colors.track), 'Rails et quais')}
         ${item(sw(colors.wagon), 'Wagonnet')}
+        ${WORKER_JOBS.map((j) => item(sw(j.color), j.name)).join('')}
       </ul>
       <h4>Minerais repérés</h4>
       <ul class="map-legend">${ores.length ? ores.map((r) => item(resIcon(r.id), r.name)).join('') : '<li class="muted">Aucun pour l’instant</li>'}</ul>
@@ -619,6 +621,7 @@ export function helpPanel(keys: { move: string; label: (c: string) => string }):
     <div><h4>Zoom</h4><p>Molette de la souris</p></div>
     <div><h4>Trottinette</h4><p>Achetée à l'atelier (onglet Transport) : maintenez <kbd>Maj</kbd> pour rouler vite, relâchez pour descendre. Pas de minage en roulant</p></div>
     <div><h4>Cours du marché</h4><p>Les prix de vente montent et descendent, avec des événements (« forte demande de cuivre »). Le comptoir et les caisses d'expédition paient au cours du moment : les courbes sont au <b>Tableau d'affichage</b> (${k('KeyE')} devant, onglet Marché). Stockez dans un coffre, vendez à la hausse</p></div>
+    <div><h4>Ouvriers</h4><p>Achetés une fois à l'atelier (onglet Ouvriers). Le <b>ramasseur</b> range les minerais laissés par terre dans un coffre ; le <b>ravitailleur</b> prend le charbon des coffres pour recharger vos machines. On change leur métier quand on veut ; un ouvrier bloqué est signalé au Tableau d'affichage</p></div>
     <div><h4>Wagonnet</h4><p>${k('KeyF')} : monter / descendre</p></div>
     <div><h4>Outil en main</h4><p>${k('KeyT')} : pioche ou marteau-piqueur (s'il est acheté)</p></div>
     <div><h4>Carte</h4><p><kbd>M</kbd> : carte de la mine (ou clic sur la mini-carte)</p></div>

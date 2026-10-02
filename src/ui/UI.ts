@@ -52,7 +52,7 @@ export class UI {
   /** Dernier onglet du Tableau d'affichage (Marché ou Production). */
   boardTab = 'market';
   /** Réglages de l'onglet Machines (catégorie, « achetables seulement », détails dépliés). */
-  readonly shopView = { cat: 'all', only: false, open: new Set<string>() };
+  readonly shopView: { cat: string; only: boolean; open: Set<string>; fire: number | null } = { cat: 'all', only: false, open: new Set<string>(), fire: null };
   /** Au prochain dessin du panneau, on remonte en haut de la liste. */
   private scrollTop = false;
   menu: 'main' | 'pause' | null = null;
@@ -265,6 +265,7 @@ export class UI {
 
   openPanel(kind: PanelKind, target: Structure | null = null, tab = kind === 'workshop' ? this.workshopTab : kind === 'board' ? this.boardTab : 'tools'): void {
     this.panel = { kind, target, tab };
+    this.shopView.fire = null;
     this.scrollTop = true;
     this.panelSig = '';
     this.popNext = true;
@@ -293,6 +294,7 @@ export class UI {
       this.boardTab = tab;
     }
     this.panel.tab = tab;
+    this.shopView.fire = null;
     this.scrollTop = true;
     this.panelSig = '';
   }
@@ -314,6 +316,16 @@ export class UI {
 
   toggleShopOnly(): void {
     this.shopView.only = !this.shopView.only;
+  }
+
+  /** Congédier un ouvrier : le premier appui demande confirmation (vrai au second appui, sur le même ouvrier). */
+  confirmFire(id: number): boolean {
+    if (this.shopView.fire === id) {
+      this.shopView.fire = null;
+      return true;
+    }
+    this.shopView.fire = id;
+    return false;
   }
 
   /** Déplie ou replie le détail d'une machine. */
