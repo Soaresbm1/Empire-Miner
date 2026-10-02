@@ -123,6 +123,17 @@ ne pas changer le terrain), `gas` et `water` (niveaux 0 à 255). `GameState.brea
 l'évanouissement ramène le joueur au camp. Les poches ne sont pas sauvegardées (elles se recalculent depuis la
 graine) ; `dug`, le gaz, l'eau, les éboulements annoncés et la santé le sont.
 
+Marché (`sim/Market.ts`, réglages dans `data/market.ts`) : `GameState.market` garde, pour chaque minerai, un cours
+(multiplicateur du prix de base) qui avance par pas de 10 s de temps de jeu (`Market.update(time)`, appelé à chaque
+tick) : marche aléatoire qui revient vers la moyenne, plus des événements (hausse ou chute temporaire d'un minerai
+que le joueur connaît, annoncés par `SimEvent` `market`). Les tirages viennent d'un hash (graine, pas, minerai) : pas
+d'état aléatoire à sauvegarder, et avancer d'un coup ou pas à pas donne le même marché. Un lingot suit le cours de son
+minerai, la pierre ne s'échange pas. Toute vente passe par `GameState.quote(res, n)` (comptoir, « tout vendre ») ou
+`StructureContext.quote` (caisse d'expédition) : le prix d'un lot est arrondi une seule fois. L'interface
+(`ui/market.ts`) lit le marché sans le modifier : prix et tendance (Comptoir, sac), courbes SVG et événements (onglet
+Marché du Tableau d'affichage), ligne du HUD. Sauvegarde : champ facultatif `market` (cours, courbes, événements) ;
+sans lui, le marché repart à 100 % au pas du temps de jeu, sans rejouer le passé.
+
 Repères (`sim/Markers.ts`) : `GameState.markers` (un `MarkerBook`) garde la liste, le repère suivi et
 les sauvegarde ; `GameState.addMarker` les nomme d'après le terrain et les machines. La carte complète
 convertit un clic en case (`MineMap.tileAt`, via la dernière vue dessinée) ; l'interface transmet la position du

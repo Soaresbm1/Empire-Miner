@@ -3,7 +3,7 @@
  * trois chiffres clés, l'histogramme des gains des 10 dernières minutes, un tableau par
  * ressource et les machines à surveiller.
  */
-import { RESOURCES, getResource } from '../data/resources';
+import { RESOURCES } from '../data/resources';
 import type { GameState } from '../sim/GameState';
 import { GAIN_MINUTES, type MinuteGain, type Rates } from '../sim/Production';
 import type { TunnelBorer } from '../sim/structures/Borer';
@@ -170,7 +170,7 @@ export function productionStats(g: GameState): string {
   const r = g.production.rates();
   const ore = total(r.ore);
   const ingots = total(r.ingots);
-  const ingotValue = Object.entries(r.ingots).reduce((v, [res, n]) => v + n * getResource(res).value, 0);
+  const ingotValue = Object.entries(r.ingots).reduce((v, [res, n]) => v + n * g.market.price(res), 0);
   const window = r.minutes >= 4.5 ? 'les 5 dernières minutes' : 'ce début de partie';
   return `
     <div class="kpis">

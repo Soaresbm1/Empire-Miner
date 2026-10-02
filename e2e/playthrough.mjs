@@ -1228,6 +1228,64 @@ try {
   const trackLine = (await page.textContent('#hud-track')) ?? '';
   await shot('26a-marker-arrow');
   check(trackLine.includes(here[0].label) && / m/.test(trackLine), `le repère suivi s'affiche sous la mini-carte avec sa distance (${trackLine.trim()})`);
+
+  // Cours du marché : prix variables, courbes et événements au Tableau d'affichage, vente au cours du moment.
+  await ev(() => {
+    const g = window.__EM.state;
+    g.stats.discovered = [...new Set([...g.stats.discovered, 'coal', 'copper', 'iron'])];
+    g.stats.collected = { ...g.stats.collected, coal: 40, copper: 30, iron: 12 };
+    // Vingt-cinq minutes de marché, avec une forte demande de cuivre au palier (le temps de jeu avance de pas en pas).
+    const t0 = Math.ceil(g.time / 10) * 10;
+    g.time = t0 + 1500;
+    for (let t = t0 + 10; t <= g.time; t += 10) g.market.update(t);
+    const now = g.market.step;
+    g.market.load({ ...g.market.serialize(), e: [{ n: 0, res: 'copper', start: now - 5, rise: 2, hold: 8, fall: 4, amp: 0.42 }] }, g.time);
+    g.events = [];
+    g.inventory.add('copper', 6);
+    const b = g.structures.list.find((s) => s.type === 'board');
+    g.player.x = (b.x + 1) * 16;
+    g.player.y = (b.y + b.h + 0.6) * 16;
+    window.__EM.renderer.snapCamera();
+  });
+  await page.waitForTimeout(500);
+  const hudMarket = (await page.textContent('#hud-market')) ?? '';
+  check(/Cuivre/.test(hudMarket), `le HUD annonce l'événement du marché sous l'argent (${hudMarket.trim()})`);
+  await page.keyboard.press('KeyE');
+  await page.waitForTimeout(500);
+  const boardText = await ev(() => document.querySelector('.panel-board')?.textContent ?? '');
+  check(/Marché/.test(boardText) && /Production/.test(boardText), "le Tableau d'affichage a les onglets Marché et Production");
+  check((await page.locator('.panel-board svg.spark').count()) === 3, 'une courbe par minerai connu (charbon, cuivre, fer)');
+  check(/Forte demande de cuivre/.test(boardText), "l'événement en cours est listé, avec le conseil de vente");
+  await shot('27-market-board');
+  await page.keyboard.press('Digit2');
+  await page.waitForTimeout(300);
+  check(/Gains des 10 dernières minutes/.test(await ev(() => document.querySelector('.panel-board')?.textContent ?? '')), "la touche 2 ouvre l'onglet Production");
+  await page.keyboard.press('ArrowLeft');
+  await page.waitForTimeout(300);
+  check((await page.locator('.panel-board svg.spark').count()) === 3, 'la flèche gauche revient au Marché');
+  await page.keyboard.press('Escape');
+  await page.waitForTimeout(250);
+  await ev(() => {
+    const g = window.__EM.state;
+    const c = g.structures.list.find((s) => s.type === 'counter');
+    g.player.x = (c.x + 1) * 16;
+    g.player.y = (c.y + c.h + 0.6) * 16;
+  });
+  await page.waitForTimeout(300);
+  await page.keyboard.press('KeyE');
+  await page.waitForTimeout(500);
+  check(/Prix du jour/.test(await ev(() => document.querySelector('.panel-counter')?.textContent ?? '')), 'le Comptoir affiche le prix du jour');
+  const expectedSale = await ev(() => {
+    const g = window.__EM.state;
+    return Object.entries(g.inventory.items).reduce((sum, [res, n]) => sum + g.quote(res, n), 0);
+  });
+  const moneyBefore = (await state()).money;
+  await page.click('[data-action="sellAll"]');
+  await page.waitForTimeout(400);
+  const gained = (await state()).money - moneyBefore;
+  check(gained === expectedSale && expectedSale > 0, `« tout vendre » paie exactement le cours du moment (+${gained} $)`);
+  await page.keyboard.press('Escape');
+  await page.waitForTimeout(250);
 } catch (e) {
   failures++;
   console.error(e);

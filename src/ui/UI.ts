@@ -24,6 +24,7 @@ import { MenuFx } from './menuFx';
 import { MAP_COLORS } from '../render/MineMap';
 import { QUALITY_LABEL, type Quality } from '../render/quality';
 import { WORKSHOP_TABS, isWorkshopTab } from './workshop';
+import { hudMarket, BOARD_TABS, isBoardTab } from './market';
 import { boardPanel, borerPanel, counterPanel, smelterPanel, drillPanel, helpPanel, inventoryPanel, mapPanel, shippingPanel, sorterPanel, stationPanel, storagePanel, switchPanel, workshopPanel } from './panels';
 
 /** Flèches dans les 8 directions, dans l'ordre des angles (est, sud-est, sud…). */
@@ -48,6 +49,8 @@ export class UI {
   panel: { kind: PanelKind; target: Structure | null; tab: string } | null = null;
   /** Dernier onglet de l'Atelier : on y revient à la prochaine visite. */
   workshopTab = 'tools';
+  /** Dernier onglet du Tableau d'affichage (Marché ou Production). */
+  boardTab = 'market';
   /** Réglages de l'onglet Machines (catégorie, « achetables seulement », détails dépliés). */
   readonly shopView = { cat: 'all', only: false, open: new Set<string>() };
   /** Au prochain dessin du panneau, on remonte en haut de la liste. */
@@ -118,6 +121,7 @@ export class UI {
     const surface = g.player.tileY < 12;
     this.set('hud-money', `<span class="coin"></span>${money(g.money)}`);
     this.set('hud-income', extra.income);
+    this.set('hud-market', hudMarket(g));
     // Fournaise : température, qui ralentit les machines et épuise le mineur (sauf près d'un ventilateur).
     const temp = surface ? null : g.hazards.temperature(g.player.tileY);
     const cooled = temp !== null && g.hazards.cooled(g.player.tileX, g.player.tileY);
@@ -259,7 +263,7 @@ export class UI {
 
   // ------------------------------------------------------------------ panneaux
 
-  openPanel(kind: PanelKind, target: Structure | null = null, tab = kind === 'workshop' ? this.workshopTab : 'tools'): void {
+  openPanel(kind: PanelKind, target: Structure | null = null, tab = kind === 'workshop' ? this.workshopTab : kind === 'board' ? this.boardTab : 'tools'): void {
     this.panel = { kind, target, tab };
     this.scrollTop = true;
     this.panelSig = '';
@@ -284,17 +288,22 @@ export class UI {
     if (this.panel.kind === 'workshop') {
       if (!isWorkshopTab(tab)) return;
       this.workshopTab = tab;
+    } else if (this.panel.kind === 'board') {
+      if (!isBoardTab(tab)) return;
+      this.boardTab = tab;
     }
     this.panel.tab = tab;
     this.scrollTop = true;
     this.panelSig = '';
   }
 
-  /** Onglet suivant (1) ou précédent (-1) de l'Atelier, en bouclant. */
+  /** Onglet suivant (1) ou précédent (-1) de l'Atelier ou du Tableau d'affichage, en bouclant. */
   cycleTab(dir: 1 | -1): void {
-    if (this.panel?.kind !== 'workshop') return;
-    const i = WORKSHOP_TABS.findIndex(([id]) => id === this.panel!.tab);
-    this.setTab(WORKSHOP_TABS[(i + dir + WORKSHOP_TABS.length) % WORKSHOP_TABS.length][0]);
+    const kind = this.panel?.kind;
+    if (kind !== 'workshop' && kind !== 'board') return;
+    const tabs = kind === 'workshop' ? WORKSHOP_TABS : BOARD_TABS;
+    const i = tabs.findIndex(([id]) => id === this.panel!.tab);
+    this.setTab(tabs[(i + dir + tabs.length) % tabs.length][0]);
   }
 
   /** Magasin de machines : catégorie affichée (« all » : toutes). */
@@ -328,7 +337,7 @@ export class UI {
         break;
       case 'board':
         title = "Tableau d'affichage";
-        body = boardPanel(g);
+        body = boardPanel(g, tab);
         break;
       case 'workshop':
         title = 'Atelier';

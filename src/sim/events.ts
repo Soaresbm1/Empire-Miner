@@ -33,4 +33,6 @@ export type SimEvent =
   /** Le joueur monte sur sa trottinette (Maj enfoncée) ou en descend (Maj relâchée). */
   | { t: 'mount'; on: boolean }
   /** Corde de rappel : début de la manœuvre, annulation, arrivée au camp (« up ») ou retour au point d'accroche (« down »). */
-  | { t: 'rope'; phase: 'start' | 'cancel' | 'up' | 'down' };
+  | { t: 'rope'; phase: 'start' | 'cancel' | 'up' | 'down' }
+  /** Événement du marché : forte demande (`up`, le cours monte) ou surproduction (le cours chute) sur un minerai. */
+  | { t: 'market'; res: string; up: boolean; pct: number };

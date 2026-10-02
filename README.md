@@ -172,8 +172,8 @@ lettre tapée : c'est la touche marquée M, quel que soit le clavier.
   pose (sur un gisement, en surface…), et une ligne d'état dit en direct si la pose est possible là où vise la
   souris, et pourquoi sinon. La caméra remonte pour que la barre ne cache pas le joueur. Le mode s'ouvre même
   sans aucune machine en stock, pour démonter au clic droit.
-- Vente automatique : **caisse d'expédition** à poser en surface. Tout ce qui y arrive est vendu au prix du
-  comptoir à chaque passage du transporteur (toutes les 15 s) ; sa capacité est limitée (120 kg), pleine elle
+- Vente automatique : **caisse d'expédition** à poser en surface. Tout ce qui y arrive est vendu au cours du
+  moment, comme au comptoir, à chaque passage du transporteur (toutes les 15 s) ; sa capacité est limitée (120 kg), pleine elle
   bloque les convoyeurs. Le HUD affiche le revenu automatique par minute.
 - **La Fournaise** (sous 450 m) : roche volcanique aux fissures rougeoyantes, or plus abondant et, sous 500 m, des
   **filons de diamant** (la ressource la plus précieuse, taillée seulement par la Pioche pro en acier, qui ne se
@@ -184,12 +184,27 @@ lettre tapée : c'est la touche marquée M, quel que soit le clavier.
   santé ne remonte plus tant qu'il a chaud). Un ventilateur à 4 cases l'en protège (on y reprend son souffle) et la
   combinaison ignifugée en absorbe l'essentiel. Les anciennes sauvegardes se chargent et la mine se prolonge
   simplement par le bas.
-- **Tableau d'affichage** : un panneau de bois au milieu du camp, entre le Comptoir et l'Atelier (`E` devant lui).
-  Il affiche les **statistiques de production** : trois chiffres (ventes, minerai extrait, lingots fondus par
-  minute, moyennés sur les 5 dernières minutes), un histogramme des gains des 10 dernières minutes (comptoir et
-  caisses d'expédition), un tableau par ressource (extrait, fondu, vendu) et la liste des machines à surveiller
-  (sans charbon, sortie bloquée, coffre plein, ralenties par la chaleur…). Les mesures sont sauvegardées ; les
-  anciennes sauvegardes trouvent le tableau au camp, avec des mesures à zéro.
+- **Cours du marché** : les prix de vente montent et descendent. Chaque minerai a un **cours**, multiplicateur de
+  son prix de base (100 % = le prix de la fiche), qui dérive doucement toutes les 10 s autour de 100 % (en général
+  de 80 à 120 %) ; un lingot suit le cours de son minerai, la pierre ne bouge pas. Toutes les 2,5 à 5 minutes, un
+  **événement** frappe un minerai que le joueur connaît : « forte demande de cuivre » (+28 % à +65 %) ou
+  « surproduction de charbon » (−20 % à −34 %), pendant deux à trois minutes. Une annonce et un petit son le
+  signalent, et le HUD l'affiche sous l'argent (« ▲ Cuivre +52 % »). Le Comptoir et les caisses d'expédition paient
+  au cours du moment (le prix d'un lot est arrondi une seule fois) : on peut **stocker dans un coffre quand le cours
+  est bas et vendre quand il remonte**. Hausses et baisses se compensent, donc vendre tout de suite rapporte le prix
+  moyen. Les 90 premières secondes sont calmes (tout à 100 %), et les cours, les courbes et les événements en cours
+  sont sauvegardés ; les anciennes sauvegardes repartent d'un marché à 100 %.
+- **Tableau d'affichage** : un panneau de bois au milieu du camp, entre le Comptoir et l'Atelier (`E` devant lui),
+  avec deux onglets (`1` et `2`, ou les flèches ; il rouvre le dernier onglet vu). **Marché** : les événements en
+  cours avec le temps qui reste, un conseil (« bon moment pour vendre : cuivre à +44 % », ou « l'or est bradé :
+  gardez-le dans un coffre »), et pour chaque minerai connu sa **courbe des 10 dernières minutes** (pointillés : le
+  prix de base), son prix du moment et sa tendance (▲ ▼ sur 30 s, couleur selon l'écart au prix de base). Le prix
+  du lingot s'ajoute dès qu'on en a fondu un. **Production** : les **statistiques de production** : trois chiffres
+  (ventes, minerai extrait, lingots fondus par minute, moyennés sur les 5 dernières minutes), un histogramme des
+  gains des 10 dernières minutes (comptoir et caisses d'expédition), un tableau par ressource (extrait, fondu,
+  vendu) et la liste des machines à surveiller (sans charbon, sortie bloquée, coffre plein, ralenties par la
+  chaleur…). Les mesures sont sauvegardées ; les anciennes sauvegardes trouvent le tableau au camp, avec des mesures
+  à zéro. Le Comptoir et le sac montrent eux aussi le prix du jour, avec sa tendance.
 - **Mini-carte** en haut à droite (la mine autour du joueur) et **carte complète** avec `M` : galeries, roche,
   filons et gisements repérés, machines, rails, wagonnets, position du joueur et zones de profondeur (100 m,
   300 m, 450 m). Seul ce que le joueur a déjà vu y apparaît.

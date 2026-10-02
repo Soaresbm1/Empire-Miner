@@ -19,6 +19,7 @@ import type { StructureSave } from '../sim/structures/Structure';
 import { rleDecode, rleEncode } from './codec';
 import { HEALTH } from '../data/hazards';
 import type { MarkerSave } from '../sim/Markers';
+import type { MarketSave } from '../sim/Market';
 import type { SlotSave } from '../sim/Production';
 
 export const SAVE_VERSION = 1;
@@ -71,6 +72,8 @@ export interface SaveData {
   markers?: MarkerSave;
   /** Statistiques de production des 10 dernières minutes (absentes des anciennes sauvegardes). */
   production?: SlotSave[];
+  /** Cours du marché, courbes et événements en cours (absents des anciennes sauvegardes : marché neuf à 100 %). */
+  market?: MarketSave;
 }
 
 function sparse(grid: Float32Array): [number, number][] {
@@ -115,6 +118,7 @@ export function serialize(g: GameState): SaveData {
     health: round2(g.hp),
     markers: g.markers.serialize(),
     production: g.production.serialize(),
+    market: g.market.serialize(),
     hazards: {
       dug: rleEncode(w.dug),
       gas: sparse(w.gas),
@@ -154,6 +158,7 @@ export function deserialize(data: SaveData): GameState {
   w.markAllDirty();
 
   g.time = data.time;
+  g.market.load(data.market, data.time);
   g.player.x = data.player.x;
   g.player.y = data.player.y;
   g.player.facing = data.player.facing;
