@@ -222,9 +222,9 @@ lettre tapée : c'est la touche marquée M, quel que soit le clavier.
   qu'aucun coffre n'accepte, et ne range jamais dans une caisse d'expédition) ; il porte 15 kg et laisse la pierre. Le **ravitailleur** prend du charbon dans les coffres et recharge les foreuses, les fours et les foreuses
   de percement dont le réservoir est à moitié vide ou moins (une machine collée à un coffre se sert déjà seule). Ils
   marchent de case en case par le plus court chemin, en évitant la roche, les machines, le grisou et l'eau profonde.
-  Pour **choisir** un tas ou une machine ils ne regardent pas au-delà de 90 cases à parcourir, mais pour **rentrer**
-  (déposer leur charge, retourner à leur poste) ils cherchent aussi loin qu'il faut : un ramasseur qui a suivi une
-  traînée de minerai jusqu'au fond de la mine remonte toujours déposer sa charge, au lieu de rester coincé. Ils ne
+  **Sans limite de distance** : pour un tas, un coffre, du charbon, une machine ou leur poste, ils cherchent aussi loin
+  qu'il faut (jusqu'au fond de la mine, avec une longue marche à la clé) ; seuls un passage coupé ou l'absence de cible
+  les arrêtent. Un ramasseur qui a suivi une traînée de minerai très bas remonte donc toujours déposer sa charge. Ils ne
   visent jamais le même tas ou la même machine, contournent un passage qui se ferme et attendent près de l'entrée de la
   mine quand il n'y a rien à faire. Le panneau montre ce que fait chacun (« Rapporte
   sa charge au coffre »…) et sa charge ; congédier demande confirmation (sans remboursement, la charge reste par

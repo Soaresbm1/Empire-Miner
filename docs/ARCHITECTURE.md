@@ -169,9 +169,12 @@ Ouvriers (`sim/Workers.ts`, réglages dans `data/workers.ts`) : `GameState.worke
 ouvriers, mis à jour à chaque tick. Chacun a une tâche (`WorkerTask` : marcher vers un tas, un coffre, une machine…)
 et un chemin de cases. La recherche de chemin (`Pather`, largeur d'abord sur la grille, tableaux réutilisés, 4
 voisins) ne traverse que les cases franchissables (`walkable` : ni roche, ni structure pleine, ni foreuse en route, ni
-grisou ou eau profonde) et s'arrête à `WORKERS.reach` cases pour **chercher du travail** (tas, machine, charbon) mais à
-`WORKERS.farReach` pour **rentrer** (déposer la charge dans `planStore`, livrer du charbon, retourner à la case d'attente) :
-sans cela, un ramasseur qui a suivi une traînée de minerai trop loin des coffres restait coincé avec sa charge. Quand il ne
+grisou ou eau profonde) et ne s'arrête qu'à `WORKERS.reach` (2 000 cases de chemin : aucune limite de distance en
+pratique) pour **chercher du travail** (tas, machine, charbon) comme pour **rentrer** (déposer la charge dans `planStore`,
+livrer du charbon, retourner à la case d'attente). Avant, la limite était de 90 cases et un ramasseur qui avait suivi une
+traînée de minerai trop loin des coffres restait coincé avec sa charge. Une recherche qui échoue parcourt toute la zone
+accessible (quelques dizaines de milliers de cases au plus : peu coûteux) ; une recherche de coffre sans résultat n'est
+refaite que toutes les 3 s (`FAR_RETRY`). Quand il ne
 trouve pas de coffre, `planStore` dit pourquoi (`WorkerFlag` : `nostore` aucun coffre n'accepte, `full` ils sont pleins,
 `noroute` aucun chemin) ; `ui/crew.ts` en fait les phrases, la ligne du Tableau d'affichage et l'infobulle au survol
 (`workerAt`, `workerTooltip`). Le ramasseur vise le tas le plus proche non

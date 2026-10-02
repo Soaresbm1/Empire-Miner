@@ -43,13 +43,12 @@ export const WORKERS = {
   speed: 54,
   /** Ce qu'un ouvrier porte (kg). */
   capacity: 15,
-  /** Un tas ou un coffre plus loin que cela (cases à parcourir) n'est pas visé quand l'ouvrier cherche du travail. */
-  reach: 90,
   /**
-   * Pour rentrer (déposer sa charge, retourner à son poste), un ouvrier cherche bien plus loin : sans cela, un ramasseur
-   * qui a suivi une traînée de minerai jusqu'au fond de la mine ne retrouverait jamais un coffre.
+   * Plus long chemin (en cases) qu'un ouvrier cherche, pour un tas, un coffre, du charbon, une machine ou son poste :
+   * autrement dit, aucune limite de distance en pratique (la mine entière tient dans moins de 2 000 cases de chemin).
+   * Seuls un passage coupé (roche, grisou, eau profonde, machine) ou l'absence de cible l'arrêtent.
    */
-  farReach: 2000,
+  reach: 2000,
   /** Le ravitailleur recharge une machine dont le réservoir est à moitié vide ou moins. */
   fuelLow: 0.5,
   /** Pause après un geste : ramasser, déposer, recharger (s). */

@@ -182,26 +182,31 @@ describe('ramasseur', () => {
     expect(c.items.copper).toBe(2);
   });
 
-  it('un tas trop loin à parcourir est laissé', () => {
+  it('un tas très loin à parcourir est ramassé quand même : plus de limite de distance', () => {
     const g = new GameState(4);
     const c = chest(g);
     const w = g.workers.add('picker', g);
-    // Une galerie en serpentin sous le puits : le tas, au bout, est à plus de `reach` cases à parcourir.
-    const y1 = S + 25;
-    const y2 = S + 27;
-    for (let y = S + 12; y <= y1; y++) g.world.set(49, y, AIR);
-    for (let x = 49; x <= 90; x++) g.world.set(x, y1, AIR);
-    for (let y = y1; y <= y2; y++) g.world.set(90, y, AIR);
-    for (let x = 10; x <= 90; x++) g.world.set(x, y2, AIR);
-    drop(g, 'copper', 1, 10, y2);
-    run(g, 30);
-    expect(c.items.copper ?? 0).toBe(0);
-    expect(w.cargo).toEqual({});
-    expect(g.drops.list).toHaveLength(1);
-    // Le même tas, plus près, est ramassé.
-    drop(g, 'copper', 1, 70, y1);
-    run(g, 60);
+    // Une galerie en serpentin sous le puits : le tas, au bout, est à plus de 140 cases à parcourir du camp.
+    const far = farGallery(g);
+    drop(g, 'copper', 1, far.x, far.y);
+    run(g, 220);
     expect(c.items.copper).toBe(1);
+    expect(w.cargo).toEqual({});
+    expect(g.drops.list).toHaveLength(0);
+    expect(w.flag).toBeNull();
+  });
+
+  it('un tas qu’aucun chemin ne rejoint (muré dans la roche) reste où il est, sans bloquer l’ouvrier', () => {
+    const g = new GameState(4);
+    const c = chest(g);
+    const w = g.workers.add('picker', g);
+    drop(g, 'copper', 1, 70, S + 40); // en pleine roche
+    drop(g, 'iron', 1, 56, 10); // un tas accessible, lui, est ramassé
+    run(g, 40);
+    expect(c.items.iron).toBe(1);
+    expect(g.drops.list.map((d) => d.res)).toEqual(['copper']);
+    expect(w.task).toBeNull();
+    expect(w.flag).toBeNull();
   });
 
   it('sans coffre qui accepte ce minerai, il le laisse au sol et le signale ; puis le ramasse quand un coffre apparaît', () => {

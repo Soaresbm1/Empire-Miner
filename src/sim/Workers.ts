@@ -143,7 +143,7 @@ class Pather {
   }
 }
 
-/** Délai (s) avant de refaire une recherche lointaine qui n'a rien donné. */
+/** Délai (s) avant de refaire une recherche (jusqu'au bout de la mine) qui n'a rien donné. */
 const FAR_RETRY = 3;
 
 /** Case où un ouvrier peut marcher : ni roche, ni machine pleine, ni foreuse en route, ni grisou ou eau profonde. */
@@ -306,7 +306,7 @@ export class WorkerSystem {
       const home = this.homeTile(g, this.list.indexOf(w));
       const here = this.tileOf(w, g);
       if (here === home) return idle();
-      const path = this.finder(g).find(g, here, (i) => i === home, WORKERS.farReach);
+      const path = this.finder(g).find(g, here, (i) => i === home, WORKERS.reach);
       if (path) {
         w.task = { kind: 'home' };
         w.path = path;
@@ -386,8 +386,7 @@ export class WorkerSystem {
         if (!Object.keys(w.cargo).some((res) => (w.cargo[res] ?? 0) > 0 && s.canAccept(res))) continue;
         for (const i of around(g, s)) if (!goals.has(i)) goals.set(i, s);
       }
-      // On rentre de loin : un ramasseur ne doit pas rester coincé au fond de la mine avec sa charge.
-      const path = goals.size ? this.finder(g).find(g, here, (i) => goals.has(i), WORKERS.farReach) : null;
+      const path = goals.size ? this.finder(g).find(g, here, (i) => goals.has(i), WORKERS.reach) : null;
       if (!path) continue;
       const target = goals.get(path.length ? path[path.length - 1] : here)!;
       w.task = { kind: 'store', x: target.x, y: target.y };
@@ -424,7 +423,7 @@ export class WorkerSystem {
     if ((w.cargo[fuelRes] ?? 0) > 0) {
       const goals = new Map<number, Structure>();
       for (const s of needy) for (const i of around(g, s)) if (!goals.has(i)) goals.set(i, s);
-      const path = this.finder(g).find(g, here, (i) => goals.has(i), WORKERS.farReach);
+      const path = this.finder(g).find(g, here, (i) => goals.has(i), WORKERS.reach);
       if (path) {
         const target = goals.get(path.length ? path[path.length - 1] : here)!;
         w.task = { kind: 'fuel', x: target.x, y: target.y };
