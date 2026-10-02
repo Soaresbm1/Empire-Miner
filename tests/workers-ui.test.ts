@@ -3,7 +3,7 @@ import { TILE } from '../src/core/constants';
 import { WORKERS } from '../src/data/workers';
 import { GameState } from '../src/sim/GameState';
 import { Storage } from '../src/sim/structures/Storage';
-import { cargoLine, stuckWorkers, workerStatus } from '../src/ui/crew';
+import { cargoLine, stuckWorkers, workerAt, workerStatus, workerTooltip } from '../src/ui/crew';
 import { helpPanel, storagePanel } from '../src/ui/panels';
 import { productionStats } from '../src/ui/stats';
 import { WORKSHOP_TABS, offers, tabBadges, workshopAdvice, workshopPanel, DEFAULT_VIEW } from '../src/ui/workshop';
@@ -205,5 +205,61 @@ describe('filtre de coffre : panneau', () => {
     expect(storagePanel(g, c)).toMatch(/data-action="storageDeposit"[^>]*disabled[^>]*title="Rien dans votre sac que ce coffre accepte"/);
     g.inventory.add('copper', 1);
     expect(storagePanel(g, c)).not.toMatch(/data-action="storageDeposit"[^>]*disabled/);
+  });
+});
+
+describe('ouvriers : pourquoi ils sont bloqués', () => {
+  it('chaque cause a sa phrase, avec ce que le joueur peut faire', () => {
+    const g = rich();
+    const w = g.workers.add('picker', g);
+    const text = (flag: typeof w.flag) => {
+      w.flag = flag;
+      return workerStatus(g, w);
+    };
+    expect(text('nostore').text).toContain("Aucun coffre n'accepte");
+    expect(text('full').text).toContain('pleins');
+    expect(text('full').text).toContain('videz-en un');
+    expect(text('noroute').text).toContain('Aucun chemin');
+    expect(text('noroute').text).toContain('dégagez le passage');
+    for (const f of ['nostore', 'full', 'noroute'] as const) expect(text(f).tone).toBe('warn');
+    // Trois phrases différentes : la distance ou un chemin coupé n'est plus présenté comme un problème de réglage.
+    expect(new Set(['nostore', 'full', 'noroute'].map((f) => text(f as 'nostore').text)).size).toBe(3);
+  });
+
+  it('le Tableau d’affichage les distingue aussi', () => {
+    const g = rich();
+    for (const flag of ['nostore', 'full', 'noroute'] as const) g.workers.add('picker', g).flag = flag;
+    const stuck = stuckWorkers(g).map((s) => s.text);
+    expect(stuck).toContain("Ramasseur : aucun coffre n'accepte ce minerai");
+    expect(stuck).toContain('Ramasseur : les coffres sont pleins');
+    expect(stuck).toContain('Ramasseur : aucun chemin vers un coffre');
+  });
+
+  it('workerAt : l’ouvrier est trouvé sur sa case et juste au-dessus de sa tête (là où s’affiche le « ! »)', () => {
+    const g = rich();
+    const w = g.workers.add('picker', g);
+    w.x = (60 + 0.5) * TILE;
+    w.y = (30 + 0.5) * TILE + 1;
+    expect(workerAt(g, 60, 30)).toBe(w);
+    expect(workerAt(g, 60, 29)).toBe(w);
+    expect(workerAt(g, 60, 31)).toBeUndefined();
+    expect(workerAt(g, 61, 30)).toBeUndefined();
+  });
+
+  it('l’infobulle dit qui il est, ce qui le bloque et ce qu’il porte', () => {
+    const g = rich();
+    const w = g.workers.add('picker', g);
+    w.flag = 'noroute';
+    w.cargo = { copper: 2 };
+    const html = workerTooltip(g, w);
+    expect(html).toContain('Ramasseur');
+    expect(html).toContain('Aucun chemin');
+    expect(html).toContain('class="bad"');
+    expect(html).toContain('chip');
+    // Au travail : pas d'alerte.
+    w.flag = null;
+    w.task = { kind: 'store', x: 46, y: 10 };
+    expect(workerTooltip(g, w)).not.toContain('class="bad"');
+    expect(workerTooltip(g, w)).toContain('Rapporte sa charge au coffre');
   });
 });

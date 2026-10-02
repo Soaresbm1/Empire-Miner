@@ -36,6 +36,7 @@ Version autonome en un seul fichier HTML (ouvrable sans serveur) : `npm run buil
 | Monter / descendre d'un wagonnet | `F` |
 | Carte de la mine | `M` (ou clic sur la mini-carte) |
 | Poser un repère là où on est | `N` (sur la carte : clic) |
+| Carte ouverte : zoomer / dézoomer / tout voir | molette, ou `+` `−` / `0` (glisser pour déplacer la carte) |
 | Zoom | molette |
 | Pause, sauvegarde, chargement, export | `Échap` |
 
@@ -220,12 +221,17 @@ lettre tapée : c'est la touche marquée M, quel que soit le clavier.
   range dans le coffre le plus proche **qui accepte ce minerai** (chaque coffre se règle : il ne prend jamais un tas
   qu'aucun coffre n'accepte, et ne range jamais dans une caisse d'expédition) ; il porte 15 kg et laisse la pierre. Le **ravitailleur** prend du charbon dans les coffres et recharge les foreuses, les fours et les foreuses
   de percement dont le réservoir est à moitié vide ou moins (une machine collée à un coffre se sert déjà seule). Ils
-  marchent de case en case par le plus court chemin (90 cases au plus), en évitant la roche, les machines, le
-  grisou et l'eau profonde, ne visent jamais le même tas ou la même machine, contournent un passage qui se ferme et
-  attendent près de l'entrée de la mine quand il n'y a rien à faire. Le panneau montre ce que fait chacun (« Rapporte
+  marchent de case en case par le plus court chemin, en évitant la roche, les machines, le grisou et l'eau profonde.
+  **Sans limite de distance** : pour un tas, un coffre, du charbon, une machine ou leur poste, ils cherchent aussi loin
+  qu'il faut (jusqu'au fond de la mine, avec une longue marche à la clé) ; seuls un passage coupé ou l'absence de cible
+  les arrêtent. Un ramasseur qui a suivi une traînée de minerai très bas remonte donc toujours déposer sa charge. Ils ne
+  visent jamais le même tas ou la même machine, contournent un passage qui se ferme et attendent près de l'entrée de la
+  mine quand il n'y a rien à faire. Le panneau montre ce que fait chacun (« Rapporte
   sa charge au coffre »…) et sa charge ; congédier demande confirmation (sans remboursement, la charge reste par
-  terre). Un ouvrier bloqué (« aucun coffre n'accepte ce minerai », « plus de charbon dans les coffres ») est signalé au
-  Tableau d'affichage et par un point d'exclamation au-dessus de lui ; ils apparaissent aussi sur la carte (points
+  terre). Un ouvrier bloqué est signalé au Tableau d'affichage et par un point d'exclamation au-dessus de lui, et
+  **survoler l'ouvrier** à la souris donne la cause et quoi faire : « aucun coffre n'accepte ce minerai » (réglage des
+  coffres), « les coffres qui acceptent ce minerai sont pleins », « aucun chemin jusqu'à un coffre » (roche, grisou, eau
+  ou machine en travers) ou « plus de charbon dans les coffres » ; ils apparaissent aussi sur la carte (points
   vert et orange). Casque vert pour le ramasseur, orange pour le ravitailleur. Les ouvriers sont sauvegardés
   (métier, position, charge) ; les anciennes sauvegardes n'en ont pas.
 - **Cours du marché** : les prix de vente montent et descendent. Chaque minerai a un **cours**, multiplicateur de
@@ -252,6 +258,12 @@ lettre tapée : c'est la touche marquée M, quel que soit le clavier.
 - **Mini-carte** en haut à droite (la mine autour du joueur) et **carte complète** avec `M` : galeries, roche,
   filons et gisements repérés, machines, rails, wagonnets, position du joueur et zones de profondeur (100 m,
   300 m, 450 m). Seul ce que le joueur a déjà vu y apparaît.
+- **Zoom de la carte** : sur la carte complète, la **molette** zoome autour du curseur (la case visée ne bouge pas) jusqu'à
+  une tuile de 40 pixels, **glisser** déplace la carte, `+` / `−` et les boutons zooment depuis le centre, `0` ou
+  **« Tout voir »** reviennent au cadrage complet, **« Me retrouver »** centre la carte sur vous (en zoomant un peu si tout
+  était visible). Une pastille « Zoom ×4,5 » s'affiche en haut à droite ; la carte s'ouvre toujours sur « tout voir ».
+  Un clic **sans bouger** pose un repère sur la case visée, un glissé n'en pose jamais ; les repères et les points
+  (joueur, ouvriers, wagonnets) gardent une taille lisible à fort zoom.
 - **Repères** : `N` marque l'endroit où l'on se trouve, et un clic sur la carte complète pose un repère ailleurs.
   Quatre types (repère, filon, base, danger), chacun avec sa couleur et son symbole, jusqu'à 24 repères. Le nom est
   donné d'après ce qu'il y a à cet endroit (« Filon d'or », « Gisement de fer », « Fonderie », « Grisou »…), sinon

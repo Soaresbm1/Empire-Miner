@@ -36,8 +36,11 @@ import { allowWords, chestBar, chestsInRect, pickChests, toggleDraft } from '../
 import { Speed, advance, isSpeed, keepsUp, nextSpeed, smoothRate, speedDanger } from './speed';
 import { speedBar } from '../ui/speedBar';
 import { esc, kg, money, resIcon } from '../ui/format';
+import { workerAt, workerTooltip } from '../ui/crew';
 
 const AUTOSAVE_EVERY = 60;
+/** Facteur de zoom de la carte complète pour un cran de molette ou un appui sur + / −. */
+const MAP_ZOOM_STEP = 1.35;
 const MENU_SEED = 20260928;
 
 export class Game {
@@ -206,6 +209,17 @@ export class Game {
 
   onAction(action: string, arg: string): void {
     const g = this.state;
+    // Carte : déplacer et zoomer à la molette se font en silence (le clic sonne à chaque image, sinon).
+    if (action === 'mapDrag') {
+      const [dx, dy] = arg.split(',').map(Number);
+      this.map.panBy(dx, dy);
+      return;
+    }
+    if (action === 'mapWheel') {
+      const [px, py, dir] = arg.split(',').map(Number);
+      this.map.zoomAt(px, py, dir < 0 ? MAP_ZOOM_STEP : 1 / MAP_ZOOM_STEP);
+      return;
+    }
     this.sfx.click();
     switch (action) {
       case 'close':
@@ -473,6 +487,12 @@ export class Game {
       case 'markHere':
         this.markHere(g);
         break;
+      case 'mapZoom':
+        if (arg === 'in') this.map.zoomBy(MAP_ZOOM_STEP);
+        else if (arg === 'out') this.map.zoomBy(1 / MAP_ZOOM_STEP);
+        else if (arg === 'reset') this.map.resetView();
+        else if (arg === 'me') this.map.centerOnPlayer(g);
+        break;
       case 'mapClick': {
         const [px, py] = arg.split(',').map(Number);
         const t = this.map.tileAt(px, py);
@@ -591,6 +611,12 @@ export class Game {
       if (inp.wasPressed('KeyH', 'F1')) this.togglePanel('help');
       // M : la lettre M du clavier, où qu'elle soit (AZERTY, QWERTY…).
       if (inp.wasTyped('m')) this.togglePanel('map');
+      // Carte ouverte : + et − zooment, 0 revient à « tout voir ».
+      if (this.ui.panel?.kind === 'map') {
+        if (inp.wasTyped('+', '=')) this.map.zoomBy(MAP_ZOOM_STEP);
+        if (inp.wasTyped('-')) this.map.zoomBy(1 / MAP_ZOOM_STEP);
+        if (inp.wasTyped('0')) this.map.resetView();
+      }
       if (inp.wasTyped('n') && !this.ui.panel) this.markHere(g);
       if (inp.wasPressed('KeyB') && !this.ui.panel) this.setBuildMode(!this.buildMode);
       if (inp.wasPressed('KeyC') && !this.ui.panel) this.setChestMode(!this.chestMode);
@@ -722,6 +748,7 @@ export class Game {
     if (this.ui.panel?.kind === kind) this.ui.closePanel();
     else {
       this.setBuildMode(false);
+      if (kind === 'map') this.map.resetView(); // la carte s'ouvre toujours sur « tout voir »
       this.ui.openPanel(kind);
     }
   }
@@ -1209,6 +1236,8 @@ export class Game {
   private describeTile(g: GameState, tx: number, ty: number): string | null {
     const w = g.world;
     if (!w.inBounds(tx, ty) || !w.explored[w.idx(tx, ty)]) return null;
+    const worker = workerAt(g, tx, ty);
+    if (worker) return workerTooltip(g, worker);
     const wagon = g.wagons.at(tx, ty);
     if (wagon)
       return `<b>Wagonnet</b> — ${wagon.stopped ? "à l'arrêt" : 'en route'}${wagon.rider ? ' · vous êtes à bord' : ''}<br>Chargement : ${kg(wagon.weight())} / ${kg(

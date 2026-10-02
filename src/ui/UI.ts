@@ -86,6 +86,63 @@ export class UI {
       this.host.onAction(el.dataset.action!, el.dataset.arg ?? '');
     };
     for (const root of [this.panelRoot, this.menuRoot, this.hud]) root.addEventListener('pointerdown', onPointer);
+    this.listenMap();
+  }
+
+  /**
+   * Carte complète : un clic sans bouger pose un repère, un glissé déplace la carte, la molette zoome autour du curseur.
+   * Les positions sont envoyées en pixels du canvas (pas en pixels de l'écran).
+   */
+  private listenMap(): void {
+    const onMap = (e: Event): HTMLCanvasElement | null => {
+      const t = e.target;
+      return t instanceof HTMLCanvasElement && t.id === 'map-canvas' ? t : null;
+    };
+    const toCanvas = (el: HTMLCanvasElement, cx: number, cy: number) => {
+      const r = el.getBoundingClientRect();
+      return { x: ((cx - r.left) * el.width) / Math.max(1, r.width), y: ((cy - r.top) * el.height) / Math.max(1, r.height) };
+    };
+    let drag: { id: number; x: number; y: number; moved: boolean } | null = null;
+    this.panelRoot.addEventListener('pointerdown', (e) => {
+      const el = onMap(e);
+      if (!el || e.button !== 0) return;
+      e.preventDefault();
+      drag = { id: e.pointerId, x: e.clientX, y: e.clientY, moved: false };
+      el.setPointerCapture?.(e.pointerId);
+    });
+    this.panelRoot.addEventListener('pointermove', (e) => {
+      const el = onMap(e);
+      if (!drag || !el || e.pointerId !== drag.id) return;
+      if (!drag.moved && Math.hypot(e.clientX - drag.x, e.clientY - drag.y) < 5) return;
+      drag.moved = true;
+      const a = toCanvas(el, drag.x, drag.y);
+      const b = toCanvas(el, e.clientX, e.clientY);
+      this.host.onAction('mapDrag', `${Math.round(b.x - a.x)},${Math.round(b.y - a.y)}`);
+      drag.x = e.clientX;
+      drag.y = e.clientY;
+    });
+    const end = (e: PointerEvent) => {
+      const el = onMap(e);
+      const d = drag;
+      if (!d || e.pointerId !== d.id) return;
+      drag = null;
+      if (!el || e.type === 'pointercancel' || d.moved) return;
+      const p = toCanvas(el, e.clientX, e.clientY);
+      this.host.onAction('mapClick', `${Math.round(p.x)},${Math.round(p.y)}`);
+    };
+    this.panelRoot.addEventListener('pointerup', end);
+    this.panelRoot.addEventListener('pointercancel', end);
+    this.panelRoot.addEventListener(
+      'wheel',
+      (e) => {
+        const el = onMap(e);
+        if (!el) return;
+        e.preventDefault();
+        const p = toCanvas(el, e.clientX, e.clientY);
+        this.host.onAction('mapWheel', `${Math.round(p.x)},${Math.round(p.y)},${Math.sign(e.deltaY)}`);
+      },
+      { passive: false },
+    );
   }
 
   /** La souris est-elle au-dessus d'un élément d'interface ? */

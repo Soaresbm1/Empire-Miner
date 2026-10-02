@@ -149,6 +149,14 @@ panneaux, construction et sauvegarde automatique (à l'horloge réelle) continue
 annoncé, grisou, eau profonde) ramène à ×1 et refuse les vitesses rapides. Le son plafonne ses voix simultanées. Ni la vitesse
 ni la pause ne sont sauvegardées.
 
+Zoom de la carte complète (`render/MineMap.ts`) : la carte garde un `zoomCell` (taille d'une tuile en pixels du canvas,
+`null` = cadrage automatique « tout voir ») et un `center` (en cases). `drawFull` calcule `fitCell` (tout voir) et `maxCell`
+(`MAP_MAX_CELL` = 40 px CSS), borne le zoom, puis cadre la vue sur le centre avec `clampAxis` (ramenée dans le monde, ou
+centrée s'il est plus petit que la vue). `zoomAround` (pure) garde la case sous le curseur immobile ; `zoomAt`, `zoomBy`,
+`panBy`, `resetView`, `centerOnPlayer` sont les points d'entrée. Côté interface (`UI.listenMap`), le canvas n'a plus de
+`data-action` : un appui sans mouvement (moins de 5 px) envoie `mapClick` au relâchement, un glissé envoie `mapDrag` (en pixels
+du canvas, sans son), la molette `mapWheel`. `Game` ouvre toujours la carte sur « tout voir ».
+
 Réglage de plusieurs coffres : mode `chestMode` de `Game` (touche C), un état d'interface qui ne touche pas la
 simulation avant « Appliquer ». `chestSel` (ensemble de `Storage`) est rempli par `updateChests` : un clic bref bascule le
 coffre visé, un glissé de plus de 6 pixels choisit ceux du rectangle (`chestsInRect`, `pickChests` : si tous y étaient
@@ -161,7 +169,15 @@ Ouvriers (`sim/Workers.ts`, réglages dans `data/workers.ts`) : `GameState.worke
 ouvriers, mis à jour à chaque tick. Chacun a une tâche (`WorkerTask` : marcher vers un tas, un coffre, une machine…)
 et un chemin de cases. La recherche de chemin (`Pather`, largeur d'abord sur la grille, tableaux réutilisés, 4
 voisins) ne traverse que les cases franchissables (`walkable` : ni roche, ni structure pleine, ni foreuse en route, ni
-grisou ou eau profonde) et s'arrête à `WORKERS.reach` cases. Le ramasseur vise le tas le plus proche non
+grisou ou eau profonde) et ne s'arrête qu'à `WORKERS.reach` (2 000 cases de chemin : aucune limite de distance en
+pratique) pour **chercher du travail** (tas, machine, charbon) comme pour **rentrer** (déposer la charge dans `planStore`,
+livrer du charbon, retourner à la case d'attente). Avant, la limite était de 90 cases et un ramasseur qui avait suivi une
+traînée de minerai trop loin des coffres restait coincé avec sa charge. Une recherche qui échoue parcourt toute la zone
+accessible (quelques dizaines de milliers de cases au plus : peu coûteux) ; une recherche de coffre sans résultat n'est
+refaite que toutes les 3 s (`FAR_RETRY`). Quand il ne
+trouve pas de coffre, `planStore` dit pourquoi (`WorkerFlag` : `nostore` aucun coffre n'accepte, `full` ils sont pleins,
+`noroute` aucun chemin) ; `ui/crew.ts` en fait les phrases, la ligne du Tableau d'affichage et l'infobulle au survol
+(`workerAt`, `workerTooltip`). Le ramasseur vise le tas le plus proche non
 réclamé par un autre (les tas de pierre, ceux que le joueur vient de jeter et ceux qu'aucun coffre n'accepte sont
 ignorés), puis un coffre qui peut recevoir sa charge (jamais une caisse d'expédition) ; le ravitailleur repère les machines à combustible (`fuelWanted`,
 `fuelUnits`, `addFuel`) à moitié vides, prend du charbon dans un coffre et les recharge. Un passage qui se ferme en
@@ -173,8 +189,8 @@ dans `ui/workshop.ts`, le rendu dans `Renderer.drawWorker` (sprites du mineur re
 
 Repères (`sim/Markers.ts`) : `GameState.markers` (un `MarkerBook`) garde la liste, le repère suivi et
 les sauvegarde ; `GameState.addMarker` les nomme d'après le terrain et les machines. La carte complète
-convertit un clic en case (`MineMap.tileAt`, via la dernière vue dessinée) ; l'interface transmet la position du
-clic sur un canvas qui porte un `data-action`.
+convertit un clic en case (`MineMap.tileAt`, via la dernière vue dessinée, donc aussi quand la carte est zoomée) ;
+l'interface transmet la position du clic (en pixels du canvas) au relâchement, s'il n'y a pas eu de glissé.
 
 ## Étendre le jeu
 

@@ -1221,6 +1221,56 @@ try {
   await page.click('[data-action="markerTrack"]');
   await page.waitForTimeout(200);
   await shot('26-map-markers');
+
+  // Zoom de la carte : molette autour du curseur, glissé pour déplacer (sans poser de repère), clic pour poser, « Tout voir ».
+  {
+    const box = await page.$eval('#map-canvas', (c) => {
+      const r = c.getBoundingClientRect();
+      return { x: r.left, y: r.top, w: r.width, h: r.height };
+    });
+    const zoom = () => ev(() => window.__EM.map.zoomLevel);
+    const tileAt = (sx, sy) =>
+      ev(([sx, sy, box]) => {
+        const c = document.getElementById('map-canvas');
+        return window.__EM.map.tileAt(((sx - box.x) * c.width) / box.w, ((sy - box.y) * c.height) / box.h);
+      }, [sx, sy, box]);
+    const markers = () => ev(() => window.__EM.state.markers.list.length);
+    const cx = box.x + box.w * 0.55;
+    const cy = box.y + box.h * 0.5;
+    check((await zoom()) === 1, 'la carte s’ouvre sur « tout voir » (zoom ×1)');
+    await page.mouse.move(cx, cy);
+    for (let i = 0; i < 4; i++) {
+      await page.mouse.wheel(0, -120);
+      await page.waitForTimeout(120);
+    }
+    const zin = await zoom();
+    check(zin > 2.5, `la molette zoome la carte (×${zin.toFixed(2)})`);
+    await shot('26b-map-zoomed');
+    const m0 = await markers();
+    const t0 = await tileAt(cx, cy);
+    await page.mouse.move(cx, cy);
+    await page.mouse.down();
+    await page.mouse.move(cx + 70, cy + 40, { steps: 6 });
+    await page.mouse.move(cx + 140, cy + 60, { steps: 6 });
+    await page.mouse.up();
+    await page.waitForTimeout(250);
+    const t1 = await tileAt(cx, cy);
+    check(t1.x < t0.x && t1.y < t0.y && (await markers()) === m0, `un glissé déplace la carte sans poser de repère (${JSON.stringify(t0)} → ${JSON.stringify(t1)})`);
+    const hit = await tileAt(cx, cy);
+    await page.mouse.click(cx, cy);
+    await page.waitForTimeout(250);
+    const mk = await ev(() => window.__EM.state.markers.list.at(-1));
+    check((await markers()) === m0 + 1 && mk.x === hit.x && mk.y === hit.y, `un clic sur la carte zoomée pose le repère sur la case visée (${mk.x},${mk.y})`);
+    await page.click('[data-action="mapZoom"][data-arg="reset"]');
+    await page.waitForTimeout(200);
+    check((await zoom()) === 1, '« Tout voir » revient au cadrage complet');
+    await page.keyboard.press('Equal');
+    await page.waitForTimeout(150);
+    const zk = await zoom();
+    await page.keyboard.press('Digit0');
+    await page.waitForTimeout(150);
+    check(zk > 1.2 && (await zoom()) === 1, `les touches + et 0 zooment et remettent tout en vue (×${zk.toFixed(2)} puis ×1)`);
+  }
   await page.keyboard.press('Escape');
   await page.waitForTimeout(200);
   await teleport(20, S + 60); // loin du repère suivi : la flèche le montre au bord de l'écran
@@ -1567,6 +1617,34 @@ try {
     check(reached && tun.row.every(Boolean), `la foreuse perce tout le tunnel : diamant, socle rocheux, falaise et arbre (${tun.tunnel} cases, ${tun.status})`);
     check(tun.sides.every(Boolean), 'la tête large perce aussi le diamant et le socle rocheux des côtés');
     await shot('35-borer-level5-tunnel');
+  }
+
+  // Ouvrier bloqué : l'infobulle au survol dit pourquoi (ici, aucun coffre n'accepte ce qu'il porte).
+  {
+    await ev(() => {
+      const g = window.__EM.state;
+      for (const c of g.storages()) c.setAllow(['coal']);
+      g.player.x = 50.5 * 16;
+      g.player.y = 10.5 * 16;
+      const w = g.workers.add('picker', g);
+      w.x = 54.5 * 16;
+      w.y = 10.5 * 16 + 1;
+      w.cargo = { gold: 1 };
+      window.__stuckWorker = w.id;
+      window.__EM.renderer.snapCamera();
+    });
+    await page.waitForTimeout(3000);
+    const spot = await ev(() => {
+      const w = window.__EM.state.workers.get(window.__stuckWorker);
+      const p = window.__EM.renderer.worldToScreen(w.x, w.y - 6);
+      const r = document.getElementById('game').getBoundingClientRect();
+      return { x: p.x + r.left, y: p.y + r.top, flag: w.flag };
+    });
+    await page.mouse.move(spot.x, spot.y);
+    await page.waitForTimeout(400);
+    const tip = (await page.textContent('#tooltip')) ?? '';
+    check(spot.flag === 'nostore' && /Ramasseur/.test(tip) && /Aucun coffre n'accepte/.test(tip), `survoler un ouvrier bloqué donne la cause dans l'infobulle (${tip.replace(/\s+/g, ' ').trim().slice(0, 80)})`);
+    await shot('36-worker-blocked-tooltip');
   }
 } catch (e) {
   failures++;

@@ -33,7 +33,15 @@ export type WorkerTask =
   | { kind: 'home' };
 
 /** Pourquoi un ouvrier ne peut pas avancer (pour l'interface). */
-export type WorkerFlag = 'nostore' | 'nocoal' | 'lost';
+export type WorkerFlag =
+  /** Ramasseur : aucun coffre n'accepte ce qu'il porte ou ce qui traîne (réglage des coffres, pas de coffre). */
+  | 'nostore'
+  /** Ramasseur : les coffres qui acceptent ce minerai sont pleins. */
+  | 'full'
+  /** Ramasseur : un coffre convient, mais aucun chemin n'y mène (roche, grisou, eau profonde, machine en travers). */
+  | 'noroute'
+  | 'nocoal'
+  | 'lost';
 
 export interface Worker {
   id: number;
@@ -134,6 +142,9 @@ class Pather {
     return null;
   }
 }
+
+/** Délai (s) avant de refaire une recherche (jusqu'au bout de la mine) qui n'a rien donné. */
+const FAR_RETRY = 3;
 
 /** Case où un ouvrier peut marcher : ni roche, ni machine pleine, ni foreuse en route, ni grisou ou eau profonde. */
 export function walkable(g: GameState, x: number, y: number): boolean {
@@ -299,7 +310,10 @@ export class WorkerSystem {
       if (path) {
         w.task = { kind: 'home' };
         w.path = path;
-      } else idle();
+      } else {
+        idle();
+        w.retry = FAR_RETRY; // pas de chemin du tout : inutile de refaire une grande recherche chaque seconde
+      }
     }
   }
 
@@ -318,20 +332,23 @@ export class WorkerSystem {
     const claimed = new Set(this.list.filter((o) => o !== w && o.task?.kind === 'pick').map((o) => (o.task as { drop: number }).drop));
     // Un tas que plus aucun coffre n'accepte (réglage des coffres, coffres pleins) reste où il est.
     const chests = g.structures.list.filter((s): s is Storage => s instanceof Storage);
-    const wanted = new Map<string, boolean>();
+    const wanted = new Map<string, 'ok' | 'full' | 'none'>();
+    /** Un coffre peut-il recevoir ce minerai (ok), un seul le voudrait mais il est plein (full), aucun ne le veut (none) ? */
     const taken = (res: string) => {
-      let ok = wanted.get(res);
-      if (ok === undefined) wanted.set(res, (ok = chests.some((c) => c.canAccept(res))));
-      return ok;
+      let r = wanted.get(res);
+      if (r === undefined) wanted.set(res, (r = chests.some((c) => c.canAccept(res)) ? 'ok' : chests.some((c) => c.accepts(res)) ? 'full' : 'none'));
+      return r;
     };
-    let refused = false;
+    let refused: WorkerFlag | null = null;
     if (free > 0) {
       const spots = new Map<number, number>();
       for (const d of g.drops.list) {
         const r = getResource(d.res);
         if (d.locked || d.age < 0.35 || r.groundLife !== undefined || r.weight > free || claimed.has(d.id)) continue;
-        if (!taken(d.res)) {
-          refused = true;
+        const t = taken(d.res);
+        if (t !== 'ok') {
+          // « aucun coffre n'en veut » prime sur « coffres pleins » : c'est ce qu'on règle en premier.
+          if (t === 'none' || refused === null) refused = t === 'none' ? 'nostore' : 'full';
           continue;
         }
         const i = Math.floor((d.y - 1) / TILE) * width + Math.floor(d.x / TILE);
@@ -349,8 +366,8 @@ export class WorkerSystem {
       }
     }
     if (cargoCount(w.cargo) > 0) return this.planStore(w, g);
-    // Des minerais au sol, mais aucun coffre n'en veut : on le signale au joueur.
-    w.flag = refused ? 'nostore' : null;
+    // Des minerais au sol, mais aucun coffre n'en veut (ou ils sont pleins) : on le signale au joueur.
+    w.flag = refused;
     return false;
   }
 
@@ -377,7 +394,11 @@ export class WorkerSystem {
       w.flag = null;
       return true;
     }
-    w.flag = 'nostore';
+    // Pourquoi aucun coffre n'est visé : personne n'en veut, ils sont pleins, ou le chemin est coupé.
+    const carried = Object.keys(w.cargo).filter((res) => (w.cargo[res] ?? 0) > 0);
+    const accepting = chests.filter((s) => carried.some((res) => s.accepts(res)));
+    w.flag = !accepting.length ? 'nostore' : accepting.some((s) => carried.some((res) => s.canAccept(res))) ? 'noroute' : 'full';
+    if (w.flag === 'noroute') w.retry = FAR_RETRY;
     return false;
   }
 
