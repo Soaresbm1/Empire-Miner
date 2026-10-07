@@ -101,6 +101,8 @@ d'aucun compte : il ouvre le lien du jeu et tape un code.
 4. Les deux se voient dans la mine (l'autre porte une chemise verte, son nom flotte au-dessus de sa tête, un point vert sur la
    carte).
 
+**Même version des deux côtés** : si l'un des deux est resté sur une ancienne page (après une mise à jour du jeu), la connexion est refusée avec « Versions différentes du jeu : rechargez la page des deux côtés » ; la version se calcule toute seule à partir du code qui décide du déroulement de la partie.
+
 **Règles** : 2 joueurs au plus. La partie est celle de l'hôte et se **sauvegarde chez lui** (l'invité ne sauvegarde jamais).
 Pas de pause ni de vitesse ×2/×4 à deux (les deux jeux avancent ensemble). Un menu n'arrête pas la partie : l'autre joueur
 continue de jouer. Si l'invité se déconnecte, l'hôte continue seul ; en revenant **avec le même appareil**, l'invité retrouve

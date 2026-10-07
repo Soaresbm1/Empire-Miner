@@ -180,6 +180,12 @@ class Duel {
 
 const playing = (d: Duel) => d.host.status === 'playing' && d.guest.status === 'playing';
 
+describe('Session : version du protocole', () => {
+  it('la version porte l\'empreinte du code de simulation (calculée à la construction), pour que deux versions ne jouent pas ensemble', () => {
+    expect(PROTOCOL).toMatch(/^1-[0-9a-f]{10}$/);
+  });
+});
+
 describe('Session : arrivée de l’invité', () => {
   it('l’hôte attend seul, puis l’invité rejoint : même partie, deux joueurs', async () => {
     const d = new Duel();
@@ -231,6 +237,48 @@ describe('Session : arrivée de l’invité', () => {
       expect(d.hostG.withSlot(slot, () => d.hostG.autoPickup.coal)).toBe(d.guestG!.withSlot(slot, () => d.guestG!.autoPickup.coal));
       expect(d.hostG.withSlot(slot, () => d.hostG.hp)).toBe(d.guestG!.withSlot(slot, () => d.guestG!.hp));
     }
+  });
+
+  it('les deux creusent chacun leur paroi et ramassent ce qu\'ils ont cassé, identiquement sur les deux appareils', async () => {
+    const d = new Duel();
+    await d.runAsync(8000, () => playing(d));
+    expect(playing(d)).toBe(true);
+    // Un instant où les deux appareils en sont au même pas : on installe les deux joueurs de la même façon des deux côtés.
+    for (let i = 0; i < 600 && d.host.tick !== d.guest.tick; i++) d.frame();
+    expect(d.host.tick).toBe(d.guest.tick);
+    const Wall = 45;
+    // (Les champs personnels se changent par emplacement : sur l'appareil de l'invité, l'emplacement actif est le 1.)
+    for (const g of [d.hostG, d.guestG!]) {
+      for (const [slot, tx] of [[0, 46], [1, 53]] as const) {
+        g.withSlot(slot, () => {
+          g.pickaxeLevel = 1;
+          g.player.x = (tx + 0.5) * TILE;
+          g.player.y = (Y + 0.5) * TILE;
+        });
+      }
+    }
+    const mineAt = (wallX: number): PlayerIntent => ({ mx: 0, my: 0, mine: true, target: { tx: wallX, ty: Y } });
+    d.intents[0] = mineAt(Wall);
+    d.intents[1] = mineAt(54);
+    let mismatches = 0;
+    let checks = 0;
+    for (let i = 0; i < 60 * 14; i++) {
+      d.frame();
+      if (i % 61 === 0) await new Promise((r) => setTimeout(r, 0));
+      if (d.host.tick === d.guest.tick && d.host.tick % 10 === 0) {
+        checks++;
+        if (stateDigest(d.hostG) !== stateDigest(d.guestG!)) mismatches++;
+      }
+    }
+    expect(checks).toBeGreaterThan(5);
+    expect(mismatches).toBe(0);
+    const carried = (g: GameState, slot: number) => g.withSlot(slot, () => Object.values(g.inventory.items).reduce((a, b) => a + b, 0));
+    // Chacun a cassé de la roche et l'a ramassée, et c'est vrai sur les deux appareils.
+    for (const g of [d.hostG, d.guestG!]) {
+      expect(carried(g, 0)).toBeGreaterThan(0);
+      expect(carried(g, 1)).toBeGreaterThan(0);
+    }
+    expect(carried(d.hostG, 1)).toBe(carried(d.guestG!, 1));
   });
 
   it('survit à des pertes de 15 %, des doublons et un réseau lent', async () => {

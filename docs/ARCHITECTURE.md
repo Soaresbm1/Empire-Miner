@@ -303,7 +303,11 @@ même simulation à pas fixe ; seules les **entrées** circulent : l'intention d
   Un écart déclenche une **resynchronisation** : l'hôte renvoie sa partie complète.
 - **Session** (`net/session.ts`) : poignée de main (`hello` → l'hôte fait entrer l'invité, écrit la sauvegarde, la recharge
   lui-même, la découpe en morceaux de 6000 signes compressés `deflate-raw` + base64 ; l'invité réclame les morceaux
-  manquants avec `need`, puis dit `ready`), présence (silence > 8 s = parti), `bye`, `full`, version de protocole.
+  manquants avec `need`, puis dit `ready`), présence (silence > 8 s = parti), `bye`, `full`, version de protocole. Cette dernière
+  (`PROTOCOL`) est « 1- » suivi d'une empreinte (SHA-1) de `src/sim`, `src/data`, `src/core`, `src/save` et `src/net`, calculée à la
+  construction (`define` de `vite.config.ts`) : toute modification de ce qui décide du déroulement d'une partie change la version,
+  et un invité resté sur l'ancienne page est refusé (« rechargez la page des deux côtés ») au lieu de jouer une autre partie ;
+  le dessin et l'interface n'y comptent pas. Le numéro ne change à la main que si le format des messages change.
   Les affaires d'un invité qui part sont gardées chez l'hôte (`guestStash`, par identifiant d'appareil) et rendues à son retour.
 - **Transports** (`net/transport.ts`, `net/mqtt.ts`) : un canal « au mieux » (perte, doublon, désordre possibles).
   `MqttTransport` : client MQTT 3.1.1 minimal sur WebSocket, abonné à **trois courtiers publics** à la fois

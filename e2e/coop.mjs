@@ -137,6 +137,10 @@ check(picks[0][0] === true && picks[0][1] === false && picks[1][0] === true && p
 check(picks[0][2] === 1 && picks[1][2] === 1, "un repère posé par l'hôte apparaît chez les deux");
 
 // ---------------------------------------------------------------- pause à deux : le jeu continue
+// Avec deux pages dans la même fenêtre, la première touche pressée dans la page qui n'est pas au premier plan l'y amène, et
+// Chromium suspend alors son dessin un instant (~0,5 s) : on l'amène d'abord au premier plan, pour ne mesurer que le jeu.
+await host.bringToFront();
+await sleep(1200);
 await host.keyboard.press('Escape');
 await sleep(300);
 check(await host.evaluate(() => window.__EM.ui.menu === 'pause'), 'le menu pause s’ouvre');
