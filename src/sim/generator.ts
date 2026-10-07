@@ -19,6 +19,7 @@ import { RESOURCES, ResourceDef, resourceIndex } from '../data/resources';
 import { LEGACY_WORLD_H, SURFACE_ROWS, TILE, WORLD_H, WORLD_W, depthAt, rowForDepth } from '../core/constants';
 import { Rng, fbm } from '../core/rng';
 import { World } from './World';
+import { hyp } from '../core/dmath';
 
 export interface BuildingPlacement {
   type: 'counter' | 'workshop' | 'board';
@@ -67,7 +68,7 @@ export function generateWorld(seed: number, w = WORLD_W, h = WORLD_H): WorldLayo
   const caveStart = rowForDepth(40);
   for (let y = caveStart; y < h - 1; y++) {
     for (let x = 1; x < w - 1; x++) {
-      const dStart = Math.hypot(x - START_CENTER.x, (y - START_CENTER.y) * 1.3);
+      const dStart = hyp(x - START_CENTER.x, (y - START_CENTER.y) * 1.3);
       if (dStart < 16) continue;
       const n = fbm(x / 7, y / 5.5, seed + 77, 3);
       const n2 = fbm(x / 3.5, y / 3.5, seed + 99, 2);

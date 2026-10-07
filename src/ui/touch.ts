@@ -95,6 +95,8 @@ export interface TouchContext {
   speed: number;
   /** Hauteur de la barre de construction (px), pour que les boutons restent au-dessus. */
   barHeight: number;
+  /** Partie à deux : ni pause ni vitesse (l'autre joueur continue de jouer). */
+  net?: boolean;
 }
 
 interface Btn {
@@ -404,7 +406,7 @@ export class TouchControls {
   update(ctx: TouchContext, dt: number): void {
     this.ctx = ctx;
     const show = ctx.playing && !ctx.blocking;
-    const sig = [show, ctx.near, ctx.riding, ctx.wagonNear, ctx.hasScooter, ctx.buildMode, ctx.chestMode, ctx.paused, ctx.speed, Math.round(ctx.barHeight)].join('|');
+    const sig = [show, ctx.near, ctx.riding, ctx.wagonNear, ctx.hasScooter, ctx.buildMode, ctx.chestMode, ctx.paused, ctx.speed, !!ctx.net, Math.round(ctx.barHeight)].join('|');
     if (sig !== this.sig) {
       this.sig = sig;
       this.root.classList.toggle('hidden', !show);
@@ -424,6 +426,7 @@ export class TouchControls {
       for (const b of this.root.querySelectorAll<HTMLElement>('[data-code="KeyC"]')) b.classList.toggle('on', ctx.chestMode);
       for (const b of this.root.querySelectorAll<HTMLElement>('[data-code="KeyP"]')) b.classList.toggle('on', ctx.paused);
       for (const b of this.root.querySelectorAll<HTMLElement>('[data-code="KeyX"]')) b.classList.toggle('on', ctx.speed > 1);
+      for (const b of this.root.querySelectorAll<HTMLElement>('[data-code="KeyP"], [data-code="KeyX"]')) b.classList.toggle('hidden', !!ctx.net);
       if (!show) this.releaseAll();
     }
     // Le bas du cadre en haut à gauche : l'équipement se range dessous (la mise en page tactile en a besoin).

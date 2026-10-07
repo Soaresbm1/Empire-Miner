@@ -5,7 +5,7 @@
 /** Outil tenu par le joueur. */
 export type ToolKind = 'pickaxe' | 'jackhammer';
 
-export type SimEvent =
+type SimEventBody =
   | { t: 'swing'; x: number; y: number; tool: ToolKind }
   | { t: 'hit'; tx: number; ty: number; block: number; ratio: number }
   | { t: 'break'; tx: number; ty: number; block: number }
@@ -38,3 +38,6 @@ export type SimEvent =
   | { t: 'market'; res: string; up: boolean; pct: number }
   /** Un ouvrier ramasse (« pick »), dépose (« store ») ou recharge une machine (« fuel »). */
   | { t: 'worker'; kind: 'pick' | 'store' | 'fuel' | 'place'; x: number; y: number; res: string };
+
+/** Un événement ; à deux joueurs, `slot` dit lequel l'a causé (voir `GameState.emit`). */
+export type SimEvent = SimEventBody & { slot?: number };

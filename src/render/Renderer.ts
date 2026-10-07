@@ -129,6 +129,8 @@ export class Renderer {
   private hurtFlash = 0;
   /** Temps restant de la petite chute qui pose le mineur à son arrivée par la corde. */
   private landT = 0;
+  /** Noms des autres joueurs (partie à deux), par emplacement. */
+  peerNames: Record<number, string> = {};
 
   constructor(canvas: HTMLCanvasElement) {
     this.canvas = canvas;
@@ -363,6 +365,19 @@ export class Renderer {
     }
     for (const w of state.workers.list) if (this.inView(w.x, w.y, 24)) list.push({ y: w.y, draw: () => this.drawWorker(w) });
     if (showPlayer) list.push({ y: state.player.y, draw: () => this.drawPlayer() });
+    // L'autre joueur (partie à deux) : même dessin, avec son équipement à lui (ses champs sont échangés le temps du dessin).
+    if (showPlayer)
+      for (const o of state.otherPlayers()) {
+        const op = o.state.player;
+        if (!this.inView(op.x, op.y, 48)) continue;
+        list.push({
+          y: op.y,
+          draw: () => {
+            state.withSlot(o.slot, () => this.drawPlayer(false));
+            this.drawNameTag(op.x, op.y - 30, this.peerNames[o.slot] ?? '');
+          },
+        });
+      }
     list.sort((a, b) => a.y - b.y);
     for (const d of list) d.draw();
     // Travées des ponts : au-dessus de tout ce qui est au sol (on passe dessous).
@@ -1679,16 +1694,32 @@ export class Renderer {
 
   // ------------------------------------------------------------------ personnage
 
-  /** Images du mineur avec l'équipement qu'il porte en ce moment. */
-  private minerSprites(): PlayerSprites {
+  /** Images du mineur avec l'équipement qu'il porte en ce moment (`friend` : l'autre joueur, chemise verte). */
+  private minerSprites(friend = false): PlayerSprites {
     const gear = this.state!.gear;
-    const key = ['helmet', 'mask', 'boots', 'suit'].map((id) => (gear.has(id) ? '1' : '0')).join('');
+    const key = ['helmet', 'mask', 'boots', 'suit'].map((id) => (gear.has(id) ? '1' : '0')).join('') + (friend ? 'f' : '');
     let set = this.minerSets.get(key);
     if (!set) {
-      set = buildPlayerSprites({ helmet: gear.has('helmet'), mask: gear.has('mask'), boots: gear.has('boots'), suit: gear.has('suit') });
+      set = buildPlayerSprites({ helmet: gear.has('helmet'), mask: gear.has('mask'), boots: gear.has('boots'), suit: gear.has('suit'), friend });
       this.minerSets.set(key, set);
     }
     return set;
+  }
+
+  /** Le nom d'un autre joueur, au-dessus de sa tête. */
+  private drawNameTag(x: number, y: number, name: string): void {
+    if (!name) return;
+    const ctx = this.ctx;
+    ctx.font = '600 6px "Pixelify Sans", monospace';
+    ctx.textAlign = 'center';
+    const w = Math.ceil(ctx.measureText(name).width) + 6;
+    const bx = Math.round(x - w / 2);
+    const by = Math.round(y - 5);
+    ctx.fillStyle = 'rgba(18,14,16,0.75)';
+    ctx.fillRect(bx, by, w, 9);
+    ctx.fillStyle = '#9fe3b4';
+    ctx.fillText(name, Math.round(x), by + 7);
+    ctx.textAlign = 'left';
   }
 
   /** Un ouvrier : le mineur aux couleurs de son métier, avec sa charge sur la tête et une bulle quand il est bloqué. */
@@ -1735,11 +1766,12 @@ export class Renderer {
     }
   }
 
-  private drawPlayer(): void {
+  /** `local` : le joueur de cet appareil (faux : l'autre joueur, dessiné sans la chute d'arrivée et sans nuage de la trottinette locale). */
+  private drawPlayer(local = true): void {
     const state = this.state!;
     const p = state.player;
     const ctx = this.ctx;
-    const sprites = this.minerSprites();
+    const sprites = this.minerSprites(!local);
     const frames = sprites.frames[p.facing];
     // Suspendu à la corde de rappel : il monte avec elle (ou s'enfonce dans un trou à la descente), la trottinette est rangée.
     const dir = state.ropeT > 0 ? state.ropeDir : null;
@@ -1755,7 +1787,7 @@ export class Renderer {
     const bob = walking && frame % 2 === 0 ? -1 : 0;
     const x = Math.round(p.x - img.width / 2);
     // Hauteur au-dessus du sol : la montée à la corde (avec un léger balancement), ou la petite chute de l'arrivée.
-    const lift = anim ? anim.lift + (anim.lift > 0 ? Math.sin(this.time * 5) : 0) : landLift(this.landT);
+    const lift = anim ? anim.lift + (anim.lift > 0 ? Math.sin(this.time * 5) : 0) : landLift(local ? this.landT : 0);
     const y = Math.round(p.y - img.height + 3 + bob - (riding ? SCOOTER_LIFT : 0) - lift);
     // L'ombre reste au sol : elle s'efface quand le mineur s'éloigne.
     ctx.fillStyle = `rgba(0,0,0,${(0.35 * (anim ? anim.shadow : 1 - lift / 14)).toFixed(3)})`;
@@ -1947,6 +1979,7 @@ export class Renderer {
     const p = state.player;
     const flicker = 1 + Math.sin(this.time * 13) * 0.015 + Math.sin(this.time * 7.3) * 0.02;
     punch(p.x, p.y - 8, 6.5 * flicker, 1);
+    for (const o of state.otherPlayers()) punch(o.state.player.x, o.state.player.y - 8, 6 * flicker, 1);
     for (const l of state.layout.lamps) punch(l.x, l.y, 3.6 + Math.sin(this.time * 5 + l.x) * 0.08, 0.85);
     for (const s of state.structures.list) {
       if (s instanceof Drill) punch((s.x + 0.5) * TILE, (s.y + 0.5) * TILE, s.status === 'ok' ? 3.2 : 1.6, 0.8);

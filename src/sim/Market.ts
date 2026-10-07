@@ -14,6 +14,7 @@
 import { hash2 } from '../core/rng';
 import { MARKET } from '../data/market';
 import { RESOURCES, getResource } from '../data/resources';
+import { dexp, dlog } from '../core/dmath';
 
 /** Minerais qui s'échangent : tout sauf la pierre et les lingots. */
 export const COMMODITIES: readonly string[] = RESOURCES.filter((r) => !r.ingot && r.id !== 'stone').map((r) => r.id);
@@ -74,8 +75,8 @@ export interface MarketSave {
 const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
 const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
 const round3 = (v: number) => Math.round(v * 1000) / 1000;
-const LOG_MIN = Math.log(MARKET.min);
-const LOG_MAX = Math.log(MARKET.max);
+const LOG_MIN = dlog(MARKET.min);
+const LOG_MAX = dlog(MARKET.max);
 const seconds = (s: number) => Math.max(1, Math.round(s / MARKET.step));
 
 /** Effet d'un événement sur le logarithme du cours, au pas `k` : montée, palier, retour. */
@@ -164,7 +165,7 @@ export class Market {
     return this.events.map((e) => ({
       res: e.res,
       up: e.amp > 0,
-      pct: Math.round((Math.exp(e.amp) - 1) * 100),
+      pct: Math.round((dexp(e.amp) - 1) * 100),
       left: Math.max(0, (endOf(e) - this.step) * MARKET.step),
     }));
   }
@@ -222,7 +223,7 @@ export class Market {
     };
     this.events.push(e);
     this.nextEvent = k + seconds(lerp(ev.gap[0], ev.gap[1], r(4)));
-    this.announce({ res: e.res, up: e.amp > 0, pct: Math.round((Math.exp(e.amp) - 1) * 100), left: (endOf(e) - k) * MARKET.step });
+    this.announce({ res: e.res, up: e.amp > 0, pct: Math.round((dexp(e.amp) - 1) * 100), left: (endOf(e) - k) * MARKET.step });
   }
 
   /** Recalcule le cours de chaque minerai (dérive et événements) et l'ajoute à la courbe. */
@@ -230,7 +231,7 @@ export class Market {
     for (const id of COMMODITIES) {
       let e = 0;
       for (const ev of this.events) if (ev.res === id) e += effect(ev, this.step);
-      const v = clamp(Math.exp(this.x[id] + e), MARKET.min, MARKET.max);
+      const v = clamp(dexp(this.x[id] + e), MARKET.min, MARKET.max);
       this.now[id] = v;
       const h = this.past[id];
       h.push(round3(v));

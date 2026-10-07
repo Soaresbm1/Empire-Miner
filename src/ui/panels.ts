@@ -661,6 +661,7 @@ export function helpPanel(keys: { move: string; label: (c: string) => string; to
     <div><h4>Tableau d'affichage</h4><p>${k('KeyE')} devant le tableau, entre le comptoir et l'atelier : ventes, minerai et lingots par minute, gains des 10 dernières minutes, machines à l'arrêt</p></div>
     <div><h4>Four et fonderie</h4><p>Minerai (convoyeur ou ${k('KeyE')} : déposer) + charbon → lingots vendus 2,5 fois plus cher, poussés devant la flèche</p></div>
     <div><h4>Améliorer une foreuse</h4><p>${k('KeyE')} sur la foreuse : niveau 2 = cases gauche et droite, niveau 3 = aussi derrière</p></div>
+    <div><h4>Jouer à deux</h4><p>Menu principal → <b>Jouer à deux</b> : un joueur crée la partie et envoie le lien (ou le code à 5 signes) à l'autre, qui le tape sur son propre téléphone ou ordinateur. Les deux sont dans la même mine : <b>argent, machines, ouvriers et coffres sont communs</b> ; <b>sac, pioche, équipement et position sont à chacun</b>. La partie est celle de l'hôte et se sauvegarde chez lui ; il n'y a ni pause ni vitesse à deux. Si l'un se déconnecte, l'autre continue ; en revenant avec le même appareil, il retrouve ses affaires</p></div>
     <div><h4>Menu</h4><p><kbd>Échap</kbd> : pause, sauvegarde, chargement</p></div>
   </div>
   <p class="hint">Le jeu se sauvegarde automatiquement toutes les minutes dans ce navigateur.${

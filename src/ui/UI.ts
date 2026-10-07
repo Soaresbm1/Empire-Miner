@@ -42,8 +42,18 @@ export interface UIHost {
   touch?(): boolean;
 }
 
+/** Ce que le menu pause sait d'une partie à deux en cours. */
+export interface NetMenu {
+  role: 'host' | 'guest';
+  code: string;
+  peer: string;
+  playing: boolean;
+}
+
 /** Faux dans les hébergements qui bloquent les téléchargements (build « artifact »). */
 const CAN_DOWNLOAD = import.meta.env.MODE !== 'artifact';
+/** Le jeu à deux a besoin de WebSocket vers des courtiers publics : pas dans l'hébergement « artifact ». */
+const CAN_PLAY2 = import.meta.env.MODE !== 'artifact';
 
 const $ = <T extends HTMLElement>(sel: string) => document.querySelector(sel) as T;
 
@@ -89,6 +99,13 @@ export class UI {
     };
     for (const root of [this.panelRoot, this.menuRoot, this.hud]) root.addEventListener('pointerdown', onPointer);
     this.listenMap();
+    // Entrée dans le champ du code : on rejoint.
+    this.menuRoot.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && (e.target as HTMLElement).id === 'join-code') {
+        e.preventDefault();
+        this.host.onAction('join', '');
+      }
+    });
   }
 
   /**
@@ -499,6 +516,7 @@ export class UI {
       <div class="menu-buttons">
         ${save ? `<button class="btn primary big" data-action="continue">Continuer${saveInfo}</button>` : ''}
         <button class="btn big ${save ? (confirmNew ? 'danger' : '') : 'primary'}" data-action="new">${confirmNew ? 'Confirmer : écraser la sauvegarde' : 'Nouvelle partie'}</button>
+        ${CAN_PLAY2 ? '<button class="btn big" data-action="play2" title="Une mine, deux mineurs : sur deux téléphones ou deux ordinateurs">Jouer à deux<small>avec un ami, sur son propre appareil</small></button>' : ''}
         <button class="btn" data-action="import">Importer une sauvegarde…</button>
         <button class="btn" data-action="help">Commandes</button>
         <button class="btn" data-action="touch" title="Stick et boutons à l'écran, pour jouer au doigt">Commandes tactiles : ${this.host.touch?.() ? 'oui' : 'non'}</button>
@@ -507,22 +525,118 @@ export class UI {
     </div>`;
   }
 
-  showPauseMenu(muted: boolean, quality: Quality = 'high'): void {
+  showPauseMenu(muted: boolean, quality: Quality = 'high', net: NetMenu | null = null): void {
     this.menu = 'pause';
     this.syncOverlay();
     this.menuFx.stop();
+    const guest = net?.role === 'guest';
+    const twoPlayer = net
+      ? `<p class="net-note">${
+          net.role === 'host'
+            ? net.playing
+              ? `À deux avec <b>${esc(net.peer || 'votre ami')}</b> · code <b class="code">${esc(net.code)}</b>`
+              : `Partie ouverte · code <b class="code">${esc(net.code)}</b> · personne n'est encore arrivé`
+            : `Chez <b>${esc(net.peer || "l'hôte")}</b> · code <b class="code">${esc(net.code)}</b>`
+        }<br><span class="muted">Le jeu continue pendant ce menu.</span></p>
+      ${net.role === 'host' ? '<button class="btn" data-action="invite">Inviter : envoyer le lien</button>' : ''}
+      <button class="btn danger" data-action="netLeave">${guest ? 'Quitter la partie à deux' : 'Arrêter la partie à deux'}</button>`
+      : CAN_PLAY2
+        ? '<button class="btn" data-action="host2" title="Un ami rejoint votre mine avec un code">Inviter un ami (jouer à deux)</button>'
+        : '';
     this.menuRoot.innerHTML = `<div class="menu pause-menu"><h2>Pause</h2><div class="menu-buttons">
       <button class="btn primary big" data-action="resume">Reprendre</button>
-      <button class="btn" data-action="save">Sauvegarder</button>
-      <button class="btn" data-action="load">Charger la dernière sauvegarde</button>
-      ${CAN_DOWNLOAD ? '<button class="btn" data-action="export">Exporter la sauvegarde (fichier)</button>' : ''}
-      <button class="btn" data-action="import">Importer une sauvegarde…</button>
+      ${guest ? '' : '<button class="btn" data-action="save">Sauvegarder</button>'}
+      ${net ? '' : '<button class="btn" data-action="load">Charger la dernière sauvegarde</button>'}
+      ${CAN_DOWNLOAD && !guest ? '<button class="btn" data-action="export">Exporter la sauvegarde (fichier)</button>' : ''}
+      ${net ? '' : '<button class="btn" data-action="import">Importer une sauvegarde…</button>'}
       <button class="btn" data-action="mute">Son : ${muted ? 'coupé' : 'activé'}</button>
       <button class="btn" data-action="quality" title="Élevée : tous les effets. Basse : pour les petits appareils.">Graphismes : ${QUALITY_LABEL[quality]}</button>
       <button class="btn" data-action="help">Commandes</button>
       <button class="btn" data-action="touch" title="Stick et boutons à l'écran, pour jouer au doigt">Commandes tactiles : ${this.host.touch?.() ? 'oui' : 'non'}</button>
+      ${twoPlayer}
       <button class="btn" data-action="quit">Quitter vers le menu</button>
     </div></div>`;
+  }
+
+  // ------------------------------------------------------------------ jouer à deux
+
+  /** Menu « Jouer à deux » : créer une partie (nouvelle ou sauvegardée) ou en rejoindre une avec son code. */
+  showPlayMenu(opts: { hasSave: boolean; code?: string; error?: string; confirmNew?: boolean }): void {
+    this.menu = 'main';
+    this.syncOverlay();
+    this.menuFx.start(this.menuMotes);
+    this.menuRoot.innerHTML = `<div class="menu main-menu play-menu">
+      <h2 class="play-title">Jouer à deux</h2>
+      <p class="tagline">Une seule mine, deux mineurs. L'argent et les machines sont communs ; le sac et la pioche sont à chacun.</p>
+      <div class="menu-buttons">
+        <div class="play-box">
+          <h3>Inviter un ami</h3>
+          <p class="muted">Vous créez la partie et envoyez le lien (ou le code à 5 lettres) à votre ami. Elle est sauvegardée chez vous.</p>
+          ${opts.hasSave ? '<button class="btn primary big" data-action="hostSave">Reprendre ma partie à deux</button>' : ''}
+          <button class="btn ${opts.confirmNew ? 'danger' : opts.hasSave ? '' : 'primary big'}" data-action="hostNew">${opts.confirmNew ? 'Confirmer : écraser la sauvegarde' : 'Nouvelle partie à deux'}</button>
+        </div>
+        <div class="play-box">
+          <h3>Rejoindre un ami</h3>
+          <p class="muted">Tapez le code reçu, ou ouvrez directement le lien de votre ami.</p>
+          <div class="join-row">
+            <input id="join-code" class="join-input" type="text" inputmode="text" autocomplete="off" autocapitalize="characters" autocorrect="off" spellcheck="false" maxlength="8" placeholder="CODE" value="${esc(opts.code ?? '')}" aria-label="Code de la partie">
+            <button class="btn primary" data-action="join">Rejoindre</button>
+          </div>
+          ${opts.error ? `<p class="join-error">${esc(opts.error)}</p>` : ''}
+        </div>
+        <button class="btn" data-action="close">Retour</button>
+      </div>
+    </div>`;
+  }
+
+  /** Invitation reçue par lien : un seul gros bouton pour rejoindre. */
+  showInvitation(code: string): void {
+    this.menu = 'main';
+    this.syncOverlay();
+    this.menuFx.start(this.menuMotes);
+    this.menuRoot.innerHTML = `<div class="menu main-menu play-menu">
+      <h2 class="play-title">Un ami vous invite</h2>
+      <p class="tagline">Rejoignez sa mine : vous jouez ensemble, chacun sur son appareil.<br>Code de la partie : <b class="code">${esc(code)}</b></p>
+      <div class="menu-buttons">
+        <button class="btn primary big" data-action="join" data-arg="${esc(code)}">Rejoindre la partie</button>
+        <button class="btn" data-action="close">Menu principal</button>
+      </div>
+    </div>`;
+  }
+
+  /** Écran d'attente du joueur qui rejoint : connexion, réception de la partie, ou échec avec de quoi réessayer. */
+  showJoining(code: string, text: string, failed: boolean): void {
+    this.menu = 'main';
+    this.syncOverlay();
+    this.menuFx.start(this.menuMotes);
+    this.menuRoot.innerHTML = `<div class="menu main-menu play-menu">
+      <h2 class="play-title">Partie de ${esc(code)}</h2>
+      <p class="tagline join-text ${failed ? 'failed' : ''}">${esc(text)}</p>
+      ${failed ? '' : '<div class="net-spinner" aria-hidden="true"></div>'}
+      <div class="menu-buttons">
+        ${failed ? '<button class="btn primary big" data-action="netRetry">Réessayer</button>' : ''}
+        <button class="btn" data-action="netCancel">${failed ? 'Retour au menu' : 'Annuler'}</button>
+      </div>
+    </div>`;
+  }
+
+  /** Le texte de l'écran d'attente change sans refaire tout l'écran (le focus et l'animation restent). */
+  setJoiningText(text: string): void {
+    const el = this.menuRoot.querySelector('.join-text');
+    if (el) el.textContent = text;
+  }
+
+  /** Pastille de connexion du HUD et bandeau « En attente de l'autre joueur ». */
+  setNet(chip: string, banner: string): void {
+    this.set('hud-net', chip);
+    const el = document.getElementById('net-stall');
+    if (el) {
+      if (this.cache.get('net-stall') !== banner) {
+        this.cache.set('net-stall', banner);
+        el.innerHTML = banner;
+        el.classList.toggle('hidden', !banner);
+      }
+    }
   }
 
   hideMenu(): void {

@@ -21,6 +21,7 @@ src/
   audio/       effets sonores synthétisés (Web Audio)
   ui/          HUD et panneaux HTML au-dessus du canvas
   game/        Game : boucle à pas fixe, entrées → intentions, construction, menus, sauvegardes
+  net/         jeu à deux : lockstep, session, transports (MQTT, BroadcastChannel), instantané, empreintes
 ```
 
 ## Principes
@@ -246,3 +247,40 @@ exploration, objets au sol (avec leur âge, pour que les pierres ne repartent pa
 structures (avec leur contenu : objets sur convoyeurs, charbon, tampons, coffres), joueur, argent, inventaire,
 kits, améliorations et statistiques. Stockage : `localStorage` (+ copie de secours)
 et export/import de fichier JSON.
+
+## Jeu à deux (lockstep)
+
+**Principe.** Les deux appareils partent du même état (la sauvegarde de l'hôte, rechargée des deux côtés) et font tourner la
+même simulation à pas fixe ; seules les **entrées** circulent : l'intention de chaque joueur à chaque pas et ses
+`SimAction` (acheter, poser, régler…). Aucun état de jeu n'est envoyé en cours de partie.
+
+- **Déterminisme** (`core/dmath.ts`, test d'analyse statique) : pas de `Math.random`, `hypot`, `exp`, `log`, `sin`, `cos`,
+  `pow` dans `src/sim` ; les fonctions voisines sont remplacées par des versions n'utilisant que + − × ÷ √, identiques sur
+  tous les moteurs JavaScript (iPhone ↔ ordinateur). Les tirages passent par le générateur de la simulation.
+- **Joueurs** (`sim/GameState`) : les champs personnels (`PERSONAL_KEYS` : joueur, sac, pioche, équipement, corde, santé…)
+  sont échangés par référence (`withSlot`) ; le reste (argent, monde, structures, kits, ouvriers, wagonnets, marché,
+  repères) est commun. Les phases du monde tournent sous l'emplacement 0 pour que les deux appareils s'accordent.
+  `local` est le joueur de l'appareil ; `otherPlayers()` sert au rendu.
+- **Actions** (`sim/actions.ts`) : tout ce que l'interface change passe par `applyAction(g, SimAction)`. Seul, elle
+  s'applique tout de suite ; à deux, elle est mise en file (`Session.send`) et appliquée aux deux appareils au même pas, dans
+  l'ordre des emplacements. Les retours à l'écran sont des événements `message` portant l'emplacement du joueur concerné.
+- **Lockstep** (`net/lockstep.ts`) : chacun écrit ses entrées `delay` pas à l'avance (8 pas ≈ 133 ms, jusqu'à 30 si le réseau
+  est lent). Un pas ne s'exécute que si l'on a l'entrée de l'autre, sinon on attend. Fiabilité par redondance : chaque
+  paquet répète les entrées non confirmées (`ack`) et annonce jusqu'où l'on a écrit (`up`) ; un pas sans entrée listée est « sans
+  changement ». Pertes, doublons et désordre sont donc sans effet (testé avec 15 % de pertes).
+- **Empreintes** (`net/digest.ts`) : toutes les 120 pas (2 s), chacun envoie un hachage de l'état (monde, structures, joueurs).
+  Un écart déclenche une **resynchronisation** : l'hôte renvoie sa partie complète.
+- **Session** (`net/session.ts`) : poignée de main (`hello` → l'hôte fait entrer l'invité, écrit la sauvegarde, la recharge
+  lui-même, la découpe en morceaux de 6000 signes compressés `deflate-raw` + base64 ; l'invité réclame les morceaux
+  manquants avec `need`, puis dit `ready`), présence (silence > 8 s = parti), `bye`, `full`, version de protocole.
+  Les affaires d'un invité qui part sont gardées chez l'hôte (`guestStash`, par identifiant d'appareil) et rendues à son retour.
+- **Transports** (`net/transport.ts`, `net/mqtt.ts`) : un canal « au mieux » (perte, doublon, désordre possibles).
+  `MqttTransport` : client MQTT 3.1.1 minimal sur WebSocket, abonné à **trois courtiers publics** à la fois
+  (`broker.emqx.io`, `broker.hivemq.com`, `test.mosquitto.org`), publie sur deux ; sujet `empire-miner/v1/<code>` ; messages
+  numérotés par émetteur (anti-écho, anti-doublon). `BroadcastTransport` (deux onglets du même navigateur) sert aux essais :
+  `?net=local` dans l'adresse.
+- **Interface** : `Game` crée la `Session`, route les actions et `runSim` par elle, filtre les événements par joueur
+  (`PERSONAL_EVENTS`), n'enregistre jamais côté invité, et désactive pause et vitesse.
+- **Essais** : `tests/multiplayer-sim.test.ts` (simulation à deux, déterminisme), `tests/lockstep.test.ts` et
+  `tests/session.test.ts` (réseau simulé : pertes, doublons, coupures, divergence, départ/retour), `tests-net/mqtt.check.ts`
+  (vrai courtier local), `e2e/coop.mjs` (deux pages de navigateur).

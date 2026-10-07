@@ -25,14 +25,9 @@ import type { SlotSave } from '../sim/Production';
 
 export const SAVE_VERSION = 1;
 
-export interface SaveData {
-  game: 'empire-miner';
-  version: number;
-  savedAt: string;
-  seed: number;
-  time: number;
+/** Ce qui est propre à un joueur : personnage, sac, outils, achats personnels, santé. */
+export interface PersonalSave {
   player: { x: number; y: number; facing: Dir };
-  money: number;
   pickaxeLevel: number;
   bagLevel: number;
   /** Outils mécaniques (absents des sauvegardes d'avant le marteau-piqueur). */
@@ -42,8 +37,20 @@ export interface SaveData {
   /** Équipement de protection acheté (absent des sauvegardes d'avant l'équipement : aucun). */
   gear?: string[];
   inventory: Record<string, number>;
-  kits: Record<string, number>;
   autoPickup: Record<string, boolean>;
+  /** Santé du joueur (absente des sauvegardes d'avant les dangers : pleine santé). */
+  health?: number;
+}
+
+export interface SaveData extends PersonalSave {
+  game: 'empire-miner';
+  version: number;
+  savedAt: string;
+  seed: number;
+  time: number;
+  money: number;
+  /** Kits de construction : communs à tous les joueurs. */
+  kits: Record<string, number>;
   stats: Stats;
   world: {
     w: number;
@@ -61,8 +68,6 @@ export interface SaveData {
   structures: StructureSave[];
   /** Absent des sauvegardes d'avant les wagonnets. */
   wagons?: WagonSave[];
-  /** Santé du joueur (absente des sauvegardes d'avant les dangers : pleine santé). */
-  health?: number;
   /**
    * Dangers (absents des anciennes sauvegardes) : cases creusées à la main, grisou et eau
    * ([indice, niveau]) et éboulements annoncés ([x, y, temps restant]). Les poches cachées se
@@ -77,6 +82,51 @@ export interface SaveData {
   market?: MarketSave;
   /** Ouvriers : métier, position et charge (absents des anciennes sauvegardes : aucun ouvrier). */
   workers?: WorkerSave[];
+  /** Jeu à deux : les joueurs présents autres que le premier (identifiant d'invité compris), et les invités partis. */
+  players?: (PersonalSave & { id: string })[];
+  guests?: Record<string, PersonalSave>;
+}
+
+/** Ce qu'on peut laisser de côté en écrivant la sauvegarde (le monde, pour calculer une empreinte plus vite). */
+export interface SerializeOptions {
+  world?: boolean;
+}
+
+/** Les champs personnels du joueur actif de `g`. */
+export function personalOf(g: GameState): PersonalSave {
+  return {
+    player: { x: round2(g.player.x), y: round2(g.player.y), facing: g.player.facing },
+    pickaxeLevel: g.pickaxeLevel,
+    bagLevel: g.bagLevel,
+    tools: { jackhammer: g.hasJackhammer, inHand: g.tool, hammerFuel: round2(g.hammerFuel), scooter: g.hasScooter },
+    gear: [...g.gear],
+    rope: { count: g.ropes, anchor: g.ropeAnchor ? [g.ropeAnchor.tx, g.ropeAnchor.ty] : null },
+    inventory: { ...g.inventory.items },
+    autoPickup: { ...g.autoPickup },
+    health: round2(g.hp),
+  };
+}
+
+/** Charge des champs personnels dans le joueur actif de `g` (valeurs aberrantes corrigées). */
+export function loadPersonal(g: GameState, data: PersonalSave): void {
+  const w = g.world;
+  g.player.x = data.player.x;
+  g.player.y = data.player.y;
+  g.player.facing = data.player.facing;
+  g.hp = Math.min(HEALTH.max, Math.max(1, Number(data.health ?? HEALTH.max) || HEALTH.max));
+  g.pickaxeLevel = Math.min(Math.max(0, data.pickaxeLevel), PICKAXES.length - 1);
+  g.setBagLevel(Math.min(Math.max(0, data.bagLevel), BAGS.length - 1));
+  g.hasJackhammer = !!data.tools?.jackhammer;
+  g.tool = g.hasJackhammer && data.tools?.inHand === 'jackhammer' ? 'jackhammer' : 'pickaxe';
+  g.hammerFuel = Math.max(0, Number(data.tools?.hammerFuel ?? 0) || 0);
+  g.hasScooter = data.tools?.scooter === true;
+  g.gear = new Set<string>();
+  for (const id of Array.isArray(data.gear) ? data.gear : []) if (isGear(id)) g.gear.add(id);
+  g.ropes = Math.min(ROPE.maxStock, Math.max(0, Math.floor(Number(data.rope?.count ?? 0)) || 0));
+  const a = data.rope?.anchor;
+  g.ropeAnchor = Array.isArray(a) && Number.isInteger(a[0]) && Number.isInteger(a[1]) && w.inBounds(a[0], a[1]) ? { tx: a[0], ty: a[1] } : null;
+  g.inventory.items = filterKnown(data.inventory);
+  g.autoPickup = { ...g.autoPickup, ...data.autoPickup };
 }
 
 function sparse(grid: Float32Array): [number, number][] {
@@ -85,44 +135,44 @@ function sparse(grid: Float32Array): [number, number][] {
   return out;
 }
 
-export function serialize(g: GameState): SaveData {
+export function serialize(g: GameState, opts: SerializeOptions = {}): SaveData {
   const w = g.world;
   const reserves: [number, number][] = [];
   for (let i = 0; i < w.deposit.length; i++) if (w.deposit[i]) reserves.push([i, w.reserve[i]]);
+  // Les champs « solo » décrivent toujours le joueur 0 : une sauvegarde est la même quel que soit l'appareil qui l'écrit.
+  const personal = g.withSlot(0, () => personalOf(g));
+  const others = g.presentSlots().filter((i) => i !== 0);
   return {
     game: 'empire-miner',
     version: SAVE_VERSION,
     savedAt: new Date().toISOString(),
     seed: g.seed,
     time: g.time,
-    player: { x: round2(g.player.x), y: round2(g.player.y), facing: g.player.facing },
+    ...personal,
     money: g.money,
-    pickaxeLevel: g.pickaxeLevel,
-    bagLevel: g.bagLevel,
-    tools: { jackhammer: g.hasJackhammer, inHand: g.tool, hammerFuel: round2(g.hammerFuel), scooter: g.hasScooter },
-    gear: [...g.gear],
-    rope: { count: g.ropes, anchor: g.ropeAnchor ? [g.ropeAnchor.tx, g.ropeAnchor.ty] : null },
-    inventory: { ...g.inventory.items },
     kits: { ...g.inventory.kits },
-    autoPickup: { ...g.autoPickup },
     stats: { ...g.stats, discovered: [...g.stats.discovered], collected: { ...g.stats.collected } },
-    world: {
-      w: w.w,
-      h: w.h,
-      tiles: rleEncode(w.tiles),
-      deposit: rleEncode(w.deposit),
-      explored: rleEncode(w.explored),
-      reserves,
-      damage: Array.from(w.damage.entries()),
-    },
+    world:
+      opts.world === false
+        ? { w: w.w, h: w.h, tiles: '', deposit: '', explored: '', reserves: [], damage: [] }
+        : {
+            w: w.w,
+            h: w.h,
+            tiles: rleEncode(w.tiles),
+            deposit: rleEncode(w.deposit),
+            explored: rleEncode(w.explored),
+            reserves,
+            damage: Array.from(w.damage.entries()),
+          },
     drops: g.drops.list.map((d) => [d.res, d.count, round2(d.x), round2(d.y), round2(d.age)]),
     structures: g.structures.list.filter((s) => s.removable).map((s) => s.serialize()),
     wagons: g.wagons.list.map((w) => w.serialize()),
-    health: round2(g.hp),
     markers: g.markers.serialize(),
     production: g.production.serialize(),
     market: g.market.serialize(),
     workers: g.workers.serialize(),
+    ...(others.length ? { players: others.map((i) => ({ id: g.guestIds[i] ?? '', ...g.withSlot(i, () => personalOf(g)) })) } : {}),
+    ...(Object.keys(g.guestStash).length ? { guests: g.guestStash as Record<string, PersonalSave> } : {}),
     hazards: {
       dug: rleEncode(w.dug),
       gas: sparse(w.gas),
@@ -163,24 +213,9 @@ export function deserialize(data: SaveData): GameState {
 
   g.time = data.time;
   g.market.load(data.market, data.time);
-  g.player.x = data.player.x;
-  g.player.y = data.player.y;
-  g.player.facing = data.player.facing;
   g.money = data.money;
-  g.hp = Math.min(HEALTH.max, Math.max(1, Number(data.health ?? HEALTH.max) || HEALTH.max));
-  g.pickaxeLevel = Math.min(Math.max(0, data.pickaxeLevel), PICKAXES.length - 1);
-  g.setBagLevel(Math.min(Math.max(0, data.bagLevel), BAGS.length - 1));
-  g.hasJackhammer = !!data.tools?.jackhammer;
-  g.tool = g.hasJackhammer && data.tools?.inHand === 'jackhammer' ? 'jackhammer' : 'pickaxe';
-  g.hammerFuel = Math.max(0, Number(data.tools?.hammerFuel ?? 0) || 0);
-  g.hasScooter = data.tools?.scooter === true;
-  for (const id of Array.isArray(data.gear) ? data.gear : []) if (isGear(id)) g.gear.add(id);
-  g.ropes = Math.min(ROPE.maxStock, Math.max(0, Math.floor(Number(data.rope?.count ?? 0)) || 0));
-  const a = data.rope?.anchor;
-  g.ropeAnchor = Array.isArray(a) && Number.isInteger(a[0]) && Number.isInteger(a[1]) && w.inBounds(a[0], a[1]) ? { tx: a[0], ty: a[1] } : null;
-  g.inventory.items = filterKnown(data.inventory);
+  loadPersonal(g, data);
   g.inventory.kits = { ...data.kits };
-  g.autoPickup = { ...g.autoPickup, ...data.autoPickup };
   g.stats = {
     ...g.stats,
     ...data.stats,
@@ -203,6 +238,14 @@ export function deserialize(data: SaveData): GameState {
   }
   // Les ouvriers viennent après le monde et les machines : leur case d'attente en dépend.
   g.workers.load(data.workers, g);
+  // Jeu à deux : les autres joueurs présents et les invités partis.
+  g.guestStash = { ...(data.guests ?? {}) };
+  for (const p of data.players ?? []) {
+    const slot = g.addPlayer();
+    if (slot < 0) break;
+    g.guestIds[slot] = typeof p.id === 'string' ? p.id : '';
+    g.withSlot(slot, () => loadPersonal(g, p));
+  }
   return g;
 }
 
