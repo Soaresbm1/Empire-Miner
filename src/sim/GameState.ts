@@ -22,7 +22,7 @@ import { MARKER_KINDS, Marker, MarkerBook, MarkerKind } from './Markers';
 import { ProductionLog } from './Production';
 import type { SimEvent, ToolKind } from './events';
 import { generateWorld, WorldLayout } from './generator';
-import { Inventory } from './Inventory';
+import { Inventory, type KitHolder } from './Inventory';
 import { Market } from './Market';
 import { Player } from './Player';
 import { StructureManager } from './StructureManager';
@@ -41,6 +41,7 @@ import { revealAround } from './visibility';
 import { Wagon, WagonSystem } from './Wagons';
 import { WorkerSystem } from './Workers';
 import type { World } from './World';
+import { hyp, smallCosSin } from '../core/dmath';
 
 export interface PlayerIntent {
   /** Direction de déplacement souhaitée (-1..1). */
@@ -95,6 +96,73 @@ export const VIEW_RADIUS = 9; // tuiles
 export const PICKUP_RADIUS = 34;
 export const INTERACT_RANGE = 12;
 
+/** Nombre maximal de joueurs dans une même mine. */
+export const MAX_PLAYERS = 2;
+
+/**
+ * Ce qui est propre à chaque joueur : son personnage, son sac (minerais ; les kits sont communs), son outil, ses
+ * achats personnels (pioche, sac, trottinette, équipement), sa corde, sa santé. Le reste de la partie (argent,
+ * mine, machines, ouvriers, marché) est commun.
+ *
+ * Les champs du joueur « actif » vivent directement dans `GameState` (tout le code existant les lit tels quels) ;
+ * ceux des autres joueurs attendent dans `store`. `withSlot` échange les deux le temps d'une opération.
+ */
+export const PERSONAL_KEYS = [
+  'player',
+  'inventory',
+  'riding',
+  'pickaxeLevel',
+  'bagLevel',
+  'hasJackhammer',
+  'tool',
+  'hammerFuel',
+  'hasScooter',
+  'scootering',
+  'ropes',
+  'ropeAnchor',
+  'ropeT',
+  'ropeDir',
+  'gear',
+  'autoPickup',
+  'hp',
+  'lastHurt',
+  'lastHurtEvent',
+  'lastNoFuel',
+  'lastHeatWarn',
+  'lastShieldMsg',
+  'lastPlayerTile',
+  'lastInvFull',
+  'lastZone',
+] as const;
+
+export type PersonalState = {
+  player: Player;
+  inventory: Inventory;
+  riding: Wagon | null;
+  pickaxeLevel: number;
+  bagLevel: number;
+  hasJackhammer: boolean;
+  tool: ToolKind;
+  hammerFuel: number;
+  hasScooter: boolean;
+  scootering: boolean;
+  ropes: number;
+  ropeAnchor: { tx: number; ty: number } | null;
+  ropeT: number;
+  ropeDir: 'up' | 'down' | null;
+  gear: Set<string>;
+  autoPickup: Record<string, boolean>;
+  hp: number;
+  lastHurt: number;
+  lastHurtEvent: number;
+  lastNoFuel: number;
+  lastHeatWarn: number;
+  lastShieldMsg: number;
+  lastPlayerTile: number;
+  lastInvFull: number;
+  lastZone: string;
+};
+
 export class GameState implements StructureContext {
   readonly seed: number;
   readonly world: World;
@@ -111,8 +179,8 @@ export class GameState implements StructureContext {
   readonly workers = new WorkerSystem();
   /** Type de repère choisi dans le panneau de la carte (pour le prochain repère posé). */
   markerKind: MarkerKind = 'point';
-  readonly player: Player;
-  readonly inventory: Inventory;
+  player: Player;
+  inventory: Inventory;
   readonly drops = new DropSystem();
   readonly structures: StructureManager;
   readonly wagons = new WagonSystem();
@@ -135,10 +203,21 @@ export class GameState implements StructureContext {
   /** Sens de la manœuvre en cours : remonter au camp ou redescendre au point d'accroche. */
   ropeDir: 'up' | 'down' | null = null;
   /** Équipement de protection acheté à l'Atelier (identifiants de `GEAR`). */
-  readonly gear = new Set<string>();
+  gear = new Set<string>();
   private lastNoFuel = -99;
   private lastHeatWarn = -99;
   private lastShieldMsg = -99;
+  /** Kits de construction : un seul stock pour tous les joueurs. */
+  private readonly kitHolder: KitHolder = { kits: {} };
+  /** Joueurs présents (l'emplacement 0 est toujours là), celui que l'écran de ce téléphone suit, et celui dont les champs sont chargés. */
+  private present: boolean[] = [true];
+  local = 0;
+  active = 0;
+  private readonly store: (PersonalState | null)[] = [null];
+  /** Invités partis : leur sac et leurs achats sont gardés, ils les retrouvent en revenant (clé : identifiant d'invité). */
+  guestStash: Record<string, unknown> = {};
+  /** Identifiant d'invité de chaque joueur présent (emplacement 1 et suivants). */
+  guestIds: Record<number, string> = {};
   time = 0;
   autoPickup: Record<string, boolean> = {};
   stats: Stats = {
@@ -178,8 +257,9 @@ export class GameState implements StructureContext {
     );
     this.hazards = new HazardSystem(this);
     this.rng = new Rng(seed ^ 0x5bd1e995);
+    this.drops.rand = () => this.rng.float();
     this.player = new Player(this.layout.spawn.x, this.layout.spawn.y);
-    this.inventory = new Inventory(BAGS[0].capacity);
+    this.inventory = new Inventory(BAGS[0].capacity, this.kitHolder);
     this.structures = new StructureManager(this.world.w);
     for (const b of this.layout.buildings) this.structures.add(new Building(b.type, b.x, b.y));
     for (const r of RESOURCES) this.autoPickup[r.id] = true;
@@ -211,6 +291,134 @@ export class GameState implements StructureContext {
     return 1 - kept;
   }
 
+  // ---------------------------------------------------------------- joueurs (jeu à deux)
+
+  /** Nombre de joueurs présents. */
+  get playerCount(): number {
+    return this.present.filter(Boolean).length;
+  }
+
+  isPresent(slot: number): boolean {
+    return !!this.present[slot];
+  }
+
+  /** Emplacements des joueurs présents, dans l'ordre. */
+  presentSlots(): number[] {
+    const out: number[] = [];
+    for (let i = 0; i < this.present.length; i++) if (this.present[i]) out.push(i);
+    return out;
+  }
+
+  /** Charge dans `GameState` les champs du joueur `slot` (et range ceux du joueur actif). */
+  private swapTo(slot: number): void {
+    if (slot === this.active) return;
+    const self = this as unknown as Record<string, unknown>;
+    const next = this.store[slot];
+    if (!next) throw new Error(`Joueur ${slot} absent`);
+    const cur: Record<string, unknown> = {};
+    for (const k of PERSONAL_KEYS) cur[k] = self[k];
+    this.store[this.active] = cur as unknown as PersonalState;
+    this.store[slot] = null;
+    const src = next as unknown as Record<string, unknown>;
+    for (const k of PERSONAL_KEYS) self[k] = src[k];
+    this.active = slot;
+  }
+
+  /** Exécute `fn` comme si `slot` était le joueur de cet appareil (ses champs sont échangés le temps de l'appel). */
+  withSlot<T>(slot: number, fn: () => T): T {
+    if (slot === this.active) return fn();
+    const before = this.active;
+    this.swapTo(slot);
+    try {
+      return fn();
+    } finally {
+      this.swapTo(before);
+    }
+  }
+
+  /** Fait de `slot` le joueur que cet appareil suit (écran, sac, panneaux). */
+  setLocal(slot: number): void {
+    this.swapTo(slot);
+    this.local = slot;
+  }
+
+  /** État neuf d'un joueur qui arrive : sac vide, vieille pioche, au camp (à côté des autres). */
+  private freshPersonal(slot: number): PersonalState {
+    const autoPickup: Record<string, boolean> = {};
+    for (const r of RESOURCES) autoPickup[r.id] = true;
+    return {
+      player: new Player(this.layout.spawn.x + slot, this.layout.spawn.y),
+      inventory: new Inventory(BAGS[0].capacity, this.kitHolder),
+      riding: null,
+      pickaxeLevel: 0,
+      bagLevel: 0,
+      hasJackhammer: false,
+      tool: 'pickaxe',
+      hammerFuel: 0,
+      hasScooter: false,
+      scootering: false,
+      ropes: 0,
+      ropeAnchor: null,
+      ropeT: 0,
+      ropeDir: null,
+      gear: new Set<string>(),
+      autoPickup,
+      hp: HEALTH.max,
+      lastHurt: -99,
+      lastHurtEvent: -99,
+      lastNoFuel: -99,
+      lastHeatWarn: -99,
+      lastShieldMsg: -99,
+      lastPlayerTile: -1,
+      lastInvFull: -10,
+      lastZone: '',
+    };
+  }
+
+  /** Ajoute un joueur dans le premier emplacement libre ; renvoie son numéro, ou -1 si la mine est pleine. */
+  addPlayer(): number {
+    let slot = this.present.findIndex((p) => !p);
+    if (slot < 0) {
+      if (this.present.length >= MAX_PLAYERS) return -1;
+      slot = this.present.length;
+      this.present.push(false);
+      this.store.push(null);
+    }
+    this.present[slot] = true;
+    this.store[slot] = this.freshPersonal(slot);
+    return slot;
+  }
+
+  /** Retire un joueur (il a quitté la partie). Un joueur « local » ne se retire pas. */
+  removePlayer(slot: number): void {
+    if (slot === 0 || slot === this.local || !this.present[slot]) return;
+    if (slot === this.active) this.swapTo(this.local);
+    const p = this.store[slot];
+    if (p?.riding) {
+      p.riding.rider = false;
+      p.riding.hold = false;
+    }
+    this.present[slot] = false;
+    this.store[slot] = null;
+    delete this.guestIds[slot];
+  }
+
+  /** Les joueurs présents autres que celui de cet appareil (pour les dessiner, les compter, les comparer). */
+  otherPlayers(): { slot: number; state: PersonalState }[] {
+    const out: { slot: number; state: PersonalState }[] = [];
+    for (let i = 0; i < this.present.length; i++) {
+      if (!this.present[i] || i === this.active) continue;
+      const st = this.store[i];
+      if (st) out.push({ slot: i, state: st });
+    }
+    return out;
+  }
+
+  /** Exécute `fn` pour chaque joueur présent, dans l'ordre des emplacements (même ordre sur tous les appareils). */
+  private eachPlayer(fn: (slot: number) => void): void {
+    for (let i = 0; i < this.present.length; i++) if (this.present[i]) this.withSlot(i, () => fn(i));
+  }
+
   // ---------------------------------------------------------------- contexte des structures
 
   structureAt(x: number, y: number): Structure | undefined {
@@ -218,6 +426,8 @@ export class GameState implements StructureContext {
   }
 
   emit(e: SimEvent): void {
+    // À deux, chaque événement dit quel joueur l'a causé (les messages et les achats ne concernent que lui).
+    if (this.present.length > 1 && e.slot === undefined) e.slot = this.active;
     this.events.push(e);
   }
 
@@ -258,11 +468,12 @@ export class GameState implements StructureContext {
   }
 
   occupied(x: number, y: number): boolean {
-    const p = this.player;
     const x0 = x * TILE;
     const y0 = y * TILE;
-    const onPlayer = p.x + p.halfW > x0 && p.x - p.halfW < x0 + TILE && p.y + p.halfH > y0 && p.y - p.halfH < y0 + TILE;
-    return onPlayer || !!this.wagons.at(x, y);
+    const covers = (p: Player) => p.x + p.halfW > x0 && p.x - p.halfW < x0 + TILE && p.y + p.halfH > y0 && p.y - p.halfH < y0 + TILE;
+    if (covers(this.player)) return true;
+    for (const o of this.otherPlayers()) if (covers(o.state.player)) return true;
+    return !!this.wagons.at(x, y);
   }
 
   reveal(x: number, y: number): void {
@@ -271,11 +482,41 @@ export class GameState implements StructureContext {
 
   // ---------------------------------------------------------------- boucle
 
-  update(dt: number, intent: PlayerIntent): void {
-    this.time += dt;
-    this.stats.playTime += dt;
-    this.market.update(this.time);
-    this.workers.update(dt, this);
+  /**
+   * Un pas de simulation. `intent` : l'intention du joueur (jeu seul), ou celle de chaque joueur dans l'ordre des
+   * emplacements (jeu à deux). Le monde avance une fois ; ce qui est propre à un joueur (déplacement, minage, ramassage,
+   * santé) se calcule pour chacun, dans l'ordre, avec ses champs chargés.
+   */
+  update(dt: number, intent: PlayerIntent | readonly (PlayerIntent | undefined)[]): void {
+    const intents = Array.isArray(intent) ? (intent as readonly (PlayerIntent | undefined)[]) : [intent as PlayerIntent];
+    const home = this.active;
+    // Le monde se calcule toujours depuis le joueur 0 : les deux appareils obtiennent le même résultat.
+    this.swapTo(0);
+    try {
+      this.time += dt;
+      this.stats.playTime += dt;
+      this.market.update(this.time);
+      this.workers.update(dt, this);
+      this.eachPlayer((i) => this.stepControls(dt, intents[i] ?? NO_INTENT));
+      for (const d of this.drops.update(dt, this.world)) this.emit({ t: 'crumble', res: d.res, x: d.x, y: d.y });
+      this.eachPlayer(() => this.updatePickup(dt));
+      this.structures.update(dt, this);
+      this.wagons.update(dt, this);
+      this.eachPlayer(() => {
+        if (this.riding) this.followWagon(this.riding);
+      });
+      this.hazards.update(dt);
+      this.eachPlayer(() => {
+        this.updateHealth(dt);
+        this.updateExploration();
+      });
+    } finally {
+      this.swapTo(home);
+    }
+  }
+
+  /** Déplacement, minage et corde du joueur actif, ou son voyage en wagonnet. */
+  private stepControls(dt: number, intent: PlayerIntent): void {
     if (!this.riding) {
       // Maj maintenue : on monte sur la trottinette (relâchée : on en descend). Les mains sont au
       // guidon, donc plus de minage, et un coup de pioche en cours est interrompu.
@@ -294,14 +535,6 @@ export class GameState implements StructureContext {
       }
       if (this.ropeT > 0) this.cancelRope('Dans un wagonnet : la corde est rangée.');
     }
-    for (const d of this.drops.update(dt, this.world)) this.emit({ t: 'crumble', res: d.res, x: d.x, y: d.y });
-    this.updatePickup(dt);
-    this.structures.update(dt, this);
-    this.wagons.update(dt, this);
-    if (this.riding) this.followWagon(this.riding);
-    this.hazards.update(dt);
-    this.updateHealth(dt);
-    this.updateExploration();
   }
 
   // ---------------------------------------------------------------- repères
@@ -384,8 +617,10 @@ export class GameState implements StructureContext {
   }
 
   hurtPlayerNear(x: number, y: number, radius: number, amount: number, cause: string): void {
-    const p = this.player;
-    if (Math.max(Math.abs(p.x / TILE - (x + 0.5)), Math.abs(p.y / TILE - (y + 0.5))) <= radius) this.hurtPlayer(amount, cause);
+    this.eachPlayer(() => {
+      const p = this.player;
+      if (Math.max(Math.abs(p.x / TILE - (x + 0.5)), Math.abs(p.y / TILE - (y + 0.5))) <= radius) this.hurtPlayer(amount, cause);
+    });
   }
 
   random(): number {
@@ -444,7 +679,7 @@ export class GameState implements StructureContext {
   private updateMovement(dt: number, intent: PlayerIntent): void {
     const p = this.player;
     let { mx, my } = intent;
-    const len = Math.hypot(mx, my);
+    const len = hyp(mx, my);
     if (len > 1) {
       mx /= len;
       my /= len;
@@ -507,7 +742,7 @@ export class GameState implements StructureContext {
   /** Distance (en tuiles) entre le joueur et le centre d'une tuile. */
   distanceToTile(tx: number, ty: number): number {
     const p = this.player;
-    return Math.hypot((tx + 0.5) * TILE - p.x, (ty + 0.5) * TILE - (p.y - 3)) / TILE;
+    return hyp((tx + 0.5) * TILE - p.x, (ty + 0.5) * TILE - (p.y - 3)) / TILE;
   }
 
   /** Caractéristiques de l'outil en main (le marteau-piqueur seulement s'il a été acheté). */
@@ -781,13 +1016,18 @@ export class GameState implements StructureContext {
       // Les morceaux jaillissent plutôt du côté du mineur (ou vers l'arrière de la machine).
       const ox = from ? from.x : cx;
       const oy = from ? from.y : cy;
-      const toward = from ? Math.atan2(from.y - cy, from.x - cx) : Math.atan2(this.player.y - 3 - cy, this.player.x - cx);
+      // Direction (unitaire) vers le mineur ; sans trigonométrie du moteur : voir `core/dmath`.
+      const tx0 = from ? from.x - cx : this.player.x - cx;
+      const ty0 = from ? from.y - cy : this.player.y - 3 - cy;
+      const len = hyp(tx0, ty0);
+      const ux = len > 1e-9 ? tx0 / len : 1;
+      const uy = len > 1e-9 ? ty0 / len : 0;
       for (let k = 0; k < n; k++) {
         const d = this.drops.spawn(block.drop.res, 1, ox, oy);
-        const a = toward + (this.rng.float() - 0.5) * 1.6;
+        const rot = smallCosSin((this.rng.float() - 0.5) * 1.6);
         const sp = 30 + this.rng.float() * 30;
-        d.vx = Math.cos(a) * sp;
-        d.vy = Math.sin(a) * sp;
+        d.vx = (ux * rot.cos - uy * rot.sin) * sp;
+        d.vy = (ux * rot.sin + uy * rot.cos) * sp;
         out.push(d);
       }
     }
@@ -806,7 +1046,7 @@ export class GameState implements StructureContext {
     const px = p.x;
     const py = p.y - 3;
     for (const d of [...this.drops.list]) {
-      const dist = Math.hypot(d.x - px, d.y - py);
+      const dist = hyp(d.x - px, d.y - py);
       if (d.locked) {
         // Objet jeté volontairement : ignoré tant que le joueur n'est pas reparti.
         if (dist > 30) d.locked = false;
@@ -906,7 +1146,7 @@ export class GameState implements StructureContext {
       }
     /** Distance entre le joueur et le rectangle de tuiles (x, y, w, h). */
     const gap = (x: number, y: number, w: number, h: number) =>
-      Math.hypot(Math.max(x * TILE - (p.x + p.halfW), 0, p.x - p.halfW - (x + w) * TILE), Math.max(y * TILE - (p.y + p.halfH), 0, p.y - p.halfH - (y + h) * TILE));
+      hyp(Math.max(x * TILE - (p.x + p.halfW), 0, p.x - p.halfW - (x + w) * TILE), Math.max(y * TILE - (p.y + p.halfH), 0, p.y - p.halfH - (y + h) * TILE));
     for (const s of seen) {
       if ((s.isBelt && !s.configurable) || s.inert) continue;
       const d = gap(s.x, s.y, s.w, s.h);
@@ -1177,11 +1417,11 @@ export class GameState implements StructureContext {
     if (def.needsDeposit && !this.world.depositAt(tx, ty)) return 'Doit être posée sur un gisement exposé';
     if (def.surfaceOnly && ty + def.h > SURFACE_ROWS) return 'À poser en surface, au camp';
     if (def.solid) {
-      const p = this.player;
       const x0 = tx * TILE;
       const y0 = ty * TILE;
-      const overlap = p.x + p.halfW > x0 && p.x - p.halfW < x0 + def.w * TILE && p.y + p.halfH > y0 && p.y - p.halfH < y0 + def.h * TILE;
-      if (overlap) return 'Vous êtes dans le passage';
+      const overlaps = (p: Player) => p.x + p.halfW > x0 && p.x - p.halfW < x0 + def.w * TILE && p.y + p.halfH > y0 && p.y - p.halfH < y0 + def.h * TILE;
+      if (overlaps(this.player)) return 'Vous êtes dans le passage';
+      if (this.otherPlayers().some((o) => overlaps(o.state.player))) return 'Un autre joueur est dans le passage';
     }
     return null;
   }
@@ -1297,7 +1537,8 @@ export class GameState implements StructureContext {
     let best: Wagon | null = null;
     let bestD = TILE * 1.6;
     for (const w of this.wagons.list) {
-      const d = Math.hypot(w.px() - this.player.x, w.py() - this.player.y);
+      if (w.rider && w !== this.riding) continue; // déjà occupé par un autre joueur
+      const d = hyp(w.px() - this.player.x, w.py() - this.player.y);
       if (d < bestD) {
         bestD = d;
         best = w;

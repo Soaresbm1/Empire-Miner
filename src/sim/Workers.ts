@@ -21,6 +21,7 @@ import { TunnelBorer } from './structures/Borer';
 import { Drill } from './structures/Drill';
 import { Storage } from './structures/Storage';
 import type { Structure } from './structures/Structure';
+import { hyp } from '../core/dmath';
 
 /** Ce que l'ouvrier est en train de faire. */
 export type WorkerTask =
@@ -347,7 +348,7 @@ export class WorkerSystem {
       const cy = (ty + 0.5) * TILE;
       const dx = cx - w.x;
       const dy = cy - w.y;
-      const dist = Math.hypot(dx, dy);
+      const dist = hyp(dx, dy);
       const pace = w.job === 'driller' ? drillerLevel(w.level).speed : 1;
       const step = Math.min(dist, WORKERS.speed * pace * g.hazards.speedFactor(tx, ty) * dt);
       if (dist > 1e-6) {
@@ -669,7 +670,7 @@ export class WorkerSystem {
   private doPick(w: Worker, g: GameState, dropId: number): void {
     const d = g.drops.list.find((o) => o.id === dropId);
     // Sur la même case que le tas, on est toujours à portée (la diagonale d'une case fait 22,6 pixels).
-    if (!d || Math.hypot(d.x - w.x, d.y - 1 - w.y) > TILE * 1.5) return;
+    if (!d || hyp(d.x - w.x, d.y - 1 - w.y) > TILE * 1.5) return;
     const room = Math.floor((WORKERS.capacity - cargoWeight(w.cargo)) / getResource(d.res).weight + 1e-6);
     const k = Math.min(d.count, room);
     if (k <= 0) return;

@@ -5,13 +5,27 @@
 import { parseKit } from '../data/machines';
 import { getResource } from '../data/resources';
 
+/** Kits de construction : ils appartiennent à l'équipe, tous les sacs d'une partie partagent le même stock. */
+export interface KitHolder {
+  kits: Record<string, number>;
+}
+
 export class Inventory {
   items: Record<string, number> = {};
-  kits: Record<string, number> = {};
   capacity: number;
+  private readonly holder: KitHolder;
 
-  constructor(capacity: number) {
+  constructor(capacity: number, holder: KitHolder = { kits: {} }) {
     this.capacity = capacity;
+    this.holder = holder;
+  }
+
+  get kits(): Record<string, number> {
+    return this.holder.kits;
+  }
+
+  set kits(v: Record<string, number>) {
+    this.holder.kits = v;
   }
 
   count(res: string): number {

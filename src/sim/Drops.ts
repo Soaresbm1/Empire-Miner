@@ -8,6 +8,7 @@
 import { TILE } from '../core/constants';
 import { getResource } from '../data/resources';
 import type { World } from './World';
+import { dexp } from '../core/dmath';
 
 /** Durée (s) pendant laquelle un tas sur le point de s'effriter clignote. */
 export const FADE_TIME = 5;
@@ -38,19 +39,37 @@ export class DropSystem {
   private nextId = 1;
   private mergeTimer = 0;
 
+  /** Hasard de la partie (fourni par `GameState`, jamais `Math.random` : les deux téléphones doivent tirer pareil). */
+  rand: () => number = Math.random;
+
   spawn(res: string, count: number, x: number, y: number, burst = true): Drop {
-    const a = Math.random() * Math.PI * 2;
-    const sp = burst ? 25 + Math.random() * 35 : 0;
+    // Éclat lancé dans une direction au hasard : point tiré dans le disque unité, puis normalisé (pas de trigonométrie).
+    let dx = 1;
+    let dy = 0;
+    if (burst) {
+      for (let tries = 0; tries < 20; tries++) {
+        const px = this.rand() * 2 - 1;
+        const py = this.rand() * 2 - 1;
+        const l2 = px * px + py * py;
+        if (l2 > 0.01 && l2 <= 1) {
+          const l = Math.sqrt(l2);
+          dx = px / l;
+          dy = py / l;
+          break;
+        }
+      }
+    }
+    const sp = burst ? 25 + this.rand() * 35 : 0;
     const d: Drop = {
       id: this.nextId++,
       res,
       count,
       x,
       y,
-      vx: Math.cos(a) * sp,
-      vy: Math.sin(a) * sp,
+      vx: dx * sp,
+      vy: dy * sp,
       z: burst ? 2 : 0,
-      vz: burst ? 70 + Math.random() * 40 : 0,
+      vz: burst ? 70 + this.rand() * 40 : 0,
       age: 0,
       magnet: false,
       locked: false,
@@ -85,7 +104,7 @@ export class DropSystem {
         const ny = d.y + d.vy * dt;
         if (!world.isSolid(Math.floor(d.x / TILE), Math.floor(ny / TILE))) d.y = ny;
         else d.vy = -d.vy * 0.3;
-        const f = Math.exp(-FRICTION * dt);
+        const f = dexp(-FRICTION * dt);
         d.vx *= f;
         d.vy *= f;
         if (Math.abs(d.vx) < 1 && Math.abs(d.vy) < 1) d.vx = d.vy = 0;
