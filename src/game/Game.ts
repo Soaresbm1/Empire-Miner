@@ -37,6 +37,7 @@ import { Speed, advance, isSpeed, keepsUp, nextSpeed, smoothRate, speedDanger } 
 import { speedBar } from '../ui/speedBar';
 import { esc, kg, money, resIcon } from '../ui/format';
 import { workerAt, workerTooltip } from '../ui/crew';
+import { TouchControls, isTouchDevice, saveTouchPref } from '../ui/touch';
 
 const AUTOSAVE_EVERY = 60;
 /** Facteur de zoom de la carte complète pour un cran de molette ou un appui sur + / −. */
@@ -82,7 +83,9 @@ export class Game {
   private menuPan = 0;
   debug = false;
   private fps = 60;
-  private quality: Quality = loadQuality();
+  private quality: Quality = loadQuality(isTouchDevice() ? 'medium' : 'high');
+  /** Commandes tactiles (téléphone, tablette), seulement sur un écran tactile. */
+  private touch: TouchControls | null = null;
   /** Ventes automatiques récentes (temps de simulation, montant) pour le revenu par minute. */
   private shipLog: { t: number; total: number }[] = [];
 
@@ -95,12 +98,14 @@ export class Game {
       keyLabel: (c) => this.input.label(c),
       moveKeys: () => this.input.moveKeys(),
       machineIcon: (id) => this.renderer.machineIcon(id),
+      touch: () => !!this.touch,
     });
     this.ui.setMenuMotes(PROFILES[this.quality].menuMotes);
+    if (isTouchDevice()) this.setTouch(true);
     window.addEventListener('resize', () => this.renderer.resize());
     const unlock = () => this.sfx.unlock();
-    window.addEventListener('pointerdown', unlock);
-    window.addEventListener('keydown', unlock);
+    // Sur iPhone, le son ne se débloque que dans un geste « fini » (toucher levé, clic).
+    for (const type of ['pointerdown', 'pointerup', 'touchend', 'click', 'keydown']) window.addEventListener(type, unlock);
     window.addEventListener('beforeunload', () => this.autoSaveNow());
     document.addEventListener('visibilitychange', () => {
       if (document.hidden) this.autoSaveNow();
@@ -109,6 +114,15 @@ export class Game {
       this.sfx.setMuted(localStorage.getItem('empire-miner.muted') === '1');
     } catch {
       /* stockage indisponible */
+    }
+  }
+
+  /** Affiche ou retire les commandes tactiles (stick et boutons à l'écran). */
+  private setTouch(on: boolean): void {
+    if (on && !this.touch) this.touch = new TouchControls(this.input, this.renderer.canvas, document.getElementById('ui') ?? document.body);
+    else if (!on && this.touch) {
+      this.touch.destroy();
+      this.touch = null;
     }
   }
 
@@ -283,6 +297,15 @@ export class Game {
         }
         this.ui.showPauseMenu(this.sfx.muted, this.quality);
         return;
+      case 'touch': {
+        const on = !this.touch;
+        saveTouchPref(on);
+        this.setTouch(on);
+        this.ui.toast(on ? 'Commandes tactiles activées.' : 'Commandes tactiles retirées (clavier et souris).', 'info');
+        if (this.mode === 'menu') this.showMainMenu();
+        else this.ui.showPauseMenu(this.sfx.muted, this.quality);
+        return;
+      }
       case 'quality':
         this.quality = nextQuality(this.quality);
         saveQuality(this.quality);
@@ -544,11 +567,35 @@ export class Game {
     try {
       if (this.mode === 'playing' && this.state) this.tickPlaying(dt, this.state);
       else this.tickMenu(dt);
+      this.updateTouch(dt);
     } catch (e) {
       console.error(e);
     }
     this.input.endFrame();
     requestAnimationFrame((tt) => this.frame(tt));
+  }
+
+  /** Boutons tactiles : ce qu'ils doivent montrer (rien dans les menus ni quand un panneau est ouvert). */
+  private updateTouch(dt: number): void {
+    const t = this.touch;
+    if (!t) return;
+    const g = this.mode === 'playing' ? this.state : null;
+    t.update(
+      {
+        playing: !!g,
+        blocking: this.ui.blocking,
+        near: !!g?.nearestInteractable(),
+        riding: !!g?.riding,
+        wagonNear: !!g?.nearestWagon(),
+        hasScooter: !!g?.hasScooter,
+        buildMode: this.buildMode,
+        chestMode: this.chestMode,
+        paused: this.userPaused,
+        speed: this.speed,
+        barHeight: this.buildMode || this.chestMode ? this.ui.buildBarHeight : 0,
+      },
+      dt,
+    );
   }
 
   private tickMenu(dt: number): void {
@@ -805,6 +852,7 @@ export class Game {
   }
 
   private hintsHtml(): string {
+    if (this.touch) return ''; // les boutons à l'écran remplacent la barre de touches
     const l = (c: string) => this.input.label(c);
     const g = this.state;
     const rope = g && (g.ropes > 0 || g.ropeAnchor) ? `<span${g.ropeT > 0 ? ' class="on"' : ''}><kbd>${l('KeyV')}</kbd> ${g.atCamp ? (g.ropeAnchor ? 'Redescendre' : 'Corde') : 'Remonter'}${g.ropes > 0 ? ` <b>×${g.ropes}</b>` : ''}</span>` : '';

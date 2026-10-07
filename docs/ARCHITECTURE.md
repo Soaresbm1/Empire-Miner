@@ -207,6 +207,18 @@ ne peut juste plus y recruter. Sauvegarde : champ facultatif `workers` (métier,
 position, charge ; le reste se recalcule). L'interface (`ui/crew.ts`) lit les ouvriers sans les modifier ; l'onglet est
 dans `ui/workshop.ts`, le rendu dans `Renderer.drawWorker` (sprites du mineur recolorés par `PlayerGear.crew`).
 
+Commandes tactiles (`ui/touch.ts`, `core/Input.ts`) : le jeu ne connaît ni doigts ni boutons, seulement `Input`. Les boutons à
+l'écran appuient des touches virtuelles (`setVirtual` pour une touche maintenue : stick → ZQSD, ⛏ → Espace, trottinette → Maj ;
+`tap` pour un appui bref : Agir → E, ☰ → I, M, B, C, N, T, V, F, P, X, H, Échap) et un doigt posé sur le canvas se comporte comme la
+souris (`touchDown`, `touchMove`, `touchUp` : clic gauche, ou droit en mode « Retirer » ; le relâchement est reporté à la fin de
+l'image pour qu'un tap très bref soit vu). Deux doigts sur le monde = pincement, converti en cran de molette. `TouchControls`
+(créé par `Game.setTouch` si `isTouchDevice()` : `?touch`/`?notouch`, puis le réglage du menu, puis `(pointer: coarse)`) construit
+son DOM dans `#ui`, ne le met à jour que si `TouchContext` change, et se cache quand un panneau ou un menu est ouvert. Le style
+tactile est sous `body.touch` (`ui.css`) : cadres compacts, équipement sous l'argent (`--tl-bottom`), boutons au-dessus de la barre
+de construction (`--bb-h`), zones sûres (`env(safe-area-inset-*)`). Le zoom de base se règle sur le petit côté de l'écran
+(`Renderer.resize`). `stickKeys` et `pinchStep` sont des fonctions pures testées (`tests/touch.test.ts`) ; `e2e/playthrough.mjs`
+rejoue stick, Agir, minage, pincement et construction avec de vrais événements tactiles (CDP) à la taille d'un iPhone.
+
 Repères (`sim/Markers.ts`) : `GameState.markers` (un `MarkerBook`) garde la liste, le repère suivi et
 les sauvegarde ; `GameState.addMarker` les nomme d'après le terrain et les machines. La carte complète
 convertit un clic en case (`MineMap.tileAt`, via la dernière vue dessinée, donc aussi quand la carte est zoomée) ;

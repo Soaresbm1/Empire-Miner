@@ -43,6 +43,29 @@ Version autonome en un seul fichier HTML (ouvrable sans serveur) : `npm run buil
 Les touches sont lues par position physique : ZQSD et WASD fonctionnent sans réglage. Seule la carte se lit à la
 lettre tapée : c'est la touche marquée M, quel que soit le clavier.
 
+### Sur téléphone et tablette
+
+Le jeu détecte l'écran tactile et affiche ses propres commandes (aucun clavier nécessaire) ; il se joue mieux **écran en
+travers**, mais fonctionne aussi debout. Sur iPhone, ouvrez le lien de la version jouable : tout est déjà réglé.
+
+| Action | Au doigt |
+| --- | --- |
+| Se déplacer | **stick** en bas à gauche (8 directions) |
+| Miner | **toucher et maintenir** une paroi proche, ou garder le bouton **⛏ Miner** appuyé pour frapper devant soi |
+| Interagir (comptoir, atelier, coffre, machine), fermer un panneau | bouton **Agir** (il s'allume quand quelque chose est à portée) |
+| Sac, carte, construction | boutons **Sac**, **Carte**, **Bâtir** |
+| Coffres, repère, outil, corde, wagonnet, pause, vitesse, aide, menu | bouton **☰** (toutes les autres touches du clavier) |
+| Trottinette | bouton **🛴 Roule** (apparaît une fois achetée) : activé, on roule |
+| Zoom | **pincer** avec deux doigts |
+| Construire | **toucher** pose la machine (glisser pour tracer convoyeurs et rails), **↻ Tourner** l'oriente, **✕ Retirer** puis toucher une machine la démonte |
+| Régler plusieurs coffres | **toucher** un coffre pour le choisir, **glisser** un rectangle pour en choisir plusieurs |
+| Carte | glisser pour la déplacer, boutons **+** **−** pour zoomer |
+
+Les cadres du haut sont compacts, l'équipement se range sous l'argent, la barre de construction tient en deux lignes et les
+boutons restent au-dessus d'elle ; les zones sûres de l'iPhone (encoche, barre du bas) sont respectées. Les graphismes
+démarrent en qualité **Moyenne** sur un appareil tactile (réglable dans le menu pause). Le bouton « Commandes tactiles »
+du menu principal et du menu pause force l'affichage ou le retire ; `?touch` et `?notouch` dans l'adresse font de même.
+
 ## Contenu de la version 0.1 (tranche verticale)
 
 - Mine explorable persistante générée à partir d'une graine, galeries de départ, cavernes à découvrir.

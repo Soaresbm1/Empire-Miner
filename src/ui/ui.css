@@ -20,6 +20,9 @@ html, body {
   margin: 0;
   height: 100%;
   overflow: hidden;
+  overscroll-behavior: none;
+  -webkit-tap-highlight-color: transparent;
+  -webkit-touch-callout: none;
   background: #07060a;
   color: var(--text);
   font-family: var(--font);
@@ -30,9 +33,10 @@ html, body {
 #game {
   position: fixed;
   inset: 0;
-  width: 100vw;
-  height: 100vh;
+  width: 100%;
+  height: 100%;
   display: block;
+  touch-action: none;
   image-rendering: pixelated;
   cursor: crosshair;
 }
@@ -620,3 +624,150 @@ kbd {
 .crew-cargo { display: inline-flex; gap: 4px; vertical-align: middle; margin-left: 6px; }
 .crew-act { flex: none; display: flex; flex-direction: column; gap: 4px; align-items: stretch; }
 @media (max-width: 640px) { .crew-row { flex-wrap: wrap; } .crew-act { flex-direction: row; width: 100%; } }
+
+/* ================================================================ Téléphone et tablette
+   Activé par `body.touch` (écran tactile, ou ?touch) : stick, boutons, cadres compacts, zones sûres de l'iPhone. */
+:root { --sl: env(safe-area-inset-left, 0px); --sr: env(safe-area-inset-right, 0px); --st: env(safe-area-inset-top, 0px); --sb: env(safe-area-inset-bottom, 0px); }
+body.touch button, body.touch .tab, body.touch .bb-tab, body.touch .bb-kit, body.touch [data-action] { touch-action: manipulation; }
+
+/* Boutons à l'écran. */
+.tc { position: absolute; inset: 0; z-index: 4; pointer-events: none; --u: 52px; }
+.tc.hidden { display: none; }
+.tc button, .tc .tc-stick { pointer-events: auto; touch-action: none; -webkit-user-select: none; user-select: none; }
+.tc-btn {
+  display: inline-flex; flex-direction: column; align-items: center; justify-content: center; gap: 0;
+  min-width: var(--u); height: calc(var(--u) - 6px); padding: 0 8px; border: 0; border-radius: 12px; cursor: pointer;
+  background: rgba(30, 22, 25, 0.82); color: var(--text); font: 600 13px/1.1 var(--font);
+  box-shadow: inset 0 2px 0 #5a4a52, inset 0 -3px 0 #1a1216, 0 0 0 2px #120e10, 0 4px 0 2px rgba(0, 0, 0, 0.3);
+}
+.tc-btn b { font-size: 19px; font-weight: 400; line-height: 1; }
+.tc-btn.down, .tc-btn.on { background: #4a3a22; color: var(--gold); box-shadow: inset 0 0 0 2px var(--gold), 0 0 0 2px #120e10; }
+.tc-btn.down { transform: translateY(2px); }
+.tc-btn.hidden { display: none; }
+.tc-right { position: absolute; right: calc(var(--sr) + 10px); bottom: calc(var(--bb-h, 0px) + var(--sb) + 10px); display: flex; flex-direction: column; align-items: flex-end; gap: 10px; }
+.tc-extra, .tc-quick, .tc-build { display: flex; gap: 8px; }
+.tc-extra:not(:has(:not(.hidden))) { display: none; }
+.tc-main { display: flex; align-items: flex-end; gap: 12px; }
+.tc.building .tc-main { display: none; }
+.tc-build.hidden { display: none; }
+.tc-act, .tc-mine { border-radius: 50%; padding: 0; }
+.tc-act { width: 74px; height: 74px; margin-bottom: 30px; font-size: 16px; border-radius: 50%; }
+.tc-act.lit { background: #4a3a22; color: var(--gold); box-shadow: inset 0 0 0 3px var(--gold), 0 0 0 2px #120e10, 0 0 16px rgba(242, 194, 48, 0.55); animation: tc-pulse 1.1s ease-in-out infinite; }
+@keyframes tc-pulse { 50% { box-shadow: inset 0 0 0 3px var(--gold), 0 0 0 2px #120e10, 0 0 26px rgba(242, 194, 48, 0.9); } }
+.tc-mine { width: 92px; height: 92px; font-size: 14px; }
+.tc-mine b { font-size: 34px; }
+.tc-stick { position: absolute; left: calc(var(--sl) + 8px); bottom: calc(var(--bb-h, 0px) + var(--sb) + 8px); width: 156px; height: 156px; display: flex; align-items: center; justify-content: center; }
+.tc-base { position: relative; width: 120px; height: 120px; border-radius: 50%; display: flex; align-items: center; justify-content: center; background: rgba(20, 14, 16, 0.5); box-shadow: inset 0 0 0 3px rgba(138, 106, 76, 0.85), 0 0 0 2px #120e10; }
+.tc-knob { width: 56px; height: 56px; border-radius: 50%; background: radial-gradient(circle at 40% 35%, #8a6a4c, #4a3626); box-shadow: inset 0 2px 0 rgba(255, 255, 255, 0.25), 0 0 0 2px #120e10; pointer-events: none; }
+.tc-stick.down .tc-knob { background: radial-gradient(circle at 40% 35%, #f2c230, #a07410); }
+/* Menu ☰ : toutes les commandes du clavier. */
+.tc-sheet { position: absolute; right: calc(var(--sr) + 10px); bottom: calc(var(--bb-h, 0px) + var(--sb) + 10px + 110px + var(--tc-sheet-lift, 0px)); width: min(320px, calc(100vw - 20px)); display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; padding: 10px; border-radius: 14px; background: rgba(22, 17, 20, 0.95); box-shadow: inset 0 0 0 2px var(--line-light), 0 0 0 2px #120e10, 0 8px 0 rgba(0, 0, 0, 0.3); }
+.tc-sheet.hidden { display: none; }
+.tc-sheet .tc-btn { min-width: 0; height: 46px; padding: 0 2px; font-size: 13px; }
+
+body.touch #game { cursor: default; }
+
+/* Cadres compacts : l'écran d'un téléphone est petit, le monde doit rester visible. */
+body.touch .hud-box { padding: 2px 6px 3px; }
+body.touch .hud-tl { top: calc(var(--st) + 6px); left: calc(var(--sl) + 6px); width: 178px; min-width: 0; }
+body.touch .money { font-size: 19px; gap: 5px; }
+body.touch .coin { width: 15px; height: 15px; }
+body.touch .depth { font-size: 12px; margin-top: 0; }
+body.touch .depth .zone { font-size: 11px; }
+body.touch .income:not(:empty), body.touch .market:not(:empty) { font-size: 11px; }
+body.touch .speed { max-width: none; margin-top: 3px; }
+body.touch .sp { height: 22px; font-size: 13px; }
+body.touch .sp-note { font-size: 11px; margin-top: 3px; }
+body.touch .hud-tr { top: calc(var(--st) + 6px); right: calc(var(--sr) + 6px); max-width: min(46vw, 250px); font-size: 11px; gap: 4px; }
+body.touch .objective { padding: 2px 6px 3px; line-height: 1.2; }
+body.touch .obj-title { font-size: 10px; letter-spacing: 0.5px; margin-bottom: 0; }
+body.touch .minimap { padding: 3px; }
+body.touch .minimap canvas { width: 112px; height: 78px; }
+body.touch .minimap-cap { display: none; }
+body.touch #hud-track:not(:empty) { font-size: 11px; }
+/* L'équipement (outil, sac, santé) se range sous le cadre de l'argent. */
+body.touch .hud-bl { top: calc(var(--tl-bottom, 110px) + 6px); bottom: auto; left: calc(var(--sl) + 6px); width: 178px; }
+body.touch .equip { font-size: 12px; margin-bottom: 3px; }
+body.touch .equip .tier { padding: 0 3px; }
+body.touch .hud-bl .bar { height: 15px; }
+body.touch .hud-bl .bar span { font-size: 10px; line-height: 14px; padding-left: 13px; }
+body.touch .hud-bl .chips { display: none; }
+body.touch .hud-bl .fuel-line { font-size: 11px; }
+body.touch #hud.building .hud-bl { display: none; }
+body.touch .hud-br { display: none; }
+body.touch #save-indicator { right: calc(var(--sr) + 10px); bottom: auto; top: calc(var(--st) + 6px); font-size: 11px; }
+body.touch #toasts { top: calc(var(--st) + 6px); max-width: calc(100vw - 2 * 190px); }
+body.touch .toast { font-size: 13px; padding: 5px 9px; }
+/* Invite d'action au centre, entre le stick et les boutons. */
+body.touch .hud-bc { bottom: calc(var(--sb) + 10px); max-width: calc(100vw - 2 * 170px - var(--sl) - var(--sr)); pointer-events: none; }
+body.touch .prompt:not(:empty) { font-size: 13px; padding: 4px 10px; text-align: center; margin-bottom: 4px; }
+/* Barre de construction : sur toute la largeur, sans les explications. */
+body.touch .hud-bc:has(.buildbar) { max-width: none; width: calc(100vw - 8px - var(--sl) - var(--sr)); bottom: calc(var(--sb) + 4px); }
+body.touch .buildbar { width: 100%; margin-top: 0; padding: 9px 6px 4px; }
+body.touch .bb-head { margin-bottom: 4px; }
+body.touch .bb-tab { height: 30px; font-size: 13px; }
+body.touch .bb-close { padding: 0 10px; font-size: 22px; }
+body.touch .bb-kits { flex-wrap: nowrap; overflow-x: auto; gap: 5px; padding: 2px 2px 4px; scrollbar-width: none; }
+body.touch .bb-kit { flex: none; width: auto; flex-direction: row; align-items: center; gap: 5px; height: 42px; padding: 3px 8px 3px 4px; }
+body.touch .bb-kit img { height: 30px; }
+body.touch .bb-kit b { min-height: 0; max-width: 96px; font-size: 12px; line-height: 1.1; text-align: left; }
+body.touch .bb-kit .count { position: static; order: 3; font-size: 12px; color: var(--gold); }
+body.touch .bb-kit .lvl { position: static; }
+body.touch .bb-desc, body.touch .bb-keys, body.touch .bb-tip, body.touch .bb-kit .n, body.touch .bb-info, body.touch .bb-dir { display: none; }
+body.touch .bb-status { margin-top: 3px; padding: 2px 6px; font-size: 12px; }
+body.touch .chestbar .bb-head { margin: 0; }
+body.touch .chestbar .bb-close { position: absolute; top: -12px; right: 8px; padding: 0 9px; border-radius: 4px; background: #2e2318; box-shadow: inset 0 0 0 2px var(--line-light); font-size: 16px; line-height: 22px; }
+body.touch #hud.building .prompt { display: none; }
+body.touch .chestbar { padding-top: 12px; }
+body.touch .chestbar .cb-step { font-size: 12px; margin-top: 2px; gap: 3px 6px; }
+body.touch .chestbar .btn { padding: 2px 8px; font-size: 13px; }
+body.touch .chestbar .cb-apply { margin-top: 3px; }
+body.touch .chestbar .cb-step > b:first-child { min-width: 0; font-size: 12px; }
+
+/* Panneaux (atelier, sac, carte…) : presque tout l'écran, boutons plus gros. */
+body.touch #panel-root { padding: calc(var(--st) + 4px) calc(var(--sr) + 4px) calc(var(--sb) + 4px) calc(var(--sl) + 4px); }
+body.touch .panel { max-width: 100%; max-height: 100%; }
+body.touch .panel h2 { font-size: 19px; }
+body.touch .panel .close { width: 42px; height: 42px; font-size: 18px; }
+body.touch .panel-body { overflow-x: auto; padding: 8px 10px 12px; -webkit-overflow-scrolling: touch; overscroll-behavior: contain; }
+body.touch .panel .btn, body.touch .menu .btn, body.touch .panel .tab { min-height: 38px; }
+body.touch .tabs { overflow-x: auto; flex-wrap: nowrap; scrollbar-width: none; }
+body.touch .tab { flex: none; padding: 6px 10px 5px; font-size: 15px; }
+body.touch .tab-key { display: none; }
+body.touch .help-touch { grid-column: 1 / -1; padding: 8px 10px; border-radius: 6px; background: rgba(242, 194, 48, 0.1); box-shadow: inset 0 0 0 2px rgba(242, 194, 48, 0.4); }
+
+/* Écrans bas (téléphone tenu en travers) : menus compacts. */
+@media (max-height: 520px) {
+  #menu-root { overflow-y: auto; }
+  #menu-root > .menu { margin: auto; }
+  .logo { width: min(46vw, 300px); }
+  .main-menu h1 { font-size: clamp(34px, 9vh, 56px); }
+  .tagline { margin: 8px 0 10px; padding: 3px 10px; font-size: 13px; }
+  .menu-buttons { gap: 6px; min-width: min(340px, 72vw); }
+  .main-menu .menu-buttons { display: grid; grid-template-columns: 1fr 1fr; }
+  .main-menu .menu-buttons .btn.big { grid-column: 1 / -1; }
+  .btn.big { font-size: 17px; padding: 6px 16px; }
+  .credits { display: none; }
+  .pause-menu { padding: 6px 14px 10px; max-height: calc(100% - 8px); overflow-y: auto; }
+  .pause-menu h2 { margin: 0 0 6px; font-size: 22px; }
+  .pause-menu .menu-buttons { display: grid; grid-template-columns: 1fr 1fr; min-width: min(480px, 86vw); }
+  .pause-menu .menu-buttons .btn.big { grid-column: 1 / -1; }
+}
+
+/* Téléphone tenu debout : l'invite d'action passe au-dessus des boutons, les messages sous le bandeau du haut. */
+@media (orientation: portrait) {
+  body.touch #toasts { top: calc(var(--tl-bottom, 190px) + 110px); max-width: calc(100vw - 24px); }
+  body.touch .hud-bc { max-width: none; bottom: calc(var(--sb) + 190px); }
+  body.touch .hud-bc:has(.buildbar) { bottom: calc(var(--sb) + 4px); }
+  body.touch .hud-bl .chips { display: flex; }
+}
+
+/* Téléphone tenu debout : boutons un peu plus serrés pour ne pas passer sous le stick. */
+@media (max-width: 460px) {
+  .tc-stick { width: 146px; height: 146px; }
+  .tc-base { width: 112px; height: 112px; }
+  .tc-quick, .tc-build, .tc-extra { gap: 6px; }
+  .tc-quick .tc-btn, .tc-build .tc-btn, .tc-extra .tc-btn { min-width: 44px; padding: 0 5px; font-size: 12px; }
+  .tc-act { width: 68px; height: 68px; }
+  .tc-mine { width: 84px; height: 84px; }
+}

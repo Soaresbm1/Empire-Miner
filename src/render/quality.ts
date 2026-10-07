@@ -38,11 +38,13 @@ export function nextQuality(q: Quality): Quality {
   return QUALITY_ORDER[(QUALITY_ORDER.indexOf(q) + 1) % QUALITY_ORDER.length];
 }
 
-export function loadQuality(): Quality {
+/** Qualité mémorisée ; sans réglage encore, `fallback` (les appareils tactiles démarrent en « Moyenne »). */
+export function loadQuality(fallback: Quality = 'high'): Quality {
   try {
-    return parseQuality(localStorage.getItem(KEY));
+    const v = localStorage.getItem(KEY);
+    return v === null ? fallback : parseQuality(v);
   } catch {
-    return 'high';
+    return fallback;
   }
 }
 

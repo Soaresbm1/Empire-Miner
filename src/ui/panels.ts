@@ -632,9 +632,12 @@ export function mapPanel(g: GameState, colors: Record<string, string>): string {
 
 // ------------------------------------------------------------------ aide
 
-export function helpPanel(keys: { move: string; label: (c: string) => string }): string {
+export function helpPanel(keys: { move: string; label: (c: string) => string; touch?: boolean }): string {
   const k = (c: string) => `<kbd>${keys.label(c)}</kbd>`;
-  return `<div class="help">
+  const finger = keys.touch
+    ? `<div class="help-touch"><h4>Au doigt (téléphone, tablette)</h4><p><b>Stick</b> à gauche : se déplacer. <b>⛏ Miner</b> : gardez appuyé pour frapper devant vous ; vous pouvez aussi <b>toucher et maintenir</b> une paroi proche. <b>Agir</b> : ouvrir l'atelier, un coffre, une machine, ou fermer un panneau. <b>☰</b> : toutes les autres commandes (Coffres, Repère, Outil, Corde, Pause, Vitesse, Aide, Menu). <b>Pincer</b> avec deux doigts : zoomer. En construction : <b>toucher</b> pose la machine (glissez pour tracer un convoyeur), <b>↻ Tourner</b> l'oriente, <b>✕ Retirer</b> puis toucher une machine la démonte. Le jeu se joue mieux écran en travers.</p></div>`
+    : '';
+  return `<div class="help">${finger}
     <div><h4>Se déplacer</h4><p><kbd>${keys.move}</kbd> ou flèches</p></div>
     <div><h4>Miner</h4><p>Maintenir le <kbd>clic gauche</kbd> sur une paroi proche, ou ${k('Space')} pour frapper devant soi</p></div>
     <div><h4>Interagir</h4><p>${k('KeyE')} près du comptoir, de l'atelier, d'un coffre ou d'une foreuse</p></div>

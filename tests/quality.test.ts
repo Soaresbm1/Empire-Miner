@@ -16,6 +16,8 @@ describe('réglage de la qualité graphique', () => {
     expect(parseQuality('low')).toBe('low');
     // Pas de navigateur dans les tests : la lecture et l'écriture échouent sans bruit.
     expect(loadQuality()).toBe('high');
+    // Un appareil tactile sans réglage mémorisé démarre en « Moyenne ».
+    expect(loadQuality('medium')).toBe('medium');
     expect(() => saveQuality('low')).not.toThrow();
   });
 
