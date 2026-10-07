@@ -66,6 +66,44 @@ boutons restent au-dessus d'elle ; les zones sûres de l'iPhone (encoche, barre 
 démarrent en qualité **Moyenne** sur un appareil tactile (réglable dans le menu pause). Le bouton « Commandes tactiles »
 du menu principal et du menu pause force l'affichage ou le retire ; `?touch` et `?notouch` dans l'adresse font de même.
 
+## Jouer à deux
+
+Deux joueurs, **chacun sur son appareil** (téléphone ou ordinateur), dans la **même mine**. L'ami qui rejoint n'a besoin
+d'aucun compte : il ouvre le lien du jeu et tape un code.
+
+- **Commun** : l'argent, les machines posées, les kits en stock, les coffres, les ouvriers, le marché, la mine.
+- **Personnel** : le sac, la pioche et ses améliorations, l'équipement de protection, la corde, la santé, la position.
+
+**Comment faire**
+
+1. Le jeu doit être **publié sur Internet** (une adresse `https://…` que les deux appareils peuvent ouvrir) : voir
+   « Publier le jeu » ci-dessous. Le mode « fichier HTML ouvert depuis un dossier » ou `npm run dev` sur un seul
+   ordinateur ne convient pas pour deux téléphones.
+2. **Hôte** : menu principal → **Jouer à deux** → *Nouvelle partie à deux* (ou *Reprendre ma partie à deux*), ou, en pleine
+   partie, menu pause → *Inviter un ami*. Le HUD affiche un **code de 5 signes** ; toucher la pastille (ou « Inviter : envoyer le
+   lien » dans le menu pause) ouvre la feuille de partage du téléphone avec un lien `…/?join=CODE`.
+3. **Invité** : ouvre le lien reçu et touche **Rejoindre la partie** (ou : menu principal → *Jouer à deux* → taper le code).
+4. Les deux se voient dans la mine (l'autre porte une chemise verte, son nom flotte au-dessus de sa tête, un point vert sur la
+   carte).
+
+**Règles** : 2 joueurs au plus. La partie est celle de l'hôte et se **sauvegarde chez lui** (l'invité ne sauvegarde jamais).
+Pas de pause ni de vitesse ×2/×4 à deux (les deux jeux avancent ensemble). Un menu n'arrête pas la partie : l'autre joueur
+continue de jouer. Si l'invité se déconnecte, l'hôte continue seul ; en revenant **avec le même appareil**, l'invité retrouve
+son sac, sa pioche et sa position. Si la connexion est lente ou coupée, un bandeau « En attente de l'autre joueur » apparaît et
+la partie reprend toute seule ; au bout de 8 s sans nouvelle, la liaison est abandonnée (l'invité peut « Réessayer »).
+
+**Sous le capot** (détails dans [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)) : les deux appareils calculent la même partie,
+pas après pas (« lockstep »), et ne s'échangent que ce que font les joueurs, pas l'état du jeu. Le canal passe par des
+**courtiers MQTT publics gratuits** en WebSocket (aucun serveur à soi, aucun compte) ; le code de partie sert de sujet. Ces
+courtiers sont partagés et sans garantie : les messages ne sont ni chiffrés ni authentifiés au-delà du code secret, et un
+courtier peut être lent ou indisponible (le jeu en essaie trois à la fois).
+
+### Publier le jeu (GitHub Pages)
+
+Le dépôt contient `.github/workflows/pages.yml` : à chaque fusion dans `main`, il lance les tests, construit le jeu et le
+publie sur `https://<utilisateur>.github.io/<dépôt>/`. À faire **une seule fois** : *Settings → Pages → Build and deployment →
+Source : GitHub Actions*. On peut aussi le lancer à la main (onglet *Actions* → *Publier le jeu* → *Run workflow*).
+
 ## Contenu de la version 0.1 (tranche verticale)
 
 - Mine explorable persistante générée à partir d'une graine, galeries de départ, cavernes à découvrir.
@@ -326,6 +364,8 @@ du menu principal et du menu pause force l'affichage ou le retire ; `?touch` et 
 ```bash
 npm test             # tests unitaires de la simulation (Vitest, sans navigateur)
 npm run build && npm run e2e   # partie jouée dans Chromium avec clavier/souris, captures dans e2e/screenshots/
+node e2e/coop.mjs              # jeu à deux : deux pages du même navigateur (canal local ?net=local), après un build
+npx vite-node tests-net/mqtt.check.ts   # client MQTT contre un vrai courtier local (aedes)
 ```
 
 Le test de bout en bout rejoue la tranche verticale : lancer une partie, descendre, miner, ramasser,

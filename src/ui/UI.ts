@@ -52,6 +52,8 @@ export interface NetMenu {
 
 /** Faux dans les hébergements qui bloquent les téléchargements (build « artifact »). */
 const CAN_DOWNLOAD = import.meta.env.MODE !== 'artifact';
+/** Le jeu à deux a besoin de WebSocket vers des courtiers publics : pas dans l'hébergement « artifact ». */
+const CAN_PLAY2 = import.meta.env.MODE !== 'artifact';
 
 const $ = <T extends HTMLElement>(sel: string) => document.querySelector(sel) as T;
 
@@ -514,7 +516,7 @@ export class UI {
       <div class="menu-buttons">
         ${save ? `<button class="btn primary big" data-action="continue">Continuer${saveInfo}</button>` : ''}
         <button class="btn big ${save ? (confirmNew ? 'danger' : '') : 'primary'}" data-action="new">${confirmNew ? 'Confirmer : écraser la sauvegarde' : 'Nouvelle partie'}</button>
-        <button class="btn big" data-action="play2" title="Une mine, deux mineurs : sur deux téléphones ou deux ordinateurs">Jouer à deux<small>avec un ami, sur son propre appareil</small></button>
+        ${CAN_PLAY2 ? '<button class="btn big" data-action="play2" title="Une mine, deux mineurs : sur deux téléphones ou deux ordinateurs">Jouer à deux<small>avec un ami, sur son propre appareil</small></button>' : ''}
         <button class="btn" data-action="import">Importer une sauvegarde…</button>
         <button class="btn" data-action="help">Commandes</button>
         <button class="btn" data-action="touch" title="Stick et boutons à l'écran, pour jouer au doigt">Commandes tactiles : ${this.host.touch?.() ? 'oui' : 'non'}</button>
@@ -538,7 +540,9 @@ export class UI {
         }<br><span class="muted">Le jeu continue pendant ce menu.</span></p>
       ${net.role === 'host' ? '<button class="btn" data-action="invite">Inviter : envoyer le lien</button>' : ''}
       <button class="btn danger" data-action="netLeave">${guest ? 'Quitter la partie à deux' : 'Arrêter la partie à deux'}</button>`
-      : '<button class="btn" data-action="host2" title="Un ami rejoint votre mine avec un code">Inviter un ami (jouer à deux)</button>';
+      : CAN_PLAY2
+        ? '<button class="btn" data-action="host2" title="Un ami rejoint votre mine avec un code">Inviter un ami (jouer à deux)</button>'
+        : '';
     this.menuRoot.innerHTML = `<div class="menu pause-menu"><h2>Pause</h2><div class="menu-buttons">
       <button class="btn primary big" data-action="resume">Reprendre</button>
       ${guest ? '' : '<button class="btn" data-action="save">Sauvegarder</button>'}
