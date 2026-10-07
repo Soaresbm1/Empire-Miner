@@ -24,7 +24,7 @@ export const WORKER_JOBS: readonly WorkerJobDef[] = [
     id: 'driller',
     name: 'Foreur',
     description:
-      "Pose des foreuses à charbon sur les gisements au sol : d'abord les petits minerais, puis de plus précieux à chaque amélioration. Prend les foreuses de votre stock, à défaut les achète lui-même, puis les ravitaille en charbon pris dans les coffres.",
+      "Pose des foreuses à charbon sur les gisements au sol, 3 au plus chacun : d'abord les petits minerais, puis de plus précieux à chaque amélioration. Prend les foreuses de votre stock, à défaut les achète lui-même, puis les ravitaille en charbon pris dans les coffres.",
     color: '#4a8fe0',
   },
   {
@@ -133,6 +133,8 @@ export const DRILLER = {
   moneyReserve: 200,
   /** Un gisement qui a moins que cela en réserve ne vaut pas une foreuse. */
   minReserve: 10,
+  /** Foreuses qu'un foreur a posées et qui tiennent encore : au plus ce nombre chacun (retirer l'une libère sa place). */
+  maxDrills: 3,
   /** Machine qu'il pose. */
   machine: 'drill',
   /** Distance (cases) jusqu'où il vérifie qu'une foreuse ne bouche pas un passage. */

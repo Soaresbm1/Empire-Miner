@@ -306,7 +306,10 @@ Source : GitHub Actions*. On peut aussi le lancer à la main (onglet *Actions* �
   **foreur** pose des **foreuses à charbon sur les gisements au sol** (exposés, déjà explorés, pas encore couverts par une
   foreuse ni visés par un autre foreur, et sans boucher un passage) : il prend d'abord un **kit de foreuse de votre stock**,
   à défaut il **l'achète lui-même** au prix de l'Atelier tant qu'il vous reste 200 $ ensuite (sinon il s'arrête et le
-  signale : « plus de foreuse en stock ni assez d'argent »). Il a 4 **niveaux**, améliorés à l'Atelier (bouton sur sa
+  signale : « plus de foreuse en stock ni assez d'argent »). **Chaque foreur ne pose que 3 foreuses** (celles qu'il a posées
+  et qui sont encore debout : en retirer une lui en redonne une à poser ; celles que vous posez vous-même ne comptent pas, ni
+  celles d'avant cette règle) ; une fois ses 3 posées il continue de ravitailler les foreuses en charbon, et la fiche de
+  l'équipe affiche « foreuses posées : 3 / 3 ». Il a 4 **niveaux**, améliorés à l'Atelier (bouton sur sa
   ligne) : le **niveau 1** (gratuit) équipe les petits minerais (charbon, cuivre), pose en 3 s ; le **niveau 2**
   (400 $) ajoute le fer et pose en 2,2 s ; le **niveau 3** (900 $, pioche de niveau 3) ajoute l'argent et l'or ; le
   **niveau 4** (2 200 $, pioche de niveau 4) ajoute le diamant ; chaque niveau marche aussi plus vite (×1,15, ×1,3, ×1,5).

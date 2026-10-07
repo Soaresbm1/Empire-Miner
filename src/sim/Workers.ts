@@ -292,6 +292,8 @@ export class WorkerSystem {
     const w = this.get(id);
     if (!w) return false;
     for (const [res, n] of Object.entries(w.cargo)) if (n > 0) g.drops.spawn(res, n, w.x, w.y - 2);
+    // Ses foreuses restent, mais n'ont plus de propriétaire (un identifiant libéré pourrait servir à un autre foreur).
+    for (const s of g.structures.list) if (s instanceof Drill && s.placedBy === id) s.placedBy = 0;
     this.list.splice(this.list.indexOf(w), 1);
     return true;
   }
@@ -527,6 +529,11 @@ export class WorkerSystem {
    * proche. Sans foreuse (stock vide, pas assez d'argent), il le signale.
    */
   private thinkPlace(w: Worker, g: GameState): boolean {
+    // Son quota est atteint : il ne pose plus rien (ce n'est pas un blocage), jusqu'à ce qu'une de ses foreuses disparaisse.
+    if (this.drillsOf(w, g) >= DRILLER.maxDrills) {
+      w.flag = null;
+      return false;
+    }
     const world = g.world;
     const width = world.w;
     const lvl = drillerLevel(w.level);
@@ -726,9 +733,16 @@ export class WorkerSystem {
     g.emit({ t: 'worker', kind: 'fuel', x: w.x, y: w.y, res });
   }
 
+  /** Foreuses posées par ce foreur et encore debout (celles d'avant cette règle ou posées par le joueur ne comptent pas). */
+  drillsOf(w: Worker, g: GameState): number {
+    let n = 0;
+    for (const s of g.structures.list) if (s instanceof Drill && s.placedBy === w.id) n++;
+    return n;
+  }
+
   /** Foreur : pose la foreuse sur le gisement, face à un coffre voisin s'il y en a un, puis marque une pause. */
   private doPlace(w: Worker, g: GameState, x: number, y: number): void {
-    if (blocksPassage(g, x, y)) return;
+    if (this.drillsOf(w, g) >= DRILLER.maxDrills || blocksPassage(g, x, y)) return;
     let dir: Dir = 1;
     for (let k = 0; k < 4; k++)
       if (g.structures.at(x + DX[k], y + DY[k]) instanceof Storage) {
@@ -738,6 +752,7 @@ export class WorkerSystem {
     const res = g.world.depositAt(x, y) ?? 'coal';
     const placed = g.placeDrillFor(x, y, dir);
     if (!placed) return;
+    placed.drill.placedBy = w.id;
     w.wait = drillerLevel(w.level).placeTime;
     g.emit({ t: 'worker', kind: 'place', x: (x + 0.5) * TILE, y: (y + 0.5) * TILE, res });
   }

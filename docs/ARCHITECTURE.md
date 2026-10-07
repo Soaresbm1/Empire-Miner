@@ -191,7 +191,10 @@ dans la machine). Les fours et fonderies sont exclus. **Foreur** (`thinkDriller`
 et explorés (`world.deposit`/`reserve`/`explored`), ceux dont le minerai est au plus du palier `DRILLER_LEVELS[level].maxTier`
 (la pierre est exclue), qui ne sont pas dans la portée d'une foreuse existante (`Drill.reach()`), pas réclamés par un autre
 foreur et où `GameState.siteProblem` autorise la pose ; `blocksPassage` écarte les cases dont l'occupation couperait un
-passage (cases libres voisines qui ne se rejoignent plus dans `DRILLER.passageRadius`). Avant de chercher un gisement
+passage (cases libres voisines qui ne se rejoignent plus dans `DRILLER.passageRadius`). Chaque foreur ne garde que
+`DRILLER.maxDrills` (3) foreuses debout : `Drill.placedBy` (identifiant du foreur, 0 pour le joueur ; champ facultatif `by` de la
+sauvegarde) est posé par `doPlace`, `WorkerSystem.drillsOf` les compte, `thinkPlace` s'arrête au quota sans drapeau de blocage,
+et `remove` (congé) rend ses foreuses sans propriétaire pour qu'un identifiant libéré ne leur reste pas attaché. Avant de chercher un gisement
 (`thinkDriller`), il fait le travail d'un ravitailleur pour les foreuses seules (`thinkFuel` partagé avec `thinkRefueler` ;
 `needy` ne retient que les `Drill` pour un foreur) : coffre qui a du charbon (`take`), puis foreuse à moitié vide (`fuel`) ;
 sans charbon, `nocoal` reste affiché tant qu'il n'a rien à poser. Il marche jusqu'à une case voisine

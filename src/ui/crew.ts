@@ -4,7 +4,7 @@
  */
 import { TILE } from '../core/constants';
 import { RESOURCES, getResource } from '../data/resources';
-import { DRILLER_LEVELS, WORKERS, drillerLevel, getJob, workerName } from '../data/workers';
+import { DRILLER, DRILLER_LEVELS, WORKERS, drillerLevel, getJob, workerName } from '../data/workers';
 import type { GameState } from '../sim/GameState';
 import { cargoCount, cargoWeight, type Worker, type WorkerFlag } from '../sim/Workers';
 import { kg, resIcon } from './format';
@@ -40,6 +40,8 @@ export function workerStatus(g: GameState, w: Worker): WorkerStatus {
   const t = w.task;
   if (!t) {
     if (w.flag) return { text: FLAG_TEXT[w.flag], tone: 'warn' };
+    if (w.job === 'driller' && g.workers.drillsOf(w, g) >= DRILLER.maxDrills)
+      return { text: `A posé ses ${DRILLER.maxDrills} foreuses : retirez-en une pour qu'il en pose une autre. Il ravitaille toujours les foreuses en charbon.`, tone: 'idle' };
     if (w.job === 'driller') return { text: `Cherche un gisement à équiper (${oresOf(w.level) || 'aucun'}) ou une foreuse sans charbon`, tone: 'idle' };
     return { text: w.job === 'picker' ? 'Attend des minerais par terre ou à prendre dans les machines' : 'Toutes les machines ont du charbon', tone: 'idle' };
   }
@@ -75,10 +77,11 @@ export function oresOf(level: number): string {
     .join(', ');
 }
 
-/** Ce que sait faire un foreur à ce niveau, en une ligne (fiche de l'équipe). */
-export function drillerFacts(level: number): string {
+/** Ce que sait faire un foreur à ce niveau, en une ligne (fiche de l'équipe) ; `placed` : ses foreuses encore debout. */
+export function drillerFacts(level: number, placed?: number): string {
   const l = drillerLevel(level);
-  return `Niveau ${l.level} / ${DRILLER_LEVELS.length} · équipe : ${oresOf(level)} · pose en ${l.placeTime.toLocaleString('fr-FR')} s · marche ×${l.speed.toLocaleString('fr-FR')}`;
+  const quota = placed === undefined ? '' : ` · foreuses posées : ${placed} / ${DRILLER.maxDrills}`;
+  return `Niveau ${l.level} / ${DRILLER_LEVELS.length} · équipe : ${oresOf(level)} · pose en ${l.placeTime.toLocaleString('fr-FR')} s · marche ×${l.speed.toLocaleString('fr-FR')}${quota}`;
 }
 
 /** Ce que l'ouvrier porte, en icônes : « 3 cuivre, 1 charbon · 7,5 kg / 15 kg » (vide s'il ne porte rien). */
