@@ -500,6 +500,21 @@ export class MineMap {
       ctx.fillStyle = getJob(w.job).color;
       ctx.fillRect(px(wx) - r / 2, py(wy) - r / 2, r, r);
     }
+    // L'autre joueur (partie à deux) : un point vert cerclé de noir.
+    for (const o of g.otherPlayers()) {
+      const ox = o.state.player.x / TILE;
+      const oy = o.state.player.y / TILE;
+      if (!inView(ox, oy)) continue;
+      const rr = Math.max(dot * 1.2, Math.min(v.cell * 0.55, cap * 0.7));
+      ctx.fillStyle = '#000';
+      ctx.beginPath();
+      ctx.arc(px(ox), py(oy), rr + Math.max(1, rr * 0.35), 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#6cc88a';
+      ctx.beginPath();
+      ctx.arc(px(ox), py(oy), rr, 0, Math.PI * 2);
+      ctx.fill();
+    }
     // Joueur : point blanc cerclé de noir, avec une onde qui pulse.
     const cx = px(g.player.x / TILE);
     const cy = py(g.player.y / TILE);

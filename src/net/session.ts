@@ -351,7 +351,7 @@ export class Session {
   }
 
   private sendChunk(out: { id: number; z: boolean; chunks: string[] }, i: number): void {
-    this.o.transport.send({ m: 'snap', id: out.id, n: out.chunks.length, i, z: out.z ? 1 : 0, d: out.chunks[i] });
+    this.o.transport.send({ m: 'snap', id: out.id, n: out.chunks.length, i, z: out.z ? 1 : 0, d: out.chunks[i], h: this.o.name });
   }
 
   private onNeed(msg: Message): void {
@@ -390,6 +390,7 @@ export class Session {
     const i = Number(msg.i);
     if (!Number.isInteger(id) || !Number.isInteger(n) || !Number.isInteger(i) || n < 1 || n > 4000 || i < 0 || i >= n || typeof msg.d !== 'string') return;
     if (id <= this.epoch) return; // déjà chargé
+    if (typeof msg.h === 'string' && msg.h) this.peerName = msg.h.slice(0, 24);
     if (!this.incoming || this.incoming.id !== id) this.incoming = { id, z: !!msg.z, n, got: new Map(), tick: 0 };
     const inc = this.incoming;
     if (!inc.got.has(i)) inc.got.set(i, msg.d);

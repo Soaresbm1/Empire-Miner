@@ -3,6 +3,7 @@
  */
 import './ui/ui.css';
 import { Game } from './game/Game';
+import { stateDigest } from './net/digest';
 import { installTheme } from './ui/theme';
 
 installTheme();
@@ -12,6 +13,7 @@ game.start();
 
 // Accès de débogage / tests automatisés : ?debug dans l'URL.
 if (new URLSearchParams(location.search).has('debug')) {
-  (window as unknown as { __EM: Game }).__EM = game;
+  (window as unknown as { __EM: Game; __digest: typeof stateDigest }).__EM = game;
+  (window as unknown as { __digest: typeof stateDigest }).__digest = stateDigest;
   game.debug = true;
 }

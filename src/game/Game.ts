@@ -38,11 +38,33 @@ import { esc, kg, money, resIcon } from '../ui/format';
 import { workerAt, workerTooltip } from '../ui/crew';
 import { applyAction, type SimAction } from '../sim/actions';
 import { TouchControls, isTouchDevice, saveTouchPref } from '../ui/touch';
+import { releaseGuests } from '../net/guests';
+import { MqttTransport } from '../net/mqtt';
+import { Session, type SessionStatus } from '../net/session';
+import { BroadcastTransport, cleanCode, newGameCode, randomId, type Transport } from '../net/transport';
+import type { NetMenu } from '../ui/UI';
 
 const AUTOSAVE_EVERY = 60;
 /** Facteur de zoom de la carte complète pour un cran de molette ou un appui sur + / −. */
 const MAP_ZOOM_STEP = 1.35;
 const MENU_SEED = 20260928;
+
+/** Événements qui ne concernent que le joueur qui les a provoqués (l'autre joueur n'entend ni ne lit les siens). */
+const PERSONAL_EVENTS = new Set(['swing', 'hit', 'denied', 'pickup', 'invFull', 'sold', 'bought', 'message', 'hurt', 'mount', 'rope', 'faint', 'placed', 'removed']);
+
+/** Identité de cet appareil pour rejoindre des parties : mémorisée, pour retrouver son sac et sa pioche en revenant. */
+function loadGuestId(): string {
+  const key = 'empire-miner.guest';
+  try {
+    const kept = localStorage.getItem(key);
+    if (kept && /^[a-z0-9]{8,24}$/.test(kept)) return kept;
+    const id = randomId(12);
+    localStorage.setItem(key, id);
+    return id;
+  } catch {
+    return randomId(12);
+  }
+}
 
 export class Game {
   readonly renderer: Renderer;
@@ -87,7 +109,15 @@ export class Game {
   /** Commandes tactiles (téléphone, tablette), seulement sur un écran tactile. */
   private touch: TouchControls | null = null;
   /** Partie à deux en cours (null : on joue seul). */
-  private session: { send(a: SimAction): void } | null = null;
+  private session: Session | null = null;
+  /** Dernier code de partie rejoint (pour « Réessayer »), et code d'une invitation reçue par lien. */
+  private netCode = '';
+  /** L'invité a déjà joué dans cette partie (une nouvelle réception est alors une resynchronisation). */
+  private netWasPlaying = false;
+  /** Identité de cet appareil quand il rejoint une partie : la même d'une visite à l'autre, pour retrouver ses affaires. */
+  private readonly guestId = loadGuestId();
+  /** Canal de la partie à deux (le relais public ; les essais le remplacent). */
+  netTransport: (code: string) => Transport = (code) => (new URLSearchParams(location.search).get('net') === 'local' ? new BroadcastTransport(code) : new MqttTransport(code));
   /** Ventes automatiques récentes (temps de simulation, montant) pour le revenu par minute. */
   private shipLog: { t: number; total: number }[] = [];
 
@@ -108,7 +138,10 @@ export class Game {
     const unlock = () => this.sfx.unlock();
     // Sur iPhone, le son ne se débloque que dans un geste « fini » (toucher levé, clic).
     for (const type of ['pointerdown', 'pointerup', 'touchend', 'click', 'keydown']) window.addEventListener(type, unlock);
-    window.addEventListener('beforeunload', () => this.autoSaveNow());
+    window.addEventListener('beforeunload', () => {
+      this.autoSaveNow();
+      this.session?.close();
+    });
     document.addEventListener('visibilitychange', () => {
       if (document.hidden) this.autoSaveNow();
     });
@@ -141,6 +174,12 @@ export class Game {
 
   start(): void {
     this.showMainMenu();
+    // Lien d'invitation (?join=CODE) : on propose directement de rejoindre.
+    const invited = cleanCode(new URLSearchParams(location.search).get('join') ?? '');
+    if (invited) {
+      this.netCode = invited;
+      this.ui.showInvitation(invited);
+    }
     requestAnimationFrame((t) => {
       this.last = t;
       this.frame(t);
@@ -172,6 +211,9 @@ export class Game {
   }
 
   private begin(state: GameState): void {
+    this.closeSession();
+    // Une sauvegarde faite pendant une partie à deux contient l'invité : il n'est plus là, ses affaires sont gardées de côté.
+    releaseGuests(state);
     this.state = state;
     this.mode = 'playing';
     this.acc = 0;
@@ -198,7 +240,8 @@ export class Game {
   }
 
   private autoSaveNow(): void {
-    if (this.mode === 'playing' && this.state) saveToBrowser(this.state);
+    // Un invité ne sauvegarde jamais : la partie est celle de l'hôte.
+    if (this.mode === 'playing' && this.state && this.session?.role !== 'guest') saveToBrowser(this.state);
   }
 
   private exportSave(): void {
@@ -230,6 +273,167 @@ export class Game {
       }
     };
     input.click();
+  }
+
+  // ------------------------------------------------------------------ partie à deux
+
+  private netMenu(): NetMenu | null {
+    const s = this.session;
+    return s ? { role: s.role, code: s.code, peer: s.peerName, playing: s.playing } : null;
+  }
+
+  private showPause(): void {
+    this.ui.showPauseMenu(this.sfx.muted, this.quality, this.netMenu());
+  }
+
+  /** Ouvre la partie en cours à un ami : un code à cinq signes, et on joue seul en attendant son arrivée. */
+  private startHosting(): void {
+    const g = this.state;
+    if (!g) return;
+    this.closeSession();
+    const code = newGameCode();
+    this.openSession('host', code);
+    this.session?.attach(g);
+    this.ui.toast(`Partie ouverte à un ami. Code : ${code}`, 'good');
+  }
+
+  /** Rejoint la partie d'un ami avec son code. */
+  private joinGame(code: string): void {
+    this.closeSession();
+    this.netCode = code;
+    this.netWasPlaying = false;
+    this.openSession('guest', code);
+    this.ui.showJoining(code, 'Connexion à la partie…', false);
+  }
+
+  private openSession(role: 'host' | 'guest', code: string): void {
+    this.session = new Session({
+      role,
+      transport: this.netTransport(code),
+      code,
+      guestId: role === 'guest' ? this.guestId : 'host',
+      name: role === 'host' ? 'Hôte' : 'Invité',
+      getState: () => this.state,
+      adopt: (g) => this.adoptState(g),
+      onStatus: (st, info) => this.onNetStatus(st, info),
+    });
+  }
+
+  private closeSession(): void {
+    const s = this.session;
+    this.session = null;
+    s?.close();
+    this.renderer.peerNames = {};
+    this.ui.setNet('', '');
+  }
+
+  /** Une nouvelle partie est prête (celle de l'hôte rechargée, ou celle reçue par l'invité) : on la joue. */
+  private adoptState(g: GameState): void {
+    this.state = g;
+    this.mode = 'playing';
+    this.acc = 0;
+    this.buildMode = false;
+    this.setChestMode(false);
+    this.speed = 1;
+    this.userPaused = false;
+    this.simRate = 1;
+    this.confirmNew = false;
+    this.shipLog = [];
+    this.renderer.setState(g);
+    this.renderer.snapCamera();
+    this.ui.closePanel();
+    // Le menu du jeu reste tel quel pour celui qui avait une partie en cours ; l'invité sort de son écran d'attente.
+    if (this.ui.menu === 'main') this.ui.hideMenu();
+    this.ui.showHud(true);
+    g.events.length = 0;
+  }
+
+  private onNetStatus(st: SessionStatus, info: string): void {
+    const s = this.session;
+    if (!s) return;
+    if (s.role === 'guest') {
+      if (st === 'connecting') this.ui.showJoining(s.code, 'Connexion à la partie…', false);
+      else if (st === 'syncing') {
+        if (this.netWasPlaying) this.ui.toast('Resynchronisation avec l’hôte…', 'info');
+        else this.ui.setJoiningText(info || 'Réception de la partie…');
+      } else if (st === 'playing') {
+        const first = !this.netWasPlaying;
+        this.netWasPlaying = true;
+        if (first) this.ui.toast('Vous êtes dans la mine de l’hôte. Son argent et ses machines sont aussi les vôtres.', 'good');
+      } else if (st === 'lost') {
+        this.sfx.error();
+        this.ui.closePanel();
+        // L'écran de jeu laisse la place à l'écran d'attente : « Réessayer » ou retour au menu.
+        this.mode = 'menu';
+        this.setBuildMode(false);
+        this.ui.showHud(false);
+        if (this.menuState) this.renderer.setState(this.menuState);
+        this.ui.showJoining(s.code, info || 'Connexion perdue.', true);
+      }
+      return;
+    }
+    if (st === 'syncing') this.ui.toast('Un ami arrive dans la mine…', 'info');
+    else if (st === 'playing') this.ui.toast('Votre ami a rejoint la partie.', 'good');
+    else if (st === 'waiting' && info) this.ui.toast(`${info} La partie continue, code ${s.code}.`, 'warn');
+    else if (st === 'lost') this.ui.toast(info || 'Connexion perdue.', 'bad');
+    if (this.ui.menu === 'pause') this.showPause();
+  }
+
+  /** Pastille du HUD (code, état) et bandeau d'attente ; le nom de l'autre joueur au-dessus de sa tête. */
+  private updateNetHud(g: GameState): void {
+    const s = this.session;
+    if (!s) {
+      this.ui.setNet('', '');
+      return;
+    }
+    const peer = esc(s.peerName || (s.role === 'host' ? 'Invité' : 'Hôte'));
+    let chip: string;
+    let banner = '';
+    if (s.role === 'host' && !s.linked) chip = `<span class="dot wait"></span>Code <b class="code">${s.code}</b><small>Touchez ici pour inviter un ami</small>`;
+    else if (s.status === 'syncing') chip = `<span class="dot wait"></span>Synchronisation…`;
+    else if (s.status === 'lost') chip = `<span class="dot bad"></span>Connexion perdue`;
+    else chip = `<span class="dot ${s.stalled ? 'wait' : 'ok'}"></span>À deux · <b>${peer}</b>`;
+    if (s.stalled && s.linked) banner = `En attente de l’autre joueur…<small>Connexion lente ou interrompue. La partie reprend toute seule.</small>`;
+    this.ui.setNet(chip, banner);
+    this.renderer.peerNames = { [g.local === 0 ? 1 : 0]: s.peerName || (s.role === 'host' ? 'Invité' : 'Hôte') };
+  }
+
+  /**
+   * Envoie le lien d'invitation (feuille de partage du téléphone, sinon presse-papiers). Le partage exige un geste fini :
+   * on attend que le doigt se lève.
+   */
+  private shareOnRelease(): void {
+    const s = this.session;
+    if (!s || s.role !== 'host') return;
+    const run = () => {
+      window.removeEventListener('pointerup', run, true);
+      window.removeEventListener('click', run, true);
+      void this.share(s.code);
+    };
+    window.addEventListener('pointerup', run, true);
+    window.addEventListener('click', run, true);
+  }
+
+  private async share(code: string): Promise<void> {
+    const url = new URL(location.href);
+    url.search = '';
+    url.hash = '';
+    url.searchParams.set('join', code);
+    const text = `Rejoins ma mine dans Empire Miner ! Code : ${code}`;
+    try {
+      if (navigator.share) {
+        await navigator.share({ title: 'Empire Miner', text, url: url.toString() });
+        return;
+      }
+    } catch (e) {
+      if ((e as Error).name === 'AbortError') return;
+    }
+    try {
+      await navigator.clipboard.writeText(`${text}\n${url.toString()}`);
+      this.ui.toast('Lien copié : collez-le dans un message à votre ami.', 'good');
+    } catch {
+      this.ui.toast(`Donnez ce code à votre ami : ${code}`, 'info');
+    }
   }
 
   // ------------------------------------------------------------------ actions d'interface
@@ -308,7 +512,7 @@ export class Game {
         } catch {
           /* ignoré */
         }
-        this.ui.showPauseMenu(this.sfx.muted, this.quality);
+        this.showPause();
         return;
       case 'touch': {
         const on = !this.touch;
@@ -316,7 +520,7 @@ export class Game {
         this.setTouch(on);
         this.ui.toast(on ? 'Commandes tactiles activées.' : 'Commandes tactiles retirées (clavier et souris).', 'info');
         if (this.mode === 'menu') this.showMainMenu();
-        else this.ui.showPauseMenu(this.sfx.muted, this.quality);
+        else this.showPause();
         return;
       }
       case 'quality':
@@ -324,12 +528,74 @@ export class Game {
         saveQuality(this.quality);
         this.renderer.setQuality(this.quality);
         this.ui.setMenuMotes(PROFILES[this.quality].menuMotes);
-        this.ui.showPauseMenu(this.sfx.muted, this.quality);
+        this.showPause();
         return;
       case 'quit':
         this.autoSaveNow();
+        this.closeSession();
         this.ui.hideMenu();
         this.showMainMenu();
+        return;
+      case 'play2':
+        this.ui.showPlayMenu({ hasSave: !!browserSaveInfo(), code: this.netCode });
+        return;
+      case 'hostSave':
+        try {
+          const s = loadFromBrowser();
+          if (s) {
+            this.begin(s);
+            this.startHosting();
+          } else this.ui.showPlayMenu({ hasSave: false, error: 'Aucune sauvegarde trouvée.' });
+        } catch (e) {
+          this.ui.toast(`Sauvegarde illisible : ${(e as Error).message}`, 'bad');
+        }
+        return;
+      case 'hostNew':
+        if (browserSaveInfo() && !this.confirmNew) {
+          this.confirmNew = true;
+          this.ui.showPlayMenu({ hasSave: true, confirmNew: true });
+          return;
+        }
+        this.newGame();
+        this.startHosting();
+        return;
+      case 'host2':
+        if (g && this.mode === 'playing') {
+          this.startHosting();
+          this.showPause();
+        }
+        return;
+      case 'join': {
+        const raw = arg || (document.getElementById('join-code') as HTMLInputElement | null)?.value || '';
+        const code = cleanCode(raw);
+        if (!code) {
+          this.ui.showPlayMenu({ hasSave: !!browserSaveInfo(), code: raw, error: 'Le code a 5 lettres ou chiffres : demandez-le à votre ami.' });
+          return;
+        }
+        this.joinGame(code);
+        return;
+      }
+      case 'netRetry':
+        if (this.netCode) this.joinGame(this.netCode);
+        return;
+      case 'netCancel':
+        this.closeSession();
+        this.showMainMenu();
+        return;
+      case 'netLeave': {
+        const guest = this.session?.role === 'guest';
+        this.closeSession();
+        if (guest) {
+          this.ui.hideMenu();
+          this.showMainMenu();
+        } else {
+          this.ui.toast('Partie à deux arrêtée : vous jouez de nouveau seul.', 'info');
+          this.showPause();
+        }
+        return;
+      }
+      case 'invite':
+        this.shareOnRelease();
         return;
       case 'tab':
         this.ui.setTab(arg);
@@ -571,6 +837,7 @@ export class Game {
         paused: this.userPaused,
         speed: this.speed,
         barHeight: this.buildMode || this.chestMode ? this.ui.buildBarHeight : 0,
+        net: !!this.session,
       },
       dt,
     );
@@ -597,6 +864,8 @@ export class Game {
   private tickPlaying(dt: number, g: GameState): void {
     const inp = this.input;
     const paused = this.ui.menu === 'pause';
+    // À deux, un menu ne fige pas le jeu (l'autre joueur continue) ; seul, si.
+    const frozen = paused && !this.session?.linked;
 
     // --- touches globales
     if (inp.wasPressed('Escape')) {
@@ -604,7 +873,7 @@ export class Game {
       else if (paused) this.ui.hideMenu();
       else if (this.buildMode) this.setBuildMode(false);
       else if (this.chestMode) this.setChestMode(false);
-      else this.ui.showPauseMenu(this.sfx.muted, this.quality);
+      else this.showPause();
     }
     // Atelier ou Tableau d'affichage ouvert : les chiffres (ou les flèches) changent d'onglet.
     const tabbed = this.ui.panel?.kind === 'workshop' ? WORKSHOP_TABS : this.ui.panel?.kind === 'board' ? BOARD_TABS : null;
@@ -704,13 +973,13 @@ export class Game {
     if (!this.ui.blocking && reach) overlay.reach = reach;
 
     // --- simulation (pas fixe)
-    if (!paused) {
+    if (!frozen) {
       if (!this.userPaused) this.runSim(g, dt, intent);
       this.flushEvents();
       this.autosave -= dt;
       if (this.autosave <= 0) {
         this.autosave = AUTOSAVE_EVERY;
-        if (saveToBrowser(g)) this.ui.flashSaved();
+        if (this.session?.role !== 'guest' && saveToBrowser(g)) this.ui.flashSaved();
       }
     }
 
@@ -743,7 +1012,7 @@ export class Game {
       build: this.buildBarHtml(g),
       hints: this.hintsHtml(),
       income: this.incomeHtml(g),
-      speed: speedBar({
+      speed: this.session ? '' : speedBar({
         speed: this.speed,
         paused: this.userPaused,
         rate: this.simRate,
@@ -751,6 +1020,7 @@ export class Game {
         keys: { pause: this.input.label('KeyP'), speed: this.input.label('KeyX') },
       }),
     });
+    this.updateNetHud(g);
     // La barre cache le bas de l'écran : on garde le joueur au centre de ce qui reste visible.
     this.buildInset = this.buildMode || this.chestMode ? Math.max(this.buildInset, this.ui.buildBarHeight) : 0;
     this.renderer.bottomInset = this.buildInset;
@@ -827,7 +1097,7 @@ export class Game {
     const rope = g && (g.ropes > 0 || g.ropeAnchor) ? `<span${g.ropeT > 0 ? ' class="on"' : ''}><kbd>${l('KeyV')}</kbd> ${g.atCamp ? (g.ropeAnchor ? 'Redescendre' : 'Corde') : 'Remonter'}${g.ropes > 0 ? ` <b>×${g.ropes}</b>` : ''}</span>` : '';
     const scooter = this.state?.hasScooter ? `<span${this.state.scootering ? ' class="on"' : ''}><kbd>Maj</kbd> Trottinette</span>` : '';
     const chests = g && g.storages().length > 1 ? `<span${this.chestMode ? ' class="on"' : ''}><kbd>${l('KeyC')}</kbd> Coffres</span>` : '';
-    return `${rope}${scooter}<span><kbd>${l('KeyB')}</kbd> Construire</span>${chests}<span><kbd>${l('KeyI')}</kbd> Sac</span><span${this.userPaused ? ' class="on"' : ''}><kbd>${l('KeyP')}</kbd> Pause</span><span${this.speed > 1 ? ' class="on"' : ''}><kbd>${l('KeyX')}</kbd> Vitesse</span><span><kbd>M</kbd> Carte</span><span><kbd>N</kbd> Repère</span><span><kbd>${l('KeyH')}</kbd> Aide</span><span><kbd>Échap</kbd> Menu</span>`;
+    return `${rope}${scooter}<span><kbd>${l('KeyB')}</kbd> Construire</span>${chests}<span><kbd>${l('KeyI')}</kbd> Sac</span>${this.session ? '' : `<span${this.userPaused ? ' class="on"' : ''}><kbd>${l('KeyP')}</kbd> Pause</span><span${this.speed > 1 ? ' class="on"' : ''}><kbd>${l('KeyX')}</kbd> Vitesse</span>`}<span><kbd>M</kbd> Carte</span><span><kbd>N</kbd> Repère</span><span><kbd>${l('KeyH')}</kbd> Aide</span><span><kbd>Échap</kbd> Menu</span>`;
   }
 
   // ------------------------------------------------------------------ construction
@@ -904,6 +1174,12 @@ export class Game {
    * moins vite que demandé (le bandeau le dit) plutôt que de saccader.
    */
   private runSim(g: GameState, dt: number, intent: PlayerIntent): void {
+    // À deux : les deux appareils avancent ensemble, pas après pas, avec les entrées des deux joueurs.
+    if (this.session) {
+      this.session.advance(dt, intent);
+      this.simRate = 1;
+      return;
+    }
     if (this.speed > 1) {
       const why = speedDanger(g);
       if (why) {
@@ -919,12 +1195,20 @@ export class Game {
 
   /** Pause (P) : la simulation s'arrête, mais on peut construire, acheter et ouvrir les panneaux. */
   private togglePause(): void {
+    if (this.session) {
+      this.ui.toast("Pas de pause à deux : l'autre joueur continue de jouer.", 'info');
+      return;
+    }
     this.userPaused = !this.userPaused;
     this.sfx.click();
   }
 
   /** Change de vitesse (et reprend si le jeu était en pause) ; refusé là où aller plus vite serait dangereux. */
   private setSpeed(speed: Speed, g: GameState | null = this.state): void {
+    if (this.session) {
+      this.ui.toast("Pas de vitesse rapide à deux : les deux jeux doivent avancer ensemble.", 'info');
+      return;
+    }
     if (speed > 1 && g) {
       const why = speedDanger(g);
       if (why) {
@@ -1348,6 +1632,11 @@ export class Game {
     if (!g) return;
     const r = this.renderer;
     for (const e of g.events) {
+      // À deux : ce que fait l'autre joueur ne fait pas sonner ni écrire chez moi (on voit et on entend ses coups de pioche de près).
+      if (PERSONAL_EVENTS.has(e.t) && e.slot !== undefined && e.slot !== g.local) {
+        this.otherPlayerEvent(g, e);
+        continue;
+      }
       switch (e.t) {
         case 'swing':
           if (e.tool === 'jackhammer') {
@@ -1468,6 +1757,36 @@ export class Game {
       }
     }
     g.events.length = 0;
+  }
+
+  /** Ce que fait l'autre joueur : ses coups de pioche et ses poses se voient et s'entendent de près, le reste ne me regarde pas. */
+  private otherPlayerEvent(g: GameState, e: GameState['events'][number]): void {
+    const slot = e.slot!;
+    const p = g.isPresent(slot) ? g.withSlot(slot, () => ({ x: g.player.x, y: g.player.y })) : null;
+    if (!p) return;
+    const near = Math.hypot(p.x - g.player.x, p.y - g.player.y) < 16 * TILE;
+    switch (e.t) {
+      case 'swing':
+        if (near) {
+          if (e.tool === 'jackhammer') this.sfx.hammer();
+          else this.sfx.swing();
+        }
+        break;
+      case 'hit':
+        this.renderer.onHit(e.tx, e.ty, e.block, p.x, p.y);
+        if (near) this.sfx.hit(getBlock(e.block).tier);
+        break;
+      case 'placed':
+        if (near) this.sfx.place();
+        this.renderer.fx.emit('dust', (e.tx + 0.5) * TILE, (e.ty + 0.8) * TILE, 'rgba(160,150,130,0.5)', 5, 20);
+        break;
+      case 'removed':
+        if (near) this.sfx.remove();
+        break;
+      case 'bought':
+        this.ui.toast(`${this.session?.peerName || 'Votre ami'} : ${e.name}`, 'info');
+        break;
+    }
   }
 
   private drawDebug(g: GameState): void {

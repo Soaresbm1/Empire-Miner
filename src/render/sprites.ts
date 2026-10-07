@@ -112,6 +112,8 @@ export interface PlayerGear {
   suit?: boolean;
   /** Ouvrier : les couleurs de son métier (casque, chemise et salopette) à la place de celles du mineur. */
   crew?: 'picker' | 'refueler' | 'driller';
+  /** L'autre joueur (partie à deux) : chemise verte, pour ne pas le confondre avec soi. */
+  friend?: boolean;
 }
 
 /**
@@ -127,6 +129,7 @@ const CREW_COLORS: Record<'picker' | 'refueler' | 'driller', Record<string, stri
 /** Casque d'acier, semelles de caoutchouc, combinaison orange et argent : seules les couleurs changent. */
 function playerPalette(gear: PlayerGear): Record<string, string> {
   const p = { ...PLAYER_PALETTE };
+  if (gear.friend) Object.assign(p, { u: '#6cc88a', T: '#3f9a62', t: '#2a6c43' });
   if (gear.helmet) Object.assign(p, { L: '#eef4fb', Y: '#9db4cc', h: '#7c93ad', y: '#546a86' });
   if (gear.boots) Object.assign(p, { K: '#6f5a10', k: '#a88a14' });
   if (gear.suit) Object.assign(p, { u: '#f5b050', T: '#e08a28', t: '#a85c14', B: '#c8d0da', c: '#eef2f7', b: '#8a95a6' });
