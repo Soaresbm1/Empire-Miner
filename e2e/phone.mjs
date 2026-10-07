@@ -8,7 +8,8 @@
  *   - les boutons ont une taille de doigt.
  * Des captures sont enregistrées dans e2e/screenshots/phone/.
  *
- *   npm run build && node e2e/phone.mjs [--only=iphone-court] [--scene=game] [--quiet]
+ *   npm run build && node e2e/phone.mjs [--only=iphone-court] [--scene=game] [--quiet] [--dump]
+ *   (--dump : écrit aussi la position de chaque élément mesuré)
  *
  * Variables : CHROME_PATH (exécutable Chromium), E2E_URL (sinon lance `vite preview`).
  */
@@ -79,7 +80,7 @@ const MEASURE = () => {
     for (const el of document.querySelectorAll(sel)) {
       if (!shown(el)) continue;
       if (opts.nonEmpty && !el.textContent.trim() && !el.querySelector('canvas,img')) continue;
-      items.push({ name: opts.name ? opts.name(el) : name, kind, ...R(el) });
+      items.push({ name: opts.name ? opts.name(el) : name, kind, group: opts.group, ...R(el) });
     }
   };
   // Cadres du HUD
@@ -88,7 +89,10 @@ const MEASURE = () => {
   add('mini-carte', '#minimap-box', 'hud');
   add('repère suivi', '#hud-track', 'hud', { nonEmpty: true });
   add('invite', '.prompt', 'hud', { nonEmpty: true });
-  add('barre de construction', '#hud-build > *', 'hud', { nonEmpty: true });
+  add('barre de construction', '#hud-build > *', 'hud', { nonEmpty: true, group: 'bar' });
+  // Le titre et le ✕ débordent au-dessus du cadre de la barre : ils ne doivent pas toucher le stick ni les boutons.
+  add('titre de la barre', '#hud-build .bb-title', 'hud', { group: 'bar' });
+  add('✕ de la barre', '#hud-build .bb-close', 'hud', { group: 'bar' });
   add('bandeau d’attente', '#net-stall', 'hud');
   // Boutons à l'écran
   add('stick', '.tc-base', 'ctl');
@@ -98,8 +102,8 @@ const MEASURE = () => {
   add('extras', '.tc-extra', 'ctl');
   add('construction', '.tc-build', 'ctl');
   add('menu ☰', '.tc-sheet', 'overlay');
-  // Messages (passagers : on les mesure à part)
-  add('message', '#toasts .toast', 'toast');
+  // Messages (passagers : on les mesure à part ; un message qui s'efface n'est plus un message)
+  add('message', '#toasts .toast:not(.out)', 'toast');
   const btns = [...document.querySelectorAll('.tc-btn, .tc-base, #ui .btn, #ui .sp, #ui .tab, .panel .close')].filter(shown).map((el) => ({ name: (el.textContent || el.className).trim().slice(0, 20), ...R(el) }));
   return { items, btns, w: innerWidth, h: innerHeight };
 };
@@ -111,6 +115,7 @@ function checkLayout(dev, scene, m, opts = {}) {
   const [st, sl, sb, sr] = dev.safe;
   const inside = (it) => it.l >= sl - 0.6 && it.r <= m.w - sr + 0.6 && it.t >= st - 0.6 && it.b <= m.h - sb + 0.6;
   const tag = `${dev.id} · ${scene}`;
+  if (args.dump) for (const it of m.items) console.log(`      ${it.name.padEnd(22)} ${it.kind.padEnd(7)} x ${it.l.toFixed(1)}…${it.r.toFixed(1)}  y ${it.t.toFixed(1)}…${it.b.toFixed(1)}  (${it.w.toFixed(1)}×${it.h.toFixed(1)})`);
   for (const it of m.items) {
     if (it.kind === 'toast') continue;
     if (!inside(it)) check(false, `${tag} : « ${it.name} » sort de la zone sûre (${Math.round(it.l)},${Math.round(it.t)} → ${Math.round(it.r)},${Math.round(it.b)} ; zone ${sl},${st} → ${m.w - sr},${m.h - sb})`);
@@ -121,6 +126,7 @@ function checkLayout(dev, scene, m, opts = {}) {
     for (let j = i + 1; j < solid.length; j++) {
       const a = solid[i];
       const b = solid[j];
+      if (a.group && a.group === b.group) continue; // le titre et le ✕ chevauchent exprès le cadre de leur barre
       const area = inter(a, b);
       if (area > 4) {
         overlaps++;
@@ -188,7 +194,20 @@ const PANEL_FIT = () => {
   const body = p.querySelector('.panel-body');
   const close = p.querySelector('.close');
   const cr = close?.getBoundingClientRect();
+  // Tout ce qui répond au toucher dans le panneau, et qui serait trop petit pour un doigt.
+  const small = [...p.querySelectorAll('[data-action]')]
+    .filter((el) => {
+      const cs = getComputedStyle(el);
+      const q = el.getBoundingClientRect();
+      return cs.display !== 'none' && cs.visibility !== 'hidden' && q.width > 1 && q.height > 1 && !el.disabled;
+    })
+    .map((el) => {
+      const q = el.getBoundingClientRect();
+      return { name: (el.textContent || el.dataset.action).trim().slice(0, 22), w: q.width, h: q.height };
+    })
+    .filter((b) => Math.min(b.w, b.h) < 30);
   return {
+    small,
     l: r.left, t: r.top, r: r.right, b: r.bottom, w: innerWidth, h: innerHeight,
     bodyScrollable: body ? body.scrollHeight > body.clientHeight + 1 : false,
     bodyOverflowY: body ? getComputedStyle(body).overflowY : '',
@@ -205,6 +224,7 @@ function checkPanel(dev, scene, m) {
   check(m.l >= sl - 0.6 && m.r <= m.w - sr + 0.6 && m.t >= st - 0.6 && m.b <= m.h - sb + 0.6, `${tag} : le panneau tient dans la zone sûre (${Math.round(m.l)},${Math.round(m.t)} → ${Math.round(m.r)},${Math.round(m.b)})`);
   check(!m.bodyScrollable || m.bodyOverflowY === 'auto' || m.bodyOverflowY === 'scroll', `${tag} : le contenu du panneau défile s'il est long`);
   check(m.bodyH >= Math.min(90, m.h * 0.3), `${tag} : le contenu garde de la place (${Math.round(m.bodyH)} px de haut)`);
+  check(m.small.length === 0, `${tag} : les boutons du panneau sont de taille de doigt${m.small.length ? ` — trop petits : ${m.small.slice(0, 6).map((b) => `${b.name} ${Math.round(b.w)}×${Math.round(b.h)}`).join(', ')}` : ''}`);
   if (m.close) check(Math.min(m.close.w, m.close.h) >= 34, `${tag} : bouton de fermeture de taille de doigt (${Math.round(m.close.w)}×${Math.round(m.close.h)})`);
 }
 
@@ -298,6 +318,66 @@ for (const dev of DEVICES) {
     await page.waitForTimeout(200);
   }
 
+  // ---------------------------------------------------------------- réglage des coffres, boutons en plus, bandeau d'attente
+  if (want('extras')) {
+    // Deux coffres posés près du joueur, puis le mode « Régler les coffres ».
+    await page.evaluate(() => {
+      const E = window.__EM;
+      const g = E.state;
+      g.player.x = 50.5 * 16;
+      g.player.y = 9.5 * 16;
+      E.renderer.snapCamera();
+      g.inventory.addKit('storage', 3);
+      let placed = 0;
+      for (let dx = -6; dx <= 6 && placed < 2; dx++) for (const dy of [2, 3]) {
+        const x = 50 + dx;
+        const y = 9 + dy;
+        if (placed < 2 && g.canPlace('storage', x, y).ok) {
+          g.place('storage', x, y, 0);
+          placed++;
+        }
+      }
+      E.setChestMode(true);
+    });
+    await page.waitForTimeout(700);
+    await shot(page, dev, '05b-coffres');
+    checkLayout(dev, 'réglage des coffres', await page.evaluate(MEASURE), { minFree: 40 });
+    await page.evaluate(() => window.__EM.setChestMode(false));
+    await page.waitForTimeout(200);
+
+    // Trottinette et wagonnet : la rangée de boutons en plus.
+    await page.evaluate(() => {
+      const E = window.__EM;
+      E.state.hasScooter = true;
+      document.querySelector('.tc-wagon')?.classList.remove('hidden');
+      document.querySelector('.tc-scooter')?.classList.remove('hidden');
+    });
+    await page.waitForTimeout(400);
+    await shot(page, dev, '05c-extras');
+    checkLayout(dev, 'trottinette et wagonnet', await page.evaluate(MEASURE), { minFree: 55 });
+
+    // « En attente de l'autre joueur ».
+    await page.evaluate(() => {
+      const E = window.__EM;
+      const real = E.ui.setNet;
+      window.__realSetNet = real;
+      real.call(E.ui, '<span class="dot wait"></span>À deux · <b>Invité</b>', 'En attente de l’autre joueur…<small>Connexion lente ou interrompue. La partie reprend toute seule.</small>');
+      E.ui.setNet = () => {};
+    });
+    await page.waitForTimeout(300);
+    await shot(page, dev, '05d-attente');
+    checkLayout(dev, 'bandeau d’attente', await page.evaluate(MEASURE), { minFree: 50 });
+    // Retour à l'état d'avant : plus de bandeau, plus de trottinette (les scènes suivantes ne doivent pas en hériter).
+    await page.evaluate(() => {
+      const E = window.__EM;
+      E.ui.setNet = window.__realSetNet;
+      E.ui.setNet('', '');
+      document.querySelector('.tc-wagon')?.classList.add('hidden');
+      document.querySelector('.tc-scooter')?.classList.add('hidden');
+      E.state.hasScooter = false;
+    });
+  }
+
   // ---------------------------------------------------------------- menu ☰
   if (want('sheet')) {
     await page.evaluate(() => {
@@ -337,16 +417,85 @@ for (const dev of DEVICES) {
         },
         [kind, finder],
       );
-    for (const [i, [kind, finder, label]] of [
+    // Une machine de chaque sorte, posée au camp (la foreuse, sur un gisement de la mine), pour ouvrir tous les panneaux.
+    await page.evaluate(() => {
+      const E = window.__EM;
+      const g = E.state;
+      g.money = 250000;
+      for (const k of ['storage', 'shipping', 'furnace', 'sorter', 'rail_load', 'rail_switch', 'borer']) g.inventory.addKit(k, 1);
+      let n = 0;
+      for (const k of ['storage', 'shipping', 'furnace', 'sorter', 'rail_load', 'rail_switch', 'borer']) {
+        if (g.structures.list.some((s) => s.type === k)) continue;
+        let done = false;
+        for (let dy = 1; dy < 12 && !done; dy++)
+          for (let dx = -16 + n; dx <= 16 && !done; dx += 1) {
+            const x = 50 + dx;
+            const y = 6 + dy;
+            g.player.x = (x + 0.5) * 16;
+            g.player.y = (y - 1) * 16;
+            if (g.canPlace(k, x, y).ok) done = !!g.place(k, x, y, 0);
+          }
+        n += 2;
+      }
+      // La foreuse : le premier gisement exposé de la mine.
+      g.inventory.addKit('drill', 1);
+      const w = g.world;
+      outer: for (let y = 0; y < w.h; y++)
+        for (let x = 0; x < w.w; x++)
+          if (g.siteProblem('drill', x, y) === null) {
+            g.player.x = (x + 0.5) * 16;
+            g.player.y = (y - 1) * 16;
+            g.place('drill', x, y, 0);
+            break outer;
+          }
+    });
+    const PANELS = [
       ['inventory', null, 'sac'],
       ['map', null, 'carte'],
       ['help', null, 'aide'],
-      ['workshop', 'workshop', 'atelier'],
+      ['workshop', 'workshop', 'atelier', 'tools'],
+      ['workshop', 'workshop', 'atelier-transport', 'transport'],
+      ['workshop', 'workshop', 'atelier-equipement', 'gear'],
+      ['workshop', 'workshop', 'atelier-machines', 'machines'],
+      ['workshop', 'workshop', 'atelier-ouvriers', 'crew'],
       ['counter', 'counter', 'comptoir'],
-      ['board', 'board', 'tableau'],
-    ].entries()) {
-      await open(kind, finder);
-      await page.waitForTimeout(350);
+      ['board', 'board', 'tableau', 'market'],
+      ['board', 'board', 'tableau-production', 'production'],
+      ['storage', 'storage', 'coffre'],
+      ['shipping', 'shipping', 'expedition'],
+      ['drill', 'drill', 'foreuse'],
+      ['borer', 'borer', 'percement'],
+      ['furnace', 'furnace', 'four'],
+      ['sorter', 'sorter', 'trieur'],
+      ['station', 'rail_load', 'gare'],
+      ['switch', 'rail_switch', 'aiguillage'],
+      ['install', null, 'ecran-accueil'],
+    ];
+    for (const [i, [kind, finder, label, tab]] of PANELS.entries()) {
+      const found = await page.evaluate(
+        ([kind, finder, tab]) => {
+          const E = window.__EM;
+          const g = E.state;
+          const target = finder ? g.structures.list.find((s) => s.type === finder) ?? null : null;
+          if (finder && !target) return false;
+          // Le jeu referme un panneau quand on s'éloigne de la machine : on se place à côté.
+          if (target) {
+            g.player.x = (target.x + target.w / 2) * 16;
+            g.player.y = (target.y + target.h + 0.4) * 16;
+            E.renderer.snapCamera();
+          }
+          E.ui.closePanel();
+          E.ui.openPanel(kind, target, tab);
+          E.ui.renderPanel(g, 0, true);
+          return true;
+        },
+        [kind, finder, tab],
+      );
+      if (!found) {
+        check(false, `${dev.id} · panneau ${label} : la machine n'a pas pu être posée pour le test`);
+        continue;
+      }
+      await page.waitForTimeout(300);
       await shot(page, dev, `07-${String(i).padStart(2, '0')}-${label}`);
       checkPanel(dev, `panneau ${label}`, await page.evaluate(PANEL_FIT));
     }

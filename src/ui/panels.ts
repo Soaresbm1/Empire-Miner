@@ -561,7 +561,7 @@ export function smelterPanel(g: GameState, s: Smelter): string {
 // ------------------------------------------------------------------ carte
 
 /** Carte complète : le canvas est dessiné à chaque image par le jeu ; à droite, la légende. */
-export function mapPanel(g: GameState, colors: Record<string, string>): string {
+export function mapPanel(g: GameState, colors: Record<string, string>, touch = false): string {
   const sw = (c: string, cls = '') => `<i class="sw ${cls}" style="background:${c}"></i>`;
   const item = (icon: string, label: string) => `<li>${icon}<span>${label}</span></li>`;
   const ores = RESOURCES.filter((r) => r.vein && (g.stats.discovered.includes(r.id) || (g.stats.collected[r.id] ?? 0) > 0));
@@ -589,17 +589,21 @@ export function mapPanel(g: GameState, colors: Record<string, string>): string {
     .join('');
   return `<div class="map-layout">
     <div class="map-main">
-      <canvas id="map-canvas" class="map-canvas" title="Clic : poser un repère · molette : zoom · glisser : déplacer la carte"></canvas>
+      <canvas id="map-canvas" class="map-canvas"${touch ? '' : ' title="Clic : poser un repère · molette : zoom · glisser : déplacer la carte"'}></canvas>
       <div class="map-zoom">
         ${btn('mapZoom', '−', { arg: 'out', cls: 'small', title: 'Dézoomer (−)' })}${btn('mapZoom', '+', { arg: 'in', cls: 'small', title: 'Zoomer (+)' })}${btn('mapZoom', 'Tout voir', { arg: 'reset', cls: 'small', title: 'Voir toute la mine explorée (0)' })}${btn('mapZoom', 'Me retrouver', { arg: 'me', cls: 'small', title: 'Centrer la carte sur vous' })}
-        <span class="hint">Molette : zoom · glisser : déplacer · clic : repère</span>
+        <span class="hint">${touch ? 'Pincer : zoom · glisser : déplacer · toucher : repère' : 'Molette : zoom · glisser : déplacer · clic : repère'}</span>
       </div>
     </div>
     <div class="map-side">
       <h4>Repères (${g.markers.list.length} / ${MAX_MARKERS})</h4>
       <div class="marker-kinds">${kinds}</div>
-      <div class="buy" style="margin-top:0">${btn('markHere', 'Marquer ma position (N)', { cls: 'small', disabled: g.markers.full && !g.markers.at(p.tileX, p.tileY) })}</div>
-      <p class="hint map-note">Cliquez sur la carte pour poser un repère du type choisi ; « Suivre » affiche une flèche vers lui dans la mine. Molette ou <kbd>+</kbd> <kbd>−</kbd> pour zoomer, glissez pour déplacer la carte, <kbd>0</kbd> pour tout revoir.</p>
+      <div class="buy" style="margin-top:0">${btn('markHere', touch ? 'Marquer ma position' : 'Marquer ma position (N)', { cls: 'small', disabled: g.markers.full && !g.markers.at(p.tileX, p.tileY) })}</div>
+      <p class="hint map-note">${
+        touch
+          ? 'Touchez la carte pour poser un repère du type choisi ; « Suivre » affiche une flèche vers lui dans la mine. Pincez ou touchez + − pour zoomer, glissez pour déplacer la carte, « Tout voir » pour tout revoir.'
+          : 'Cliquez sur la carte pour poser un repère du type choisi ; « Suivre » affiche une flèche vers lui dans la mine. Molette ou <kbd>+</kbd> <kbd>−</kbd> pour zoomer, glissez pour déplacer la carte, <kbd>0</kbd> pour tout revoir.'
+      }</p>
       ${list ? `<ul class="marker-list">${list}</ul>` : ''}
       <h4>Légende</h4>
       <ul class="map-legend">

@@ -123,6 +123,9 @@ const SHEET: Btn[] = [
   { code: 'Escape', label: 'Menu', hint: 'Menu du jeu' },
 ];
 
+/** Ce que le titre et le ✕ de la barre de construction dépassent au-dessus de son cadre (px CSS). */
+const BAR_OVERHANG = 12;
+
 /** Les trois raccourcis les plus utiles, toujours sous le pouce. */
 const QUICK: Btn[] = [SHEET[0], SHEET[1], SHEET[2]];
 
@@ -414,7 +417,8 @@ export class TouchControls {
       this.sig = sig;
       this.root.classList.toggle('hidden', !show);
       this.root.classList.toggle('building', ctx.buildMode || ctx.chestMode);
-      this.root.style.setProperty('--bb-h', `${Math.round(ctx.barHeight)}px`);
+      // Le titre et le ✕ de la barre débordent de 12 px au-dessus de son cadre : les boutons montent d'autant.
+      this.root.style.setProperty('--bb-h', `${ctx.barHeight > 0 ? Math.round(ctx.barHeight) + BAR_OVERHANG : 0}px`);
       this.act.classList.toggle('lit', ctx.near || ctx.riding);
       this.act.firstElementChild!.textContent = ctx.riding ? 'Descendre' : 'Agir';
       this.wagon.classList.toggle('hidden', !ctx.wagonNear || ctx.riding);

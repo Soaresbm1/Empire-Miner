@@ -27,9 +27,13 @@ import { WORKSHOP_TABS, isWorkshopTab } from './workshop';
 import { hudMarket, BOARD_TABS, isBoardTab } from './market';
 import { boardPanel, borerPanel, counterPanel, smelterPanel, drillPanel, helpPanel, installPanel, inventoryPanel, mapPanel, shippingPanel, sorterPanel, stationPanel, storagePanel, switchPanel, workshopPanel } from './panels';
 import { displayMode } from './fullscreen';
+import { pinchStep } from './touch';
 
 /** Flèches dans les 8 directions, dans l'ordre des angles (est, sud-est, sud…). */
 const ARROWS8 = ['→', '↘', '↓', '↙', '←', '↖', '↑', '↗'];
+
+/** Un doigt qui bouge de plus que cela (px CSS) entre l'appui et le relâchement ne fait pas un appui sur un bouton. */
+const TAP_SLOP = 10;
 
 export type PanelKind = 'counter' | 'workshop' | 'board' | 'inventory' | 'storage' | 'drill' | 'borer' | 'furnace' | 'shipping' | 'sorter' | 'station' | 'switch' | 'map' | 'help' | 'install';
 
@@ -84,21 +88,38 @@ export class UI {
   private refreshTimer = 0;
 
   constructor(private readonly host: UIHost) {
-    const onPointer = (e: PointerEvent) => {
-      const el = (e.target as HTMLElement).closest<HTMLElement>('[data-action]');
-      if (!el || (el as HTMLButtonElement).disabled || e.button !== 0) return;
-      e.preventDefault();
+    const act = (el: HTMLElement, x: number, y: number) => {
       // Un canvas cliquable (carte) reçoit la position du clic, en pixels du canvas.
       if (el instanceof HTMLCanvasElement) {
         const r = el.getBoundingClientRect();
-        const px = ((e.clientX - r.left) * el.width) / Math.max(1, r.width);
-        const py = ((e.clientY - r.top) * el.height) / Math.max(1, r.height);
+        const px = ((x - r.left) * el.width) / Math.max(1, r.width);
+        const py = ((y - r.top) * el.height) / Math.max(1, r.height);
         this.host.onAction(el.dataset.action!, `${Math.round(px)},${Math.round(py)}`);
         return;
       }
       this.host.onAction(el.dataset.action!, el.dataset.arg ?? '');
     };
+    // Un bouton répond à la souris dès l'appui. Au doigt, il répond au relâchement, et seulement si le doigt n'a presque pas
+    // bougé : sinon c'était un défilement (le navigateur annule alors le geste) et rien ne doit être acheté ni activé.
+    const taps = new Map<number, { el: HTMLElement; x: number; y: number }>();
+    const onPointer = (e: PointerEvent) => {
+      const el = (e.target as HTMLElement).closest<HTMLElement>('[data-action]');
+      if (!el || (el as HTMLButtonElement).disabled || e.button !== 0) return;
+      // Sans cela, le navigateur rejouerait un clic de souris sur ce qui se trouve dessous (le monde, une fois le panneau fermé).
+      e.preventDefault();
+      if (e.pointerType === 'mouse') act(el, e.clientX, e.clientY);
+      else taps.set(e.pointerId, { el, x: e.clientX, y: e.clientY });
+    };
+    const onRelease = (e: PointerEvent) => {
+      const t = taps.get(e.pointerId);
+      if (!t) return;
+      taps.delete(e.pointerId);
+      if (e.type !== 'pointerup' || Math.hypot(e.clientX - t.x, e.clientY - t.y) > TAP_SLOP || (t.el as HTMLButtonElement).disabled) return;
+      act(t.el, e.clientX, e.clientY);
+    };
     for (const root of [this.panelRoot, this.menuRoot, this.hud]) root.addEventListener('pointerdown', onPointer);
+    window.addEventListener('pointerup', onRelease);
+    window.addEventListener('pointercancel', onRelease);
     this.listenMap();
     // La hauteur de la barre de construction peut changer sans que son contenu change (rotation, taille de l'écran) :
     // les boutons à l'écran et le stick se placent au-dessus d'elle.
@@ -121,6 +142,8 @@ export class UI {
         if (el) ro.observe(el);
       }
     }
+    // Clavier de l'iPhone : en se refermant, il laisse parfois la page décalée.
+    this.menuRoot.addEventListener('focusout', () => window.scrollTo(0, 0));
     // Entrée dans le champ du code : on rejoint.
     this.menuRoot.addEventListener('keydown', (e) => {
       if (e.key === 'Enter' && (e.target as HTMLElement).id === 'join-code') {
@@ -144,16 +167,44 @@ export class UI {
       return { x: ((cx - r.left) * el.width) / Math.max(1, r.width), y: ((cy - r.top) * el.height) / Math.max(1, r.height) };
     };
     let drag: { id: number; x: number; y: number; moved: boolean } | null = null;
+    // Au doigt : deux doigts sur la carte zooment autour de leur milieu (comme la molette, un cran à la fois).
+    const fingers = new Map<number, { x: number; y: number }>();
+    let pinch: number | null = null;
+    const spread = () => {
+      const [a, b] = [...fingers.values()];
+      return Math.hypot(a.x - b.x, a.y - b.y);
+    };
     this.panelRoot.addEventListener('pointerdown', (e) => {
       const el = onMap(e);
       if (!el || e.button !== 0) return;
       e.preventDefault();
-      drag = { id: e.pointerId, x: e.clientX, y: e.clientY, moved: false };
       el.setPointerCapture?.(e.pointerId);
+      fingers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      if (fingers.size >= 2) {
+        // Un deuxième doigt : plus de repère ni de glissé tant que les doigts ne sont pas tous levés.
+        drag = null;
+        if (fingers.size === 2) pinch = spread();
+        return;
+      }
+      if (pinch !== null) return;
+      drag = { id: e.pointerId, x: e.clientX, y: e.clientY, moved: false };
     });
     this.panelRoot.addEventListener('pointermove', (e) => {
       const el = onMap(e);
-      if (!drag || !el || e.pointerId !== drag.id) return;
+      if (!el) return;
+      if (fingers.has(e.pointerId)) fingers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      if (pinch !== null) {
+        if (fingers.size !== 2) return;
+        const step = pinchStep(pinch, spread());
+        if (step === 0) return;
+        const [a, b] = [...fingers.values()];
+        const mid = toCanvas(el, (a.x + b.x) / 2, (a.y + b.y) / 2);
+        // La molette : une valeur négative zoome ; des doigts qui s'écartent zooment.
+        this.host.onAction('mapWheel', `${Math.round(mid.x)},${Math.round(mid.y)},${-step}`);
+        pinch = spread();
+        return;
+      }
+      if (!drag || e.pointerId !== drag.id) return;
       if (!drag.moved && Math.hypot(e.clientX - drag.x, e.clientY - drag.y) < 5) return;
       drag.moved = true;
       const a = toCanvas(el, drag.x, drag.y);
@@ -164,6 +215,8 @@ export class UI {
     });
     const end = (e: PointerEvent) => {
       const el = onMap(e);
+      if (fingers.delete(e.pointerId) && fingers.size === 0) pinch = null;
+      else if (pinch !== null && fingers.size < 2) pinch = fingers.size ? -1 : null;
       const d = drag;
       if (!d || e.pointerId !== d.id) return;
       drag = null;
@@ -506,7 +559,7 @@ export class UI {
         break;
       case 'map':
         title = 'Carte de la mine';
-        body = mapPanel(g, MAP_COLORS);
+        body = mapPanel(g, MAP_COLORS, this.host.touch?.());
         break;
       case 'help':
         title = 'Commandes';
