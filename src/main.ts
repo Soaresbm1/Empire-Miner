@@ -2,6 +2,7 @@
  * Point d'entrée d'Empire Miner.
  */
 import './ui/ui.css';
+import './ui/touch.css';
 import { Game } from './game/Game';
 import { stateDigest } from './net/digest';
 import { installTheme } from './ui/theme';

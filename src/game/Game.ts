@@ -38,6 +38,7 @@ import { esc, kg, money, resIcon } from '../ui/format';
 import { workerAt, workerTooltip } from '../ui/crew';
 import { applyAction, type SimAction } from '../sim/actions';
 import { TouchControls, isTouchDevice, saveTouchPref } from '../ui/touch';
+import { homeScreenHintDue, homeScreenHintShown, toggleFullscreen } from '../ui/fullscreen';
 import { releaseGuests } from '../net/guests';
 import { MqttTransport } from '../net/mqtt';
 import { Session, type SessionStatus } from '../net/session';
@@ -170,6 +171,7 @@ export class Game {
       this.touch.destroy();
       this.touch = null;
     }
+    this.ui.setTouchLayout(!!this.touch);
   }
 
   start(): void {
@@ -229,6 +231,11 @@ export class Game {
     this.ui.hideMenu();
     this.ui.closePanel();
     this.ui.showHud(true);
+    // iPhone dans Safari : on glisse, une seule fois, comment enlever les barres.
+    if (this.touch && homeScreenHintDue()) {
+      homeScreenHintShown();
+      this.ui.toast('Astuce : pour jouer en plein écran, touchez Partager puis « Sur l’écran d’accueil ».', 'info');
+    }
     // Première exploration immédiate.
     state.update(0, NO_INTENT);
     state.events.length = 0;
@@ -389,7 +396,7 @@ export class Game {
     const peer = esc(s.peerName || (s.role === 'host' ? 'Invité' : 'Hôte'));
     let chip: string;
     let banner = '';
-    if (s.role === 'host' && !s.linked) chip = `<span class="dot wait"></span>Code <b class="code">${s.code}</b><small>Touchez ici pour inviter un ami</small>`;
+    if (s.role === 'host' && !s.linked) chip = `<span class="dot wait"></span>Code <b class="code">${s.code}</b><span class="share">↗ Inviter</span><small>Touchez ici pour inviter un ami</small>`;
     else if (s.status === 'syncing') chip = `<span class="dot wait"></span>Synchronisation…`;
     else if (s.status === 'lost') chip = `<span class="dot bad"></span>Connexion perdue`;
     else chip = `<span class="dot ${s.stalled ? 'wait' : 'ok'}"></span>À deux · <b>${peer}</b>`;
@@ -513,6 +520,17 @@ export class Game {
           /* ignoré */
         }
         this.showPause();
+        return;
+      case 'fullscreen':
+        void toggleFullscreen().then(() => {
+          if (this.mode === 'menu') this.showMainMenu();
+          else this.showPause();
+        });
+        return;
+      case 'install':
+        this.ui.openPanel('install');
+        if (this.state) this.ui.renderPanel(this.state, 0, true);
+        else if (this.menuState) this.ui.renderPanel(this.menuState, 0, true);
         return;
       case 'touch': {
         const on = !this.touch;
@@ -1060,7 +1078,7 @@ export class Game {
   /** Invite d'action : structure proche (E) et wagonnet (F). */
   private promptText(g: GameState, near: ReturnType<GameState['nearestInteractable']>): string {
     if (this.ui.blocking) return '';
-    const f = `<kbd>${this.input.label('KeyF')}</kbd>`;
+    const f = this.touch ? '<b class="act-tag">🚃</b>' : `<kbd>${this.input.label('KeyF')}</kbd>`;
     if (g.riding) return `${f} Descendre du wagonnet`;
     const main = this.structurePrompt(near);
     const wagon = g.nearestWagon() ? `${f} Monter dans le wagonnet` : '';
@@ -1069,7 +1087,8 @@ export class Game {
 
   private structurePrompt(near: ReturnType<GameState['nearestInteractable']>): string {
     if (!near) return '';
-    const e = `<kbd>${this.input.label('KeyE')}</kbd>`;
+    // Au doigt, le bouton « Agir » remplace la touche E.
+    const e = this.touch ? '<b class="act-tag">Agir</b>' : `<kbd>${this.input.label('KeyE')}</kbd>`;
     if (near instanceof Building) return `${e} ${BUILDING_INFO[near.type].name} — ${BUILDING_INFO[near.type].prompt}`;
     if (near instanceof Storage) return `${e} Ouvrir le coffre`;
     if (near instanceof ShippingCrate) return `${e} Caisse d'expédition — vente automatique`;

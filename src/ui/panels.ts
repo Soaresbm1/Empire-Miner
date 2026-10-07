@@ -632,6 +632,20 @@ export function mapPanel(g: GameState, colors: Record<string, string>): string {
 
 // ------------------------------------------------------------------ aide
 
+/** Plein écran sur iPhone : seule l'icône de l'écran d'accueil enlève les barres de Safari. */
+export function installPanel(): string {
+  return `<div class="install">
+    <p>Safari garde sa barre d'adresse et ses onglets à l'écran : sur un iPhone, le jeu n'a que la moitié de la hauteur. Pour jouer en plein écran, ajoutez-le à l'écran d'accueil :</p>
+    <ol class="how">
+      <li><b>Touchez Partager</b> <span class="share-ico">⎋</span> dans la barre de Safari (le carré avec une flèche vers le haut).</li>
+      <li>Faites défiler le menu et touchez <b>« Sur l'écran d'accueil »</b>.</li>
+      <li>Touchez <b>Ajouter</b>, puis ouvrez <b>Empire Miner</b> depuis son icône.</li>
+    </ol>
+    <p>Le jeu s'ouvre alors sans aucune barre, avec toute la hauteur de l'écran.</p>
+    <p class="hint">À savoir : l'icône a son propre espace de stockage, donc la partie enregistrée dans Safari n'y apparaît pas. Pour la reprendre, exportez-la d'abord (menu pause, « Exporter »), puis importez-la dans l'application (« Importer »).</p>
+  </div>`;
+}
+
 export function helpPanel(keys: { move: string; label: (c: string) => string; touch?: boolean }): string {
   const k = (c: string) => `<kbd>${keys.label(c)}</kbd>`;
   const finger = keys.touch

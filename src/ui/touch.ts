@@ -199,6 +199,9 @@ export class TouchControls {
     this.listenButtons();
     this.listenStick();
     this.listenWorld();
+    // Le menu ☰ se pose au-dessus de la pile de boutons : il en faut la hauteur.
+    const stack = q('.tc-right');
+    if (typeof ResizeObserver !== 'undefined') new ResizeObserver(() => this.root.style.setProperty('--tc-h', `${stack.offsetHeight}px`)).observe(stack);
     // Pas de menu contextuel, pas de zoom de la page, pas de défilement : tout le toucher est pour le jeu.
     for (const el of [this.root, this.canvas]) el.addEventListener('touchstart', (e) => this.alive && e.cancelable && e.preventDefault(), { passive: false });
     document.addEventListener('gesturestart', (e) => e.preventDefault());

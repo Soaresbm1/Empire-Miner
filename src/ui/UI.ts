@@ -18,19 +18,20 @@ import type { Sorter } from '../sim/structures/Sorter';
 import type { RailStation, RailSwitch } from '../sim/structures/Rail';
 import { Storage } from '../sim/structures/Storage';
 import type { Structure } from '../sim/structures/Structure';
-import { esc, kg, money, resIcon } from './format';
+import { esc, kgPair, money, resIcon } from './format';
 import { icon } from './theme';
 import { MenuFx } from './menuFx';
 import { MAP_COLORS } from '../render/MineMap';
 import { QUALITY_LABEL, type Quality } from '../render/quality';
 import { WORKSHOP_TABS, isWorkshopTab } from './workshop';
 import { hudMarket, BOARD_TABS, isBoardTab } from './market';
-import { boardPanel, borerPanel, counterPanel, smelterPanel, drillPanel, helpPanel, inventoryPanel, mapPanel, shippingPanel, sorterPanel, stationPanel, storagePanel, switchPanel, workshopPanel } from './panels';
+import { boardPanel, borerPanel, counterPanel, smelterPanel, drillPanel, helpPanel, installPanel, inventoryPanel, mapPanel, shippingPanel, sorterPanel, stationPanel, storagePanel, switchPanel, workshopPanel } from './panels';
+import { displayMode } from './fullscreen';
 
 /** Flèches dans les 8 directions, dans l'ordre des angles (est, sud-est, sud…). */
 const ARROWS8 = ['→', '↘', '↓', '↙', '←', '↖', '↑', '↗'];
 
-export type PanelKind = 'counter' | 'workshop' | 'board' | 'inventory' | 'storage' | 'drill' | 'borer' | 'furnace' | 'shipping' | 'sorter' | 'station' | 'switch' | 'map' | 'help';
+export type PanelKind = 'counter' | 'workshop' | 'board' | 'inventory' | 'storage' | 'drill' | 'borer' | 'furnace' | 'shipping' | 'sorter' | 'station' | 'switch' | 'map' | 'help' | 'install';
 
 export interface UIHost {
   onAction(action: string, arg: string): void;
@@ -99,6 +100,27 @@ export class UI {
     };
     for (const root of [this.panelRoot, this.menuRoot, this.hud]) root.addEventListener('pointerdown', onPointer);
     this.listenMap();
+    // La hauteur de la barre de construction peut changer sans que son contenu change (rotation, taille de l'écran) :
+    // les boutons à l'écran et le stick se placent au-dessus d'elle.
+    const bar = document.getElementById('hud-build');
+    if (bar && typeof ResizeObserver !== 'undefined') new ResizeObserver(() => (this.buildBarHeight = bar.offsetHeight)).observe(bar);
+    // Les messages se posent sous l'objectif (en travers) ou sous tout le haut du HUD (debout), quelle que soit sa hauteur.
+    const ui = document.getElementById('ui');
+    if (ui && typeof ResizeObserver !== 'undefined') {
+      const bottoms = () => {
+        const edge = (sel: string) => {
+          const r = this.hud.querySelector(sel)?.getBoundingClientRect();
+          return r && r.height > 0 ? r.bottom : 0;
+        };
+        ui.style.setProperty('--obj-bottom', `${Math.round(edge('.hud-mid'))}px`);
+        ui.style.setProperty('--hud-bottom', `${Math.round(Math.max(edge('.hud-left'), edge('.hud-mid'), edge('.hud-tr')))}px`);
+      };
+      const ro = new ResizeObserver(bottoms);
+      for (const sel of ['.hud-left', '.hud-mid', '.hud-tr']) {
+        const el = this.hud.querySelector(sel);
+        if (el) ro.observe(el);
+      }
+    }
     // Entrée dans le champ du code : on rejoint.
     this.menuRoot.addEventListener('keydown', (e) => {
       if (e.key === 'Enter' && (e.target as HTMLElement).id === 'join-code') {
@@ -192,6 +214,19 @@ export class UI {
     this.hud.classList.toggle('hidden', !v);
   }
 
+  /**
+   * Mise en page tactile : l'objectif quitte la colonne de la mini-carte pour le centre du haut de l'écran (une ligne
+   * ou deux), au lieu de lui voler de la hauteur.
+   */
+  setTouchLayout(on: boolean): void {
+    const obj = document.getElementById('hud-objective');
+    const mid = this.hud.querySelector('.hud-mid');
+    const col = this.hud.querySelector('.hud-tr');
+    if (!obj || !mid || !col) return;
+    if (on) mid.appendChild(obj);
+    else col.insertBefore(obj, col.firstChild);
+  }
+
   updateHud(g: GameState, extra: { prompt: string; build: string; hints: string; income: string; speed: string }): void {
     const depth = depthAt(g.player.tileY);
     const surface = g.player.tileY < 12;
@@ -209,7 +244,7 @@ export class UI {
         ? `<span class="zone">Surface · Camp</span>`
         : `▼ <b>${Math.floor(depth)} m</b> <span class="zone" style="color:${zoneForDepth(depth).color}">${zoneForDepth(depth).name}</span>${
             temp !== null
-              ? `<div class="heat">Chaleur ${temp} °C : machines ralenties${cooled ? ' · au frais près du ventilateur' : suit ? ' · combinaison en service' : ''}</div>`
+              ? `<div class="heat">Chaleur ${temp} °C<span class="h2"> : machines ralenties${cooled ? ' · au frais près du ventilateur' : suit ? ' · combinaison en service' : ''}</span></div>`
               : ''
           }`,
     );
@@ -225,13 +260,15 @@ export class UI {
     const water = g.hazards.waterAt(p.tileX, p.tileY);
     const quake = g.hazards.pendingNear(p.tileX, p.tileY, 4);
     const alerts: string[] = [];
-    if (quake) alerts.push(`Le plafond craque : étai ou fuite ! (${Math.ceil(quake.t)} s)`);
+    // Chaque alerte a un mot-clé et une explication (`.b`) que l'écran d'un téléphone en travers laisse de côté.
+    const b = (long: string) => `<span class="b">${long}</span>`;
+    if (quake) alerts.push(`Le plafond craque${b(' : étai ou fuite !')} (${Math.ceil(quake.t)} s)`);
     const boots = g.hasGear('boots');
-    if (gas >= GAS.harmful) alerts.push(g.hasGear('mask') ? 'Grisou : le masque vous protège, sortez du nuage' : 'Grisou : sortez du nuage !');
+    if (gas >= GAS.harmful) alerts.push(`Grisou${b(g.hasGear('mask') ? ' : le masque vous protège, sortez du nuage' : ' : sortez du nuage !')}`);
     else if (gas > 0) alerts.push('Traces de grisou');
-    if (water >= WATER.deep) alerts.push(boots ? 'Eau profonde : les cuissardes limitent la fatigue' : 'Eau profonde : vous vous épuisez');
-    else if (water > 0 && !boots) alerts.push("Dans l'eau : vous êtes ralenti");
-    if (temp !== null && !cooled && !suit) alerts.push('Chaleur : la santé baisse (ventilateur ou combinaison)');
+    if (water >= WATER.deep) alerts.push(`Eau profonde${b(boots ? ' : les cuissardes limitent la fatigue' : ' : vous vous épuisez')}`);
+    else if (water > 0 && !boots) alerts.push(`Dans l'eau${b(' : vous êtes ralenti')}`);
+    if (temp !== null && !cooled && !suit) alerts.push(`Chaleur${b(' : la santé baisse (ventilateur ou combinaison)')}`);
     // Pièces d'équipement : allumées si portées, sinon grisées avec le rappel de leur prix (dès qu'on descend).
     const gearLine =
       g.gear.size > 0 || g.stats.maxDepth >= 55
@@ -245,21 +282,20 @@ export class UI {
           }).join('')}</div>`
         : '';
     const hp = g.hp / HEALTH.max;
-    const health = `<div class="bar health ${hp < 0.35 ? 'full' : hp < 0.7 ? 'warn' : ''}"><div style="width:${Math.max(0, hp * 100)}%"></div><span>Santé ${Math.ceil(g.hp)} / ${HEALTH.max}</span></div>${
+    const health = `<div class="bar health ${hp < 0.35 ? 'full' : hp < 0.7 ? 'warn' : ''}"><div style="width:${Math.max(0, hp * 100)}%"></div><span><i>Santé </i>${Math.ceil(g.hp)} / ${HEALTH.max}</span></div>${
       alerts.length ? `<div class="danger-line">⚠ ${alerts.join(' · ')}</div>` : ''
     }`;
+    const jack = g.hasJackhammer
+      ? `<div class="fuel-line"><span class="k"><kbd>${this.host.keyLabel('KeyT')}</kbd> ${g.tool === 'jackhammer' ? 'passer à la pioche' : 'passer au marteau-piqueur'}</span>${
+          g.tool === 'jackhammer' ? `<span class="coal"> · charbon dans le sac : ${g.inventory.count('coal')}</span>` : ''
+        }</div>`
+      : '';
     this.set(
       'hud-equip',
-      `<div class="equip">${g.tool === 'pickaxe' && icon(`pick${g.pickaxeLevel}`) ? `<img class="tool-ico" src="${icon(`pick${g.pickaxeLevel}`)}" alt="">` : ''}<span class="tier">N${g.activeTool.tier}</span> ${g.activeTool.name}${
-        g.hasJackhammer
-          ? `<div class="fuel-line"><kbd>${this.host.keyLabel('KeyT')}</kbd> ${g.tool === 'jackhammer' ? 'passer à la pioche' : 'passer au marteau-piqueur'}${
-              g.tool === 'jackhammer' ? ` · charbon dans le sac : ${g.inventory.count('coal')}` : ''
-            }</div>`
-          : ''
-      }${g.scootering ? '<div class="fuel-line">Trottinette en marche · minage impossible</div>' : ''}${
-        g.ropeT > 0 ? `<div class="fuel-line rope-line">${g.ropeDir === 'down' ? 'Descente' : 'Remontée'} : ne bougez plus… ${Math.ceil(g.ropeT)} s</div>` : ''
-      }</div>
-       <div class="bar bag ${ratio >= 0.999 ? 'full' : ratio > 0.8 ? 'warn' : ''}"><div style="width:${Math.min(100, ratio * 100)}%"></div><span>${g.bag.name} ${kg(w)} / ${kg(inv.capacity)}</span></div>
+      `<div class="equip">${g.tool === 'pickaxe' && icon(`pick${g.pickaxeLevel}`) ? `<img class="tool-ico" src="${icon(`pick${g.pickaxeLevel}`)}" alt="">` : ''}<span class="tier">N${g.activeTool.tier}</span> <span class="tool-name">${g.activeTool.name}</span>${jack}${
+        g.scootering ? '<div class="fuel-line">Trottinette en marche · minage impossible</div>' : ''
+      }${g.ropeT > 0 ? `<div class="fuel-line rope-line">${g.ropeDir === 'down' ? 'Descente' : 'Remontée'} : ne bougez plus… ${Math.ceil(g.ropeT)} s</div>` : ''}</div>
+       <div class="bar bag ${ratio >= 0.999 ? 'full' : ratio > 0.8 ? 'warn' : ''}"><div style="width:${Math.min(100, ratio * 100)}%"></div><span><i>${g.bag.name} </i>${kgPair(w, inv.capacity)}</span></div>
        <div class="chips">${items || '<span class="muted">Sac vide</span>'}</div>
        ${health}${gearLine}`,
     );
@@ -267,8 +303,8 @@ export class UI {
     this.set(
       'hud-objective',
       objective
-        ? `<div class="obj-title">Objectif ${index + 1}/${OBJECTIVES.length}</div><div>${esc(objective.text)}</div>`
-        : `<div class="obj-title">Objectif libre</div><div>Agrandissez votre exploitation et descendez toujours plus bas.</div>`,
+        ? `<div class="obj-title"><span class="o-label">Objectif </span>${index + 1}/${OBJECTIVES.length}</div><div class="obj-text">${esc(objective.text)}</div>`
+        : `<div class="obj-title"><span class="o-label">Objectif </span>libre</div><div class="obj-text">Agrandissez votre exploitation et descendez toujours plus bas.</div>`,
     );
     // Repère suivi : nom, distance et direction.
     const t = g.markers.trackedMarker;
@@ -476,6 +512,10 @@ export class UI {
         title = 'Commandes';
         body = helpPanel({ move: this.host.moveKeys(), label: (c) => this.host.keyLabel(c), touch: this.host.touch?.() });
         break;
+      case 'install':
+        title = 'Jouer en plein écran';
+        body = installPanel();
+        break;
     }
     const money$ = kind === 'counter' || kind === 'workshop' ? `<span class="panel-money"><span class="coin"></span>${money(g.money)}</span>` : '';
     const inner = `<header><h2>${title}</h2>${money$}<button class="close" data-action="close" title="Fermer">✕</button></header><div class="panel-body">${body}</div>`;
@@ -517,12 +557,27 @@ export class UI {
         ${save ? `<button class="btn primary big" data-action="continue">Continuer${saveInfo}</button>` : ''}
         <button class="btn big ${save ? (confirmNew ? 'danger' : '') : 'primary'}" data-action="new">${confirmNew ? 'Confirmer : écraser la sauvegarde' : 'Nouvelle partie'}</button>
         ${CAN_PLAY2 ? '<button class="btn big" data-action="play2" title="Une mine, deux mineurs : sur deux téléphones ou deux ordinateurs">Jouer à deux<small>avec un ami, sur son propre appareil</small></button>' : ''}
-        <button class="btn" data-action="import">Importer une sauvegarde…</button>
+        <button class="btn" data-action="import" title="Reprendre une partie exportée dans un fichier">Importer…</button>
         <button class="btn" data-action="help">Commandes</button>
-        <button class="btn" data-action="touch" title="Stick et boutons à l'écran, pour jouer au doigt">Commandes tactiles : ${this.host.touch?.() ? 'oui' : 'non'}</button>
+        <button class="btn" data-action="touch" title="Stick et boutons à l'écran, pour jouer au doigt">Tactile : ${this.host.touch?.() ? 'oui' : 'non'}</button>
+        ${this.fullscreenButton()}
       </div>
       <p class="credits">Clavier et souris, ou au doigt sur téléphone · prototype v0.1</p>
     </div>`;
+  }
+
+  /** Bouton « Plein écran » : l'API du navigateur là où elle existe, la marche à suivre sur iPhone, rien si déjà plein écran. */
+  private fullscreenButton(): string {
+    switch (displayMode()) {
+      case 'button':
+        return '<button class="btn" data-action="fullscreen" title="Cacher la barre du navigateur">Plein écran</button>';
+      case 'fullscreen':
+        return '<button class="btn" data-action="fullscreen">Quitter le plein écran</button>';
+      case 'home-screen':
+        return '<button class="btn" data-action="install" title="Comment cacher la barre de Safari">Plein écran…</button>';
+      default:
+        return '';
+    }
   }
 
   showPauseMenu(muted: boolean, quality: Quality = 'high', net: NetMenu | null = null): void {
@@ -530,29 +585,32 @@ export class UI {
     this.syncOverlay();
     this.menuFx.stop();
     const guest = net?.role === 'guest';
-    const twoPlayer = net
+    const note = net
       ? `<p class="net-note">${
           net.role === 'host'
             ? net.playing
               ? `À deux avec <b>${esc(net.peer || 'votre ami')}</b> · code <b class="code">${esc(net.code)}</b>`
               : `Partie ouverte · code <b class="code">${esc(net.code)}</b> · personne n'est encore arrivé`
             : `Chez <b>${esc(net.peer || "l'hôte")}</b> · code <b class="code">${esc(net.code)}</b>`
-        }<br><span class="muted">Le jeu continue pendant ce menu.</span></p>
-      ${net.role === 'host' ? '<button class="btn" data-action="invite">Inviter : envoyer le lien</button>' : ''}
+        }<br><span class="muted">Le jeu continue pendant ce menu.</span></p>`
+      : '';
+    const twoPlayer = net
+      ? `${net.role === 'host' ? '<button class="btn" data-action="invite">Envoyer le lien</button>' : ''}
       <button class="btn danger" data-action="netLeave">${guest ? 'Quitter la partie à deux' : 'Arrêter la partie à deux'}</button>`
       : CAN_PLAY2
-        ? '<button class="btn" data-action="host2" title="Un ami rejoint votre mine avec un code">Inviter un ami (jouer à deux)</button>'
+        ? '<button class="btn" data-action="host2" title="Un ami rejoint votre mine avec un code">Inviter un ami</button>'
         : '';
-    this.menuRoot.innerHTML = `<div class="menu pause-menu"><h2>Pause</h2><div class="menu-buttons">
+    this.menuRoot.innerHTML = `<div class="menu pause-menu"><h2>Pause</h2>${note}<div class="menu-buttons">
       <button class="btn primary big" data-action="resume">Reprendre</button>
       ${guest ? '' : '<button class="btn" data-action="save">Sauvegarder</button>'}
-      ${net ? '' : '<button class="btn" data-action="load">Charger la dernière sauvegarde</button>'}
-      ${CAN_DOWNLOAD && !guest ? '<button class="btn" data-action="export">Exporter la sauvegarde (fichier)</button>' : ''}
-      ${net ? '' : '<button class="btn" data-action="import">Importer une sauvegarde…</button>'}
+      ${net ? '' : '<button class="btn" data-action="load" title="Recharger la dernière sauvegarde automatique">Charger la sauvegarde</button>'}
+      ${CAN_DOWNLOAD && !guest ? '<button class="btn" data-action="export" title="Enregistrer la partie dans un fichier">Exporter (fichier)</button>' : ''}
+      ${net ? '' : '<button class="btn" data-action="import" title="Reprendre une partie exportée dans un fichier">Importer…</button>'}
       <button class="btn" data-action="mute">Son : ${muted ? 'coupé' : 'activé'}</button>
-      <button class="btn" data-action="quality" title="Élevée : tous les effets. Basse : pour les petits appareils.">Graphismes : ${QUALITY_LABEL[quality]}</button>
+      <button class="btn" data-action="quality" title="Élevée : tous les effets. Basse : pour les petits appareils.">Qualité : ${QUALITY_LABEL[quality]}</button>
       <button class="btn" data-action="help">Commandes</button>
-      <button class="btn" data-action="touch" title="Stick et boutons à l'écran, pour jouer au doigt">Commandes tactiles : ${this.host.touch?.() ? 'oui' : 'non'}</button>
+      <button class="btn" data-action="touch" title="Stick et boutons à l'écran, pour jouer au doigt">Tactile : ${this.host.touch?.() ? 'oui' : 'non'}</button>
+      ${this.fullscreenButton()}
       ${twoPlayer}
       <button class="btn" data-action="quit">Quitter vers le menu</button>
     </div></div>`;
