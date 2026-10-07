@@ -214,11 +214,39 @@ l'écran appuient des touches virtuelles (`setVirtual` pour une touche maintenue
 souris (`touchDown`, `touchMove`, `touchUp` : clic gauche, ou droit en mode « Retirer » ; le relâchement est reporté à la fin de
 l'image pour qu'un tap très bref soit vu). Deux doigts sur le monde = pincement, converti en cran de molette. `TouchControls`
 (créé par `Game.setTouch` si `isTouchDevice()` : `?touch`/`?notouch`, puis le réglage du menu, puis `(pointer: coarse)`) construit
-son DOM dans `#ui`, ne le met à jour que si `TouchContext` change, et se cache quand un panneau ou un menu est ouvert. Le style
-tactile est sous `body.touch` (`ui.css`) : cadres compacts, équipement sous l'argent (`--tl-bottom`), boutons au-dessus de la barre
-de construction (`--bb-h`), zones sûres (`env(safe-area-inset-*)`). Le zoom de base se règle sur le petit côté de l'écran
-(`Renderer.resize`). `stickKeys` et `pinchStep` sont des fonctions pures testées (`tests/touch.test.ts`) ; `e2e/playthrough.mjs`
-rejoue stick, Agir, minage, pincement et construction avec de vrais événements tactiles (CDP) à la taille d'un iPhone.
+son DOM dans `#ui`, ne le met à jour que si `TouchContext` change, et se cache quand un panneau ou un menu est ouvert. Le zoom de
+base se règle sur le petit côté de l'écran (`Renderer.resize`). `stickKeys` et `pinchStep` sont des fonctions pures testées
+(`tests/touch.test.ts`).
+
+Mise en page tactile (`ui/touch.css`, actif avec `body.touch`) : `#ui` est un conteneur (`container: ui / size`), donc tout se règle
+sur la place **visible** de la page (`cqh`/`cqw`, `@container ui (max-height: 300px)`, `(orientation: portrait)`) et non sur `vh`, qui
+sur iOS est la hauteur *sans* les barres de Safari. L'unité `--u` (≈ 12 % de la hauteur, bornée à 34–60 px) donne la taille des
+boutons ; `--L/--R/--T/--B` sont les marges (zones sûres `env(safe-area-inset-*)` + 6 px, au moins 24 px de chaque côté contre le
+glissé « retour » du bord) ; `--ml/--mr` celles des menus, qui n'ont pas besoin de cette garde. Le HUD (`#hud`) est une grille CSS dans
+la zone sûre (colonne gauche : un seul cadre `.hud-left` ; centre : l'objectif, déplacé par `UI` dans `.hud-mid` ; droite : mini-carte
+et repère suivi) et `.tc` (boutons) occupe la même zone : stick en bas à gauche, pile de rangées alignée en bas à droite (extras,
+raccourcis, Agir et Miner), menu ☰ posé au-dessus de la pile (`--tc-h`). Pendant la construction ou le réglage des coffres, la barre
+prend le bas : les boutons montent de sa hauteur (`--bb-h`, titre et ✕ débordants compris) et le renderer décale la caméra
+(`bottomInset`). Les messages se posent sous l'objectif (`--obj-bottom`) ou, debout, sous tout le haut du HUD (`--hud-bottom`),
+mesurés par des `ResizeObserver`. Sur un écran très bas, le superflu disparaît (`display: none` ciblé) plutôt que de se chevaucher.
+
+Appui sur un bouton (`UI` constructeur) : à la souris l'action part à l'appui (`pointerdown`) ; au doigt, au relâchement et seulement
+si le doigt a bougé de moins de 10 px (`TAP_SLOP`) : un glissé qui défile une liste n'active donc pas le bouton sous le doigt (le
+navigateur envoie `pointercancel`). `preventDefault` à l'appui évite que le navigateur rejoue un clic de souris sur le monde derrière un
+panneau qu'on vient de fermer. Les bandes d'onglets défilent de côté seulement (`overflow-y: hidden`) : sinon leur premier glissé
+vertical est avalé par la bande. La carte complète gère elle-même glissé, toucher (repère) et pincement à deux doigts.
+
+Plein écran (`ui/fullscreen.ts`) : `displayMode()` dit si le jeu est déjà une application (`navigator.standalone`,
+`display-mode`), plein écran, plein écran possible par bouton (API Fullscreen, hors iPhone), ou seulement par l'écran d'accueil
+(iPhone : `installPanel`). Le manifeste (`public/manifest.webmanifest`, `display: fullscreen`), les icônes (`public/*.png`, générées
+par `node scripts/make-icons.mjs`) et les balises `apple-mobile-web-app-*` de `index.html` permettent « Sur l'écran d'accueil ». `Game`
+garde l'écran allumé (Screen Wake Lock) et refait l'ajustement au changement d'orientation ou de `visualViewport`.
+
+Tests : `e2e/phone.mjs` ouvre le jeu dans Chromium en émulation tactile à 11 tailles (dont celle d'un iPhone dans Safari avec ses
+barres, 874×282, et des marges d'encoche simulées par `Emulation.setSafeAreaInsetsOverride`), mesure les rectangles de chaque cadre et
+bouton (dans la zone sûre, sans recouvrement, taille de doigt, part de monde visible, menus sans défilement, panneaux de toutes sortes) et
+écrit des captures dans `e2e/screenshots/phone/` ; `e2e/touch.mjs` envoie de vrais gestes (`Input.dispatchTouchEvent`) ;
+`e2e/playthrough.mjs` rejoue une partie complète au clavier et à la souris.
 
 Repères (`sim/Markers.ts`) : `GameState.markers` (un `MarkerBook`) garde la liste, le repère suivi et
 les sauvegarde ; `GameState.addMarker` les nomme d'après le terrain et les machines. La carte complète

@@ -38,6 +38,7 @@ import { esc, kg, money, resIcon } from '../ui/format';
 import { workerAt, workerTooltip } from '../ui/crew';
 import { applyAction, type SimAction } from '../sim/actions';
 import { TouchControls, isTouchDevice, saveTouchPref } from '../ui/touch';
+import { homeScreenHintDue, homeScreenHintShown, toggleFullscreen } from '../ui/fullscreen';
 import { releaseGuests } from '../net/guests';
 import { MqttTransport } from '../net/mqtt';
 import { Session, type SessionStatus } from '../net/session';
@@ -51,6 +52,18 @@ const MENU_SEED = 20260928;
 
 /** Événements qui ne concernent que le joueur qui les a provoqués (l'autre joueur n'entend ni ne lit les siens). */
 const PERSONAL_EVENTS = new Set(['swing', 'hit', 'denied', 'pickup', 'invFull', 'sold', 'bought', 'message', 'hurt', 'mount', 'rope', 'faint', 'placed', 'removed']);
+
+/** Vrai la toute première fois pour ce nom (mémorisé dans le navigateur) : pour les astuces qu'on ne montre qu'une fois. */
+function firstTime(name: string): boolean {
+  const key = `empire-miner.${name}`;
+  try {
+    if (localStorage.getItem(key) === '1') return false;
+    localStorage.setItem(key, '1');
+    return true;
+  } catch {
+    return false;
+  }
+}
 
 /** Identité de cet appareil pour rejoindre des parties : mémorisée, pour retrouver son sac et sa pioche en revenant. */
 function loadGuestId(): string {
@@ -134,7 +147,12 @@ export class Game {
     });
     this.ui.setMenuMotes(PROFILES[this.quality].menuMotes);
     if (isTouchDevice()) this.setTouch(true);
-    window.addEventListener('resize', () => this.renderer.resize());
+    // Taille de l'écran : rotation du téléphone, barres de Safari qui apparaissent ou disparaissent. Après une rotation,
+    // iOS annonce parfois l'ancienne taille : on mesure aussi un instant plus tard.
+    const refit = () => this.renderer.resize();
+    window.addEventListener('resize', refit);
+    window.addEventListener('orientationchange', () => setTimeout(refit, 250));
+    window.visualViewport?.addEventListener('resize', refit);
     const unlock = () => this.sfx.unlock();
     // Sur iPhone, le son ne se débloque que dans un geste « fini » (toucher levé, clic).
     for (const type of ['pointerdown', 'pointerup', 'touchend', 'click', 'keydown']) window.addEventListener(type, unlock);
@@ -144,6 +162,7 @@ export class Game {
     });
     document.addEventListener('visibilitychange', () => {
       if (document.hidden) this.autoSaveNow();
+      else this.keepAwake();
     });
     try {
       this.sfx.setMuted(localStorage.getItem('empire-miner.muted') === '1');
@@ -170,6 +189,7 @@ export class Game {
       this.touch.destroy();
       this.touch = null;
     }
+    this.ui.setTouchLayout(!!this.touch);
   }
 
   start(): void {
@@ -210,6 +230,23 @@ export class Game {
     this.autoSaveNow();
   }
 
+  /**
+   * Garde l'écran allumé pendant la partie (téléphone) : une mine qui tourne toute seule ne doit pas s'arrêter parce que
+   * l'écran s'est verrouillé (le jeu est suspendu, et la connexion à deux coupée). Sans effet là où l'API n'existe pas.
+   */
+  private wakeLock: { release(): Promise<void> } | null = null;
+  private keepAwake(): void {
+    const nav = navigator as Navigator & { wakeLock?: { request(type: 'screen'): Promise<{ release(): Promise<void>; addEventListener(t: 'release', f: () => void): void }> } };
+    if (!this.touch || this.mode !== 'playing' || !nav.wakeLock || this.wakeLock || document.hidden) return;
+    nav.wakeLock
+      .request('screen')
+      .then((lock) => {
+        this.wakeLock = lock;
+        lock.addEventListener('release', () => (this.wakeLock = null));
+      })
+      .catch(() => undefined);
+  }
+
   private begin(state: GameState): void {
     this.closeSession();
     // Une sauvegarde faite pendant une partie à deux contient l'invité : il n'est plus là, ses affaires sont gardées de côté.
@@ -229,6 +266,15 @@ export class Game {
     this.ui.hideMenu();
     this.ui.closePanel();
     this.ui.showHud(true);
+    this.keepAwake();
+    // Téléphone tenu debout : une seule fois, on suggère de le mettre en travers.
+    if (this.touch && window.matchMedia?.('(orientation: portrait)').matches && firstTime('rotate-hint'))
+      this.ui.toast('Astuce : tenez le téléphone en travers pour voir plus grand.', 'info');
+    // iPhone dans Safari : on glisse, une seule fois, comment enlever les barres.
+    if (this.touch && homeScreenHintDue()) {
+      homeScreenHintShown();
+      this.ui.toast('Astuce : pour jouer en plein écran, touchez Partager puis « Sur l’écran d’accueil ».', 'info');
+    }
     // Première exploration immédiate.
     state.update(0, NO_INTENT);
     state.events.length = 0;
@@ -345,6 +391,7 @@ export class Game {
     // Le menu du jeu reste tel quel pour celui qui avait une partie en cours ; l'invité sort de son écran d'attente.
     if (this.ui.menu === 'main') this.ui.hideMenu();
     this.ui.showHud(true);
+    this.keepAwake();
     g.events.length = 0;
   }
 
@@ -389,7 +436,7 @@ export class Game {
     const peer = esc(s.peerName || (s.role === 'host' ? 'Invité' : 'Hôte'));
     let chip: string;
     let banner = '';
-    if (s.role === 'host' && !s.linked) chip = `<span class="dot wait"></span>Code <b class="code">${s.code}</b><small>Touchez ici pour inviter un ami</small>`;
+    if (s.role === 'host' && !s.linked) chip = `<span class="dot wait"></span>Code <b class="code">${s.code}</b><span class="share">↗ Inviter</span><small>Touchez ici pour inviter un ami</small>`;
     else if (s.status === 'syncing') chip = `<span class="dot wait"></span>Synchronisation…`;
     else if (s.status === 'lost') chip = `<span class="dot bad"></span>Connexion perdue`;
     else chip = `<span class="dot ${s.stalled ? 'wait' : 'ok'}"></span>À deux · <b>${peer}</b>`;
@@ -513,6 +560,17 @@ export class Game {
           /* ignoré */
         }
         this.showPause();
+        return;
+      case 'fullscreen':
+        void toggleFullscreen().then(() => {
+          if (this.mode === 'menu') this.showMainMenu();
+          else this.showPause();
+        });
+        return;
+      case 'install':
+        this.ui.openPanel('install');
+        if (this.state) this.ui.renderPanel(this.state, 0, true);
+        else if (this.menuState) this.ui.renderPanel(this.menuState, 0, true);
         return;
       case 'touch': {
         const on = !this.touch;
@@ -1060,7 +1118,7 @@ export class Game {
   /** Invite d'action : structure proche (E) et wagonnet (F). */
   private promptText(g: GameState, near: ReturnType<GameState['nearestInteractable']>): string {
     if (this.ui.blocking) return '';
-    const f = `<kbd>${this.input.label('KeyF')}</kbd>`;
+    const f = this.touch ? '<b class="act-tag">🚃</b>' : `<kbd>${this.input.label('KeyF')}</kbd>`;
     if (g.riding) return `${f} Descendre du wagonnet`;
     const main = this.structurePrompt(near);
     const wagon = g.nearestWagon() ? `${f} Monter dans le wagonnet` : '';
@@ -1069,7 +1127,8 @@ export class Game {
 
   private structurePrompt(near: ReturnType<GameState['nearestInteractable']>): string {
     if (!near) return '';
-    const e = `<kbd>${this.input.label('KeyE')}</kbd>`;
+    // Au doigt, le bouton « Agir » remplace la touche E.
+    const e = this.touch ? '<b class="act-tag">Agir</b>' : `<kbd>${this.input.label('KeyE')}</kbd>`;
     if (near instanceof Building) return `${e} ${BUILDING_INFO[near.type].name} — ${BUILDING_INFO[near.type].prompt}`;
     if (near instanceof Storage) return `${e} Ouvrir le coffre`;
     if (near instanceof ShippingCrate) return `${e} Caisse d'expédition — vente automatique`;

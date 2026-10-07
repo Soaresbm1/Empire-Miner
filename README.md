@@ -51,20 +51,35 @@ travers**, mais fonctionne aussi debout. Sur iPhone, ouvrez le lien de la versio
 | Action | Au doigt |
 | --- | --- |
 | Se déplacer | **stick** en bas à gauche (8 directions) |
-| Miner | **toucher et maintenir** une paroi proche, ou garder le bouton **⛏ Miner** appuyé pour frapper devant soi |
+| Miner | **toucher et maintenir** une paroi proche, ou garder le bouton **⛏ Miner** appuyé pour frapper devant soi (le stick et Miner marchent ensemble, un doigt chacun) |
 | Interagir (comptoir, atelier, coffre, machine), fermer un panneau | bouton **Agir** (il s'allume quand quelque chose est à portée) |
 | Sac, carte, construction | boutons **Sac**, **Carte**, **Bâtir** |
 | Coffres, repère, outil, corde, wagonnet, pause, vitesse, aide, menu | bouton **☰** (toutes les autres touches du clavier) |
 | Trottinette | bouton **🛴 Roule** (apparaît une fois achetée) : activé, on roule |
-| Zoom | **pincer** avec deux doigts |
+| Zoom | **pincer** avec deux doigts (dans le monde comme sur la carte) |
 | Construire | **toucher** pose la machine (glisser pour tracer convoyeurs et rails), **↻ Tourner** l'oriente, **✕ Retirer** puis toucher une machine la démonte |
 | Régler plusieurs coffres | **toucher** un coffre pour le choisir, **glisser** un rectangle pour en choisir plusieurs |
-| Carte | glisser pour la déplacer, boutons **+** **−** pour zoomer |
+| Carte | glisser pour la déplacer, **pincer** ou boutons **+** **−** pour zoomer, toucher pour poser un repère |
+| Menus et panneaux | un bouton répond **quand on lève le doigt** ; faire défiler une liste en partant d'un bouton (l'Atelier, par exemple) n'achète rien |
 
-Les cadres du haut sont compacts, l'équipement se range sous l'argent, la barre de construction tient en deux lignes et les
-boutons restent au-dessus d'elle ; les zones sûres de l'iPhone (encoche, barre du bas) sont respectées. Les graphismes
-démarrent en qualité **Moyenne** sur un appareil tactile (réglable dans le menu pause). Le bouton « Commandes tactiles »
-du menu principal et du menu pause force l'affichage ou le retire ; `?touch` et `?notouch` dans l'adresse font de même.
+**L'affichage suit la place réellement visible.** Safari sur iPhone, avec ses barres d'adresse et d'onglets, ne laisse parfois
+que 280 px de haut au jeu ; les tailles se règlent sur la hauteur du jeu et non sur celle de l'écran. Tout est rangé en
+régions qui ne se recouvrent pas : à gauche un seul cadre pour le mineur (argent, profondeur, vitesse, connexion, sac, santé,
+équipement), au centre l'objectif et les messages, à droite la mini-carte, en bas le stick et la pile de boutons. Sur un écran
+très bas, le superflu s'efface (revenu automatique, cours du marché, explications des alertes) et les menus passent sur
+plusieurs colonnes. Les zones sûres de l'iPhone (encoche, barre du bas) et une marge de 24 px au bord (un glissé depuis le
+bord de l'écran fait « retour » dans Safari) sont respectées. Les graphismes démarrent en qualité **Moyenne** sur un appareil
+tactile (réglable dans le menu pause). Le bouton « Tactile » du menu principal et du menu pause force l'affichage ou le
+retire ; `?touch` et `?notouch` dans l'adresse font de même. Le téléphone ne se met pas en veille pendant la partie.
+
+**Plein écran.**
+
+- **iPhone** : Safari ne permet pas de cacher ses barres depuis une page web. Le bouton **Plein écran…** (menu principal et
+  menu pause) explique la marche à suivre : touchez *Partager*, puis **« Sur l'écran d'accueil »**, puis ouvrez le jeu depuis
+  son icône. Il s'ouvre alors sans aucune barre. L'icône a son propre espace de stockage : la partie enregistrée dans Safari
+  n'y apparaît pas (menu pause → *Exporter*, puis *Importer* dans l'application).
+- **Android, iPad, ordinateur** : le bouton **Plein écran** utilise le plein écran du navigateur (et, sur Android, garde
+  l'écran en travers).
 
 ## Jouer à deux
 
@@ -365,6 +380,8 @@ Source : GitHub Actions*. On peut aussi le lancer à la main (onglet *Actions* �
 npm test             # tests unitaires de la simulation (Vitest, sans navigateur)
 npm run build && npm run e2e   # partie jouée dans Chromium avec clavier/souris, captures dans e2e/screenshots/
 node e2e/coop.mjs              # jeu à deux : deux pages du même navigateur (canal local ?net=local), après un build
+node e2e/phone.mjs             # mise en page sur téléphone, à 11 tailles d'écran (marges de l'encoche comprises), après un build
+node e2e/touch.mjs             # gestes tactiles réels (CDP) : stick, Miner, Agir, ☰, défilement sans achat, pincer, pose, iPhone
 npx vite-node tests-net/mqtt.check.ts   # client MQTT contre un vrai courtier local (aedes)
 ```
 

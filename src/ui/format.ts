@@ -15,6 +15,12 @@ export function kg(v: number): string {
   return `${(Math.round(v * 10) / 10).toLocaleString('fr-FR')} kg`;
 }
 
+/** « 16,5 kg / 20 kg » ; sur un petit écran, la première unité disparaît (« 16,5 / 20 kg »). */
+export function kgPair(v: number, cap: number): string {
+  const n = (Math.round(v * 10) / 10).toLocaleString('fr-FR');
+  return `${n}<i class="u"> kg</i> / ${(Math.round(cap * 10) / 10).toLocaleString('fr-FR')} kg`;
+}
+
 export function num(v: number, digits = 1): string {
   return v.toLocaleString('fr-FR', { maximumFractionDigits: digits });
 }

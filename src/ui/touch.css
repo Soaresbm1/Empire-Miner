@@ -1,0 +1,358 @@
+/* ================================================================ Téléphone et tablette
+   Actif avec `body.touch` (écran tactile, ou ?touch).
+
+   Mise en page par régions, dans la zone sûre de l'écran (encoche, barre d'accueil) :
+
+        ┌──────────────┬───────────────────────┬─────────┐
+        │ argent       │ objectif              │ mini-   │
+        │ profondeur   │ messages              │ carte   │
+        │ sac · santé  │                       │         │
+        │              │   (le monde, et le    │         │
+        │              │    mineur au centre)  │ boutons │
+        │ stick        │ invite / construction │ ☰ Agir  │
+        └──────────────┴───────────────────────┴─────────┘
+
+   Rien ne se recouvre : chaque région a sa place, et les tailles suivent la hauteur de l'écran (`--u`), car Safari ne laisse
+   parfois que 280 px à la page quand ses barres d'adresse et d'onglets sont affichées. e2e/phone.mjs le vérifie à
+   onze tailles d'écran. */
+
+body.touch {
+  --e: 6px;
+  /* Sans encoche, on garde 24 px au bord : un glissé depuis le bord de l'écran fait « retour » dans Safari et Android. */
+  --L: max(calc(var(--sl) + var(--e)), 24px);
+  --R: max(calc(var(--sr) + var(--e)), 24px);
+  --T: calc(var(--st) + var(--e));
+  --B: calc(var(--sb) + var(--e));
+  /* Les menus sont centrés : pas besoin de la garde de bord. */
+  --ml: calc(var(--sl) + var(--e));
+  --mr: calc(var(--sr) + var(--e));
+  /* Unité de taille des boutons, largeur de la colonne de gauche (valeurs de secours sans unités de conteneur). */
+  --u: 46px;
+  --lw: 176px;
+}
+@supports (height: 1cqh) {
+  body.touch {
+    --u: clamp(34px, min(12.4cqh, 11cqw), 60px);
+    --lw: clamp(160px, 22cqw, 200px);
+  }
+}
+body.touch #game { cursor: default; }
+body.touch button, body.touch .tab, body.touch .bb-tab, body.touch .bb-kit, body.touch [data-action] { touch-action: manipulation; }
+
+/* ---------------------------------------------------------------- HUD : la grille du haut */
+body.touch #hud {
+  position: absolute;
+  inset: var(--T) var(--R) var(--B) var(--L);
+  display: grid;
+  grid-template-columns: var(--lw) minmax(0, 1fr) auto;
+  grid-template-rows: auto;
+  align-content: start;
+  column-gap: 6px;
+  align-items: start;
+  pointer-events: none;
+}
+body.touch .hud-box { padding: 2px 6px 3px; }
+
+/* Un seul cadre pour tout ce qui concerne le mineur : argent, profondeur, vitesse, connexion, sac, santé. */
+body.touch .hud-left {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  grid-column: 1;
+  grid-row: 1;
+  width: var(--lw);
+  min-width: 0;
+  padding: 2px 7px 3px;
+}
+body.touch .hud-left > .hud-box { position: static; width: auto; min-width: 0; margin: 0; padding: 0; border: 0; border-image: none; background: none; box-shadow: none; }
+body.touch .hud-left > #hud-equip { padding-top: 3px; border-top: 1px solid rgba(138, 106, 76, 0.5); }
+
+body.touch .money { gap: 5px; overflow: hidden; font-size: clamp(15px, calc(var(--u) * 0.46), 19px); line-height: 1.15; white-space: nowrap; }
+body.touch .coin { width: 15px; height: 15px; }
+body.touch .depth { margin: 0; overflow: hidden; font-size: 11px; line-height: 1.25; text-overflow: ellipsis; white-space: nowrap; }
+body.touch .depth .zone { margin-left: 3px; font-size: 11px; }
+body.touch .depth .heat { overflow: hidden; font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
+body.touch .income:not(:empty), body.touch .market:not(:empty) { overflow: hidden; margin: 0; font-size: 10px; line-height: 1.25; text-overflow: ellipsis; white-space: nowrap; }
+body.touch .speed { max-width: none; margin-top: 3px; }
+body.touch .sp { height: 30px; font-size: 13px; }
+body.touch .sp-note { overflow: hidden; margin-top: 2px; font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
+body.touch .net { overflow: hidden; margin: 0; font-size: 11px; line-height: 1.3; text-overflow: ellipsis; white-space: nowrap; }
+body.touch .net small { display: none; }
+body.touch .net .share { display: inline; margin-left: 5px; color: var(--accent); }
+
+/* Équipement : l'outil sur une ligne, puis le sac et la santé côte à côte. */
+body.touch #hud-equip { display: grid; grid-template-columns: 1fr 1fr; gap: 3px 4px; }
+body.touch #hud-equip > .equip { grid-column: 1 / -1; overflow: hidden; margin: 0; font-size: 11px; line-height: 1.3; text-overflow: ellipsis; white-space: nowrap; }
+body.touch .equip .tool-ico { height: 14px; margin-right: 3px; vertical-align: -3px; }
+body.touch .equip .tier { padding: 0 3px; }
+body.touch .equip > .fuel-line { overflow: hidden; margin-top: 1px; font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
+body.touch .fuel-line .coal { margin: 0; }
+body.touch #hud-equip .bar { height: 14px; margin: 0; }
+body.touch #hud-equip .bar > span { padding-left: 14px; font-size: 10px; line-height: 13px; }
+body.touch .bar span i, body.touch .bar span .u, body.touch .danger-line .b, body.touch .fuel-line .k { display: none; }
+body.touch #hud-equip .bar.health { grid-column: 2; }
+body.touch #hud-equip .chips { display: none; order: 5; }
+body.touch #hud-equip > .equip { order: 0; }
+body.touch #hud-equip .bar.bag { order: 1; }
+body.touch #hud-equip .bar.health { order: 2; }
+body.touch #hud-equip .danger-line { order: 3; }
+body.touch #hud-equip .gear-line { order: 4; }
+body.touch #hud-equip .danger-line { grid-column: 1 / -1; overflow: hidden; margin: 0; font-size: 10.5px; text-overflow: ellipsis; white-space: nowrap; }
+body.touch #hud-equip .gear-line { grid-column: 1 / -1; margin: 0; }
+
+/* ---------------------------------------------------------------- HUD : objectif, mini-carte, repère suivi */
+body.touch .hud-mid { display: block; grid-column: 2; grid-row: 1; justify-self: center; min-width: 0; max-width: 100%; }
+body.touch .hud-mid:empty { display: none; }
+body.touch #hud-objective { display: flex; align-items: baseline; gap: 6px; max-width: 100%; padding: 2px 8px 3px; font-size: 11px; line-height: 1.22; }
+body.touch .obj-title { flex: none; margin: 0; font-size: 10px; letter-spacing: 0.5px; }
+body.touch .obj-text { min-width: 0; overflow: hidden; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
+
+body.touch .hud-tr { position: static; grid-column: 3; grid-row: 1; max-width: none; align-items: flex-end; gap: 4px; font-size: 11px; }
+body.touch .minimap { padding: 3px; }
+body.touch .minimap canvas { width: calc(var(--u) * 2.6); height: calc(var(--u) * 1.8); }
+body.touch .minimap-cap { display: none; }
+body.touch .track { box-sizing: border-box; max-width: calc(var(--u) * 3.6); overflow: hidden; padding: 2px 6px; font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
+
+/* Pendant la construction (ou le réglage des coffres), la barre prend le bas de l'écran : le haut se simplifie. */
+body.touch #hud.building .hud-tr { display: none; }
+body.touch #hud.building #hud-equip, body.touch #hud.building .hud-tl > :not(.money):not(.depth) { display: none; }
+
+/* ---------------------------------------------------------------- invite, messages, bandeaux */
+/* Invite d'action : au centre du bas, entre le stick et les boutons. */
+body.touch .hud-bc { position: absolute; left: 50%; bottom: 0; transform: translateX(-50%); max-width: calc(100% - 2 * (var(--u) * 3.9 + 14px)); gap: 4px; pointer-events: none; }
+body.touch .prompt:not(:empty) { margin: 0 0 2px; padding: 3px 10px; font-size: 12px; text-align: center; }
+body.touch .hud-bc:has(.buildbar) { left: 0; right: 0; max-width: none; width: auto; transform: none; }
+body.touch #hud.building .prompt { display: none; }
+
+body.touch #save-indicator { right: auto; bottom: calc(var(--u) * 0.2); left: 50%; transform: translateX(-50%); font-size: 11px; }
+
+/* Messages : sous l'objectif, au centre ; deux au plus. */
+body.touch #toasts { top: calc(var(--obj-bottom, 40px) + 4px); width: max-content; max-width: calc(100cqw - 2 * (var(--L) + var(--lw) + 8px)); gap: 3px; }
+body.touch .toast { padding: 3px 9px 3px 8px; font-size: 12px; line-height: 1.25; border-left-width: 5px; }
+body.touch .toast.out { transform: none; }
+body.touch #toasts .toast:nth-last-child(n + 3) { display: none; }
+
+/* « En attente de l'autre joueur » : en bas au centre, loin du mineur, entre le stick et la pile de boutons. */
+body.touch #net-stall { top: auto; bottom: calc(var(--u) * 1.3 + 8px); max-width: calc(100cqw - 2 * (var(--R) + var(--u) * 5.4 + 10px)); padding: 4px 12px; font-size: 13px; }
+body.touch #net-stall small { font-size: 10px; line-height: 1.2; }
+body.touch #hud.building #net-stall { bottom: calc(var(--build-h, 100px) + 8px); }
+
+/* ---------------------------------------------------------------- boutons à l'écran */
+.tc { position: absolute; inset: var(--T) var(--R) var(--B) var(--L); z-index: 4; pointer-events: none; }
+.tc.hidden { display: none; }
+.tc button, .tc .tc-stick { pointer-events: auto; touch-action: none; -webkit-user-select: none; user-select: none; }
+.tc-btn {
+  display: inline-flex; flex-direction: column; align-items: center; justify-content: center; gap: 0;
+  min-width: calc(var(--u) * 1.2); height: calc(var(--u) * 0.95); padding: 0 6px; border: 0; border-radius: 10px; cursor: pointer;
+  background: rgba(30, 22, 25, 0.82); color: var(--text); font: 600 clamp(11px, calc(var(--u) * 0.32), 15px)/1.1 var(--font);
+  box-shadow: inset 0 2px 0 #5a4a52, inset 0 -3px 0 #1a1216, 0 0 0 2px #120e10, 0 3px 0 2px rgba(0, 0, 0, 0.3);
+}
+.tc-btn b { font-size: calc(var(--u) * 0.42); font-weight: 400; line-height: 1; }
+.tc-btn.down, .tc-btn.on { background: #4a3a22; color: var(--gold); box-shadow: inset 0 0 0 2px var(--gold), 0 0 0 2px #120e10; }
+.tc-btn.down { transform: translateY(2px); }
+.tc-btn.hidden { display: none; }
+
+/* Le stick : la zone qui répond est un peu plus large que le rond dessiné. */
+.tc-stick { position: absolute; left: calc(var(--u) * -0.2); bottom: calc(var(--bb-h, 0px) + var(--u) * -0.2); display: flex; align-items: center; justify-content: center; width: calc(var(--u) * 3.3); height: calc(var(--u) * 3.3); }
+.tc-base { position: relative; display: flex; align-items: center; justify-content: center; width: calc(var(--u) * 2.9); height: calc(var(--u) * 2.9); border-radius: 50%; background: rgba(20, 14, 16, 0.5); box-shadow: inset 0 0 0 3px rgba(138, 106, 76, 0.85), 0 0 0 2px #120e10; }
+.tc-knob { width: calc(var(--u) * 1.15); height: calc(var(--u) * 1.15); border-radius: 50%; background: radial-gradient(circle at 40% 35%, #8a6a4c, #4a3626); box-shadow: inset 0 2px 0 rgba(255, 255, 255, 0.25), 0 0 0 2px #120e10; pointer-events: none; }
+.tc-stick.down .tc-knob { background: radial-gradient(circle at 40% 35%, #f2c230, #a07410); }
+
+/* À droite : pile de rangées alignées en bas à droite (extras, raccourcis, puis Agir et Miner). */
+.tc-right { position: absolute; right: 0; bottom: var(--bb-h, 0px); display: flex; flex-direction: column; align-items: flex-end; gap: calc(var(--u) * 0.16); }
+.tc-extra, .tc-quick, .tc-build { display: flex; gap: calc(var(--u) * 0.14); }
+.tc-extra:not(:has(:not(.hidden))) { display: none; }
+.tc-main { display: flex; align-items: flex-end; gap: calc(var(--u) * 0.2); }
+.tc.building .tc-main { display: none; }
+.tc-build.hidden { display: none; }
+.tc-act, .tc-mine { padding: 0; border-radius: 50%; }
+.tc-act { width: calc(var(--u) * 1.7); height: calc(var(--u) * 1.7); margin-bottom: calc(var(--u) * 0.4); }
+.tc-act.lit { background: #4a3a22; color: var(--gold); box-shadow: inset 0 0 0 3px var(--gold), 0 0 0 2px #120e10, 0 0 16px rgba(242, 194, 48, 0.55); animation: tc-pulse 1.1s ease-in-out infinite; }
+@keyframes tc-pulse { 50% { box-shadow: inset 0 0 0 3px var(--gold), 0 0 0 2px #120e10, 0 0 26px rgba(242, 194, 48, 0.9); } }
+.tc-mine { width: calc(var(--u) * 2.1); height: calc(var(--u) * 2.1); }
+.tc-mine b { font-size: calc(var(--u) * 0.7); }
+
+/* Menu ☰ : toutes les commandes du clavier, dans une fenêtre qui se pose sur les boutons. */
+.tc-sheet { position: absolute; right: 0; bottom: calc(var(--bb-h, 0px) + var(--tc-h, 110px) + 6px); display: grid; grid-template-columns: repeat(6, 1fr); gap: 6px; box-sizing: border-box; width: min(100%, calc(var(--u) * 11)); padding: 8px; border-radius: 14px; background: rgba(22, 17, 20, 0.96); box-shadow: inset 0 0 0 2px var(--line-light), 0 0 0 2px #120e10, 0 6px 0 rgba(0, 0, 0, 0.3); }
+.tc-sheet.hidden { display: none; }
+.tc-sheet .tc-btn { min-width: 0; height: calc(var(--u) * 0.95); padding: 0 2px; }
+
+/* ---------------------------------------------------------------- barre de construction et réglage des coffres */
+body.touch .buildbar { box-sizing: border-box; width: 100%; margin-top: 0; padding: 9px 6px 4px; }
+body.touch .bb-head { margin-bottom: 4px; }
+body.touch .bb-tab { height: 30px; font-size: 13px; }
+body.touch .bb-close { padding: 0 10px; font-size: 22px; }
+body.touch .bb-kits { flex-wrap: nowrap; overflow-x: auto; overflow-y: hidden; gap: 5px; padding: 2px 2px 4px; scrollbar-width: none; }
+body.touch .bb-kit { flex: none; width: auto; flex-direction: row; align-items: center; gap: 5px; height: 42px; padding: 3px 8px 3px 4px; }
+body.touch .bb-kit img { height: 30px; }
+body.touch .bb-kit b { min-height: 0; max-width: 96px; font-size: 12px; line-height: 1.1; text-align: left; }
+body.touch .bb-kit .count { position: static; order: 3; font-size: 12px; color: var(--gold); }
+body.touch .bb-kit .lvl { position: static; }
+body.touch .bb-desc, body.touch .bb-keys, body.touch .bb-tip, body.touch .bb-kit .n, body.touch .bb-info, body.touch .bb-dir { display: none; }
+body.touch .bb-status { margin-top: 3px; padding: 2px 6px; font-size: 12px; }
+body.touch .chestbar .bb-head { margin: 0; }
+body.touch .chestbar .bb-close { position: absolute; top: -12px; right: 8px; padding: 0 9px; border-radius: 4px; background: #2e2318; box-shadow: inset 0 0 0 2px var(--line-light); font-size: 16px; line-height: 22px; }
+body.touch .chestbar { padding-top: 12px; }
+body.touch .chestbar .cb-step { margin-top: 2px; gap: 3px 6px; font-size: 12px; }
+body.touch .chestbar .buy { gap: 4px; }
+body.touch .chestbar .btn { min-height: 30px; margin-bottom: 0; padding: 3px 10px; font-size: 13px; line-height: 1.1; }
+body.touch .chestbar .cb-apply { margin-top: 3px; }
+body.touch .chestbar .cb-step > b:first-child { min-width: 0; font-size: 12px; }
+
+/* ---------------------------------------------------------------- panneaux (atelier, sac, carte…) */
+body.touch #panel-root { padding: calc(var(--st) + 4px) calc(var(--sr) + 4px) calc(var(--sb) + 4px) calc(var(--sl) + 4px); }
+body.touch .panel { max-width: 100%; max-height: 100%; }
+body.touch .panel h2 { font-size: 19px; }
+body.touch .panel .close { width: 42px; height: 42px; font-size: 18px; }
+body.touch .panel-body { overflow-x: auto; padding: 8px 10px 12px; -webkit-overflow-scrolling: touch; overscroll-behavior: contain; }
+body.touch .panel .btn, body.touch .menu .btn, body.touch .panel .tab { min-height: 38px; }
+/* Les onglets défilent de côté, jamais de haut en bas : sinon le premier glissé vertical qui part d'un onglet est avalé par la bande. */
+body.touch .tabs { overflow-x: auto; overflow-y: hidden; flex-wrap: nowrap; scrollbar-width: none; }
+body.touch .tab { flex: none; padding: 6px 10px 5px; font-size: 15px; }
+body.touch .tab-key { display: none; }
+body.touch .map-canvas { height: min(calc(100cqh - 190px), 570px); min-height: 150px; }
+body.touch .map-zoom .btn { min-width: 44px; }
+body.touch .marker-list .btn.small { min-width: 42px; }
+body.touch .help-touch { grid-column: 1 / -1; padding: 8px 10px; border-radius: 6px; background: rgba(242, 194, 48, 0.1); box-shadow: inset 0 0 0 2px rgba(242, 194, 48, 0.4); }
+
+/* ================================================================ Téléphone tenu en travers */
+@container ui (orientation: landscape) {
+  /* En construction, les boutons montent : les messages se serrent pour ne pas passer dessus. */
+  body.touch #hud.building ~ #toasts { max-width: calc(100cqw - 2 * (var(--R) + var(--u) * 5.4 + 8px)); }
+  /* Réglage des coffres : le second réglage et le bouton « Appliquer » partagent une ligne, la barre reste basse. */
+  body.touch .chestbar:has(.cb-apply) { display: grid; grid-template-columns: auto minmax(0, 1fr); column-gap: 10px; align-items: center; }
+  body.touch .chestbar:has(.cb-apply) > * { grid-column: 1 / -1; }
+  body.touch .chestbar:has(.cb-apply) > .cb-step + .cb-step { grid-column: 1; }
+  body.touch .chestbar:has(.cb-apply) > .cb-apply { grid-column: 2; margin-top: 2px; }
+  body.touch .chestbar .cb-apply .btn { white-space: normal; }
+}
+
+/* ================================================================ Écran peu haut : la mini-carte rapetisse (même proportions), pour laisser sa place à la pile de boutons */
+@container ui (max-height: 340px) {
+  body.touch .minimap canvas { width: calc(var(--u) * 2.38); height: calc(var(--u) * 1.65); }
+  /* En construction, la barre prend de la hauteur : le stick rapetisse pour ne pas toucher le cadre du haut. */
+  body.touch .tc.building .tc-stick { transform: scale(0.78); transform-origin: calc(var(--u) * 0.2) calc(100% - var(--u) * 0.2); }
+}
+
+/* ================================================================ Écran bas (téléphone tenu en travers, Safari et ses barres) */
+@container ui (max-height: 300px) {
+  /* Ce qui n'est pas indispensable en jeu laisse la place : revenu automatique, cours du marché, pièces d'équipement,
+     explications des alertes, vitesse (le menu ☰ garde Pause et Vitesse), repère suivi. */
+  body.touch .income, body.touch .market, body.touch .gear-line, body.touch .depth .heat .h2,
+  body.touch .speedbar, body.touch .track, body.touch .obj-title .o-label, body.touch #net-stall small { display: none !important; }
+  body.touch .speed:has(.sp-note:empty), body.touch .speed:empty { display: none; }
+  body.touch .hud-left { gap: 2px; }
+  body.touch .money { font-size: 17px; }
+  body.touch #toasts .toast:nth-last-child(n + 2) { display: none; }
+  body.touch .buildbar { padding: 8px 6px 3px; }
+  body.touch .bb-head { margin-bottom: 3px; }
+  body.touch .bb-kit { height: 36px; }
+  body.touch .bb-kit img { height: 26px; }
+  body.touch .bb-status { margin-top: 2px; padding: 1px 6px; font-size: 11px; }
+  body.touch .tc-sheet { grid-template-columns: repeat(6, 1fr); }
+  /* Panneaux : l'en-tête et les onglets laissent la place au contenu. */
+  body.touch .panel header { gap: 8px; padding: 3px 8px; }
+  body.touch .panel h2 { font-size: 17px; }
+  body.touch .panel .close { width: 36px; height: 36px; }
+  body.touch .panel-body { padding: 6px 8px 10px; }
+  body.touch .shop-nav { position: static; margin: 0 -8px 8px; padding: 6px 8px 0; box-shadow: none; }
+  body.touch .advice { margin-bottom: 4px; padding: 2px 8px; }
+  body.touch .map-canvas { height: calc(100cqh - 150px); min-height: 110px; }
+  body.touch #hud.building .hud-tl > .depth { display: none; }
+}
+
+/* ================================================================ Téléphone tenu debout */
+@container ui (orientation: portrait) {
+  /* Le haut : le cadre du mineur à gauche, la mini-carte à droite ; l'objectif passe en dessous, sur toute la largeur. */
+  body.touch #hud { grid-template-columns: var(--lw) minmax(0, 1fr) auto; grid-template-rows: auto auto; row-gap: 6px; }
+  body.touch .money { font-size: 19px; }
+  body.touch .hud-left { --lw: 176px; }
+  body.touch .hud-mid { grid-column: 1 / -1; grid-row: 2; justify-self: stretch; }
+  body.touch #hud-objective { width: 100%; box-sizing: border-box; }
+  body.touch .hud-tr { grid-column: 3; grid-row: 1; }
+  body.touch #hud-equip .chips { display: flex; grid-column: 1 / -1; margin: 0; font-size: 12px; min-height: 0; }
+  body.touch #toasts { top: calc(var(--hud-bottom, 220px) + 6px); max-width: calc(100cqw - 24px); }
+  body.touch #hud.building ~ #toasts { top: calc(var(--hud-bottom, 112px) + 6px); }
+  /* L'invite passe au-dessus des boutons (ils sont trop larges pour la laisser entre eux). */
+  body.touch .hud-bc { bottom: calc(var(--u) * 5.2 + 26px); max-width: none; width: calc(100% - 12px); }
+  body.touch .hud-bc:has(.buildbar) { bottom: 0; width: auto; }
+  body.touch #net-stall { bottom: calc(var(--u) * 6 + 30px); max-width: calc(100% - 12px); }
+  @container ui (max-height: 620px) {
+    body.touch #net-stall small { display: none; }
+  }
+  body.touch #save-indicator { bottom: calc(var(--u) * 3 + 14px); }
+  body.touch .tc-sheet { grid-template-columns: repeat(4, 1fr); width: min(100%, calc(var(--u) * 8)); }
+  body.touch .tc-quick .tc-btn, body.touch .tc-build .tc-btn, body.touch .tc-extra .tc-btn { min-width: calc(var(--u) * 1.1); padding: 0 3px; }
+}
+
+/* ================================================================ Menus sur écran bas : plus de défilement */
+@container ui (max-height: 470px) {
+  #menu-root { overflow-y: auto; padding: var(--T, 6px) var(--mr, 6px) var(--B, 6px) var(--ml, 6px); }
+  #menu-root > .menu { margin: auto; }
+
+  /* Menu principal : le logo et la devise à gauche, les boutons à droite. */
+  .main-menu:not(.play-menu) { display: grid; grid-template-columns: auto auto; grid-template-rows: auto auto; align-items: center; justify-content: center; column-gap: clamp(14px, 4cqw, 40px); row-gap: 4px; }
+  .main-menu .logo { grid-column: 1; grid-row: 1; align-self: end; width: min(34cqw, 300px); }
+  .main-menu .tagline { grid-column: 1; grid-row: 2; align-self: start; max-width: min(34cqw, 300px); margin: 0; padding: 3px 8px; font-size: 12px; }
+  .main-menu:not(.play-menu) .menu-buttons { grid-column: 2; grid-row: 1 / span 2; display: grid; grid-template-columns: 1fr 1fr; gap: 8px; min-width: min(390px, 50cqw); }
+  .main-menu .menu-buttons .btn { margin: 0; padding: 5px 8px; font-size: 14px; }
+  .main-menu .menu-buttons .btn.big { grid-column: 1 / -1; padding: 6px 12px; font-size: 17px; }
+  .main-menu .menu-buttons .btn small { display: none; }
+  .credits { display: none; }
+
+  /* Pause : trois colonnes. */
+  .pause-menu { max-height: calc(100% - 8px); overflow-y: auto; padding: 6px 14px 10px; }
+  .pause-menu h2 { margin: 0 0 6px; font-size: 22px; }
+  .pause-menu .menu-buttons { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; min-width: min(580px, 92cqw); }
+  .pause-menu .menu-buttons .btn { margin: 0; padding: 4px 6px; font-size: 14px; }
+  .pause-menu .menu-buttons .btn.big { grid-column: 1 / -1; }
+  .pause-menu .net-note { margin: 0 0 6px; text-align: center; }
+
+  /* Jouer à deux : les deux cadres côte à côte. */
+  .play-menu { display: flex; flex-direction: column; align-items: center; width: min(100%, 700px); }
+  .play-menu .tagline, .play-box p { display: none; }
+  .play-menu .menu-buttons { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; min-width: 0; width: 100%; }
+  .play-menu .menu-buttons > .btn { grid-column: 1 / -1; margin: 0; }
+  .play-box { padding: 6px 10px 8px; gap: 6px; }
+  .play-box .btn { margin: 0; }
+  .play-title { margin-bottom: 6px; font-size: 26px; }
+  .join-text.tagline { display: block; font-size: 13px; }
+}
+
+/* Très bas (Safari avec sa barre d'adresse et sa barre d'onglets) : la pause passe à quatre colonnes. */
+@container ui (max-height: 300px) {
+  .pause-menu .menu-buttons { grid-template-columns: repeat(4, 1fr); min-width: min(700px, 94cqw); }
+  .pause-menu .net-note { margin: 0 0 4px; font-size: 12px; }
+  .pause-menu .net-note br, .pause-menu .net-note .muted { display: none; }
+  .main-menu .logo { width: min(30cqw, 260px); }
+  .main-menu .tagline { max-width: min(30cqw, 260px); font-size: 11px; }
+}
+
+/* Menu principal d'un téléphone tenu debout : un seul bloc, logo plus petit. */
+@container ui (orientation: portrait) {
+  #menu-root { overflow-y: auto; padding: var(--T, 6px) var(--mr, 6px) var(--B, 6px) var(--ml, 6px); }
+  #menu-root > .menu { margin: auto; }
+  .main-menu .logo { width: min(72cqw, 360px); }
+  .main-menu .tagline { margin: 8px 0 10px; padding: 3px 10px; font-size: 14px; }
+  .menu-buttons { gap: 8px; min-width: min(340px, 88cqw); }
+  .menu-buttons .btn { margin-bottom: 0; }
+  .credits { display: none; }
+  .pause-menu { box-sizing: border-box; width: min(100%, 440px); max-height: calc(100% - 8px); overflow-y: auto; padding: 10px 14px 14px; }
+  .pause-menu .menu-buttons { min-width: 0; }
+  .pause-menu .menu-buttons .btn { padding: 5px 8px; font-size: 14px; }
+  .play-box { padding: 8px 10px; }
+  .play-menu .tagline, .play-box p { display: none; }
+  .play-menu { width: min(100%, 420px); }
+  .pause-menu .menu-buttons { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .pause-menu .menu-buttons .btn { margin: 0; }
+  .pause-menu .menu-buttons .btn.big { grid-column: 1 / -1; }
+}
+
+body.touch .join-input { font-size: 20px; }
+.join-input { width: 150px; flex: 1 1 150px; }
+
+/* Plein écran sur iPhone : la marche à suivre. */
+.install p { margin: 0 0 8px; font-size: 14px; line-height: 1.45; }
+.install .how { margin: 0 0 10px; padding-left: 22px; font-size: 14px; line-height: 1.5; }
+.install .how li { margin-bottom: 6px; }
+.install .share-ico { display: inline-block; padding: 0 6px; border-radius: 4px; background: #3f3338; color: var(--gold); }
