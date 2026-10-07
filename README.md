@@ -43,6 +43,29 @@ Version autonome en un seul fichier HTML (ouvrable sans serveur) : `npm run buil
 Les touches sont lues par position physique : ZQSD et WASD fonctionnent sans réglage. Seule la carte se lit à la
 lettre tapée : c'est la touche marquée M, quel que soit le clavier.
 
+### Sur téléphone et tablette
+
+Le jeu détecte l'écran tactile et affiche ses propres commandes (aucun clavier nécessaire) ; il se joue mieux **écran en
+travers**, mais fonctionne aussi debout. Sur iPhone, ouvrez le lien de la version jouable : tout est déjà réglé.
+
+| Action | Au doigt |
+| --- | --- |
+| Se déplacer | **stick** en bas à gauche (8 directions) |
+| Miner | **toucher et maintenir** une paroi proche, ou garder le bouton **⛏ Miner** appuyé pour frapper devant soi |
+| Interagir (comptoir, atelier, coffre, machine), fermer un panneau | bouton **Agir** (il s'allume quand quelque chose est à portée) |
+| Sac, carte, construction | boutons **Sac**, **Carte**, **Bâtir** |
+| Coffres, repère, outil, corde, wagonnet, pause, vitesse, aide, menu | bouton **☰** (toutes les autres touches du clavier) |
+| Trottinette | bouton **🛴 Roule** (apparaît une fois achetée) : activé, on roule |
+| Zoom | **pincer** avec deux doigts |
+| Construire | **toucher** pose la machine (glisser pour tracer convoyeurs et rails), **↻ Tourner** l'oriente, **✕ Retirer** puis toucher une machine la démonte |
+| Régler plusieurs coffres | **toucher** un coffre pour le choisir, **glisser** un rectangle pour en choisir plusieurs |
+| Carte | glisser pour la déplacer, boutons **+** **−** pour zoomer |
+
+Les cadres du haut sont compacts, l'équipement se range sous l'argent, la barre de construction tient en deux lignes et les
+boutons restent au-dessus d'elle ; les zones sûres de l'iPhone (encoche, barre du bas) sont respectées. Les graphismes
+démarrent en qualité **Moyenne** sur un appareil tactile (réglable dans le menu pause). Le bouton « Commandes tactiles »
+du menu principal et du menu pause force l'affichage ou le retire ; `?touch` et `?notouch` dans l'adresse font de même.
+
 ## Contenu de la version 0.1 (tranche verticale)
 
 - Mine explorable persistante générée à partir d'une graine, galeries de départ, cavernes à découvrir.
@@ -215,12 +238,29 @@ lettre tapée : c'est la touche marquée M, quel que soit le clavier.
   combinaison ignifugée en absorbe l'essentiel. Les anciennes sauvegardes se chargent et la mine se prolonge
   simplement par le bas.
 - **Ouvriers** : des travailleurs qu'on **achète une seule fois** à l'Atelier (onglet Ouvriers, touche `5` ;
-  300 $, 600 $, 1 000 $, 1 500 $, 2 200 $ puis 3 000 $, six au plus, avec la Pioche améliorée), sans salaire. Chacun
-  a un **métier**, qu'on change gratuitement à tout moment. Le **ramasseur** va chercher les minerais laissés par
+  300 $, 600 $, 1 000 $, 1 500 $, 2 200 $, 3 000 $, 4 000 $, 5 200 $ puis 6 500 $), sans salaire. **L'équipe s'agrandit
+  avec vos pioches** : trois places avec la Pioche améliorée, six avec la Pioche en fer, neuf avec la Pioche pro en
+  acier — **neuf ouvriers au plus, trois par métier** (3 ramasseurs, 3 foreurs, 3 ravitailleurs ; un métier plein ne se
+  recrute plus et on ne peut plus y passer). Une ancienne équipe plus grande que ses places ou son quota est conservée.
+  Chacun a un **métier**, qu'on change gratuitement à tout moment. Le **ramasseur** va chercher les minerais laissés par
   terre (restes de la foreuse de percement, éboulements, tas oubliés, jusqu'au fond de la mine par le puits) et les
   range dans le coffre le plus proche **qui accepte ce minerai** (chaque coffre se règle : il ne prend jamais un tas
-  qu'aucun coffre n'accepte, et ne range jamais dans une caisse d'expédition) ; il porte 15 kg et laisse la pierre. Le **ravitailleur** prend du charbon dans les coffres et recharge les foreuses, les fours et les foreuses
-  de percement dont le réservoir est à moitié vide ou moins (une machine collée à un coffre se sert déjà seule). Ils
+  qu'aucun coffre n'accepte, et ne range jamais dans une caisse d'expédition) ; il porte 15 kg et laisse la pierre. Il
+  **vide aussi les machines qui gardent leur minerai** : une foreuse à charbon qui en retient 3 ou plus, le stock de la base
+  d'une foreuse de percement quand il atteint 5 (les fours et fonderies ne sont pas touchés) ; il respecte les réglages des
+  coffres et, sans coffre qui accepte, laisse le minerai dans la machine et le signale. Le **ravitailleur** prend du charbon dans les coffres et recharge les foreuses, les fours et les foreuses
+  de percement dont le réservoir est à moitié vide ou moins (une machine collée à un coffre se sert déjà seule). Le
+  **foreur** pose des **foreuses à charbon sur les gisements au sol** (exposés, déjà explorés, pas encore couverts par une
+  foreuse ni visés par un autre foreur, et sans boucher un passage) : il prend d'abord un **kit de foreuse de votre stock**,
+  à défaut il **l'achète lui-même** au prix de l'Atelier tant qu'il vous reste 200 $ ensuite (sinon il s'arrête et le
+  signale : « plus de foreuse en stock ni assez d'argent »). Il a 4 **niveaux**, améliorés à l'Atelier (bouton sur sa
+  ligne) : le **niveau 1** (gratuit) équipe les petits minerais (charbon, cuivre), pose en 3 s ; le **niveau 2**
+  (400 $) ajoute le fer et pose en 2,2 s ; le **niveau 3** (900 $, pioche de niveau 3) ajoute l'argent et l'or ; le
+  **niveau 4** (2 200 $, pioche de niveau 4) ajoute le diamant ; chaque niveau marche aussi plus vite (×1,15, ×1,3, ×1,5).
+  Il ne pose pas sur la pierre. **Il met aussi du charbon dans les foreuses** : comme un ravitailleur, mais pour les
+  foreuses à charbon seulement (les vôtres comme les siennes, dès que leur réservoir est à moitié vide), il prend le charbon
+  dans un coffre et le porte à la foreuse ; il le fait **avant** de chercher un nouveau gisement, et signale « plus de
+  charbon dans les coffres » quand il n'y en a plus. Les foreuses posées se vident par un ramasseur. Ils
   marchent de case en case par le plus court chemin, en évitant la roche, les machines, le grisou et l'eau profonde.
   **Sans limite de distance** : pour un tas, un coffre, du charbon, une machine ou leur poste, ils cherchent aussi loin
   qu'il faut (jusqu'au fond de la mine, avec une longue marche à la clé) ; seuls un passage coupé ou l'absence de cible
@@ -231,9 +271,9 @@ lettre tapée : c'est la touche marquée M, quel que soit le clavier.
   terre). Un ouvrier bloqué est signalé au Tableau d'affichage et par un point d'exclamation au-dessus de lui, et
   **survoler l'ouvrier** à la souris donne la cause et quoi faire : « aucun coffre n'accepte ce minerai » (réglage des
   coffres), « les coffres qui acceptent ce minerai sont pleins », « aucun chemin jusqu'à un coffre » (roche, grisou, eau
-  ou machine en travers) ou « plus de charbon dans les coffres » ; ils apparaissent aussi sur la carte (points
-  vert et orange). Casque vert pour le ramasseur, orange pour le ravitailleur. Les ouvriers sont sauvegardés
-  (métier, position, charge) ; les anciennes sauvegardes n'en ont pas.
+  ou machine en travers), « plus de charbon dans les coffres » ou « plus de foreuse en stock ni assez d'argent » ; ils apparaissent aussi sur la carte (points
+  vert, orange et bleu). Casque vert pour le ramasseur, orange pour le ravitailleur, bleu pour le foreur. Les ouvriers sont sauvegardés
+  (métier, niveau du foreur, position, charge) ; les anciennes sauvegardes n'en ont pas.
 - **Cours du marché** : les prix de vente montent et descendent. Chaque minerai a un **cours**, multiplicateur de
   son prix de base (100 % = le prix de la fiche), qui dérive doucement toutes les 10 s autour de 100 % (en général
   de 80 à 120 %) ; un lingot suit le cours de son minerai, la pierre ne bouge pas. Toutes les 2,5 à 5 minutes, un

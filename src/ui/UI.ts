@@ -38,6 +38,8 @@ export interface UIHost {
   moveKeys(): string;
   /** Image d'une machine (data URL) pour le magasin. */
   machineIcon(id: string): string;
+  /** Commandes tactiles actives (l'aide parle alors des boutons à l'écran). */
+  touch?(): boolean;
 }
 
 /** Faux dans les hébergements qui bloquent les téléchargements (build « artifact »). */
@@ -455,7 +457,7 @@ export class UI {
         break;
       case 'help':
         title = 'Commandes';
-        body = helpPanel({ move: this.host.moveKeys(), label: (c) => this.host.keyLabel(c) });
+        body = helpPanel({ move: this.host.moveKeys(), label: (c) => this.host.keyLabel(c), touch: this.host.touch?.() });
         break;
     }
     const money$ = kind === 'counter' || kind === 'workshop' ? `<span class="panel-money"><span class="coin"></span>${money(g.money)}</span>` : '';
@@ -499,8 +501,9 @@ export class UI {
         <button class="btn big ${save ? (confirmNew ? 'danger' : '') : 'primary'}" data-action="new">${confirmNew ? 'Confirmer : écraser la sauvegarde' : 'Nouvelle partie'}</button>
         <button class="btn" data-action="import">Importer une sauvegarde…</button>
         <button class="btn" data-action="help">Commandes</button>
+        <button class="btn" data-action="touch" title="Stick et boutons à l'écran, pour jouer au doigt">Commandes tactiles : ${this.host.touch?.() ? 'oui' : 'non'}</button>
       </div>
-      <p class="credits">Se joue au clavier et à la souris · prototype v0.1</p>
+      <p class="credits">Clavier et souris, ou au doigt sur téléphone · prototype v0.1</p>
     </div>`;
   }
 
@@ -517,6 +520,7 @@ export class UI {
       <button class="btn" data-action="mute">Son : ${muted ? 'coupé' : 'activé'}</button>
       <button class="btn" data-action="quality" title="Élevée : tous les effets. Basse : pour les petits appareils.">Graphismes : ${QUALITY_LABEL[quality]}</button>
       <button class="btn" data-action="help">Commandes</button>
+      <button class="btn" data-action="touch" title="Stick et boutons à l'écran, pour jouer au doigt">Commandes tactiles : ${this.host.touch?.() ? 'oui' : 'non'}</button>
       <button class="btn" data-action="quit">Quitter vers le menu</button>
     </div></div>`;
   }

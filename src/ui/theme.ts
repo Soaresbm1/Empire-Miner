@@ -289,7 +289,7 @@ export function installTheme(): void {
   for (const [id, sprite] of buildNuggetSprites()) icons.set(`res:${id}`, sprite.toDataURL());
 
   // Ouvriers : le personnage de face, aux couleurs de son métier.
-  for (const job of ['picker', 'refueler'] as const) icons.set(`worker:${job}`, buildPlayerSprites({ crew: job }).frames[1][0].toDataURL());
+  for (const job of ['picker', 'refueler', 'driller'] as const) icons.set(`worker:${job}`, buildPlayerSprites({ crew: job }).frames[1][0].toDataURL());
 
   // Pioches : l'outil en diagonale, recadré.
   buildPickaxeSprites().forEach((angles, level) => icons.set(`pick${level}`, crop(angles[Math.round(PICK_ANGLES * 0.875)]).toDataURL()));

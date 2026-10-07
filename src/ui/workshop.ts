@@ -10,9 +10,9 @@ import { BOOTS_WATER, GEAR, GearDef, HAZARD_LABEL } from '../data/gear';
 import { CAVE_IN, GAS, HEALTH, HEAT, WATER } from '../data/hazards';
 import { MACHINES, MACHINE_GROUPS, MachineDef, conveyorThroughput, parseKit } from '../data/machines';
 import { BAGS, JACKHAMMER, PICKAXES, ROPE, SCOOTER } from '../data/tools';
-import { WORKERS, WORKER_JOBS, getJob, workerName } from '../data/workers';
+import { DRILLER, DRILLER_LEVELS, WORKERS, WORKER_JOBS, drillerLevel, getJob, workerName } from '../data/workers';
 import { PLAYER_SPEED, type GameState } from '../sim/GameState';
-import { cargoLine, workerStatus } from './crew';
+import { cargoLine, drillerFacts, oresOf, workerStatus } from './crew';
 import { esc, kg, money, num } from './format';
 import { icon as themeIcon } from './theme';
 import { btn, stat } from './widgets';
@@ -119,7 +119,7 @@ function ownedAny(g: GameState, m: MachineDef): boolean {
 /** Nombre d'achats possibles tout de suite dans chaque onglet (pastille de l'onglet). */
 export function tabBadges(g: GameState): Record<string, number> {
   const hire = g.nextWorkerPrice;
-  const badges: Record<string, number> = { tools: 0, transport: 0, gear: 0, machines: newMachines(g).length, crew: g.workersUnlocked && hire !== null && g.money >= hire ? 1 : 0 };
+  const badges: Record<string, number> = { tools: 0, transport: 0, gear: 0, machines: newMachines(g).length, crew: hire !== null && g.money >= hire && WORKER_JOBS.some((j) => !g.workerHireBlocker(j.id)) ? 1 : 0 };
   for (const o of offers(g)) if (g.money >= o.price && o.tab !== 'crew') badges[o.tab]++;
   // L'équipement qui n'est pas encore « conseillé » s'achète quand même : on le compte aussi.
   for (const def of GEAR) if (!g.hasGear(def.id) && g.money >= def.price && g.stats.maxDepth + 40 < def.fromDepth) badges.gear++;
@@ -446,33 +446,58 @@ function machinesTab(g: GameState, icon: (id: string) => string, view: ShopView)
 
 // ------------------------------------------------------------------ ouvriers
 
+/** Amélioration d'un foreur : le bouton (prix, ce que ça apporte) et, s'il est grisé, pourquoi. */
+function drillerUpgrade(g: GameState, id: number): string {
+  const w = g.workers.get(id);
+  if (!w) return '';
+  if (w.level >= DRILLER_LEVELS.length) return ' <span class="tag">niveau maximal</span>';
+  const next = drillerLevel(w.level + 1);
+  const why = g.workerUpgradeBlocker(id);
+  const gain = `Niveau ${next.level} : ${oresOf(next.level)}, pose en ${next.placeTime.toLocaleString('fr-FR')} s, marche ×${next.speed.toLocaleString('fr-FR')}`;
+  return ` ${btn('workerUpgrade', `Améliorer — ${money(next.price)}`, { arg: String(id), cls: 'small primary', disabled: why !== null, title: gain })}${
+    why ? `<small class="lock"> ${why}</small>` : ''
+  }`;
+}
+
 /** Onglet Ouvriers : recruter (achat unique), puis l'équipe au travail, avec son métier et ce qu'elle fait. */
 function crewTab(g: GameState, view: ShopView): string {
   const price = g.nextWorkerPrice;
-  const locked = !g.workersUnlocked;
   const speed = `${Math.round((WORKERS.speed / PLAYER_SPEED) * 100)} % de la vôtre`;
-  const hire = WORKER_JOBS.map((job) =>
-    card({
+  const hire = WORKER_JOBS.map((job) => {
+    const why = g.workerHireBlocker(job.id);
+    const n = g.workerCount(job.id);
+    return card({
       icon: `worker:${job.id}`,
       title: job.name,
-      tag: price === null ? 'équipe complète' : undefined,
+      tag: price === null ? 'équipe complète' : n >= WORKERS.perJob ? 'au complet' : undefined,
       desc: job.description,
-      rows: `${stat('Charge', kg(WORKERS.capacity))}${stat('Vitesse', speed)}${stat('Prix du prochain', price === null ? '—' : money(price))}`,
-      state: locked ? 'locked' : price === null ? 'owned' : 'buy',
-      buy: locked || price === null ? undefined : buyBlock(g, price, 'hireWorker', job.id, 'Recruter'),
-      lock: locked ? WORKERS.unlock.text : undefined,
-    }),
-  ).join('');
+      rows: `${stat('Dans l\'équipe', `${n} sur ${WORKERS.perJob}`)}${stat('Charge', kg(WORKERS.capacity))}${stat('Vitesse', speed)}${stat('Prix du prochain', price === null ? '—' : money(price))}`,
+      state: price === null ? 'owned' : why ? 'locked' : 'buy',
+      buy: why || price === null ? undefined : buyBlock(g, price, 'hireWorker', job.id, 'Recruter'),
+      lock: price === null ? undefined : (why ?? undefined),
+    });
+  }).join('');
   const rows = g.workers.list
     .map((w) => {
       const st = workerStatus(g, w);
       const job = getJob(w.job);
-      const other = WORKER_JOBS.find((j) => j.id !== w.job)!;
       const armed = view.fire === w.id;
+      const switches = WORKER_JOBS.filter((j) => j.id !== w.job)
+        .map((j) => {
+          const full = g.workerCount(j.id) >= WORKERS.perJob;
+          return btn('workerJob', `Passer ${j.name.toLowerCase()}`, {
+            arg: `${w.id}:${j.id}`,
+            cls: 'small',
+            disabled: full,
+            title: full ? `Déjà ${WORKERS.perJob} ${j.name.toLowerCase()}s : c'est le maximum` : `Changer de métier (gratuit) : ${j.name.toLowerCase()}`,
+          });
+        })
+        .join('');
+      const level = w.job === 'driller' ? `<div class="crew-level">${drillerFacts(w.level)}${drillerUpgrade(g, w.id)}</div>` : '';
       return `<div class="crew-row">
         <div class="crew-ico">${ico(`worker:${w.job}`, 'crew-img')}</div>
-        <div class="crew-main"><div><b>${workerName(w.id)}</b> <span class="tag" style="color:${job.color}">${job.name}</span> ${cargoLine(w)}</div><span class="crew-state ${st.tone}">${st.text}</span></div>
-        <div class="crew-act">${btn('workerJob', `Passer ${other.name.toLowerCase()}`, { arg: `${w.id}:${other.id}`, cls: 'small', title: `Changer de métier (gratuit) : ${other.name.toLowerCase()}` })}${btn('fireWorker', armed ? 'Confirmer ?' : 'Congédier', {
+        <div class="crew-main"><div><b>${workerName(w.id)}</b> <span class="tag" style="color:${job.color}">${job.name}</span> ${cargoLine(w)}</div><span class="crew-state ${st.tone}">${st.text}</span>${level}</div>
+        <div class="crew-act">${switches}${btn('fireWorker', armed ? 'Confirmer ?' : 'Congédier', {
           arg: String(w.id),
           cls: `small${armed ? ' danger' : ''}`,
           title: 'Sans remboursement ; sa charge reste par terre',
@@ -482,10 +507,11 @@ function crewTab(g: GameState, view: ShopView): string {
   const team = g.workers.count
     ? `<div class="crew">${rows}</div>`
     : '<p class="empty">Personne ne travaille pour vous pour l\'instant. Recrutez un premier ouvrier ci-dessus.</p>';
-  return `<p class="sub">Un ouvrier s'achète une seule fois, sans salaire ; le suivant coûte plus cher. On change son métier quand on veut, gratuitement.</p>
+  const open = Math.max(g.workerSlots, g.workers.count);
+  return `<p class="sub">Un ouvrier s'achète une seule fois, sans salaire ; le suivant coûte plus cher. On change son métier quand on veut, gratuitement. L'équipe s'agrandit avec vos pioches : trois places de plus à chaque palier, jusqu'à ${WORKERS.max} ouvriers, ${WORKERS.perJob} par métier.</p>
     <div class="cards">${hire}</div>
-    <h4>Votre équipe : ${g.workers.count} sur ${WORKERS.max}</h4>${team}
-    <p class="hint">Le ramasseur range dans un coffre (à défaut, dans une caisse d'expédition qui vend) : posez-en un au camp. Le ravitailleur prend le charbon des coffres : gardez-y du charbon. Ils évitent le grisou et l'eau profonde.</p>`;
+    <h4>Votre équipe : ${g.workers.count} sur ${open}${open < WORKERS.max ? ` places ouvertes (${WORKERS.max} au plus)` : ''}</h4>${team}
+    <p class="hint">Le ramasseur range dans un coffre (à défaut, dans une caisse d'expédition qui vend) : posez-en un au camp. Il vide aussi les foreuses à charbon et la base d'une foreuse de percement quand elles se remplissent. Le ravitailleur prend le charbon des coffres : gardez-y du charbon. Le foreur pose des foreuses sur les gisements au sol (une foreuse de votre stock, à défaut il l'achète en vous laissant ${money(DRILLER.moneyReserve)}) et y met du charbon des coffres ; améliorez-le pour des minerais plus précieux. Ils évitent le grisou et l'eau profonde.</p>`;
 }
 
 // ------------------------------------------------------------------ panneau

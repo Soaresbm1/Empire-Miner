@@ -14,9 +14,11 @@
 import { TILE } from '../core/constants';
 import { DX, DY, type Dir } from '../core/dir';
 import { GAS, WATER } from '../data/hazards';
-import { hasResource, getResource } from '../data/resources';
-import { WORKERS, isJob, type WorkerJob } from '../data/workers';
+import { hasResource, getResource, RESOURCES } from '../data/resources';
+import { DRILLER, DRILLER_LEVELS, WORKERS, drillerLevel, isJob, type WorkerJob } from '../data/workers';
 import type { GameState } from './GameState';
+import { TunnelBorer } from './structures/Borer';
+import { Drill } from './structures/Drill';
 import { Storage } from './structures/Storage';
 import type { Structure } from './structures/Structure';
 
@@ -30,6 +32,10 @@ export type WorkerTask =
   | { kind: 'take'; x: number; y: number }
   /** Ravitailleur : marche vers une machine à recharger. */
   | { kind: 'fuel'; x: number; y: number }
+  /** Foreur : marche vers un gisement (case du gisement) où poser une foreuse. */
+  | { kind: 'place'; x: number; y: number }
+  /** Ramasseur : marche vers une machine qui garde du minerai (foreuse, base de foreuse de percement) pour la vider. */
+  | { kind: 'collect'; x: number; y: number }
   | { kind: 'home' };
 
 /** Pourquoi un ouvrier ne peut pas avancer (pour l'interface). */
@@ -41,7 +47,9 @@ export type WorkerFlag =
   /** Ramasseur : un coffre convient, mais aucun chemin n'y mène (roche, grisou, eau profonde, machine en travers). */
   | 'noroute'
   | 'nocoal'
-  | 'lost';
+  | 'lost'
+  /** Foreur : des gisements l'attendent, mais ni foreuse en stock ni argent pour en acheter une. */
+  | 'nodrill';
 
 export interface Worker {
   id: number;
@@ -51,6 +59,8 @@ export interface Worker {
   y: number;
   facing: Dir;
   cargo: Record<string, number>;
+  /** Niveau (1 à 4) : celui du foreur décide des minerais qu'il équipe et de sa vitesse ; les autres métiers restent au niveau 1. */
+  level: number;
   task: WorkerTask | null;
   /** Cases restantes à parcourir (indices), la prochaine en premier. */
   path: number[];
@@ -65,6 +75,8 @@ export interface Worker {
 export interface WorkerSave {
   id: number;
   job: WorkerJob;
+  /** Niveau du foreur (facultatif : 1 par défaut, anciennes sauvegardes). */
+  level?: number;
   x: number;
   y: number;
   cargo: Record<string, number>;
@@ -171,6 +183,71 @@ function around(g: GameState, s: Structure): number[] {
   return out;
 }
 
+/**
+ * Minerai qu'une machine garde et qu'un ramasseur peut venir prendre : la sortie d'une foreuse à charbon qui en garde
+ * assez (une foreuse reliée à un convoyeur se vide seule), le stock de la base d'une foreuse de percement.
+ */
+export function heldOre(s: Structure): Record<string, number> {
+  const out: Record<string, number> = {};
+  if (s instanceof Drill) {
+    if (s.buffer.length >= WORKERS.machinePickup.drill) for (const r of s.buffer) out[r] = (out[r] ?? 0) + 1;
+  } else if (s instanceof TunnelBorer) {
+    if (s.storeCount() >= WORKERS.machinePickup.borerBase) for (const [r, n] of Object.entries(s.store)) if (n > 0) out[r] = n;
+  }
+  return out;
+}
+
+/** Retire `n` unités de `res` du minerai que garde la machine ; renvoie combien ont été prises. */
+function takeHeld(s: Structure, res: string, n: number): number {
+  if (s instanceof Drill) {
+    let k = 0;
+    for (let i = s.buffer.length - 1; i >= 0 && k < n; i--)
+      if (s.buffer[i] === res) {
+        s.buffer.splice(i, 1);
+        k++;
+      }
+    return k;
+  }
+  if (s instanceof TunnelBorer) return s.takeStored(res, n);
+  return 0;
+}
+
+/**
+ * Une foreuse posée sur la case (x, y) boucherait-elle un passage ? Vrai quand les cases libres qui l'entourent ne se
+ * rejoignent plus, dans un rayon de `DRILLER.passageRadius` cases, une fois la case occupée (un cul-de-sac ne gêne personne).
+ */
+export function blocksPassage(g: GameState, x: number, y: number): boolean {
+  const w = g.world.w;
+  const free: number[] = [];
+  for (let k = 0; k < 4; k++) {
+    const nx = x + DX[k];
+    const ny = y + DY[k];
+    if (walkable(g, nx, ny)) free.push(ny * w + nx);
+  }
+  if (free.length <= 1) return false;
+  const here = y * w + x;
+  const seen = new Set<number>([here, free[0]]);
+  let frontier = [free[0]];
+  for (let step = 0; step < DRILLER.passageRadius && frontier.length; step++) {
+    const next: number[] = [];
+    for (const i of frontier) {
+      const cx = i % w;
+      const cy = (i - cx) / w;
+      for (let k = 0; k < 4; k++) {
+        const nx = cx + DX[k];
+        const ny = cy + DY[k];
+        const n = ny * w + nx;
+        if (seen.has(n) || !walkable(g, nx, ny)) continue;
+        seen.add(n);
+        next.push(n);
+      }
+    }
+    frontier = next;
+    if (free.every((f) => seen.has(f))) return false;
+  }
+  return !free.every((f) => seen.has(f));
+}
+
 export class WorkerSystem {
   list: Worker[] = [];
   private nextId = 1;
@@ -193,6 +270,7 @@ export class WorkerSystem {
       y: 0,
       facing: 1,
       cargo: {},
+      level: 1,
       task: null,
       path: [],
       wait: 0,
@@ -270,7 +348,8 @@ export class WorkerSystem {
       const dx = cx - w.x;
       const dy = cy - w.y;
       const dist = Math.hypot(dx, dy);
-      const step = Math.min(dist, WORKERS.speed * g.hazards.speedFactor(tx, ty) * dt);
+      const pace = w.job === 'driller' ? drillerLevel(w.level).speed : 1;
+      const step = Math.min(dist, WORKERS.speed * pace * g.hazards.speedFactor(tx, ty) * dt);
       if (dist > 1e-6) {
         w.x += (dx / dist) * step;
         w.y += (dy / dist) * step;
@@ -300,7 +379,7 @@ export class WorkerSystem {
       w.path = [];
       w.retry = WORKERS.idleWait;
     };
-    const ok = w.job === 'picker' ? this.thinkPicker(w, g) : this.thinkRefueler(w, g);
+    const ok = w.job === 'picker' ? this.thinkPicker(w, g) : w.job === 'driller' ? this.thinkDriller(w, g) : this.thinkRefueler(w, g);
     if (!ok) {
       // Rien à faire : retour au poste, sans bouger davantage s'il y est déjà.
       const home = this.homeTile(g, this.list.indexOf(w));
@@ -340,25 +419,50 @@ export class WorkerSystem {
       return r;
     };
     let refused: WorkerFlag | null = null;
+    /** Un coffre peut-il recevoir ce minerai ? Sinon on garde le signalement le plus utile pour le joueur. */
+    const refuse = (t: 'full' | 'none') => {
+      if (t === 'none' || refused === null) refused = t === 'none' ? 'nostore' : 'full';
+    };
     if (free > 0) {
       const spots = new Map<number, number>();
+      // Machines qui gardent du minerai (foreuses à charbon, bases de foreuse de percement), si un coffre le prend.
+      const claimedMachines = new Set(this.list.filter((o) => o !== w && o.task?.kind === 'collect').map((o) => `${(o.task as { x: number }).x},${(o.task as { y: number }).y}`));
+      const machines = new Map<number, Structure>();
+      for (const s of g.structures.list) {
+        if (claimedMachines.has(`${s.x},${s.y}`)) continue;
+        const held = heldOre(s);
+        let any = false;
+        for (const res of Object.keys(held)) {
+          const r = getResource(res);
+          if (r.groundLife !== undefined || r.weight > free) continue;
+          const t = taken(res);
+          if (t === 'ok') any = true;
+          else refuse(t);
+        }
+        if (any) for (const i of around(g, s)) if (!machines.has(i)) machines.set(i, s);
+      }
       for (const d of g.drops.list) {
         const r = getResource(d.res);
         if (d.locked || d.age < 0.35 || r.groundLife !== undefined || r.weight > free || claimed.has(d.id)) continue;
         const t = taken(d.res);
         if (t !== 'ok') {
           // « aucun coffre n'en veut » prime sur « coffres pleins » : c'est ce qu'on règle en premier.
-          if (t === 'none' || refused === null) refused = t === 'none' ? 'nostore' : 'full';
+          refuse(t);
           continue;
         }
         const i = Math.floor((d.y - 1) / TILE) * width + Math.floor(d.x / TILE);
         if (!spots.has(i)) spots.set(i, d.id);
       }
-      if (spots.size) {
-        const path = this.finder(g).find(g, this.tileOf(w, g), (i) => spots.has(i), WORKERS.reach);
+      if (spots.size || machines.size) {
+        const path = this.finder(g).find(g, this.tileOf(w, g), (i) => spots.has(i) || machines.has(i), WORKERS.reach);
         if (path) {
           const goal = path.length ? path[path.length - 1] : this.tileOf(w, g);
-          w.task = { kind: 'pick', drop: spots.get(goal)! };
+          const drop = spots.get(goal);
+          if (drop !== undefined) w.task = { kind: 'pick', drop };
+          else {
+            const m = machines.get(goal)!;
+            w.task = { kind: 'collect', x: m.x, y: m.y };
+          }
           w.path = path;
           w.flag = null;
           return true;
@@ -402,17 +506,103 @@ export class WorkerSystem {
     return false;
   }
 
-  /** Machines qui réclament du charbon et dont le réservoir est à moitié vide ou moins. */
+  /**
+   * Foreur : d'abord du charbon pour les foreuses qui en réclament (comme un ravitailleur, mais pour elles seules), puis
+   * un gisement où poser une foreuse.
+   */
+  private thinkDriller(w: Worker, g: GameState): boolean {
+    // Le charbon d'abord : une foreuse posée sans combustible ne produit rien (celles du joueur comme les siennes).
+    if (this.thinkFuel(w, g)) return true;
+    const fuelFlag = w.flag;
+    if (this.thinkPlace(w, g)) return true;
+    // Rien à poser : un blocage de charbon reste visible tant qu'aucune autre cause (plus de foreuse) ne l'emporte.
+    if (w.flag === null) w.flag = fuelFlag;
+    return false;
+  }
+
+  /**
+   * Un gisement de son niveau (minerais jusqu'au `maxTier` de son niveau, pas la pierre) où poser une foreuse : exposé,
+   * pas déjà couvert par une foreuse, pas encore visé par un autre foreur, qui ne bouche aucun passage. Il va au plus
+   * proche. Sans foreuse (stock vide, pas assez d'argent), il le signale.
+   */
+  private thinkPlace(w: Worker, g: GameState): boolean {
+    const world = g.world;
+    const width = world.w;
+    const lvl = drillerLevel(w.level);
+    const covered = new Set<number>();
+    for (const s of g.structures.list) if (s instanceof Drill) for (const t of s.reach()) covered.add(t.y * width + t.x);
+    const claimed = new Set(this.list.filter((o) => o !== w && o.task?.kind === 'place').map((o) => (o.task as { y: number; x: number }).y * width + (o.task as { x: number }).x));
+    // Case d'où l'ouvrier pose → case du gisement.
+    const goals = new Map<number, number>();
+    const dep = world.deposit;
+    for (let i = 0; i < dep.length; i++) {
+      if (!dep[i] || !world.explored[i] || world.reserve[i] < DRILLER.minReserve || covered.has(i) || claimed.has(i)) continue;
+      const res = RESOURCES[dep[i] - 1];
+      if (res.groundLife !== undefined || res.tier > lvl.maxTier) continue;
+      const x = i % width;
+      const y = (i - x) / width;
+      if (g.siteProblem(DRILLER.machine, x, y)) continue;
+      for (let k = 0; k < 4; k++) {
+        const nx = x + DX[k];
+        const ny = y + DY[k];
+        if (walkable(g, nx, ny)) goals.set(ny * width + nx, i);
+      }
+    }
+    if (!goals.size) {
+      w.flag = null; // rien à équiper à son niveau : ce n'est pas un blocage
+      return false;
+    }
+    if (!g.drillAvailable) {
+      w.flag = 'nodrill';
+      return false;
+    }
+    const here = this.tileOf(w, g);
+    for (let attempt = 0; attempt < 12 && goals.size; attempt++) {
+      const path = this.finder(g).find(g, here, (i) => goals.has(i), WORKERS.reach);
+      if (!path) break;
+      const standing = path.length ? path[path.length - 1] : here;
+      const site = goals.get(standing)!;
+      const sx = site % width;
+      const sy = (site - sx) / width;
+      if (blocksPassage(g, sx, sy)) {
+        for (const [k, v] of [...goals]) if (v === site) goals.delete(k);
+        continue;
+      }
+      w.task = { kind: 'place', x: sx, y: sy };
+      w.path = path;
+      w.flag = null;
+      return true;
+    }
+    w.flag = null;
+    return false;
+  }
+
+  /**
+   * Machines qui réclament du charbon et dont le réservoir est à moitié vide ou moins. Le ravitailleur les sert toutes ;
+   * le foreur seulement les foreuses à charbon.
+   */
   private needy(w: Worker, g: GameState): FuelMachine[] {
     const claimed = this.list.filter((o) => o !== w && o.task?.kind === 'fuel').map((o) => o.task as { x: number; y: number });
     return g.structures.list.filter(
       (s): s is FuelMachine =>
-        isFuelMachine(s) && s.fuelWanted() !== null && s.fuelUnits <= s.fuelMax * WORKERS.fuelLow && !claimed.some((c) => c.x === s.x && c.y === s.y),
+        isFuelMachine(s) &&
+        (w.job !== 'driller' || s instanceof Drill) &&
+        s.fuelWanted() !== null &&
+        s.fuelUnits <= s.fuelMax * WORKERS.fuelLow &&
+        !claimed.some((c) => c.x === s.x && c.y === s.y),
     );
   }
 
   /** Ravitailleur : du charbon à porter aux machines, sinon à aller chercher dans un coffre. */
   private thinkRefueler(w: Worker, g: GameState): boolean {
+    return this.thinkFuel(w, g);
+  }
+
+  /**
+   * Du charbon à porter aux machines qui en réclament (celles de son métier, voir `needy`), sinon à aller chercher dans un
+   * coffre. Renvoie faux s'il n'y a rien à faire ; `flag` dit alors si c'est faute de charbon (`nocoal`) ou de chemin (`lost`).
+   */
+  private thinkFuel(w: Worker, g: GameState): boolean {
     const needy = this.needy(w, g);
     if (!needy.length) {
       w.flag = null;
@@ -467,6 +657,10 @@ export class WorkerSystem {
         return this.doTake(w, g, task.x, task.y);
       case 'fuel':
         return this.doFuel(w, g, task.x, task.y);
+      case 'place':
+        return this.doPlace(w, g, task.x, task.y);
+      case 'collect':
+        return this.doCollect(w, g, task.x, task.y);
       case 'home':
         w.retry = WORKERS.idleWait;
     }
@@ -531,10 +725,46 @@ export class WorkerSystem {
     g.emit({ t: 'worker', kind: 'fuel', x: w.x, y: w.y, res });
   }
 
+  /** Foreur : pose la foreuse sur le gisement, face à un coffre voisin s'il y en a un, puis marque une pause. */
+  private doPlace(w: Worker, g: GameState, x: number, y: number): void {
+    if (blocksPassage(g, x, y)) return;
+    let dir: Dir = 1;
+    for (let k = 0; k < 4; k++)
+      if (g.structures.at(x + DX[k], y + DY[k]) instanceof Storage) {
+        dir = k as Dir;
+        break;
+      }
+    const res = g.world.depositAt(x, y) ?? 'coal';
+    const placed = g.placeDrillFor(x, y, dir);
+    if (!placed) return;
+    w.wait = drillerLevel(w.level).placeTime;
+    g.emit({ t: 'worker', kind: 'place', x: (x + 0.5) * TILE, y: (y + 0.5) * TILE, res });
+  }
+
+  /** Ramasseur : prend dans la machine le minerai qu'un coffre accepte, jusqu'à sa charge maximale. */
+  private doCollect(w: Worker, g: GameState, x: number, y: number): void {
+    const s = g.structures.at(x, y);
+    if (!s) return;
+    const held = heldOre(s);
+    let moved = false;
+    for (const res of Object.keys(held).sort((a, b) => held[b] - held[a])) {
+      const r = getResource(res);
+      if (r.groundLife !== undefined) continue;
+      if (!g.structures.list.some((c) => c instanceof Storage && c.canAccept(res))) continue;
+      const room = Math.floor((WORKERS.capacity - cargoWeight(w.cargo)) / r.weight + 1e-6);
+      const k = takeHeld(s, res, Math.min(held[res], room));
+      if (k <= 0) continue;
+      w.cargo[res] = (w.cargo[res] ?? 0) + k;
+      moved = true;
+      g.emit({ t: 'worker', kind: 'pick', x: w.x, y: w.y, res });
+    }
+    if (moved) w.wait = WORKERS.actWait;
+  }
+
   // ---------------------------------------------------------------- sauvegarde
 
   serialize(): WorkerSave[] {
-    return this.list.map((w) => ({ id: w.id, job: w.job, x: Math.round(w.x * 100) / 100, y: Math.round(w.y * 100) / 100, cargo: { ...w.cargo } }));
+    return this.list.map((w) => ({ id: w.id, job: w.job, level: w.level, x: Math.round(w.x * 100) / 100, y: Math.round(w.y * 100) / 100, cargo: { ...w.cargo } }));
   }
 
   /** Recharge les ouvriers sauvegardés ; les valeurs aberrantes sont ignorées (au plus `WORKERS.max`). */
@@ -545,6 +775,7 @@ export class WorkerSystem {
     for (const s of data.slice(0, WORKERS.max)) {
       if (!s || !isJob(s.job)) continue;
       const w = this.add(s.job, g);
+      w.level = Math.max(1, Math.min(DRILLER_LEVELS.length, Math.floor(Number(s.level ?? 1)) || 1));
       const x = Number(s.x);
       const y = Number(s.y);
       if (Number.isFinite(x) && Number.isFinite(y) && g.world.inBounds(Math.floor(x / TILE), Math.floor((y - 1) / TILE))) {

@@ -177,7 +177,8 @@ export class Renderer {
       this.light.width = Math.ceil(w / 2);
       this.light.height = Math.ceil(h / 2);
     }
-    const base = Math.round(h / (TILE * 16));
+    // Zoom de base : seize cases sur le petit côté de l'écran (un téléphone tenu debout ne montre pas 7 cases de large).
+    const base = Math.round(Math.min(h, w) / (TILE * 16));
     this.zoom = clamp(base + this.zoomBias, 2, 9);
   }
 

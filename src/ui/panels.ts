@@ -632,9 +632,12 @@ export function mapPanel(g: GameState, colors: Record<string, string>): string {
 
 // ------------------------------------------------------------------ aide
 
-export function helpPanel(keys: { move: string; label: (c: string) => string }): string {
+export function helpPanel(keys: { move: string; label: (c: string) => string; touch?: boolean }): string {
   const k = (c: string) => `<kbd>${keys.label(c)}</kbd>`;
-  return `<div class="help">
+  const finger = keys.touch
+    ? `<div class="help-touch"><h4>Au doigt (téléphone, tablette)</h4><p><b>Stick</b> à gauche : se déplacer. <b>⛏ Miner</b> : gardez appuyé pour frapper devant vous ; vous pouvez aussi <b>toucher et maintenir</b> une paroi proche. <b>Agir</b> : ouvrir l'atelier, un coffre, une machine, ou fermer un panneau. <b>☰</b> : toutes les autres commandes (Coffres, Repère, Outil, Corde, Pause, Vitesse, Aide, Menu). <b>Pincer</b> avec deux doigts : zoomer. En construction : <b>toucher</b> pose la machine (glissez pour tracer un convoyeur), <b>↻ Tourner</b> l'oriente, <b>✕ Retirer</b> puis toucher une machine la démonte. Le jeu se joue mieux écran en travers.</p></div>`
+    : '';
+  return `<div class="help">${finger}
     <div><h4>Se déplacer</h4><p><kbd>${keys.move}</kbd> ou flèches</p></div>
     <div><h4>Miner</h4><p>Maintenir le <kbd>clic gauche</kbd> sur une paroi proche, ou ${k('Space')} pour frapper devant soi</p></div>
     <div><h4>Interagir</h4><p>${k('KeyE')} près du comptoir, de l'atelier, d'un coffre ou d'une foreuse</p></div>
@@ -645,7 +648,7 @@ export function helpPanel(keys: { move: string; label: (c: string) => string }):
     <div><h4>Zoom</h4><p>Molette de la souris</p></div>
     <div><h4>Trottinette</h4><p>Achetée à l'atelier (onglet Transport) : maintenez <kbd>Maj</kbd> pour rouler vite, relâchez pour descendre. Pas de minage en roulant</p></div>
     <div><h4>Cours du marché</h4><p>Les prix de vente montent et descendent, avec des événements (« forte demande de cuivre »). Le comptoir et les caisses d'expédition paient au cours du moment : les courbes sont au <b>Tableau d'affichage</b> (${k('KeyE')} devant, onglet Marché). Stockez dans un coffre, vendez à la hausse</p></div>
-    <div><h4>Ouvriers</h4><p>Achetés une fois à l'atelier (onglet Ouvriers). Le <b>ramasseur</b> range les minerais laissés par terre dans un coffre ; le <b>ravitailleur</b> prend le charbon des coffres pour recharger vos machines. On change leur métier quand on veut ; un ouvrier bloqué est signalé au Tableau d'affichage</p></div>
+    <div><h4>Ouvriers</h4><p>Achetés une fois à l'atelier (onglet Ouvriers). Le <b>ramasseur</b> range les minerais laissés par terre dans un coffre ; le <b>ravitailleur</b> prend le charbon des coffres pour recharger vos machines ; le <b>foreur</b> pose des foreuses à charbon sur les gisements au sol (de plus en plus précieux à chaque amélioration) et y met du charbon pris dans les coffres. Le ramasseur vide aussi les foreuses et la base d'une foreuse de percement. L'équipe s'agrandit avec vos pioches (3 places, puis 6, puis 9 ouvriers, trois par métier). On change leur métier quand on veut ; un ouvrier bloqué est signalé au Tableau d'affichage</p></div>
     <div><h4>Wagonnet</h4><p>${k('KeyF')} : monter / descendre</p></div>
     <div><h4>Outil en main</h4><p>${k('KeyT')} : pioche ou marteau-piqueur (s'il est acheté)</p></div>
     <div><h4>Carte</h4><p><kbd>M</kbd> : carte de la mine (ou clic sur la mini-carte). <b>Molette</b> ou <kbd>+</kbd> <kbd>−</kbd> : zoom autour du curseur ; glisser : déplacer la carte ; <kbd>0</kbd> ou « Tout voir » : revoir toute la mine ; « Me retrouver » : centrer sur vous</p></div>
