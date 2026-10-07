@@ -11,6 +11,7 @@ import { getResource, hasResource } from '../data/resources';
 import { MARKER_KINDS, type MarkerKind } from './Markers';
 import type { GameState } from './GameState';
 import { isJob, type WorkerJob } from '../data/workers';
+import { Conveyor } from './structures/Conveyor';
 import { Drill } from './structures/Drill';
 import { TunnelBorer } from './structures/Borer';
 import { Smelter } from './structures/Smelter';
@@ -48,6 +49,7 @@ export type SimAction =
   | { k: 'place'; kit: string; x: number; y: number; dir: Dir; quiet?: boolean }
   | { k: 'remove'; x: number; y: number }
   | { k: 'rotate'; x: number; y: number }
+  | { k: 'beltDir'; x: number; y: number; dir: Dir }
   // machines et coffres (désignés par leur case)
   | ({ k: 'storageTake'; res: string } & At)
   | ({ k: 'storageTakeAll' } & At)
@@ -163,6 +165,15 @@ export function applyAction(g: GameState, a: SimAction): void {
     case 'rotate':
       g.rotateAt(a.x, a.y);
       return;
+    case 'beltDir': {
+      // Tracé d'un convoyeur en glissant : chaque tuile pointe vers la suivante.
+      const c = g.structures.at(a.x, a.y);
+      if (c instanceof Conveyor && (a.dir === 0 || a.dir === 1 || a.dir === 2 || a.dir === 3)) {
+        c.dir = a.dir;
+        g.structures.invalidate();
+      }
+      return;
+    }
     case 'storageTake': {
       const s = at(a);
       if (s instanceof Storage) g.storageTake(s, a.res, s.items[a.res] ?? 0);
@@ -203,8 +214,7 @@ export function applyAction(g: GameState, a: SimAction): void {
       const many = changed > 1;
       const verb = many ? 'acceptent' : 'accepte';
       const names = allow.map((r) => getResource(r).name.toLowerCase());
-      const words = names.length > 1 ? `${names.slice(0, -1).join(', ')} et ${names[names.length - 1]}` : (names[0] ?? '');
-      const what = allow.length ? `${verb} seulement ${words}` : `${verb} tout`;
+      const what = allow.length ? `${verb} seulement ${names.join(', ')}` : `${verb} tout`;
       const already = list.length - changed;
       msg(`${changed} coffre${many ? 's' : ''} réglé${many ? 's' : ''} : ${many ? 'ils' : 'il'} ${what}.${already ? ` (${already} déjà réglé${already > 1 ? 's' : ''} ainsi)` : ''}`);
       return;

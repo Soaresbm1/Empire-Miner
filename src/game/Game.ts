@@ -22,21 +22,21 @@ import { CAVE_IN, GAS, HEAT, WATER } from '../data/hazards';
 import { Drill, reachTiles } from '../sim/structures/Drill';
 import { ShippingCrate } from '../sim/structures/ShippingCrate';
 import { Sorter } from '../sim/structures/Sorter';
-import { isJob } from '../data/workers';
 import { BOARD_TABS, marketNews } from '../ui/market';
 import { WORKSHOP_TABS } from '../ui/workshop';
-import { Rail, RailStation, RailSwitch, type SwitchSetting } from '../sim/structures/Rail';
+import { Rail, RailStation, RailSwitch } from '../sim/structures/Rail';
 import { Splitter } from '../sim/structures/Splitter';
 import { Storage } from '../sim/structures/Storage';
 import { MineMap } from '../render/MineMap';
 import { PROFILES, Quality, loadQuality, nextQuality, saveQuality } from '../render/quality';
 import { Renderer, Overlay } from '../render/Renderer';
 import { UI, PanelKind } from '../ui/UI';
-import { allowWords, chestBar, chestsInRect, pickChests, toggleDraft } from '../ui/chestFilter';
+import { chestBar, chestsInRect, pickChests, toggleDraft } from '../ui/chestFilter';
 import { Speed, advance, isSpeed, keepsUp, nextSpeed, smoothRate, speedDanger } from './speed';
 import { speedBar } from '../ui/speedBar';
 import { esc, kg, money, resIcon } from '../ui/format';
 import { workerAt, workerTooltip } from '../ui/crew';
+import { applyAction, type SimAction } from '../sim/actions';
 import { TouchControls, isTouchDevice, saveTouchPref } from '../ui/touch';
 
 const AUTOSAVE_EVERY = 60;
@@ -86,6 +86,8 @@ export class Game {
   private quality: Quality = loadQuality(isTouchDevice() ? 'medium' : 'high');
   /** Commandes tactiles (téléphone, tablette), seulement sur un écran tactile. */
   private touch: TouchControls | null = null;
+  /** Partie à deux en cours (null : on joue seul). */
+  private session: { send(a: SimAction): void } | null = null;
   /** Ventes automatiques récentes (temps de simulation, montant) pour le revenu par minute. */
   private shipLog: { t: number; total: number }[] = [];
 
@@ -115,6 +117,17 @@ export class Game {
     } catch {
       /* stockage indisponible */
     }
+  }
+
+  /**
+   * Fait une action sur la partie (achat, pose, réglage…). Seul : appliquée tout de suite. À deux : envoyée à l'autre
+   * téléphone et appliquée par les deux au même pas de simulation, pour ce joueur.
+   */
+  private act(a: SimAction): void {
+    const g = this.state;
+    if (!g) return;
+    if (this.session) this.session.send(a);
+    else applyAction(g, a);
   }
 
   /** Affiche ou retire les commandes tactiles (stick et boutons à l'écran). */
@@ -337,44 +350,46 @@ export class Game {
     }
     if (!g) return;
     const target = this.ui.panel?.target ?? null;
+    // Machine ou coffre du panneau ouvert : désigné par sa case (c'est ce qui voyage d'un téléphone à l'autre).
+    const at = target ? { x: target.x, y: target.y } : null;
     switch (action) {
       case 'sell':
-        g.sell(arg, g.inventory.count(arg));
+        this.act({ k: 'sell', res: arg });
         break;
       case 'sellAll':
-        g.sellAll();
+        this.act({ k: 'sellAll' });
         break;
       case 'buyPickaxe':
-        g.buyNextPickaxe();
+        this.act({ k: 'buyPickaxe' });
         break;
       case 'buyBag':
-        g.buyNextBag();
+        this.act({ k: 'buyBag' });
         break;
       case 'buyJackhammer':
-        g.buyJackhammer();
+        this.act({ k: 'buyJackhammer' });
         break;
       case 'buyGear':
-        g.buyGear(arg);
+        this.act({ k: 'buyGear', id: arg });
         break;
       case 'buyScooter':
-        g.buyScooter();
+        this.act({ k: 'buyScooter' });
         break;
       case 'buyRope':
-        g.buyRope(Number(arg) || 1);
+        this.act({ k: 'buyRope', qty: Number(arg) || 1 });
         break;
       case 'hireWorker':
-        if (isJob(arg)) g.hireWorker(arg);
+        this.act({ k: 'hire', job: arg });
         break;
       case 'workerJob': {
         const [id, job] = arg.split(':');
-        if (isJob(job)) g.setWorkerJob(Number(id), job);
+        this.act({ k: 'workerJob', id: Number(id), job });
         break;
       }
       case 'workerUpgrade':
-        g.upgradeWorker(Number(arg));
+        this.act({ k: 'workerUpgrade', id: Number(arg) });
         break;
       case 'fireWorker':
-        if (this.ui.confirmFire(Number(arg))) g.fireWorker(Number(arg));
+        if (this.ui.confirmFire(Number(arg))) this.act({ k: 'fire', id: Number(arg) });
         break;
       case 'shopCat':
         this.ui.setShopCat(arg);
@@ -387,34 +402,29 @@ export class Game {
         break;
       case 'buyKit': {
         const [id, q] = arg.split(':');
-        g.buyKit(id, Number(q));
+        this.act({ k: 'buyKit', id, qty: Number(q) });
         break;
       }
       case 'togglePickup':
-        g.autoPickup[arg] = !g.autoPickup[arg];
+        this.act({ k: 'togglePickup', res: arg });
         break;
       case 'drop':
-        g.dropFromInventory(arg, g.inventory.count(arg));
+        this.act({ k: 'drop', res: arg });
         break;
       case 'storageTake':
-        if (target instanceof Storage) g.storageTake(target, arg, target.items[arg] ?? 0);
+        if (at) this.act({ k: 'storageTake', ...at, res: arg });
         break;
       case 'storageTakeAll':
-        if (target instanceof Storage) g.storageTakeAll(target);
+        if (at) this.act({ k: 'storageTakeAll', ...at });
         break;
       case 'storageDeposit':
-        if (target instanceof Storage) {
-          g.storageDepositAll(target);
-          // Ce que le coffre refuse reste dans le sac : on dit pourquoi.
-          if (target.allow.length && Object.keys(g.inventory.items).some((res) => !target.accepts(res)))
-            this.ui.toast(`Ce coffre n'accepte que : ${target.allow.map((r) => getResource(r).name.toLowerCase()).join(', ')}.`, 'warn');
-        }
+        if (at) this.act({ k: 'storageDeposit', ...at });
         break;
       case 'storageAllow':
-        // « Tout » vide la liste ; un minerai s'ajoute ou se retire (on peut en choisir plusieurs).
-        if (target instanceof Storage) arg ? g.toggleStorageAllow(target, arg) : g.clearStorageAllow(target);
+        if (at) this.act({ k: 'storageAllow', ...at, res: arg });
         break;
       case 'speed': {
+        if (this.session) break; // à deux, la vitesse et la pause sont celles de la partie : pas de réglage
         const n = Number(arg);
         if (n === 0) this.togglePause();
         else if (isSpeed(n)) this.setSpeed(n, g);
@@ -439,70 +449,47 @@ export class Game {
         this.applyChestDraft(g);
         break;
       case 'shipDeposit':
-        if (target instanceof ShippingCrate) {
-          const n = g.shipDepositAll(target);
-          if (n) this.ui.toast(`${n} minerai${n > 1 ? 's' : ''} déposé${n > 1 ? 's' : ''} : vendu${n > 1 ? 's' : ''} au prochain passage.`, 'good');
-        }
+        if (at) this.act({ k: 'shipDeposit', ...at });
         break;
       case 'drillFuel':
-        if (target instanceof Drill) {
-          const n = g.fuelDrill(target);
-          if (n) this.ui.toast(`${n} charbon chargé${n > 1 ? 's' : ''} dans la foreuse.`, 'good');
-        }
+        if (at) this.act({ k: 'drillFuel', ...at });
         break;
       case 'drillCollect':
-        if (target instanceof Drill) g.collectDrill(target);
+        if (at) this.act({ k: 'drillCollect', ...at });
         break;
       case 'drillRotate':
-        if (target) g.rotateAt(target.x, target.y);
+      case 'smelterRotate':
+      case 'borerRotate':
+      case 'switchRotate':
+        if (at) this.act({ k: 'rotate', ...at });
         break;
       case 'borerFuel':
-        if (target instanceof TunnelBorer) {
-          const n = g.fuelBorer(target);
-          if (n) this.ui.toast(`${n} charbon chargé${n > 1 ? 's' : ''} dans la base de la foreuse de percement.`, 'good');
-        }
+        if (at) this.act({ k: 'borerFuel', ...at });
         break;
       case 'borerStart':
-        if (target instanceof TunnelBorer) target.start();
+        if (at) this.act({ k: 'borerStart', ...at });
         break;
       case 'borerStop':
-        if (target instanceof TunnelBorer) target.stop();
+        if (at) this.act({ k: 'borerStop', ...at });
         break;
       case 'borerLength':
-        if (target instanceof TunnelBorer) g.setBorerLength(target, Number(arg));
+        if (at) this.act({ k: 'borerLength', ...at, length: Number(arg) });
         break;
       case 'smelterFuel':
-        if (target instanceof Smelter) {
-          const n = g.fuelSmelter(target);
-          if (n) this.ui.toast(`${n} charbon chargé${n > 1 ? 's' : ''} dans le ${target.def.name.toLowerCase()}.`, 'good');
-        }
+        if (at) this.act({ k: 'smelterFuel', ...at });
         break;
       case 'smelterDeposit':
-        if (target instanceof Smelter) {
-          const n = g.smelterDeposit(target);
-          if (n) this.ui.toast(`${n} minerai${n > 1 ? 's' : ''} déposé${n > 1 ? 's' : ''} à fondre.`, 'good');
-        }
+        if (at) this.act({ k: 'smelterDeposit', ...at });
         break;
       case 'smelterCollect':
-        if (target instanceof Smelter) {
-          const n = g.smelterCollect(target);
-          if (n) this.ui.toast(`${n} lingot${n > 1 ? 's' : ''} récupéré${n > 1 ? 's' : ''}.`, 'good');
-        }
-        break;
-      case 'smelterRotate':
-        if (target) g.rotateAt(target.x, target.y);
+        if (at) this.act({ k: 'smelterCollect', ...at });
         break;
       case 'borerUpgrade':
-        if (target instanceof TunnelBorer) g.upgradeMachine(target);
+      case 'drillUpgrade':
+        if (at) this.act({ k: 'machineUpgrade', ...at });
         break;
       case 'borerCollect':
-        if (target instanceof TunnelBorer) {
-          const n = g.collectBorer(target);
-          if (n) this.ui.toast(`${n} minerai${n > 1 ? 's' : ''} récupéré${n > 1 ? 's' : ''} dans la base.`, 'good');
-        }
-        break;
-      case 'borerRotate':
-        if (target) g.rotateAt(target.x, target.y);
+        if (at) this.act({ k: 'borerCollect', ...at });
         break;
       case 'openMap':
         this.togglePanel('map');
@@ -511,7 +498,7 @@ export class Game {
         if (arg in MARKER_KINDS) g.markerKind = arg as MarkerKind;
         break;
       case 'markHere':
-        this.markHere(g);
+        this.markHere();
         break;
       case 'mapZoom':
         if (arg === 'in') this.map.zoomBy(MAP_ZOOM_STEP);
@@ -523,35 +510,26 @@ export class Game {
         const [px, py] = arg.split(',').map(Number);
         const t = this.map.tileAt(px, py);
         if (!t) break;
-        const m = g.addMarker(g.markerKind, t.x, t.y);
-        if (m) this.ui.toast(`Repère posé : ${m.label}.`, 'good');
-        else this.ui.toast(g.markers.full ? 'Trop de repères : supprimez-en un dans la liste.' : 'Hors de la carte.', 'warn');
+        this.act({ k: 'mark', kind: g.markerKind, x: t.x, y: t.y });
         break;
       }
       case 'markerTrack':
-        g.markers.toggleTrack(Number(arg));
+        this.act({ k: 'markerTrack', id: Number(arg) });
         break;
       case 'markerDelete':
-        g.markers.remove(Number(arg));
-        break;
-      case 'drillUpgrade':
-        if (target instanceof Drill) g.upgradeMachine(target);
+        this.act({ k: 'markerDelete', id: Number(arg) });
         break;
       case 'stationDeposit':
-        if (target instanceof RailStation) g.stationDepositAll(target);
+        if (at) this.act({ k: 'stationDeposit', ...at });
         break;
       case 'stationTakeAll':
-        if (target instanceof RailStation) g.stationTakeAll(target);
+        if (at) this.act({ k: 'stationTakeAll', ...at });
         break;
       case 'switchSet':
-        if (target instanceof RailSwitch) g.setSwitch(target, arg as SwitchSetting);
-        break;
-      case 'switchRotate':
-        if (target) g.rotateAt(target.x, target.y);
+        if (at) this.act({ k: 'switchSet', ...at, setting: arg });
         break;
       case 'sorterFilter':
-        // « Aucun » vide la liste ; un minerai s'ajoute ou se retire (on peut en choisir plusieurs).
-        if (target instanceof Sorter) arg ? g.toggleSorterFilter(target, arg) : g.setSorterFilter(target, null);
+        if (at) this.act({ k: 'sorterFilter', ...at, res: arg });
         break;
     }
     this.flushEvents();
@@ -639,18 +617,12 @@ export class Game {
     if (!paused) {
       if (inp.wasPressed('KeyE')) {
         if (this.ui.panel) this.ui.closePanel();
-        else if (g.riding) g.leaveWagon();
+        else if (g.riding) this.act({ k: 'leaveWagon' });
         else this.interact(g);
       }
       if (inp.wasPressed('KeyF') && !this.ui.panel) {
-        if (g.riding) g.leaveWagon();
-        else {
-          const w = g.nearestWagon();
-          if (w) {
-            this.setBuildMode(false);
-            g.rideWagon(w);
-          }
-        }
+        if (!g.riding && g.nearestWagon()) this.setBuildMode(false);
+        this.act({ k: 'wagon' });
       }
       if (inp.wasPressed('KeyI')) this.togglePanel('inventory');
       // Tab : onglet suivant en construction (Maj+Tab : précédent), sinon le sac.
@@ -667,15 +639,15 @@ export class Game {
         if (inp.wasTyped('-')) this.map.zoomBy(1 / MAP_ZOOM_STEP);
         if (inp.wasTyped('0')) this.map.resetView();
       }
-      if (inp.wasTyped('n') && !this.ui.panel) this.markHere(g);
+      if (inp.wasTyped('n') && !this.ui.panel) this.markHere();
       if (inp.wasPressed('KeyB') && !this.ui.panel) this.setBuildMode(!this.buildMode);
       if (inp.wasPressed('KeyC') && !this.ui.panel) this.setChestMode(!this.chestMode);
       if (inp.wasPressed('KeyP')) this.togglePause();
       if (inp.wasPressed('KeyX')) this.setSpeed(nextSpeed(this.speed), g);
       if (this.chestMode && inp.wasPressed('Enter', 'NumpadEnter')) this.applyChestDraft(g);
-      if (inp.wasPressed('KeyT') && !this.ui.panel) g.toggleTool();
+      if (inp.wasPressed('KeyT') && !this.ui.panel) this.act({ k: 'toggleTool' });
       // V : corde de rappel (remonter au camp depuis la mine, redescendre au point d'accroche depuis le camp).
-      if (inp.wasPressed('KeyV') && !this.ui.panel && !this.buildMode) g.useRope();
+      if (inp.wasPressed('KeyV') && !this.ui.panel && !this.buildMode) this.act({ k: 'rope' });
     }
     // Un panneau ou un menu qui s'ouvre referme le mode « Régler les coffres ».
     if (this.chestMode && this.ui.blocking) this.setChestMode(false);
@@ -786,12 +758,9 @@ export class Game {
   }
 
   /** Pose un repère là où se trouve le joueur (touche N). */
-  private markHere(g: GameState): void {
-    const m = g.addMarker(g.markerKind, g.player.tileX, g.player.tileY);
-    if (m) {
-      this.sfx.place();
-      this.ui.toast(`Repère posé : ${m.label} (carte : M).`, 'good');
-    } else this.ui.toast('Trop de repères : supprimez-en un depuis la carte (M).', 'warn');
+  private markHere(): void {
+    const g = this.state;
+    if (g) this.act({ k: 'mark', kind: g.markerKind, x: 0, y: 0, here: true });
   }
 
   private togglePanel(kind: PanelKind): void {
@@ -1038,20 +1007,7 @@ export class Game {
       this.sfx.error();
       return;
     }
-    const changed = g.setStoragesAllow(list, this.chestDraft);
-    if (!changed) {
-      this.ui.toast(`${list.length > 1 ? `Ces ${list.length} coffres étaient déjà réglés` : 'Ce coffre était déjà réglé'} ainsi.`, 'info');
-      return;
-    }
-    this.sfx.place();
-    const many = changed > 1;
-    const verb = many ? 'acceptent' : 'accepte';
-    const what = this.chestDraft.length ? `${verb} seulement ${allowWords(this.chestDraft)}` : `${verb} tout`;
-    const already = list.length - changed;
-    this.ui.toast(
-      `${changed} coffre${many ? 's' : ''} réglé${many ? 's' : ''} : ${many ? 'ils' : 'il'} ${what}.${already ? ` (${already} déjà réglé${already > 1 ? 's' : ''} ainsi)` : ''}`,
-      'good',
-    );
+    this.act({ k: 'chestsAllow', at: list.map((s) => [s.x, s.y] as [number, number]), allow: [...this.chestDraft] });
   }
 
   private chestBarHtml(g: GameState): string {
@@ -1073,7 +1029,7 @@ export class Game {
     const existing = g.structures.at(mtx, mty);
     const removable = existing && existing.removable ? existing : null;
     for (let k = inp.pressCount('KeyR'); k > 0; k--) {
-      if (existing && existing.removable && getMachine(existing.type).rotatable) g.rotateAt(mtx, mty);
+      if (existing && existing.removable && getMachine(existing.type).rotatable) this.act({ k: 'rotate', x: mtx, y: mty });
       else this.buildDir = rotateCW(this.buildDir);
     }
     if (!mouseActive) {
@@ -1084,7 +1040,7 @@ export class Game {
     if (!kit) {
       // Rien à poser : on peut seulement démonter.
       if (removable) overlay.removeHint = { tx: mtx, ty: mty };
-      if ((inp.consumeRightPress() || inp.right) && removable) g.removeAt(mtx, mty);
+      if ((inp.consumeRightPress() || inp.right) && removable) this.act({ k: 'remove', x: mtx, y: mty });
       inp.consumeLeftPress();
       this.dragLast = null;
       return;
@@ -1124,7 +1080,7 @@ export class Game {
     }
 
     // Démontage : clic droit (maintenu, ou clic très bref entre deux images).
-    if ((inp.consumeRightPress() || inp.right) && removable) g.removeAt(mtx, mty);
+    if ((inp.consumeRightPress() || inp.right) && removable) this.act({ k: 'remove', x: mtx, y: mty });
 
     // Pose.
     if (inp.consumeLeftPress()) {
@@ -1146,11 +1102,7 @@ export class Game {
         const dx = mtx - tx;
         const dy = mty - ty;
         const dir: Dir = Math.abs(dx) >= Math.abs(dy) ? (dx > 0 ? 0 : 2) : dy > 0 ? 1 : 3;
-        const prev = g.structures.at(tx, ty);
-        if (prev instanceof Conveyor) {
-          prev.dir = dir;
-          g.structures.invalidate();
-        }
+        if (g.structures.at(tx, ty) instanceof Conveyor || this.session) this.act({ k: 'beltDir', x: tx, y: ty, dir });
         tx += DX[dir];
         ty += DY[dir];
         this.buildDir = dir;
@@ -1184,7 +1136,7 @@ export class Game {
       }
       return false;
     }
-    g.place(kit, tx, ty, dir);
+    this.act({ k: 'place', kit, x: tx, y: ty, dir, quiet: true });
     return true;
   }
 

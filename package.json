@@ -15,10 +15,13 @@
     "e2e": "node e2e/playthrough.mjs"
   },
   "devDependencies": {
+    "aedes": "^1.2.0",
+    "aedes-server-factory": "^0.2.1",
     "playwright-core": "^1.63.0",
     "typescript": "^7.0.2",
     "vite": "^8.3.1",
     "vite-plugin-singlefile": "^2.3.3",
-    "vitest": "^5.0.2"
+    "vitest": "^5.0.2",
+    "ws": "^8.22.0"
   }
 }
