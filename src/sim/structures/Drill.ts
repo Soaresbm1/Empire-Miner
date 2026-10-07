@@ -60,6 +60,8 @@ export class Drill extends Structure {
   extracted = 0;
   /** Niveau d'amélioration (1 = de base). */
   level = 1;
+  /** Foreur qui l'a posée (identifiant de l'ouvrier ; 0 : le joueur, ou une foreuse d'avant cette règle). */
+  placedBy = 0;
   /** Têtes de forage en activité au dernier pas (cases couvertes avec un gisement). */
   heads = 0;
   /** Cadence due à la chaleur de la Fournaise (1 = normale). */
@@ -208,6 +210,7 @@ export class Drill extends Structure {
       buffer: [...this.buffer],
       extracted: this.extracted,
       level: this.level,
+      ...(this.placedBy > 0 ? { by: this.placedBy } : {}),
     };
   }
 
@@ -219,6 +222,8 @@ export class Drill extends Structure {
     d.buffer = [...((s.buffer as string[]) ?? [])];
     d.extracted = Number(s.extracted ?? 0);
     d.level = Math.max(1, Math.min(d.maxLevel, Math.floor(Number(s.level ?? 1)) || 1));
+    const by = Math.floor(Number(s.by ?? 0));
+    d.placedBy = Number.isInteger(by) && by > 0 ? by : 0;
     return d;
   }
 }

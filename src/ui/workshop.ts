@@ -493,7 +493,7 @@ function crewTab(g: GameState, view: ShopView): string {
           });
         })
         .join('');
-      const level = w.job === 'driller' ? `<div class="crew-level">${drillerFacts(w.level)}${drillerUpgrade(g, w.id)}</div>` : '';
+      const level = w.job === 'driller' ? `<div class="crew-level">${drillerFacts(w.level, g.workers.drillsOf(w, g))}${drillerUpgrade(g, w.id)}</div>` : '';
       return `<div class="crew-row">
         <div class="crew-ico">${ico(`worker:${w.job}`, 'crew-img')}</div>
         <div class="crew-main"><div><b>${workerName(w.id)}</b> <span class="tag" style="color:${job.color}">${job.name}</span> ${cargoLine(w)}</div><span class="crew-state ${st.tone}">${st.text}</span>${level}</div>
@@ -511,7 +511,7 @@ function crewTab(g: GameState, view: ShopView): string {
   return `<p class="sub">Un ouvrier s'achète une seule fois, sans salaire ; le suivant coûte plus cher. On change son métier quand on veut, gratuitement. L'équipe s'agrandit avec vos pioches : trois places de plus à chaque palier, jusqu'à ${WORKERS.max} ouvriers, ${WORKERS.perJob} par métier.</p>
     <div class="cards">${hire}</div>
     <h4>Votre équipe : ${g.workers.count} sur ${open}${open < WORKERS.max ? ` places ouvertes (${WORKERS.max} au plus)` : ''}</h4>${team}
-    <p class="hint">Le ramasseur range dans un coffre (à défaut, dans une caisse d'expédition qui vend) : posez-en un au camp. Il vide aussi les foreuses à charbon et la base d'une foreuse de percement quand elles se remplissent. Le ravitailleur prend le charbon des coffres : gardez-y du charbon. Le foreur pose des foreuses sur les gisements au sol (une foreuse de votre stock, à défaut il l'achète en vous laissant ${money(DRILLER.moneyReserve)}) et y met du charbon des coffres ; améliorez-le pour des minerais plus précieux. Ils évitent le grisou et l'eau profonde.</p>`;
+    <p class="hint">Le ramasseur range dans un coffre (à défaut, dans une caisse d'expédition qui vend) : posez-en un au camp. Il vide aussi les foreuses à charbon et la base d'une foreuse de percement quand elles se remplissent. Le ravitailleur prend le charbon des coffres : gardez-y du charbon. Le foreur pose des foreuses sur les gisements au sol, ${DRILLER.maxDrills} au plus chacun (une foreuse de votre stock, à défaut il l'achète en vous laissant ${money(DRILLER.moneyReserve)}) et y met du charbon des coffres ; améliorez-le pour des minerais plus précieux. Ils évitent le grisou et l'eau profonde.</p>`;
 }
 
 // ------------------------------------------------------------------ panneau
