@@ -499,7 +499,7 @@ export class GameState implements StructureContext {
       this.workers.update(dt, this);
       this.eachPlayer((i) => this.stepControls(dt, intents[i] ?? NO_INTENT));
       for (const d of this.drops.update(dt, this.world)) this.emit({ t: 'crumble', res: d.res, x: d.x, y: d.y });
-      this.eachPlayer(() => this.updatePickup(dt));
+      this.eachPlayer((i) => this.updatePickup(dt, i));
       this.structures.update(dt, this);
       this.wagons.update(dt, this);
       this.eachPlayer(() => {
@@ -1041,26 +1041,44 @@ export class GameState implements StructureContext {
 
   // ---------------------------------------------------------------- ramassage
 
-  private updatePickup(dt: number): void {
+  /**
+   * Ramassage du joueur `slot` (le joueur actif). À deux, chaque joueur est passé à son tour : un tas aspiré par l'un
+   * n'est ni relâché ni ramassé par l'autre (`puller`), et le réglage de ramassage, le sac et la distance de chacun
+   * ne comptent que pour lui. Sinon le second passage défaisait chaque pas ce que le premier venait d'enclencher.
+   */
+  private updatePickup(dt: number, slot: number): void {
     const p = this.player;
     const px = p.x;
     const py = p.y - 3;
     for (const d of [...this.drops.list]) {
+      const mine = d.puller === slot;
+      // Un autre joueur est en train de l'aspirer : on n'y touche pas.
+      if (d.puller >= 0 && !mine) continue;
+      const release = () => {
+        if (mine) {
+          d.magnet = false;
+          d.puller = -1;
+        }
+      };
       const dist = hyp(d.x - px, d.y - py);
       if (d.locked) {
-        // Objet jeté volontairement : ignoré tant que le joueur n'est pas reparti.
-        if (dist > 30) d.locked = false;
-        continue;
+        // Objet jeté volontairement : ignoré par celui qui l'a jeté tant qu'il n'est pas reparti.
+        if (d.lockedBy < 0 || d.lockedBy === slot) {
+          if (dist > 30) d.locked = false;
+          continue;
+        }
       }
       if (d.age < 0.35 || !this.autoPickup[d.res]) {
-        d.magnet = false;
+        release();
         continue;
       }
       const room = this.inventory.room(d.res);
-      if (!d.magnet) {
+      if (!mine) {
         if (dist < PICKUP_RADIUS) {
-          if (room >= 1) d.magnet = true;
-          else if (this.time - this.lastInvFull > 3) {
+          if (room >= 1) {
+            d.magnet = true;
+            d.puller = slot;
+          } else if (this.time - this.lastInvFull > 3) {
             this.lastInvFull = this.time;
             this.emit({ t: 'invFull' });
           }
@@ -1068,7 +1086,7 @@ export class GameState implements StructureContext {
         continue;
       }
       if (room < 1 || dist > PICKUP_RADIUS * 2) {
-        d.magnet = false;
+        release();
         continue;
       }
       if (dist < 5) {
@@ -1078,7 +1096,7 @@ export class GameState implements StructureContext {
         this.stats.collected[d.res] = (this.stats.collected[d.res] ?? 0) + n;
         if (n > 0) this.emit({ t: 'pickup', res: d.res, n, x: d.x, y: d.y });
         if (d.count <= 0) this.drops.remove(d);
-        else d.magnet = false;
+        else release();
         continue;
       }
       const speed = 90 + 160 * Math.min(1, d.age);
@@ -1094,6 +1112,7 @@ export class GameState implements StructureContext {
     if (k > 0) {
       const d = this.drops.spawn(res, k, this.player.x, this.player.y + 2);
       d.locked = true;
+      d.lockedBy = this.active;
     }
     return k;
   }

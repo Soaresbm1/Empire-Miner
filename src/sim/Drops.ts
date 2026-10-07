@@ -25,10 +25,14 @@ export interface Drop {
   z: number;
   vz: number;
   age: number;
-  /** En cours d'aspiration vers le joueur. */
+  /** En cours d'aspiration vers un joueur. */
   magnet: boolean;
-  /** Jeté volontairement : ignoré jusqu'à ce que le joueur s'éloigne. */
+  /** Emplacement du joueur qui l'aspire (−1 : personne). À deux, chacun ne gère que ses propres tas aspirés. */
+  puller: number;
+  /** Jeté volontairement : ignoré jusqu'à ce que le joueur qui l'a jeté s'éloigne. */
   locked: boolean;
+  /** Emplacement du joueur qui l'a jeté (−1 : personne). */
+  lockedBy: number;
 }
 
 const FRICTION = 5;
@@ -72,7 +76,9 @@ export class DropSystem {
       vz: burst ? 70 + this.rand() * 40 : 0,
       age: 0,
       magnet: false,
+      puller: -1,
       locked: false,
+      lockedBy: -1,
     };
     this.list.push(d);
     return d;
