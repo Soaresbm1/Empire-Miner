@@ -236,8 +236,19 @@ mesurés par des `ResizeObserver`. Sur un écran très bas, le superflu dispara�
 Appui sur un bouton (`UI` constructeur) : à la souris l'action part à l'appui (`pointerdown`) ; au doigt, au relâchement et seulement
 si le doigt a bougé de moins de 10 px (`TAP_SLOP`) : un glissé qui défile une liste n'active donc pas le bouton sous le doigt (le
 navigateur envoie `pointercancel`). `preventDefault` à l'appui évite que le navigateur rejoue un clic de souris sur le monde derrière un
-panneau qu'on vient de fermer. Les bandes d'onglets défilent de côté seulement (`overflow-y: hidden`) : sinon leur premier glissé
-vertical est avalé par la bande. La carte complète gère elle-même glissé, toucher (repère) et pincement à deux doigts.
+panneau qu'on vient de fermer. L'action et son argument sont ceux du bouton **au moment de l'appui** (`taps`), pas au relâchement : le
+panneau se met à jour pendant que le doigt est posé. Les bandes d'onglets défilent de côté seulement (`overflow-y: hidden`) : sinon leur
+premier glissé vertical est avalé par la bande. La carte complète gère elle-même glissé, toucher (repère) et pincement à deux doigts.
+
+Mise à jour du DOM (`ui/morph.ts`) : un panneau ouvert (Atelier, Tableau d'affichage…) montre des valeurs qui bougent plusieurs fois par
+seconde (argent, ouvriers, cours) ; `renderPanel` le recalcule toutes les 0,2 s et, si le HTML a changé, le **corrige sur place** avec
+`morph(cadre, html)` au lieu de `innerHTML = …`. Refaire tous les éléments coupe net un défilement ou un appui au doigt (le navigateur perd
+l'élément que le doigt tenait) : la fenêtre paraissait figée dès que le jeu tournait, ce que seul un jeu en marche révèle. `morph` apparie
+les nœuds par position (même balise, même espace de noms), corrige texte et attributs, et laisse intacts le défilement, les images, les
+courbes SVG et la taille d'un canevas (qui appartient à qui le dessine : la carte). Le cadre `.panel` n'est créé qu'à l'ouverture (son
+animation `pop` ne rejoue donc pas), et `scrollTop` n'est réécrit que pour remonter en haut (l'écrire arrêterait l'élan d'un défilement sur
+iPhone). La barre de construction (`#hud-build`, redessinée à chaque case visée) passe aussi par `morph`. Les autres blocs du HUD, sans
+bouton ni défilement, restent en `innerHTML`.
 
 Plein écran (`ui/fullscreen.ts`) : `displayMode()` dit si le jeu est déjà une application (`navigator.standalone`,
 `display-mode`), plein écran, plein écran possible par bouton (API Fullscreen, hors iPhone), ou seulement par l'écran d'accueil
@@ -249,7 +260,9 @@ Tests : `e2e/phone.mjs` ouvre le jeu dans Chromium en émulation tactile à 11 t
 barres, 874×282, et des marges d'encoche simulées par `Emulation.setSafeAreaInsetsOverride`), mesure les rectangles de chaque cadre et
 bouton (dans la zone sûre, sans recouvrement, taille de doigt, part de monde visible, menus sans défilement, panneaux de toutes sortes) et
 écrit des captures dans `e2e/screenshots/phone/` ; `e2e/touch.mjs` envoie de vrais gestes (`Input.dispatchTouchEvent`) ;
-`e2e/playthrough.mjs` rejoue une partie complète au clavier et à la souris.
+`e2e/panels.mjs` fait de même sur un jeu qui tourne (argent et cours qui bougent) : défilement des fenêtres et de la bande de construction,
+toucher long, bouton qui change de sens sous le doigt, contenu exact de chaque fenêtre, et `morph` contre `innerHTML` sur 1 500 paires de
+contenus tirées au hasard ; `e2e/playthrough.mjs` rejoue une partie complète au clavier et à la souris.
 
 Repères (`sim/Markers.ts`) : `GameState.markers` (un `MarkerBook`) garde la liste, le repère suivi et
 les sauvegarde ; `GameState.addMarker` les nomme d'après le terrain et les machines. La carte complète
