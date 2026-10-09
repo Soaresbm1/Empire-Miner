@@ -20,8 +20,15 @@ import { Lockstep, MIN_DELAY } from './lockstep';
 import { packSnapshot, unpackSnapshot } from './snapshot';
 import type { Message, Transport, TransportStatus } from './transport';
 
-/** Version du protocole : deux appareils de versions différentes ne jouent pas ensemble. */
-export const PROTOCOL = 1;
+/** Empreinte du code de simulation, calculée à la construction (vite.config.ts) ; absente hors de Vite. */
+declare const __SIM_VERSION__: string | undefined;
+
+/**
+ * Version du protocole : deux appareils de versions différentes ne jouent pas ensemble. Le numéro change à la main quand le
+ * format des messages change ; l'empreinte suit toute modification de la simulation, des données, de la sauvegarde ou du
+ * réseau, sans qu'on ait à y penser (sinon un ami resté sur l'ancienne page jouerait une autre partie sans le savoir).
+ */
+export const PROTOCOL = `1-${typeof __SIM_VERSION__ === 'string' ? __SIM_VERSION__ : 'dev'}`;
 
 export type SessionRole = 'host' | 'guest';
 export type SessionStatus = 'connecting' | 'waiting' | 'syncing' | 'playing' | 'lost' | 'closed';
@@ -300,7 +307,7 @@ export class Session {
   // ------------------------------------------------------------------ hôte : arrivée d'un invité, instantané
 
   private onHello(msg: Message): void {
-    if (Number(msg.v) !== PROTOCOL) {
+    if (String(msg.v) !== PROTOCOL) {
       this.o.transport.send({ m: 'bad', why: 'Versions différentes du jeu : rechargez la page des deux côtés.' });
       return;
     }
