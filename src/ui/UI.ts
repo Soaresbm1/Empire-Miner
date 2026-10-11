@@ -27,6 +27,7 @@ import { WORKSHOP_TABS, isWorkshopTab } from './workshop';
 import { hudMarket, BOARD_TABS, isBoardTab } from './market';
 import { boardPanel, borerPanel, counterPanel, smelterPanel, drillPanel, helpPanel, installPanel, inventoryPanel, mapPanel, shippingPanel, sorterPanel, stationPanel, storagePanel, switchPanel, workshopPanel } from './panels';
 import { displayMode } from './fullscreen';
+import { morph } from './morph';
 import { pinchStep } from './touch';
 
 /** Flèches dans les 8 directions, dans l'ordre des angles (est, sud-est, sud…). */
@@ -88,34 +89,37 @@ export class UI {
   private refreshTimer = 0;
 
   constructor(private readonly host: UIHost) {
-    const act = (el: HTMLElement, x: number, y: number) => {
+    const act = (el: HTMLElement, action: string, arg: string, x: number, y: number) => {
       // Un canvas cliquable (carte) reçoit la position du clic, en pixels du canvas.
       if (el instanceof HTMLCanvasElement) {
         const r = el.getBoundingClientRect();
         const px = ((x - r.left) * el.width) / Math.max(1, r.width);
         const py = ((y - r.top) * el.height) / Math.max(1, r.height);
-        this.host.onAction(el.dataset.action!, `${Math.round(px)},${Math.round(py)}`);
+        this.host.onAction(action, `${Math.round(px)},${Math.round(py)}`);
         return;
       }
-      this.host.onAction(el.dataset.action!, el.dataset.arg ?? '');
+      this.host.onAction(action, arg);
     };
     // Un bouton répond à la souris dès l'appui. Au doigt, il répond au relâchement, et seulement si le doigt n'a presque pas
     // bougé : sinon c'était un défilement (le navigateur annule alors le geste) et rien ne doit être acheté ni activé.
-    const taps = new Map<number, { el: HTMLElement; x: number; y: number }>();
+    // L'action est celle du bouton tel qu'on l'a touché : le panneau se met à jour pendant l'appui (revenus, ouvriers…) et
+    // le bouton peut avoir changé de sens avant le relâchement.
+    const taps = new Map<number, { el: HTMLElement; action: string; arg: string; x: number; y: number }>();
     const onPointer = (e: PointerEvent) => {
       const el = (e.target as HTMLElement).closest<HTMLElement>('[data-action]');
       if (!el || (el as HTMLButtonElement).disabled || e.button !== 0) return;
       // Sans cela, le navigateur rejouerait un clic de souris sur ce qui se trouve dessous (le monde, une fois le panneau fermé).
       e.preventDefault();
-      if (e.pointerType === 'mouse') act(el, e.clientX, e.clientY);
-      else taps.set(e.pointerId, { el, x: e.clientX, y: e.clientY });
+      const [action, arg] = [el.dataset.action!, el.dataset.arg ?? ''];
+      if (e.pointerType === 'mouse') act(el, action, arg, e.clientX, e.clientY);
+      else taps.set(e.pointerId, { el, action, arg, x: e.clientX, y: e.clientY });
     };
     const onRelease = (e: PointerEvent) => {
       const t = taps.get(e.pointerId);
       if (!t) return;
       taps.delete(e.pointerId);
       if (e.type !== 'pointerup' || Math.hypot(e.clientX - t.x, e.clientY - t.y) > TAP_SLOP || (t.el as HTMLButtonElement).disabled) return;
-      act(t.el, e.clientX, e.clientY);
+      act(t.el, t.action, t.arg, e.clientX, e.clientY);
     };
     for (const root of [this.panelRoot, this.menuRoot, this.hud]) root.addEventListener('pointerdown', onPointer);
     window.addEventListener('pointerup', onRelease);
@@ -254,12 +258,18 @@ export class UI {
   /** Hauteur de la barre de construction (px CSS, 0 hors construction). */
   buildBarHeight = 0;
 
-  /** Remplace le contenu d'un élément s'il a changé (vrai dans ce cas). */
-  private set(id: string, html: string): boolean {
+  /**
+   * Remplace le contenu d'un élément s'il a changé (vrai dans ce cas). `inPlace` corrige le DOM existant au lieu de le refaire
+   * (voir `morph`) : pour ce qu'un doigt peut tenir ou faire défiler.
+   */
+  private set(id: string, html: string, inPlace = false): boolean {
     if (this.cache.get(id) === html) return false;
     this.cache.set(id, html);
     const el = document.getElementById(id);
-    if (el) el.innerHTML = html;
+    if (el) {
+      if (inPlace) morph(el, html);
+      else el.innerHTML = html;
+    }
     return true;
   }
 
@@ -372,7 +382,8 @@ export class UI {
     }
     this.set('hud-track', track);
     this.set('hud-prompt', extra.prompt);
-    if (this.set('hud-build', extra.build)) {
+    // La barre de construction est redessinée à chaque case visée : sur place, pour que la bande des machines garde son défilement.
+    if (this.set('hud-build', extra.build, true)) {
       // Hauteur de la barre de construction : sur un écran étroit, l'équipement passe au-dessus.
       this.hud.classList.toggle('building', !!extra.build);
       const h = document.getElementById('hud-build')?.offsetHeight ?? 0;
@@ -575,12 +586,21 @@ export class UI {
     const sig = `${kind}|${inner}`;
     if (sig === this.panelSig) return;
     this.panelSig = sig;
-    const scroll = this.panelRoot.querySelector('.panel-body')?.scrollTop ?? 0;
-    // L'animation d'ouverture ne joue qu'à l'ouverture, pas à chaque rafraîchissement du contenu.
-    this.panelRoot.innerHTML = `<div class="panel panel-${kind}${this.popNext ? ' pop' : ''}">${inner}</div>`;
+    // Le cadre du panneau n'est créé qu'à l'ouverture (et son animation ne joue qu'alors) ; ensuite le contenu est corrigé
+    // sur place. Le refaire de zéro toutes les 0,2 s interromprait le défilement au doigt et les appuis : la fenêtre
+    // paraîtrait figée dès que le jeu fait varier ce qu'elle affiche (argent, ouvriers, cours…).
+    let frame = this.panelRoot.firstElementChild;
+    if (this.popNext || !frame) {
+      this.panelRoot.innerHTML = `<div class="panel panel-${kind}${this.popNext ? ' pop' : ''}"></div>`;
+      frame = this.panelRoot.firstElementChild!;
+    }
     this.popNext = false;
-    const pb = this.panelRoot.querySelector('.panel-body');
-    if (pb) pb.scrollTop = this.scrollTop ? 0 : scroll;
+    morph(frame, inner);
+    // Réécrire `scrollTop` arrêterait l'élan d'un défilement en cours : seulement pour remonter en haut.
+    if (this.scrollTop) {
+      const pb = frame.querySelector('.panel-body');
+      if (pb) pb.scrollTop = 0;
+    }
     this.scrollTop = false;
   }
 

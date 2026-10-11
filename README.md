@@ -60,7 +60,7 @@ travers**, mais fonctionne aussi debout. Sur iPhone, ouvrez le lien de la versio
 | Construire | **toucher** pose la machine (glisser pour tracer convoyeurs et rails), **↻ Tourner** l'oriente, **✕ Retirer** puis toucher une machine la démonte |
 | Régler plusieurs coffres | **toucher** un coffre pour le choisir, **glisser** un rectangle pour en choisir plusieurs |
 | Carte | glisser pour la déplacer, **pincer** ou boutons **+** **−** pour zoomer, toucher pour poser un repère |
-| Menus et panneaux | un bouton répond **quand on lève le doigt** ; faire défiler une liste en partant d'un bouton (l'Atelier, par exemple) n'achète rien |
+| Menus et panneaux | un bouton répond **quand on lève le doigt** ; faire défiler une liste en partant d'un bouton (l'Atelier, par exemple) n'achète rien. Les fenêtres (Atelier, Tableau d'affichage, Comptoir, Sac…) se mettent à jour **sans bouger** pendant que le jeu tourne : on les fait défiler et on les touche normalement, même quand l'argent ou les cours changent |
 
 **L'affichage suit la place réellement visible.** Safari sur iPhone, avec ses barres d'adresse et d'onglets, ne laisse parfois
 que 280 px de haut au jeu ; les tailles se règlent sur la hauteur du jeu et non sur celle de l'écran. Tout est rangé en
@@ -387,6 +387,7 @@ npm run build && npm run e2e   # partie jouée dans Chromium avec clavier/souris
 node e2e/coop.mjs              # jeu à deux : deux pages du même navigateur (canal local ?net=local), après un build
 node e2e/phone.mjs             # mise en page sur téléphone, à 11 tailles d'écran (marges de l'encoche comprises), après un build
 node e2e/touch.mjs             # gestes tactiles réels (CDP) : stick, Miner, Agir, ☰, défilement sans achat, pincer, pose, iPhone
+node e2e/panels.mjs            # fenêtres au doigt sur un jeu qui tourne : défilement, toucher long, contenu exact (après un build)
 npx vite-node tests-net/mqtt.check.ts   # client MQTT contre un vrai courtier local (aedes)
 ```
 
