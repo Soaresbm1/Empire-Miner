@@ -50,6 +50,9 @@ const until = async (page, fn, arg, timeout = 15000) => {
 const status = (p) => p.evaluate(() => window.__EM.session?.status ?? 'none');
 const base = `${url.replace(/\/$/, '')}/?debug&net=local`;
 
+// Pour la page de l'hôte, une version plus récente du jeu est « publiée » (version.json annonce une autre construction).
+await host.route('**/version.json*', (r) => r.fulfill({ contentType: 'application/json', body: JSON.stringify({ build: 'zzz-nouvelle' }) }));
+
 // ---------------------------------------------------------------- l'hôte crée la partie
 await host.goto(base);
 await host.waitForSelector('[data-action="play2"]');
@@ -152,6 +155,17 @@ await sleep(700);
 check((await host.evaluate(() => window.__EM.session.tick)) > t1 + 5, 'à deux, le menu pause ne fige pas la partie');
 check((await host.textContent('.pause-menu')).includes(code), 'le menu pause rappelle le code');
 await host.screenshot({ path: `${SHOTS}coop-05-pause.png` });
+check(/version 1-[0-9a-f]{10}/.test(await host.textContent('.pause-menu')), 'le menu pause à deux affiche la version du jeu');
+check(await host.evaluate(() => !!document.querySelector('.pause-menu [data-action="reloadFresh"]')), 'une version plus récente est publiée : le menu propose la mise à jour');
+check(!(await guest.evaluate(() => !!document.querySelector('[data-action="reloadFresh"]'))), "l'invité, dont la version est la dernière publiée, n'a pas ce bouton");
+await host.click('.pause-menu [data-action="copyDiag"]');
+await host.waitForSelector('#diag-text');
+const diag = await host.inputValue('#diag-text');
+check(diag.includes('Version du jeu à deux : 1-') && diag.includes(code) && diag.includes('Journal') && diag.includes('se présente'), 'le diagnostic de la connexion donne la version, le code et le journal (qui se présente, quand)');
+await host.screenshot({ path: `${SHOTS}coop-05b-diagnostic.png` });
+await host.click('[data-action="diagBack"]');
+await host.waitForSelector('.pause-menu');
+check(true, 'et « Retour » ramène au menu pause');
 await host.keyboard.press('Escape');
 await sleep(200);
 
@@ -238,6 +252,31 @@ const back = await guest.evaluate(() => [window.__EM.state.autoPickup.coal, wind
 check(back[1] === 1 && back[0] === false, "ses réglages personnels lui sont rendus (ramassage du charbon coupé)");
 await guest.screenshot({ path: `${SHOTS}coop-08-rejoined.png` });
 
+// ---------------------------------------------------------------- l'hôte annule l'invitation puis la recrée : l'invité rejoint avec le nouveau code
+// (Le signalement : « il n'arrive plus à rejoindre, même en annulant et en recréant l'invitation ».)
+await host.bringToFront();
+await host.keyboard.press('Escape');
+await host.waitForSelector('[data-action="netLeave"]');
+await host.click('[data-action="netLeave"]');
+await host.waitForSelector('[data-action="host2"]');
+check(await host.evaluate(() => window.__EM.session === null), "l'hôte arrête la partie à deux : plus de session");
+await host.click('[data-action="host2"]');
+await until(host, () => window.__EM.session?.role === 'host' && window.__EM.session.status === 'waiting', null, 5000);
+const code2 = await host.evaluate(() => window.__EM.session.code);
+check(/^[A-Z2-9]{5}$/.test(code2) && code2 !== code, `« Inviter un ami » donne un nouveau code (${code} → ${code2})`);
+check(await until(guest, () => window.__EM.session?.status === 'lost' || window.__EM.session === null || window.__EM.session.code !== code2, null, 3000), "l'ancien invité n'est plus relié à l'ancien code");
+await host.keyboard.press('Escape').catch(() => undefined);
+await guest.goto(`${base}&join=${code2}`);
+await guest.waitForSelector('[data-action="join"]');
+await guest.click('[data-action="join"]');
+check(await both(), "l'invité rejoint avec le nouveau code");
+await sleep(1200);
+const counts2 = await Promise.all([host, guest].map((p) => p.evaluate(() => ({ n: window.__EM.state.playerCount, local: window.__EM.state.local }))));
+check(counts2[0].n === 2 && counts2[1].n === 2 && counts2[1].local === 1, 'deux joueurs dans la mine, des deux côtés');
+await record();
+await sleep(1500);
+await compare('après la nouvelle invitation');
+
 // ---------------------------------------------------------------- l'hôte quitte : l'invité est prévenu
 await host.keyboard.press('Escape');
 await host.waitForSelector('[data-action="quit"]');
@@ -245,6 +284,27 @@ await host.click('[data-action="quit"]');
 check(await until(guest, () => document.querySelector('.join-text.failed') !== null, null, 12000), "l'hôte quitte : l'invité voit un message de connexion perdue");
 await guest.screenshot({ path: `${SHOTS}coop-09-host-left.png` });
 check(await guest.evaluate(() => !!document.querySelector('[data-action="netRetry"]')), 'et peut réessayer');
+check(await guest.evaluate(() => !!document.querySelector('[data-action="copyDiag"]')), "l'écran d'échec propose le diagnostic de la connexion");
+await guest.click('[data-action="copyDiag"]');
+await guest.waitForSelector('#diag-text');
+check((await guest.inputValue('#diag-text')).includes("L'hôte a quitté") || (await guest.inputValue('#diag-text')).includes('hôte a quitté'), 'le diagnostic de l’invité dit que l’hôte a quitté');
+await guest.click('[data-action="diagBack"]');
+await guest.waitForSelector('[data-action="netRetry"]');
+
+// ---------------------------------------------------------------- mise à jour : un rechargement qui contourne le cache
+const fresh = await ctx.newPage();
+const navigations = [];
+fresh.on('request', (r) => r.isNavigationRequest() && navigations.push(r.url()));
+await fresh.route('**/version.json*', (r) => r.fulfill({ contentType: 'application/json', body: JSON.stringify({ build: 'zzz-nouvelle' }) }));
+await fresh.goto(`${base}&join=${code}`);
+await fresh.waitForSelector('[data-action="join"]');
+check(await until(fresh, () => !!document.querySelector('[data-action="reloadFresh"]'), null, 12000), 'la mise à jour publiée est détectée : le bouton apparaît dans le menu ouvert');
+await Promise.all([fresh.waitForNavigation({ waitUntil: 'load' }), fresh.click('[data-action="reloadFresh"]')]);
+await fresh.waitForSelector('[data-action="join"]');
+const after = new URL(fresh.url());
+check(navigations.some((u) => /[?&]v=/.test(u)), 'la mise à jour recharge la page par une adresse neuve (le cache du navigateur ne répond pas)');
+check(!after.searchParams.has('v') && after.searchParams.get('join') === code && after.searchParams.has('debug'), "l'adresse retrouve son aspect (sans ?v=) et garde le code d'invitation");
+await fresh.close();
 
 check(errors.length === 0, `aucune erreur dans la console (${errors.length})`);
 if (errors.length) console.log(errors.slice(0, 8).join('\n'));

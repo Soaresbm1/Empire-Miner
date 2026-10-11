@@ -100,6 +100,8 @@ class Duel {
   guestG: GameState | null = null;
   readonly hostStatus: SessionStatus[] = [];
   readonly guestStatus: SessionStatus[] = [];
+  /** Les avis que l'hôte donne à son joueur (version différente, partie pleine, erreur…). */
+  readonly notices: { text: string; kind: string }[] = [];
   readonly adopted: { host: GameState[]; guest: GameState[] } = { host: [], guest: [] };
   readonly intents: PlayerIntent[] = [STILL, STILL];
   private pumped = 0;
@@ -169,6 +171,7 @@ class Duel {
         this.watch(g, 'host');
       },
       onStatus: (s) => this.hostStatus.push(s),
+      notice: (text, kind) => this.notices.push({ text, kind }),
       now: t,
       autoPump: false,
     });
@@ -700,5 +703,150 @@ describe('Session : rôles', () => {
     d.link.a.send({ m: 'hello', v: PROTOCOL, g: 'zzz', n: 'Z' });
     d.run(300);
     expect(d.guest.status).toBe('connecting');
+  });
+});
+
+
+describe('Session : synchronisation qui n’aboutit pas, erreurs, session fermée', () => {
+  it('une synchronisation qui ne va pas au bout ne fige pas la partie de l’hôte pour toujours : il reprend seul, puis laisse l’invité réessayer', async () => {
+    const d = new Duel();
+    // Les morceaux de la partie n'arrivent jamais à l'invité, mais l'hôte l'entend (il se représente chaque seconde) : sans limite,
+    // l'hôte resterait figé « en synchronisation » tant que l'invité insiste.
+    d.link.cutFn = (_now, dir) => dir === 'ab';
+    await d.runAsync(9000, () => d.host.status === 'syncing');
+    expect(d.host.status).toBe('syncing');
+    await d.runAsync(1000); // le temps de jouer les premiers pas convenus d'avance
+    const frozen = d.hostG.time;
+    await d.runAsync(6000);
+    expect(d.host.status).toBe('syncing');
+    expect(d.hostG.time).toBe(frozen); // figée en attendant l'invité : c'est le principe du lockstep
+    await d.runAsync(20000, () => d.host.status === 'waiting');
+    expect(d.host.status).toBe('waiting');
+    expect(d.host.linked).toBe(false);
+    expect(d.hostG.playerCount).toBe(1);
+    expect(d.notices.some((n) => n.text.includes('n’a pas pu être envoyée'))).toBe(true);
+    // La partie de l'hôte avance de nouveau.
+    const t0 = d.hostG.time;
+    d.run(1000);
+    expect(d.hostG.time).toBeGreaterThan(t0);
+    // Le réseau est revenu ; l'invité, qui avait renoncé, réessaie (une nouvelle session). L'hôte laisse souffler son ami un
+    // instant : les `hello` qui arrivent tout de suite sont ignorés, ceux d'après sont acceptés.
+    d.link.cutFn = null;
+    d.link.b.closed = false;
+    const guest2 = d.makeGuest('amie');
+    const step = async (ms: number, until?: () => boolean) => {
+      const end = d.link.now + ms;
+      let i = 0;
+      while (d.link.now < end && !until?.()) {
+        d.link.now += 16;
+        d.link.deliver();
+        if (i++ % 3 === 0) {
+          d.host.pump();
+          guest2.pump();
+        }
+        d.host.advance(0.016, STILL);
+        guest2.advance(0.016, STILL);
+        await new Promise((r) => setTimeout(r, 0));
+      }
+    };
+    const syncs = d.hostStatus.filter((s) => s === 'syncing').length;
+    await step(3000);
+    expect(d.host.status).toBe('waiting');
+    expect(d.hostStatus.filter((s) => s === 'syncing').length).toBe(syncs);
+    expect(d.host.log.some((l) => l.includes('hello ignoré'))).toBe(true);
+    await step(30000, () => d.host.status === 'playing' && guest2.status === 'playing');
+    expect(d.host.status).toBe('playing');
+    expect(guest2.status).toBe('playing');
+    expect(d.hostG.playerCount).toBe(2);
+    guest2.close();
+  });
+
+  it('une erreur en préparant la partie est dite à l’hôte et à l’invité, au lieu de les laisser attendre en vain', async () => {
+    const d = new Duel();
+    // La partie de l'hôte ne peut pas être écrite (un état qui lève une erreur à l'écriture).
+    d.hostG.guestStash = { piege: { get boom(): never { throw new Error('boom'); } } };
+    await d.runAsync(8000, () => d.guest.status === 'lost');
+    expect(d.guest.status).toBe('lost');
+    expect(d.guest.failure).toBe('bad');
+    expect(d.guest.info).toContain('boom');
+    expect(d.notices.some((n) => n.kind === 'bad' && n.text.includes('boom'))).toBe(true);
+    expect(d.host.status).toBe('waiting');
+    expect(d.hostG.playerCount).toBe(1);
+    expect(d.host.log.some((l) => l.includes('ERREUR'))).toBe(true);
+    // La partie de l'hôte n'est pas figée.
+    const t0 = d.hostG.time;
+    d.run(1000);
+    expect(d.hostG.time).toBeGreaterThan(t0);
+  });
+
+  it('un invité d’une autre version est refusé en lui disant les deux versions, et l’hôte en est averti (une fois)', async () => {
+    const d = new Duel();
+    const send = d.link.b.send.bind(d.link.b);
+    d.link.b.send = (m) => send(m.m === 'hello' ? { ...m, v: '1-ancienne' } : m);
+    await d.runAsync(5000, () => d.guest.status === 'lost');
+    expect(d.guest.status).toBe('lost');
+    expect(d.guest.failure).toBe('version');
+    expect(d.guest.info).toContain('1-ancienne');
+    expect(d.guest.info).toContain(PROTOCOL);
+    const versionNotices = d.notices.filter((n) => n.text.includes('pas la même version'));
+    expect(versionNotices).toHaveLength(1);
+    expect(versionNotices[0].text).toContain('1-ancienne');
+    expect(d.host.status).toBe('waiting');
+  });
+
+  it('une session fermée ne bouge plus : la partie déballée après la fermeture n’est pas adoptée', async () => {
+    const d = new Duel();
+    let closed = false;
+    for (let i = 0; i < 60 * 10 && !closed; i++) {
+      d.frame();
+      // Dès que le dernier morceau est arrivé (le déballage est en cours, pas encore adopté), l'invité ferme sa session.
+      if (d.guest.status === 'syncing' && d.guest.progress === null && d.adopted.guest.length === 0) {
+        d.guest.close();
+        closed = true;
+      }
+      if (i % 20 === 0) await new Promise((r) => setTimeout(r, 0));
+    }
+    expect(closed).toBe(true);
+    await new Promise((r) => setTimeout(r, 100));
+    expect(d.adopted.guest).toHaveLength(0);
+    expect(d.guest.status).toBe('closed');
+  });
+
+  it('une session fermée ignore les messages qui arrivent encore : un hello en retard ne recharge pas la partie de l’hôte', async () => {
+    const d = new Duel();
+    d.link.a.send = () => undefined; // son au revoir ne part pas : l'invité continue de se présenter
+    d.host.close();
+    d.hostStatus.length = 0;
+    const journal = d.host.log.length;
+    d.run(3000); // l'invité se présente chaque seconde ; le courtier livre encore à la session fermée
+    await new Promise((r) => setTimeout(r, 50));
+    expect(d.adopted.host).toHaveLength(0);
+    expect(d.hostStatus).toEqual([]);
+    expect(d.host.status).toBe('closed');
+    expect(d.host.log).toHaveLength(journal); // elle n'a même pas pris note de ces hello
+  });
+
+  it('le diagnostic dit la version, l’état et le journal ; l’invité voit la réception avancer', async () => {
+    const d = new Duel();
+    // Une mine bien creusée : la partie à envoyer tient en plusieurs morceaux.
+    const w = d.hostG.world;
+    for (let k = 0; k < 6000; k++) {
+      const x = 1 + ((k * 7) % 98);
+      const y = SURFACE_ROWS + 5 + ((k * 13) % 200);
+      if (w.isSolid(x, y)) d.hostG.breakTile(x, y);
+    }
+    let seen = 0;
+    await d.runAsync(8000, () => {
+      seen = Math.max(seen, d.guest.progress?.total ?? 0);
+      return playing(d);
+    });
+    expect(playing(d)).toBe(true);
+    expect(seen).toBeGreaterThan(1);
+    const text = d.guest.diagnostic();
+    expect(text).toContain(PROTOCOL);
+    expect(text).toContain('Invité');
+    expect(text).toContain('Journal');
+    expect(text).toContain('réception de la génération');
+    expect(d.host.diagnostic()).toContain('prête');
   });
 });

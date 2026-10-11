@@ -4,10 +4,12 @@
 import './ui/ui.css';
 import './ui/touch.css';
 import { Game } from './game/Game';
+import { cleanReloadParam } from './game/update';
 import { stateDigest } from './net/digest';
 import { installTheme } from './ui/theme';
 
 installTheme();
+cleanReloadParam();
 const canvas = document.getElementById('game') as HTMLCanvasElement;
 const game = new Game(canvas);
 game.start();

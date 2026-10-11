@@ -41,7 +41,8 @@ import { TouchControls, isTouchDevice, saveTouchPref } from '../ui/touch';
 import { homeScreenHintDue, homeScreenHintShown, toggleFullscreen } from '../ui/fullscreen';
 import { releaseGuests } from '../net/guests';
 import { MqttTransport } from '../net/mqtt';
-import { Session, type SessionStatus } from '../net/session';
+import { PROTOCOL, Session, type SessionStatus } from '../net/session';
+import { BUILD_ID, reloadFresh, watchForUpdate } from './update';
 import { BroadcastTransport, cleanCode, newGameCode, randomId, type Transport } from '../net/transport';
 import type { NetMenu } from '../ui/UI';
 
@@ -127,6 +128,11 @@ export class Game {
   private netCode = '';
   /** L'invité a déjà joué dans cette partie (une nouvelle réception est alors une resynchronisation). */
   private netWasPlaying = false;
+  /** Hôte : l'ami a été lâché (silence) et n'est pas encore revenu : à son retour, on le dit autrement que pour une resynchronisation. */
+  private netDropped = false;
+  /** D'où l'on a ouvert le diagnostic de la connexion (pour y revenir), et la minuterie du texte de l'écran d'attente. */
+  private diagFrom: 'pause' | 'join' = 'pause';
+  private joinTick = 0;
   /** Identité de cet appareil quand il rejoint une partie : la même d'une visite à l'autre, pour retrouver ses affaires. */
   private readonly guestId = loadGuestId();
   /** Canal de la partie à deux (le relais public ; les essais le remplacent). */
@@ -197,6 +203,9 @@ export class Game {
   }
 
   start(): void {
+    this.ui.version = PROTOCOL;
+    // Une version plus récente est-elle publiée ? (Sinon, à deux : « Versions différentes du jeu ».)
+    watchForUpdate(() => this.onUpdateAvailable());
     this.showMainMenu();
     // Lien d'invitation (?join=CODE) : on propose directement de rejoindre.
     const invited = cleanCode(new URLSearchParams(location.search).get('join') ?? '');
@@ -329,7 +338,66 @@ export class Game {
 
   private netMenu(): NetMenu | null {
     const s = this.session;
-    return s ? { role: s.role, code: s.code, peer: s.peerName, playing: s.playing } : null;
+    return s ? { role: s.role, code: s.code, peer: s.peerName, playing: s.playing, relays: this.relayNote(s) } : null;
+  }
+
+  /** L'état des relais en quelques mots (vide pour un canal qui n'en a pas). */
+  private relayNote(s: Session): string {
+    const r = s.relays;
+    if (!r) return '';
+    return r.open === 0 ? 'aucun relais joignable' : `relais ${r.open}/${r.total}`;
+  }
+
+  /** Le texte de l'écran d'attente de l'invité : connexion (et relais), ou réception de la partie (morceaux reçus). */
+  private joinText(s: Session): string {
+    if (s.status === 'syncing') {
+      const p = s.progress;
+      return p ? `Réception de la partie… ${p.done}/${p.total}` : s.info || 'Réception de la partie…';
+    }
+    const rel = this.relayNote(s);
+    return `Connexion à la partie…${rel ? ` (${rel})` : ''}`;
+  }
+
+  /** Une version plus récente du jeu est publiée : on le dit, et les menus proposent de la prendre. */
+  private onUpdateAvailable(): void {
+    this.ui.setUpdate(true);
+    this.ui.toast('Une nouvelle version du jeu est disponible : ouvrez le menu et touchez « Mise à jour disponible ». À deux, faites-le des deux côtés.', 'info', 10000);
+  }
+
+  /** Le diagnostic de la connexion : version, navigateur, état de la partie à deux, relais, journal. */
+  private diagnosticText(): string {
+    const s = this.session;
+    const head = [
+      `Empire Miner · version du jeu à deux ${PROTOCOL} · construction ${BUILD_ID}`,
+      `Navigateur : ${navigator.userAgent}`,
+      `Écran : ${innerWidth}×${innerHeight}${this.touch ? ' · tactile' : ''}`,
+      '',
+    ];
+    return [...head, s ? s.diagnostic() : 'Aucune partie à deux en cours.'].join('\n');
+  }
+
+  /** Copie un texte dans le presse-papiers ; à défaut, le sélectionne pour que le joueur le copie à la main. */
+  private async copyText(text: string): Promise<void> {
+    try {
+      await navigator.clipboard.writeText(text);
+      this.ui.toast('Texte copié : collez-le dans un message.', 'good');
+      return;
+    } catch {
+      /* pas d'accès au presse-papiers : repli ci-dessous */
+    }
+    const ta = document.getElementById('diag-text') as HTMLTextAreaElement | null;
+    if (ta) {
+      ta.focus();
+      ta.select();
+      ta.setSelectionRange(0, text.length);
+    }
+    let ok = false;
+    try {
+      ok = document.execCommand('copy');
+    } catch {
+      ok = false;
+    }
+    this.ui.toast(ok ? 'Texte copié : collez-le dans un message.' : 'Le texte est sélectionné : copiez-le à la main.', ok ? 'good' : 'info');
   }
 
   private showPause(): void {
@@ -341,6 +409,8 @@ export class Game {
     const g = this.state;
     if (!g) return;
     this.closeSession();
+    this.netWasPlaying = false;
+    this.netDropped = false;
     const code = newGameCode();
     this.openSession('host', code);
     this.session?.attach(g);
@@ -366,6 +436,7 @@ export class Game {
       getState: () => this.state,
       adopt: (g) => this.adoptState(g),
       onStatus: (st, info) => this.onNetStatus(st, info),
+      notice: (text, kind) => this.ui.toast(text, kind, 8000),
     });
   }
 
@@ -403,10 +474,10 @@ export class Game {
     const s = this.session;
     if (!s) return;
     if (s.role === 'guest') {
-      if (st === 'connecting') this.ui.showJoining(s.code, 'Connexion à la partie…', false);
+      if (st === 'connecting') this.ui.showJoining(s.code, this.joinText(s), false);
       else if (st === 'syncing') {
         if (this.netWasPlaying) this.ui.toast('Resynchronisation avec l’hôte…', 'info');
-        else this.ui.setJoiningText(info || 'Réception de la partie…');
+        else this.ui.setJoiningText(this.joinText(s));
       } else if (st === 'playing') {
         const first = !this.netWasPlaying;
         this.netWasPlaying = true;
@@ -419,14 +490,23 @@ export class Game {
         this.setBuildMode(false);
         this.ui.showHud(false);
         if (this.menuState) this.renderer.setState(this.menuState);
-        this.ui.showJoining(s.code, info || 'Connexion perdue.', true);
+        this.ui.showJoining(s.code, info || 'Connexion perdue.', true, s.failure);
       }
       return;
     }
-    if (st === 'syncing') this.ui.toast('Un ami arrive dans la mine…', 'info');
-    else if (st === 'playing') this.ui.toast('Votre ami a rejoint la partie.', 'good');
-    else if (st === 'waiting' && info) this.ui.toast(`${info} La partie continue, code ${s.code}.`, 'warn');
-    else if (st === 'lost') this.ui.toast(info || 'Connexion perdue.', 'bad');
+    // Hôte : une resynchronisation (les deux parties s'étaient écartées) n'est pas l'arrivée d'un nouvel ami.
+    if (st === 'syncing') this.ui.toast(this.netWasPlaying ? 'Resynchronisation avec votre ami…' : 'Un ami arrive dans la mine…', 'info');
+    else if (st === 'playing') {
+      const first = !this.netWasPlaying;
+      const back = this.netDropped;
+      this.netWasPlaying = true;
+      this.netDropped = false;
+      if (first) this.ui.toast('Votre ami a rejoint la partie.', 'good');
+      else if (back) this.ui.toast('Votre ami est de retour.', 'good');
+    } else if (st === 'waiting') {
+      if (this.netWasPlaying) this.netDropped = true;
+      if (info) this.ui.toast(`${info} La partie continue, code ${s.code}.`, 'warn');
+    } else if (st === 'lost') this.ui.toast(info || 'Connexion perdue.', 'bad');
     if (this.ui.menu === 'pause') this.showPause();
   }
 
@@ -438,12 +518,13 @@ export class Game {
       return;
     }
     const peer = esc(s.peerName || (s.role === 'host' ? 'Invité' : 'Hôte'));
+    const relays = this.relayNote(s);
     let chip: string;
     let banner = '';
     if (s.role === 'host' && !s.linked && s.dropped)
-      chip = `<span class="dot bad"></span>Ami hors ligne · <b class="code">${s.code}</b><small>Il revient tout seul avec ce code (touchez ici pour le renvoyer)</small>`;
+      chip = `<span class="dot bad"></span>Ami hors ligne · <b class="code">${s.code}</b><small>Il revient tout seul avec ce code (touchez ici pour le renvoyer)${relays ? ` · ${relays}` : ''}</small>`;
     else if (s.role === 'host' && !s.linked)
-      chip = `<span class="dot wait"></span>Code <b class="code">${s.code}</b><span class="share">↗ Inviter</span><small>Touchez ici pour inviter un ami</small>`;
+      chip = `<span class="dot wait"></span>Code <b class="code">${s.code}</b><span class="share">↗ Inviter</span><small>Touchez ici pour inviter un ami${relays ? ` · ${relays}` : ''}</small>`;
     else if (s.status === 'syncing') chip = `<span class="dot wait"></span>Synchronisation…`;
     else if (s.status === 'lost') chip = `<span class="dot bad"></span>Connexion perdue`;
     else if (s.reconnecting) chip = `<span class="dot bad"></span>Connexion perdue…`;
@@ -649,6 +730,23 @@ export class Game {
         this.closeSession();
         this.showMainMenu();
         return;
+      case 'reloadFresh':
+        reloadFresh();
+        return;
+      case 'copyDiag':
+        this.diagFrom = this.mode === 'playing' ? 'pause' : 'join';
+        this.ui.showDiagnostic(this.diagnosticText());
+        return;
+      case 'copyDiagText':
+        void this.copyText(this.ui.diagnosticText());
+        return;
+      case 'diagBack': {
+        const s = this.session;
+        if (this.diagFrom === 'pause' && this.mode === 'playing') this.showPause();
+        else if (s?.role === 'guest') this.ui.showJoining(s.code, s.info || 'Connexion perdue.', s.status === 'lost', s.failure);
+        else this.showMainMenu();
+        return;
+      }
       case 'netLeave': {
         const guest = this.session?.role === 'guest';
         this.closeSession();
@@ -922,6 +1020,12 @@ export class Game {
     }
     this.renderer.update(dt, false);
     this.renderer.draw({ target: null, ghost: null, removeHint: null, interact: null }, false);
+    // L'invité qui se connecte ou reçoit la partie voit les relais joignables et les morceaux reçus évoluer.
+    const gs = this.session;
+    if (gs?.role === 'guest' && (gs.status === 'connecting' || gs.status === 'syncing') && (this.joinTick -= dt) <= 0) {
+      this.joinTick = 0.4;
+      this.ui.setJoiningText(this.joinText(gs));
+    }
     if (this.input.wasPressed('Escape') && this.ui.panel) {
       this.ui.closePanel();
       this.showMainMenu();

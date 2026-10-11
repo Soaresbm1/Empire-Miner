@@ -23,6 +23,8 @@ class FakeSocket {
     readonly url: string,
     /** Faux : la connexion n'arrive jamais à s'ouvrir (reste en attente). */
     opens = true,
+    /** Vrai : le courtier refuse la connexion (CONNACK avec un code d'erreur). */
+    private readonly refuse = false,
   ) {
     if (opens)
       setTimeout(() => {
@@ -35,11 +37,20 @@ class FakeSocket {
     this.onmessage?.({ data: Uint8Array.from(bytes).buffer });
   }
 
+  /** Le courtier remet un message d'un autre joueur sur le sujet de la partie (paquet PUBLISH). */
+  deliver(from: string, seq: number, msg: Record<string, unknown>, topic = 'empire-miner/v1/ABCDE'): void {
+    const t = new TextEncoder().encode(topic);
+    const p = new TextEncoder().encode(JSON.stringify({ f: from, s: seq, p: msg }));
+    const rest = 2 + t.length + p.length;
+    const bytes = [0x30, ...(rest < 128 ? [rest] : [(rest & 0x7f) | 0x80, rest >> 7]), t.length >> 8, t.length & 0xff, ...t, ...p];
+    this.reply(bytes);
+  }
+
   send(data: Uint8Array): void {
     const type = data[0] >> 4;
     this.got[type] = (this.got[type] ?? 0) + 1;
     if (!this.responsive) return;
-    if (type === 1) this.reply([0x20, 0x02, 0x00, 0x00]);
+    if (type === 1) this.reply([0x20, 0x02, 0x00, this.refuse ? 0x05 : 0x00]);
     else if (type === 8) this.reply([0x90, 0x03, data[2], data[3], 0x00]);
     else if (type === 12) this.reply([0xd0, 0x00]);
   }
@@ -179,5 +190,94 @@ describe('MqttTransport : courtiers lents, muets ou encombrés', () => {
     vi.advanceTimersByTime(60000);
     expect(made).toHaveLength(3);
     expect(made.every((s) => s.readyState === 3)).toBe(true);
+  });
+});
+
+
+describe('MqttTransport : un seul relais pour les gros messages, état des relais', () => {
+  afterEach(() => vi.restoreAllMocks());
+
+  it('trySend envoie par un seul relais, tiré parmi ceux qui sont ouverts', () => {
+    const { t, made } = setup();
+    vi.advanceTimersByTime(100);
+    vi.spyOn(Math, 'random').mockReturnValue(0);
+    expect(t.trySend({ m: 'snap' } as Message)).toBe(true);
+    expect(made.map((x) => x.got[3] ?? 0)).toEqual([1, 0, 0]);
+    (Math.random as unknown as { mockReturnValue(v: number): void }).mockReturnValue(0.99);
+    expect(t.trySend({ m: 'snap' } as Message)).toBe(true);
+    expect(made.map((x) => x.got[3] ?? 0)).toEqual([1, 0, 1]);
+    t.close();
+  });
+
+  it('trySend préfère les relais par lesquels l’autre joueur s’est fait entendre (ils relient sûrement les deux), puis les autres', () => {
+    const { t, made } = setup();
+    vi.advanceTimersByTime(100);
+    made[2].deliver('autre', 1, { m: 'hello' });
+    vi.spyOn(Math, 'random').mockReturnValue(0);
+    for (let i = 0; i < 5; i++) expect(t.trySend({ m: 'snap' } as Message)).toBe(true);
+    expect(made.map((x) => x.got[3] ?? 0)).toEqual([0, 0, 5]);
+    // Celui-là est encombré : on se rabat sur un autre relais ouvert.
+    made[2].bufferedAmount = MAX_BUFFERED + 1;
+    expect(t.trySend({ m: 'snap' } as Message)).toBe(true);
+    expect(made.map((x) => x.got[3] ?? 0)).toEqual([1, 0, 5]);
+    // Passé quelques secondes sans nouvelle de l'autre par ce relais, on ne le préfère plus.
+    made[2].bufferedAmount = 0;
+    vi.advanceTimersByTime(6000);
+    expect(t.trySend({ m: 'snap' } as Message)).toBe(true);
+    expect(made.map((x) => x.got[3] ?? 0)).toEqual([2, 0, 5]);
+    t.close();
+  });
+
+  it('un message de l’autre joueur déjà reçu par un autre relais compte aussi : ce relais relie bien les deux', () => {
+    const { t, made } = setup();
+    vi.advanceTimersByTime(100);
+    const got: Message[] = [];
+    t.onMessage = (m) => got.push(m);
+    made[0].deliver('autre', 7, { m: 'f' });
+    made[1].deliver('autre', 7, { m: 'f' }); // le même message, par le deuxième relais : doublon
+    expect(got).toHaveLength(1);
+    vi.spyOn(Math, 'random').mockReturnValue(0.99);
+    expect(t.trySend({ m: 'snap' } as Message)).toBe(true);
+    // Les relais 0 et 1 relient les deux joueurs ; le tirage au hasard (0,99) tombe sur le dernier d'entre eux.
+    expect(made.map((x) => x.got[3] ?? 0)).toEqual([0, 1, 0]);
+    t.close();
+  });
+
+  it('trySend saute un relais encombré, et dit faux quand tous le sont (on réessaiera plus tard, rien n’est perdu)', () => {
+    const { t, made } = setup();
+    vi.advanceTimersByTime(100);
+    vi.spyOn(Math, 'random').mockReturnValue(0);
+    made[0].bufferedAmount = MAX_BUFFERED + 1;
+    expect(t.trySend({ m: 'snap' } as Message)).toBe(true);
+    expect(made.map((x) => x.got[3] ?? 0)).toEqual([0, 1, 0]);
+    for (const m of made) m.bufferedAmount = MAX_BUFFERED + 1;
+    expect(t.trySend({ m: 'snap' } as Message)).toBe(false);
+    expect(made.map((x) => x.got[3] ?? 0)).toEqual([0, 1, 0]); // rien de plus n'est parti
+    t.close();
+  });
+
+  it('trySend dit faux quand aucun relais n’est ouvert', () => {
+    const t = new MqttTransport('ABCDE', { brokers: URLS, makeSocket: (u) => new FakeSocket(u, false) as unknown as WebSocket });
+    vi.advanceTimersByTime(100);
+    expect(t.trySend({ m: 'snap' } as Message)).toBe(false);
+    t.close();
+  });
+
+  it('relays() et report() disent combien de relais sont ouverts et pourquoi les autres ne le sont pas', () => {
+    const t = new MqttTransport('ABCDE', {
+      brokers: URLS,
+      makeSocket: (u) => new FakeSocket(u, u !== URLS[0], u === URLS[1]) as unknown as WebSocket,
+    });
+    vi.advanceTimersByTime(100);
+    expect(t.relays()).toEqual({ open: 1, total: 3 });
+    const lines = t.report();
+    expect(lines).toHaveLength(3);
+    expect(lines[0]).toContain('a.test');
+    expect(lines[0]).toContain('non joignable');
+    expect(lines[1]).toContain('refusée');
+    expect(lines[1]).toContain('code 5');
+    expect(lines[2]).toContain('ouvert');
+    expect(lines[2]).toContain('1 connexion(s) réussie(s)');
+    t.close();
   });
 });

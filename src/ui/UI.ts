@@ -54,6 +54,8 @@ export interface NetMenu {
   code: string;
   peer: string;
   playing: boolean;
+  /** État des relais (« relais 2/3 »), vide si le canal n'en a pas. */
+  relays?: string;
 }
 
 /** Faux dans les hébergements qui bloquent les téléchargements (build « artifact »). */
@@ -74,6 +76,10 @@ export class UI {
   /** Au prochain dessin du panneau, on remonte en haut de la liste. */
   private scrollTop = false;
   menu: 'main' | 'pause' | null = null;
+  /** Version du jeu à deux, affichée dans les menus : les deux joueurs doivent avoir la même. */
+  version = '';
+  /** Une version plus récente du jeu est publiée : les menus proposent de la prendre. */
+  private updateReady = false;
   private readonly hud = $('#hud');
   private readonly panelRoot = $('#panel-root');
   private readonly menuRoot = $('#menu-root');
@@ -395,14 +401,26 @@ export class UI {
 
   // ------------------------------------------------------------------ messages
 
-  toast(text: string, kind: 'info' | 'warn' | 'good' | 'bad' = 'info'): void {
+  toast(text: string, kind: 'info' | 'warn' | 'good' | 'bad' = 'info', ms = 2600): void {
     const el = document.createElement('div');
     el.className = `toast ${kind}`;
     el.textContent = text;
     this.toasts.appendChild(el);
     while (this.toasts.children.length > 4) this.toasts.firstElementChild?.remove();
-    setTimeout(() => el.classList.add('out'), 2600);
-    setTimeout(() => el.remove(), 3100);
+    setTimeout(() => el.classList.add('out'), ms);
+    setTimeout(() => el.remove(), ms + 500);
+  }
+
+  /** Bouton « Mettre à jour le jeu » des menus. */
+  private updateButton(): string {
+    return this.updateReady ? '<button class="btn primary" data-action="reloadFresh" title="Recharger le jeu pour prendre la dernière version">Mise à jour disponible : recharger le jeu</button>' : '';
+  }
+
+  /** Une version plus récente du jeu est publiée : le bouton apparaît dans le menu ouvert, et dans les suivants. */
+  setUpdate(ready: boolean): void {
+    this.updateReady = ready;
+    const buttons = this.menuRoot.querySelector('.menu-buttons');
+    if (ready && buttons && !buttons.querySelector('[data-action="reloadFresh"]')) buttons.insertAdjacentHTML('afterbegin', this.updateButton());
   }
 
   /** Fait briller le compteur d'argent (revenu automatique). */
@@ -627,6 +645,7 @@ export class UI {
       }
       <p class="tagline">Une vieille pioche. Une petite mine. Un futur empire industriel.</p>
       <div class="menu-buttons">
+        ${this.updateButton()}
         ${save ? `<button class="btn primary big" data-action="continue">Continuer${saveInfo}</button>` : ''}
         <button class="btn big ${save ? (confirmNew ? 'danger' : '') : 'primary'}" data-action="new">${confirmNew ? 'Confirmer : écraser la sauvegarde' : 'Nouvelle partie'}</button>
         ${CAN_PLAY2 ? '<button class="btn big" data-action="play2" title="Une mine, deux mineurs : sur deux téléphones ou deux ordinateurs">Jouer à deux<small>avec un ami, sur son propre appareil</small></button>' : ''}
@@ -635,7 +654,7 @@ export class UI {
         <button class="btn" data-action="touch" title="Stick et boutons à l'écran, pour jouer au doigt">Tactile : ${this.host.touch?.() ? 'oui' : 'non'}</button>
         ${this.fullscreenButton()}
       </div>
-      <p class="credits">Clavier et souris, ou au doigt sur téléphone · prototype v0.1</p>
+      <p class="credits">Clavier et souris, ou au doigt sur téléphone · prototype v0.1${this.version ? ` · version ${esc(this.version)}` : ''}</p>
     </div>`;
   }
 
@@ -665,16 +684,18 @@ export class UI {
               ? `À deux avec <b>${esc(net.peer || 'votre ami')}</b> · code <b class="code">${esc(net.code)}</b>`
               : `Partie ouverte · code <b class="code">${esc(net.code)}</b> · personne n'est encore arrivé`
             : `Chez <b>${esc(net.peer || "l'hôte")}</b> · code <b class="code">${esc(net.code)}</b>`
-        }<br><span class="muted">Le jeu continue pendant ce menu.</span></p>`
+        }<br><span class="muted">Le jeu continue pendant ce menu.${net.relays ? ` · ${esc(net.relays)}` : ''}${this.version ? ` · version ${esc(this.version)}` : ''}</span></p>`
       : '';
     const twoPlayer = net
       ? `${net.role === 'host' ? '<button class="btn" data-action="invite">Envoyer le lien</button>' : ''}
+      <button class="btn" data-action="copyDiag" title="Diagnostic de la connexion : un texte à envoyer pour dire où ça coince">Diagnostic</button>
       <button class="btn danger" data-action="netLeave">${guest ? 'Quitter la partie à deux' : 'Arrêter la partie à deux'}</button>`
       : CAN_PLAY2
         ? '<button class="btn" data-action="host2" title="Un ami rejoint votre mine avec un code">Inviter un ami</button>'
         : '';
     this.menuRoot.innerHTML = `<div class="menu pause-menu"><h2>Pause</h2>${note}<div class="menu-buttons">
       <button class="btn primary big" data-action="resume">Reprendre</button>
+      ${this.updateButton()}
       ${guest ? '' : '<button class="btn" data-action="save">Sauvegarder</button>'}
       ${net ? '' : '<button class="btn" data-action="load" title="Recharger la dernière sauvegarde automatique">Charger la sauvegarde</button>'}
       ${CAN_DOWNLOAD && !guest ? '<button class="btn" data-action="export" title="Enregistrer la partie dans un fichier">Exporter (fichier)</button>' : ''}
@@ -736,19 +757,45 @@ export class UI {
   }
 
   /** Écran d'attente du joueur qui rejoint : connexion, réception de la partie, ou échec avec de quoi réessayer. */
-  showJoining(code: string, text: string, failed: boolean): void {
+  showJoining(code: string, text: string, failed: boolean, failure = ''): void {
     this.menu = 'main';
     this.syncOverlay();
     this.menuFx.start(this.menuMotes);
+    // Une version différente de celle de l'hôte : réessayer ne servira à rien tant que la page n'est pas rechargée (à neuf).
+    const stale = failed && failure === 'version';
     this.menuRoot.innerHTML = `<div class="menu main-menu play-menu">
       <h2 class="play-title">Partie de ${esc(code)}</h2>
       <p class="tagline join-text ${failed ? 'failed' : ''}">${esc(text)}</p>
       ${failed ? '' : '<div class="net-spinner" aria-hidden="true"></div>'}
       <div class="menu-buttons">
-        ${failed ? '<button class="btn primary big" data-action="netRetry">Réessayer</button>' : ''}
+        ${stale ? '<button class="btn primary big" data-action="reloadFresh">Mettre à jour le jeu</button>' : ''}
+        ${failed ? `<button class="btn ${stale ? '' : 'primary big'}" data-action="netRetry">Réessayer</button>` : ''}
+        ${failed ? '<button class="btn" data-action="copyDiag" title="Un texte à envoyer pour dire où la connexion coince">Diagnostic de la connexion</button>' : ''}
         <button class="btn" data-action="netCancel">${failed ? 'Retour au menu' : 'Annuler'}</button>
       </div>
+      ${this.version ? `<p class="muted pause-version">Version du jeu : ${esc(this.version)}</p>` : ''}
     </div>`;
+  }
+
+  /** Le texte du diagnostic de la connexion, à copier (ou à lire à voix haute) : où ça coince, version, relais, journal. */
+  showDiagnostic(text: string): void {
+    this.menu = 'main';
+    this.syncOverlay();
+    this.menuFx.stop();
+    this.menuRoot.innerHTML = `<div class="menu main-menu play-menu diag-menu">
+      <h2 class="play-title">Diagnostic</h2>
+      <p class="tagline">Copiez ce texte et envoyez-le : il dit où la connexion coince.</p>
+      <textarea id="diag-text" class="diag-text" readonly spellcheck="false" rows="12">${esc(text)}</textarea>
+      <div class="menu-buttons">
+        <button class="btn primary big" data-action="copyDiagText">Copier le texte</button>
+        <button class="btn" data-action="diagBack">Retour</button>
+      </div>
+    </div>`;
+  }
+
+  /** Le texte affiché par `showDiagnostic` (pour le copier). */
+  diagnosticText(): string {
+    return (this.menuRoot.querySelector('#diag-text') as HTMLTextAreaElement | null)?.value ?? '';
   }
 
   /** Le texte de l'écran d'attente change sans refaire tout l'écran (le focus et l'animation restent). */
