@@ -260,15 +260,18 @@ Source : GitHub Actions*. On peut aussi le lancer à la main (onglet *Actions* �
   (30 lingots par charbon). Objectif : fondre 10 lingots.
 - **Dangers** en profondeur, avec une **barre de santé** (on récupère hors de danger ; à 0, on s'évanouit et on se
   réveille au camp, le sac reste là où on est tombé) :
-  - **éboulements** (dès 60 m) : une salle creusée à la main trop grande (plus de 10 cases creusées autour de la
-    dernière) fait craquer le plafond : 4 s d'alerte (zone qui clignote, poussière, grondement), puis des éboulis
-    tombent et blessent. Un **étai** (15 $, on passe dessous) consolide 3 cases autour de lui, même pendant l'alerte.
-    Les tunnels d'une case, les galeries naturelles et ceux de la foreuse de percement ne s'effondrent pas ;
+  - **éboulements** (dès 60 m, rares) : une salle creusée à la main **très** grande (plus de 16 cases creusées dans le
+    carré de 5 × 5 autour de la dernière) fait craquer le plafond : 4 s d'alerte (zone qui clignote, poussière,
+    grondement), puis des éboulis tombent et blessent. Un **étai** (15 $, on passe dessous) consolide 3 cases autour de
+    lui, même pendant l'alerte. Les tunnels (au marteau-piqueur aussi), les escaliers, les salles ordinaires, les
+    galeries naturelles et ceux de la foreuse de percement ne s'effondrent pas ;
   - **grisou** (dès 120 m) : des poches cachées dans la roche (petites taches jaunâtres sur la paroi) envahissent la
     galerie quand on les perce ; le gaz blesse, se dissipe lentement, et un **ventilateur** (180 $) le chasse en
     quelques secondes ;
   - **eau** (dès 70 m) : des poches (suintements bleus) inondent la galerie ; l'eau ralentit, profonde elle épuise ;
     une **pompe** (240 $, sans charbon : elle tourne toute seule) l'assèche.
+  Les poches sont **rares** : environ une pour 870 cases de roche creusées (six fois moins qu'avant), et une poche
+  s'ouvre **d'un coup** : percer une de ses cases la vide en entier, un seul nuage ou une seule inondation.
   Le HUD affiche la santé et le danger du moment, la carte montre les galeries inondées ou envahies de grisou.
 - **Équipement de protection** (onglet « Équipement » de l'Atelier) : une pièce par emplacement, chacune contre un
   danger précis, portée dès l'achat, conservée si l'on s'évanouit et sauvegardée. Elle absorbe une part des dégâts :

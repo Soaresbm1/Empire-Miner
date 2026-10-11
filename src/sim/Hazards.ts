@@ -2,14 +2,17 @@
  * Dangers de la mine : éboulements, grisou et eau.
  *
  * - Éboulement : en profondeur, un plafond trop largement creusé à la main (plus de
- *   `CAVE_IN.maxDug` cases creusées autour de la dernière) craque. Il s'effondre après un
- *   court délai, sauf si un étai le consolide entre-temps : des éboulis remplissent une partie
- *   des cases creusées et blessent le joueur pris dessous. Les galeries naturelles et les
- *   tunnels de la foreuse de percement (consolidés par la machine) ne comptent pas.
+ *   `CAVE_IN.maxDug` cases creusées dans le carré de 5 × 5 autour de la dernière : une très
+ *   grande salle) craque. Il s'effondre après un court délai, sauf si un étai le consolide
+ *   entre-temps : des éboulis remplissent une partie des cases creusées et blessent le joueur
+ *   pris dessous. Les galeries naturelles et les tunnels de la foreuse de percement
+ *   (consolidés par la machine) ne comptent pas.
  * - Grisou : une poche percée envahit la galerie voisine ; le gaz se dissipe lentement tout
  *   seul, très vite près d'un ventilateur, et blesse le joueur qui le respire.
  * - Eau : une poche percée inonde la galerie ; l'eau s'infiltre lentement, une pompe
  *   l'assèche. Elle ralentit le joueur et, profonde, l'épuise.
+ * - Une poche s'ouvre d'un coup : percer une de ses cases la vide en entier (un seul
+ *   événement, même si elle en compte trois ou quatre) ; les poches sont rares.
  * - Chaleur : dans la Fournaise, les foreuses et les fours ralentissent, sauf près d'un
  *   ventilateur.
  *
@@ -17,12 +20,15 @@
  * cases touchées pour ne jamais parcourir toute la carte.
  */
 import { depthAt } from '../core/constants';
-import { RUBBLE } from '../data/blocks';
+import { HOST_ROCK_IDS, RUBBLE } from '../data/blocks';
 import { BOOTS_WATER } from '../data/gear';
 import { CAVE_IN, GAS, HEAT, POCKET_GAS, POCKET_WATER, WATER } from '../data/hazards';
 import type { SimEvent } from './events';
 import type { Structure } from './structures/Structure';
 import type { World } from './World';
+
+/** Les roches qui peuvent cacher une poche (le générateur n'en pose que dans la roche hôte, jamais dans un filon). */
+const HOST_ROCKS = new Set<number>(HOST_ROCK_IDS);
 
 /** Ce dont les dangers ont besoin du reste de la simulation. */
 export interface HazardHost {
@@ -55,7 +61,7 @@ export class HazardSystem {
     return this.host.world;
   }
 
-  /** Reconstruit les listes de cases touchées (après un chargement). */
+  /** Reconstruit les listes de cases touchées (après un chargement), et referme les poches déjà ouvertes. */
   rebuild(): void {
     this.gasTiles.clear();
     this.waterTiles.clear();
@@ -63,6 +69,38 @@ export class HazardSystem {
     for (let i = 0; i < w.gas.length; i++) {
       if (w.gas[i] > 0) this.gasTiles.add(i);
       if (w.water[i] > 0) this.waterTiles.add(i);
+    }
+    this.settlePockets();
+  }
+
+  /**
+   * Les poches ne sont pas sauvegardées : le générateur les replace à chaque chargement, toutes. Une poche dont une case n'est
+   * plus de la roche (percée, ou comblée d'éboulis depuis) a déjà été ouverte : elle ne se libère pas une seconde fois, ni par ses
+   * cases voisines qui n'avaient pas encore été percées.
+   */
+  private settlePockets(): void {
+    const w = this.world;
+    for (let i = 0; i < w.pocket.length; i++) if (w.pocket[i] && !HOST_ROCKS.has(w.tiles[i])) this.openPocket(i);
+  }
+
+  /** Vide la poche qui contient la case `i` : toutes ses cases (voisines, de même nature) perdent leur marque. */
+  private openPocket(i: number): void {
+    const w = this.world;
+    const kind = w.pocket[i];
+    const stack = [i];
+    w.pocket[i] = 0;
+    while (stack.length) {
+      const c = stack.pop()!;
+      const cx = c % w.w;
+      const cy = (c - cx) / w.w;
+      for (let dy = -1; dy <= 1; dy++)
+        for (let dx = -1; dx <= 1; dx++) {
+          if (!w.inBounds(cx + dx, cy + dy)) continue;
+          const j = w.idx(cx + dx, cy + dy);
+          if (w.pocket[j] !== kind) continue;
+          w.pocket[j] = 0;
+          stack.push(j);
+        }
     }
   }
 
@@ -151,7 +189,8 @@ export class HazardSystem {
     const i = w.idx(x, y);
     const pocket = w.pocket[i];
     if (pocket) {
-      w.pocket[i] = 0;
+      // La poche s'ouvre d'un coup, quelle que soit la case percée : une seule libération, pas une par case.
+      this.openPocket(i);
       // Des éboulis n'ont plus de poche : seule la roche d'origine en cache une.
       if (block !== RUBBLE) {
         if (pocket === POCKET_GAS) this.release(x, y, 'gas');

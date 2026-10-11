@@ -196,8 +196,9 @@ function pickResourceForDepth(rng: Rng, depth: number): ResourceDef | null {
 
 /**
  * Poches de grisou et d'eau : petits amas de cases de roche (jamais de filon) marqués dans
- * `world.pocket`, dans leur tranche de profondeur. Elles ne se voient qu'à de légers indices
- * sur la paroi, et se libèrent quand on perce la case.
+ * `world.pocket`, dans leur tranche de profondeur. Elles sont rares, ne se voient qu'à de légers
+ * indices sur la paroi, et se libèrent d'un coup (toutes les cases de l'amas) quand on perce
+ * l'une d'elles.
  */
 export function placePockets(world: World, seed: number): void {
   const hl = Math.min(world.h, LEGACY_WORLD_H);
