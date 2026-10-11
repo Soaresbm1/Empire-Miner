@@ -11,7 +11,9 @@
  *     recréés, la liste défile au doigt de bout en bout, un toucher long agit une fois, faire défiler depuis un bouton
  *     n'achète rien, un bouton qui change de sens sous le doigt agit comme au moment où on l'a touché ;
  *   - chaque fenêtre montre exactement ce qu'elle doit après des mises à jour sur place ;
- *   - la barre de construction : sa bande de machines garde son défilement quand le stock change.
+ *   - la barre de construction : sa bande de machines garde son défilement quand le stock change ;
+ *   - les fenêtres sont fixes : sur un contenu volontairement plus large et plus haut que la fenêtre, un glissé de côté ne déplace
+ *     rien, un glissé en diagonale ne fait défiler que de haut en bas, la bande d'onglets ne glisse pas (iPhone debout et en travers).
  *
  *   npm run build && node e2e/panels.mjs [--quiet]
  *
@@ -543,6 +545,76 @@ console.log('\n▶ Tableau d\'affichage et autres fenêtres sur un jeu qui tourn
     check(await same(t), `${kind}${tab ? ` (${tab})` : ''} : le contenu est exactement celui que le jeu a produit`);
   }
   await t.E(() => window.__setChurn(false));
+  check(t.errors.length === 0, `aucune erreur dans la console${t.errors.length ? ` — ${t.errors[0]}` : ''}`);
+  await t.ctx.close();
+}
+
+console.log('\n▶ Fenêtres fixes : le doigt ne les fait aller que de haut en bas');
+for (const dev of [
+  { label: 'iPhone debout, 402×874', w: 402, h: 874, safe: [62, 0, 34, 0] },
+  { label: 'iPhone en travers, 874×402', w: 874, h: 402, safe: [0, 62, 21, 62] },
+]) {
+  console.log(`  — ${dev.label}`);
+  const t = await phone(dev);
+  await newGame(t);
+  // La partie est figée (pause) : rien ne change, donc ce qu'on ajoute au panneau pour l'essai n'est pas retiré par une mise à jour.
+  await t.E(() => {
+    window.__EM.userPaused = true;
+  });
+  for (const [kind, tab] of [['workshop', 'tools'], ['workshop', 'machines'], ['board', 'market'], ['counter'], ['inventory']]) {
+    const name = `${kind}${tab ? `/${tab}` : ''}`;
+    await open(t, kind, tab);
+    await sleep(300);
+    // Du contenu bien plus large et plus haut que la fenêtre : de quoi glisser de côté si le navigateur le permettait.
+    await t.E(() => {
+      const body = document.querySelector('#panel-root .panel-body');
+      const probe = document.createElement('div');
+      probe.id = 'probe-wide';
+      probe.style.cssText = 'width:2400px;height:1500px;flex:none';
+      body.append(probe);
+      body.scrollTop = 0;
+      window.__acts.length = 0;
+    });
+    const style = await t.E(() => {
+      const cs = getComputedStyle(document.querySelector('#panel-root .panel-body'));
+      return { x: cs.overflowX, ta: cs.touchAction, ob: cs.overscrollBehaviorY };
+    });
+    check(style.x === 'hidden' && style.ta.includes('pan-y') && !style.ta.includes('pan-x') && style.ob === 'none', `${name} : rien ne glisse de côté, pas de rebond (overflow-x ${style.x}, touch-action ${style.ta}, overscroll ${style.ob})`);
+    const c = await t.center('#panel-root .panel-body');
+    const where = () => t.E(() => {
+      const b = document.querySelector('#panel-root .panel-body');
+      return { left: Math.round(b.scrollLeft), top: Math.round(b.scrollTop) };
+    });
+    // Glissé purement horizontal, dans les deux sens.
+    await t.drag({ x: c.x + 60, y: c.y }, { x: c.x - 90, y: c.y }, 12, 20);
+    await t.drag({ x: c.x - 60, y: c.y }, { x: c.x + 90, y: c.y }, 12, 20);
+    const side = await where();
+    check(side.left === 0 && side.top === 0, `${name} : un glissé de côté ne déplace rien (gauche ${side.left}, haut ${side.top})`);
+    // Glissé en diagonale : seule la part verticale fait défiler.
+    await t.drag({ x: c.x + 50, y: c.y + 80 }, { x: c.x - 50, y: c.y - 40 }, 12, 20);
+    const diag = await where();
+    check(diag.left === 0 && diag.top > 40, `${name} : en diagonale la liste défile de haut en bas, sans aller de côté (gauche ${diag.left}, haut ${diag.top})`);
+    // Et verticalement, comme avant.
+    await t.E(() => (document.querySelector('#panel-root .panel-body').scrollTop = 0));
+    await sleep(100);
+    await t.drag({ x: c.x, y: c.y + 80 }, { x: c.x, y: c.y - 60 }, 12, 20);
+    const vert = await where();
+    check(vert.left === 0 && vert.top > 80, `${name} : la liste défile toujours verticalement (haut ${vert.top})`);
+    // La bande d'onglets ne glisse pas non plus, et un glissé qui part d'un onglet n'en active aucun.
+    const hasTabs = await t.E(() => !!document.querySelector('#panel-root .tabs'));
+    if (hasTabs) {
+      const tc = await t.center('#panel-root .tabs');
+      await t.E(() => (window.__acts.length = 0));
+      await t.drag({ x: tc.x + 70, y: tc.y }, { x: tc.x - 90, y: tc.y }, 12, 20);
+      const strip = await t.E(() => {
+        const tabs = document.querySelector('#panel-root .tabs');
+        return { left: Math.round(tabs.scrollLeft), over: tabs.scrollWidth - tabs.clientWidth, acts: window.__acts.slice(), body: Math.round(document.querySelector('#panel-root .panel-body').scrollLeft) };
+      });
+      check(strip.left === 0 && strip.over <= 1 && strip.body === 0 && strip.acts.length === 0, `${name} : la bande d'onglets ne glisse pas (déborde de ${strip.over} px, actions ${strip.acts.join(',') || 'aucune'})`);
+    }
+    await t.E(() => window.__EM.ui.closePanel());
+    await sleep(150);
+  }
   check(t.errors.length === 0, `aucune erreur dans la console${t.errors.length ? ` — ${t.errors[0]}` : ''}`);
   await t.ctx.close();
 }

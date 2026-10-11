@@ -169,6 +169,7 @@ const MENU_FIT = (sel) => {
   return {
     l: r.left, t: r.top, r: r.right, b: r.bottom,
     scroll: root ? root.scrollHeight - root.clientHeight : 0,
+    scrollX: root ? root.scrollWidth - root.clientWidth : 0,
     w: innerWidth, h: innerHeight,
     btns: [...el.querySelectorAll('.btn, .join-input')].map((b) => { const q = b.getBoundingClientRect(); return { name: (b.textContent || b.id).trim().slice(0, 24), t: q.top, b: q.bottom, w: q.width, h: q.height, l: q.left, r: q.right }; }),
   };
@@ -180,6 +181,7 @@ function checkMenu(dev, scene, m) {
   check(!!m, `${tag} : le menu est affiché`);
   if (!m) return;
   check(m.scroll <= 1, `${tag} : le menu tient sans défilement${m.scroll > 1 ? ` (dépasse de ${Math.round(m.scroll)} px)` : ''}`);
+  check(m.scrollX <= 1, `${tag} : le menu ne déborde pas sur le côté${m.scrollX > 1 ? ` (dépasse de ${Math.round(m.scrollX)} px)` : ''}`);
   const out = m.btns.filter((b) => b.t < st - 0.6 || b.b > m.h - sb + 0.6 || b.l < sl - 0.6 || b.r > m.w - sr + 0.6);
   check(out.length === 0, `${tag} : tous les boutons sont dans la zone sûre${out.length ? ` — dehors : ${out.map((b) => b.name).join(', ')}` : ''}`);
   const small = m.btns.filter((b) => b.h < 30);
@@ -206,8 +208,26 @@ const PANEL_FIT = () => {
       return { name: (el.textContent || el.dataset.action).trim().slice(0, 22), w: q.width, h: q.height };
     })
     .filter((b) => Math.min(b.w, b.h) < 30);
+  // Largeur : le contenu tient (rien à faire glisser de côté) et rien ne sort du corps, bande d'onglets comprise.
+  const br = body ? body.getBoundingClientRect() : r;
+  const stickOut = body
+    ? [...body.querySelectorAll('*')]
+        .filter((el) => {
+          const q = el.getBoundingClientRect();
+          return q.width > 0 && q.height > 0 && (q.right > br.right + 1 || q.left < br.left - 1);
+        })
+        .map((el) => `${el.tagName.toLowerCase()}.${String(el.className).split(' ')[0]}`)
+    : [];
+  const tabs = p.querySelector('.tabs');
+  const bs = body ? getComputedStyle(body) : null;
   return {
     small,
+    sideOver: body ? body.scrollWidth - body.clientWidth : 0,
+    tabsOver: tabs ? tabs.scrollWidth - tabs.clientWidth : 0,
+    stickOut,
+    overflowX: bs ? bs.overflowX : '',
+    touchAction: bs ? bs.touchAction : '',
+    overscrollY: bs ? bs.overscrollBehaviorY : '',
     l: r.left, t: r.top, r: r.right, b: r.bottom, w: innerWidth, h: innerHeight,
     bodyScrollable: body ? body.scrollHeight > body.clientHeight + 1 : false,
     bodyOverflowY: body ? getComputedStyle(body).overflowY : '',
@@ -224,6 +244,8 @@ function checkPanel(dev, scene, m) {
   check(m.l >= sl - 0.6 && m.r <= m.w - sr + 0.6 && m.t >= st - 0.6 && m.b <= m.h - sb + 0.6, `${tag} : le panneau tient dans la zone sûre (${Math.round(m.l)},${Math.round(m.t)} → ${Math.round(m.r)},${Math.round(m.b)})`);
   check(!m.bodyScrollable || m.bodyOverflowY === 'auto' || m.bodyOverflowY === 'scroll', `${tag} : le contenu du panneau défile s'il est long`);
   check(m.bodyH >= Math.min(90, m.h * 0.3), `${tag} : le contenu garde de la place (${Math.round(m.bodyH)} px de haut)`);
+  check(m.sideOver <= 1 && m.tabsOver <= 1 && m.stickOut.length === 0, `${tag} : tout tient en largeur, rien à faire glisser de côté${m.sideOver > 1 ? ` (le corps dépasse de ${Math.round(m.sideOver)} px)` : ''}${m.tabsOver > 1 ? ` (les onglets de ${Math.round(m.tabsOver)} px)` : ''}${m.stickOut.length ? ` — dehors : ${m.stickOut.slice(0, 4).join(', ')}` : ''}`);
+  check(m.overflowX === 'hidden' && m.touchAction.includes('pan-y') && !m.touchAction.includes('pan-x') && m.overscrollY === 'none', `${tag} : le doigt ne fait aller le contenu que de haut en bas, sans rebond (overflow-x ${m.overflowX}, touch-action ${m.touchAction}, overscroll ${m.overscrollY})`);
   check(m.small.length === 0, `${tag} : les boutons du panneau sont de taille de doigt${m.small.length ? ` — trop petits : ${m.small.slice(0, 6).map((b) => `${b.name} ${Math.round(b.w)}×${Math.round(b.h)}`).join(', ')}` : ''}`);
   if (m.close) check(Math.min(m.close.w, m.close.h) >= 34, `${tag} : bouton de fermeture de taille de doigt (${Math.round(m.close.w)}×${Math.round(m.close.h)})`);
 }

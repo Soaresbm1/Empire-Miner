@@ -237,8 +237,17 @@ Appui sur un bouton (`UI` constructeur) : à la souris l'action part à l'appui 
 si le doigt a bougé de moins de 10 px (`TAP_SLOP`) : un glissé qui défile une liste n'active donc pas le bouton sous le doigt (le
 navigateur envoie `pointercancel`). `preventDefault` à l'appui évite que le navigateur rejoue un clic de souris sur le monde derrière un
 panneau qu'on vient de fermer. L'action et son argument sont ceux du bouton **au moment de l'appui** (`taps`), pas au relâchement : le
-panneau se met à jour pendant que le doigt est posé. Les bandes d'onglets défilent de côté seulement (`overflow-y: hidden`) : sinon leur
-premier glissé vertical est avalé par la bande. La carte complète gère elle-même glissé, toucher (repère) et pincement à deux doigts.
+panneau se met à jour pendant que le doigt est posé. La carte complète gère elle-même glissé, toucher (repère) et pincement à deux doigts.
+
+Fenêtres fixes (`touch.css`) : l'intérieur d'une fenêtre ne bouge que de haut en bas. `.panel-body` a `overflow-x: hidden` (rien à faire
+glisser de côté), `touch-action: pan-y` (un glissé en diagonale ne fait défiler que verticalement) et `overscroll-behavior: none` (`contain`
+laisserait le rebond au bout de la liste ; les menus qui défilent ont aussi `overflow-x: hidden` et `pan-y`). Comme tout ce qui dépasse serait
+alors coupé, **le contenu doit tenir en largeur** : une bande d'onglets qui défilait de côté (avalée par le doigt qui fait défiler la fenêtre)
+passe à la ligne (`flex-wrap`, onglets plus serrés sous 480 px de large), les marges négatives de `.shop-nav` suivent le remplissage du corps
+(`--pad-x`, qui valait 6 px de moins que les marges de bureau : de quoi glisser de côté), les tableaux (sac, comptoir) se resserrent sous
+480 px, et les lignes du magasin ont `min-width: 0`. `e2e/phone.mjs` mesure, pour chacune des 20 fenêtres à 11 tailles, que le corps et la
+bande d'onglets ne débordent pas et que rien ne sort du corps ; `e2e/panels.mjs` glisse de vrais doigts (de côté, en diagonale, sur la bande
+d'onglets) sur un contenu volontairement plus large que la fenêtre.
 
 Mise à jour du DOM (`ui/morph.ts`) : un panneau ouvert (Atelier, Tableau d'affichage…) montre des valeurs qui bougent plusieurs fois par
 seconde (argent, ouvriers, cours) ; `renderPanel` le recalcule toutes les 0,2 s et, si le HTML a changé, le **corrige sur place** avec
