@@ -1119,7 +1119,11 @@ try {
         w.setExplored(x, yy);
       }
     w.set(24, y + 2, 0); // niche naturelle où se tient le joueur
-    for (let yy = y + 3; yy <= y + 4; yy++) for (let x = 22; x <= 26; x++) g.breakTile(x, yy); // 10 cases creusées
+    // 16 cases creusées dans le carré de 5 × 5 autour de la case visée (24, y + 5), qu'on ne creuse pas : la limite. La pioche
+    // en creusera la 17e.
+    for (let yy = y + 3; yy <= y + 4; yy++) for (let x = 22; x <= 26; x++) g.breakTile(x, yy);
+    for (const x of [22, 23, 25, 26]) g.breakTile(x, y + 5);
+    for (const x of [22, 23]) g.breakTile(x, y + 6);
     g.inventory.items = {};
     g.inventory.addKit('prop', 1);
     g.tool = 'pickaxe';

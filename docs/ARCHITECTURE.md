@@ -126,6 +126,15 @@ ne pas changer le terrain), `gas` et `water` (niveaux 0 à 255). `GameState.brea
 `StructureContext.hazards`. La santé (`GameState.hp`) baisse avec `hurtPlayer`, remonte après un délai et
 l'évanouissement ramène le joueur au camp. Les poches ne sont pas sauvegardées (elles se recalculent depuis la
 graine) ; `dug`, le gaz, l'eau, les éboulements annoncés et la santé le sont.
+**Fréquence** : les dangers étaient trop nombreux (mesuré sur 8 mines : une poche de grisou ou d'eau libérée toutes les
+150 à 160 cases de roche creusées, parce qu'une poche de 2 à 4 cases se libérait une fois par case ; un escalier de
+marteau-piqueur ou une salle de 4 × 4 faisaient déjà craquer le plafond). Une poche (amas de cases voisines de même nature)
+s'ouvre maintenant d'un coup (`openPocket` : percer l'une de ses cases les vide toutes, une seule libération), il y en a 2,4
+fois moins (`perThousand` à 1) — soit une libération pour environ 870 cases de roche creusées — et le plafond ne craque qu'au-delà de
+16 cases creusées dans le carré de 5 × 5 (`CAVE_IN.maxDug`) : un tunnel de 3 cases de large n'en compte que 9, un escalier 11,
+une salle de 8 × 8 creusée rangée par rangée 13, une galerie de 6 cases de large 17. Au chargement, `rebuild` referme
+(`settlePockets`) toute poche dont une case n'est plus de la roche : comme les poches se recalculent depuis la graine,
+sans cela une poche déjà ouverte se serait réarmée par ses cases voisines non percées.
 
 Marché (`sim/Market.ts`, réglages dans `data/market.ts`) : `GameState.market` garde, pour chaque minerai, un cours
 (multiplicateur du prix de base) qui avance par pas de 10 s de temps de jeu (`Market.update(time)`, appelé à chaque
