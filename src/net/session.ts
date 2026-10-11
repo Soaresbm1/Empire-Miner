@@ -10,6 +10,10 @@
  *    renvoie `hello` toutes les 2 s) et la partie reprend toute seule s'il le retrouve, sinon il abandonne au bout d'une minute.
  *  - Chaque invité se présente avec un numéro d'instance (tiré au hasard à chaque ouverture de la page) : un `hello` ou un
  *    `bye` en retard, venu d'un courtier lent, ne recharge ni ne coupe une partie déjà en route.
+ *  - Une synchronisation qui n'aboutit pas ne fige pas la partie de l'hôte pour toujours : au bout de 20 s il reprend seul (et
+ *    laisse souffler son ami un instant avant de réessayer). Une erreur en préparant la partie est dite aux deux joueurs.
+ *  - Une session fermée ne bouge plus : les retours asynchrones qui arrivent après (instantané déballé, message en retard) sont
+ *    ignorés, au lieu de remplacer la partie ou l'écran de la session suivante.
  *
  * Le transport est « au mieux » : tout ce qui est ici tolère les messages perdus, répétés ou en retard.
  */
@@ -48,6 +52,8 @@ export interface SessionOptions {
   /** Une nouvelle partie à adopter : celle de l'hôte rechargée, ou celle reçue par l'invité. */
   adopt: (g: GameState) => void;
   onStatus?: (s: SessionStatus, info: string) => void;
+  /** Un avis pour le joueur de cet appareil (l'hôte : « votre ami n'a pas la même version du jeu »…). */
+  notice?: (text: string, kind: 'info' | 'warn' | 'bad') => void;
   /** Heure en ms (les tests fournissent la leur). */
   now?: () => number;
   /** Faux : l'appelant fait tourner `pump` lui-même (tests). */
@@ -60,6 +66,18 @@ const SILENCE_MS = 8000;
 const GIVE_UP_MS = 60000;
 /** Une attente de l'autre aussi longue, sans pouvoir avancer d'un pas, fait reprendre l'hôte seul (ms). */
 const STALL_DROP_MS = 20000;
+/** L'hôte renonce à une synchronisation qui dure plus que ça (ms) : sa partie, figée en attendant l'invité, reprend seule. */
+const SYNC_TIMEOUT_MS = 20000;
+/** Après un échec, l'hôte ignore les `hello` pendant ce temps, multiplié par le nombre d'échecs de suite (40 s au plus). */
+const SYNC_PAUSE_MS = 6000;
+/** L'invité renonce à recevoir la partie après ce temps (ms). */
+const RECEIVE_TIMEOUT_MS = 60000;
+/** L'invité qui ne voit plus arriver de nouveau morceau depuis ce temps se représente à l'hôte, puis toutes les 4 s (ms). */
+const CHUNK_STALL_MS = 6000;
+/** Morceaux de la partie envoyés à chaque entretien du réseau (toutes les 50 ms) tant que les relais ne sont pas encombrés. */
+const SNAP_PER_PUMP = 4;
+/** Un même avis n'est donné qu'une fois par ce temps (ms). */
+const NOTICE_EVERY_MS = 15000;
 /** Intervalle entre deux paquets de jeu (ms). */
 const PACKET_EVERY = 66;
 /** Au plus tant de pas de simulation par image. */
@@ -78,6 +96,13 @@ export class Session {
   reconnecting = false;
   /** Hôte : un invité était là et a perdu la connexion ; il peut revenir avec le même code. */
   dropped = false;
+  /**
+   * Pourquoi l'invité n'a pas pu entrer (ou a été perdu) : de quoi choisir le bon conseil à l'écran (« version », « complet »,
+   * « trop lent », « hôte parti », « illisible », « perdu »), vide sinon.
+   */
+  failure: '' | 'version' | 'full' | 'slow' | 'left' | 'unreadable' | 'lost' | 'bad' = '';
+  /** Journal des derniers événements (pour le diagnostic). */
+  readonly log: string[] = [];
   /** Pas exécutés avec les deux joueurs (pour les essais). */
   private g: GameState | null = null;
   private ls: Lockstep | null = null;
@@ -94,6 +119,15 @@ export class Session {
   private stallSince = 0;
   /** L'attente en cours compte comme de la latence (pas l'attente des premiers pas, pendant que l'autre charge encore la partie). */
   private stallCounts = false;
+  /** Début de la synchronisation en cours (hôte : de la préparation ; invité : du premier morceau reçu). */
+  private syncSince = 0;
+  /** Hôte : synchronisations qui ont échoué de suite, et jusqu'à quand les `hello` sont ignorés. */
+  private syncFailures = 0;
+  private refuseUntil = 0;
+  /** Invité : dernière fois qu'on s'est représenté parce que plus aucun morceau n'arrivait ; début de la tentative de connexion. */
+  private lastNudge = 0;
+  private connectingSince = 0;
+  private readonly noticeAt: Record<string, number> = {};
   /** Numéro de cette ouverture de la page (invité), et celui de l'invité actuel (hôte). */
   private readonly instance = randomId(8);
   private peerInstance = '';
@@ -119,6 +153,7 @@ export class Session {
     this.now = o.now ?? (() => performance.now());
     this.status = o.role === 'host' ? 'waiting' : 'connecting';
     this.startedAt = this.now();
+    this.connectingSince = this.startedAt;
     this.lastHeard = this.startedAt;
     o.transport.onMessage = (m) => this.onMessage(m);
     o.transport.onStatus = (s) => {
@@ -129,10 +164,34 @@ export class Session {
   }
 
   private setStatus(s: SessionStatus, info = ''): void {
+    // Une session fermée ne bouge plus : un retour asynchrone qui arrive après la fermeture ne doit pas la ranimer.
+    if (this.status === 'closed' && s !== 'closed') return;
     if (s === this.status && info === this.info) return;
     this.status = s;
     this.info = info;
+    if (s === 'connecting') this.connectingSince = this.now();
+    this.record(`état : ${s}${info ? ` (${info})` : ''}`);
     this.o.onStatus?.(s, info);
+  }
+
+  /** Une ligne au journal (les 40 dernières), avec l'heure en secondes depuis l'ouverture de la session. */
+  private record(text: string): void {
+    this.log.push(`${((this.now() - this.startedAt) / 1000).toFixed(1).padStart(6)} s  ${text}`);
+    if (this.log.length > 40) this.log.shift();
+  }
+
+  /** Un avis pour le joueur, au plus une fois par `NOTICE_EVERY_MS` pour une même clé. */
+  private notify(key: string, text: string, kind: 'info' | 'warn' | 'bad' = 'warn'): void {
+    const t = this.now();
+    if (t - (this.noticeAt[key] ?? -Infinity) < NOTICE_EVERY_MS) return;
+    this.noticeAt[key] = t;
+    this.record(`avis : ${text}`);
+    this.o.notice?.(text, kind);
+  }
+
+  /** La session est fermée : elle ne réagit plus à rien (lu à part pour que TypeScript ne fige pas l'état d'avant un `await`). */
+  private get closed(): boolean {
+    return this.status === 'closed';
   }
 
   /** La partie que l'on joue en ce moment. */
@@ -233,23 +292,47 @@ export class Session {
     if (this.ls) this.ls.relax(t);
     // Un désaccord d'empreinte : l'hôte renvoie la partie ; l'invité le demande.
     if (this.ls && this.ls.desyncAt !== null && this.status === 'playing') {
-      if (this.role === 'host') void this.resync();
-      else if (t - this.lastDesync > 1000) {
+      if (this.role === 'host') {
+        this.record(`empreintes différentes au pas ${this.ls.desyncAt} : je renvoie la partie`);
+        void this.resync();
+      } else if (t - this.lastDesync > 1000) {
         this.lastDesync = t;
+        this.record(`empreintes différentes au pas ${this.ls.desyncAt} : je demande la partie à l’hôte`);
         this.o.transport.send({ m: 'desync', id: this.epoch });
       }
     }
   }
 
   private pumpHost(t: number): void {
-    // Envoi des morceaux de l'instantané, quelques-uns à la fois.
+    // Envoi des morceaux de l'instantané, quelques-uns à la fois, tant que les relais veulent bien les prendre (sinon on
+    // reprend au même morceau à l'entretien suivant : rien ne se perd en route, l'invité n'a pas à tout redemander).
     const out = this.outgoing;
     if (out && out.next < out.chunks.length) {
-      for (let k = 0; k < 6 && out.next < out.chunks.length; k++) this.sendChunk(out, out.next++);
+      for (let k = 0; k < SNAP_PER_PUMP && out.next < out.chunks.length; k++) {
+        if (!this.sendChunk(out, out.next)) break;
+        out.next++;
+      }
     }
     // Plus aucune nouvelle de l'invité : il est parti. Ou bien il écrit, mais la partie n'avance plus depuis trop longtemps.
     if ((this.status === 'playing' || this.status === 'syncing') && t - this.lastHeard > SILENCE_MS) this.dropPeer('Votre ami a perdu la connexion.');
     else if (this.status === 'playing' && this.stallSince && t - this.stallSince > STALL_DROP_MS) this.dropPeer('La partie à deux ne passe plus.');
+    else if (this.status === 'syncing' && t - this.syncSince > SYNC_TIMEOUT_MS) this.giveUpSync(t);
+  }
+
+  /**
+   * La partie n'a pas pu être envoyée à l'invité dans les temps (connexion trop lente, coupée, ou l'invité n'arrive pas à la
+   * charger). La partie de l'hôte, figée pendant ce temps, reprend seule ; l'invité se représentera, mais pas tout de suite, pour
+   * ne pas figer la partie de l'hôte en boucle.
+   */
+  private giveUpSync(t: number): void {
+    this.syncFailures++;
+    this.refuseUntil = t + Math.min(40000, SYNC_PAUSE_MS * this.syncFailures);
+    this.dropPeer('La partie n’a pas pu être envoyée à votre ami.', false);
+    this.notify(
+      'sync',
+      'La partie n’a pas pu être envoyée à votre ami (connexion trop lente ou coupée) : elle reprend sans lui. Il peut réessayer dans un instant.',
+      'warn',
+    );
   }
 
   private pumpGuest(t: number): void {
@@ -259,9 +342,26 @@ export class Session {
         this.o.transport.send({ m: 'hello', v: PROTOCOL, g: this.o.guestId, n: this.o.name, k: this.instance });
       }
       if (this.transportStatus === 'closed') this.setStatus('lost', 'Impossible de se connecter');
-      else if (t - this.startedAt > 20000) this.setStatus('lost', this.transportStatus === 'open' ? 'Aucune partie avec ce code (ou l’hôte n’est pas prêt).' : 'Aucun relais joignable : vérifiez la connexion.');
+      else if (t - this.connectingSince > 20000) {
+        this.failure = 'lost';
+        this.setStatus('lost', this.transportStatus === 'open' ? 'Aucune partie avec ce code (ou l’hôte n’est pas prêt).' : 'Aucun relais joignable : vérifiez la connexion.');
+      }
     }
     const inc = this.incoming;
+    if (inc && this.status === 'syncing') {
+      // Plus aucun nouveau morceau : on se représente, l'hôte (qui a tout envoyé une fois) recommence l'envoi.
+      if (t - this.lastChunk > CHUNK_STALL_MS && t - this.lastNudge > CHUNK_STALL_MS - 2000) {
+        this.lastNudge = t;
+        this.record(`plus de morceau depuis ${Math.round((t - this.lastChunk) / 1000)} s (${inc.got.size}/${inc.n}) : je me représente`);
+        this.o.transport.send({ m: 'hello', v: PROTOCOL, g: this.o.guestId, n: this.o.name, k: this.instance });
+      }
+      if (t - this.syncSince > RECEIVE_TIMEOUT_MS) {
+        this.incoming = null;
+        this.failure = 'slow';
+        this.setStatus('lost', 'La partie met trop de temps à arriver : la connexion est trop lente ou coupée.');
+        return;
+      }
+    }
     // On réclame les morceaux manquants quand il n'en arrive plus (pas ceux qui sont encore en route : ils feraient des doublons).
     if (inc && t - this.lastNeed >= 400 && t - this.lastChunk >= 350) {
       this.lastNeed = t;
@@ -291,6 +391,8 @@ export class Session {
   // ------------------------------------------------------------------ messages
 
   private onMessage(msg: Message): void {
+    // Un message en retard qui arrive à une session fermée (le relais le livrait encore) ne doit rien changer.
+    if (this.closed) return;
     const t = this.now();
     // Un `hello` n'est pas un signe de vie de l'invité actuel (c'est peut-être un autre, ou un message en retard) : voir onHello.
     if (msg.m !== 'hello') this.lastHeard = t;
@@ -307,30 +409,48 @@ export class Session {
       case 'ready':
         if (this.role === 'host' && Number(msg.id) === this.epoch && this.status === 'syncing') {
           this.outgoing = null;
+          this.syncFailures = 0;
           this.setStatus('playing', this.peerName);
         }
         return;
       case 'desync':
-        if (this.role === 'host' && Number(msg.id) === this.epoch && this.status === 'playing') void this.resync();
+        if (this.role === 'host' && Number(msg.id) === this.epoch && this.status === 'playing') {
+          this.record('l’invité demande la partie (empreintes différentes) : je la renvoie');
+          void this.resync();
+        }
         return;
       case 'full':
-        if (this.role === 'guest') this.setStatus('lost', 'La partie est déjà complète.');
+        if (this.role === 'guest') {
+          this.failure = 'full';
+          this.setStatus('lost', 'La partie est déjà complète.');
+        }
         return;
       case 'bad':
-        if (this.role === 'guest') this.setStatus('lost', String(msg.why ?? 'Versions différentes : rechargez la page.'));
+        if (this.role === 'guest') {
+          const why = String(msg.why ?? 'Versions différentes : rechargez la page.');
+          // Un hôte d'avant ces avis n'envoie pas de `kind` : on reconnaît alors son message de versions.
+          this.failure = (msg.kind ? msg.kind === 'version' : /Versions différentes/.test(why)) ? 'version' : 'bad';
+          this.setStatus('lost', why);
+        }
         return;
       case 'bye':
         if (this.role === 'host') {
           // Un au revoir en retard, d'une visite précédente, ne coupe pas la partie d'aujourd'hui.
           if (this.peerId && (this.status === 'playing' || this.status === 'syncing') && (!msg.k || msg.k === this.peerInstance)) this.dropPeer('Votre ami a quitté la partie.');
-        } else this.setStatus('lost', 'L’hôte a quitté la partie.');
+        } else {
+          this.failure = 'left';
+          this.setStatus('lost', 'L’hôte a quitté la partie.');
+        }
         return;
       case 'f':
         if (this.ls) {
           if (Number(msg.e) === this.epoch && this.status === 'syncing') {
             // Un paquet de jeu de la bonne génération : l'autre a chargé la partie et joue.
             if (this.role === 'guest') this.gotPacketThisEpoch = true;
-            else this.outgoing = null;
+            else {
+              this.outgoing = null;
+              this.syncFailures = 0;
+            }
             this.setStatus('playing', this.role === 'host' ? this.peerName : '');
           }
           this.ls.receive(msg);
@@ -343,7 +463,14 @@ export class Session {
 
   private onHello(msg: Message, t: number): void {
     if (String(msg.v) !== PROTOCOL) {
-      this.o.transport.send({ m: 'bad', why: 'Versions différentes du jeu : rechargez la page des deux côtés.' });
+      const theirs = String(msg.v ?? '?').slice(0, 24);
+      this.o.transport.send({
+        m: 'bad',
+        kind: 'version',
+        why: `Versions différentes du jeu (la vôtre : ${theirs} · celle de l’hôte : ${PROTOCOL}) : rechargez la page des deux côtés.`,
+        v: PROTOCOL,
+      });
+      this.notify('version', `Votre ami n’a pas la même version du jeu que vous (la sienne : ${theirs} · la vôtre : ${PROTOCOL}). Rechargez la page, vous deux.`, 'bad');
       return;
     }
     const id = typeof msg.g === 'string' ? msg.g.slice(0, 40) : '';
@@ -353,6 +480,7 @@ export class Session {
     const current = g.presentSlots().find((s) => s !== 0);
     if (current !== undefined && g.guestIds[current] !== id && this.status !== 'waiting') {
       this.o.transport.send({ m: 'full' });
+      this.notify('full', 'Quelqu’un d’autre essaie de rejoindre votre mine, mais elle est déjà occupée par un ami.', 'info');
       return;
     }
     const k = typeof msg.k === 'string' ? msg.k.slice(0, 16) : '';
@@ -366,23 +494,30 @@ export class Session {
       if (this.status === 'syncing' && out && out.next >= out.chunks.length) out.next = 0;
       return;
     }
+    // Une synchronisation vient d'échouer : on laisse souffler un instant (sinon la partie de l'hôte se figerait en boucle).
+    if (t < this.refuseUntil) {
+      this.record(`hello ignoré : pause de ${Math.ceil((this.refuseUntil - t) / 1000)} s après une synchronisation échouée`);
+      return;
+    }
     this.peerId = id;
     this.peerInstance = k;
     this.dropped = false;
     this.lastHeard = t;
     this.peerName = typeof msg.n === 'string' ? msg.n.slice(0, 24) : 'Ami';
+    this.record(`${this.peerName} se présente (${id.slice(0, 6)}…, instance ${k || '?'})`);
     void this.beginSync(id, true);
   }
 
   /** Fait entrer l'invité (ou non, pour une simple resynchronisation), recharge la partie et l'envoie. */
   private async beginSync(guestId: string, join: boolean): Promise<void> {
-    if (this.resyncing) return;
+    if (this.resyncing || this.closed) return;
     this.resyncing = true;
     try {
       const g = this.g ?? this.o.getState();
       if (!g) return;
       if (join && joinGuest(g, guestId) < 0) {
         this.o.transport.send({ m: 'full' });
+        this.notify('full', 'Quelqu’un d’autre essaie de rejoindre votre mine, mais elle est déjà occupée par un ami.', 'info');
         return;
       }
       const text = JSON.stringify(serialize(g));
@@ -394,17 +529,38 @@ export class Session {
       this.startLockstep(0);
       this.acc = 0;
       this.gotPacketThisEpoch = false;
+      this.syncSince = this.now();
       this.setStatus('syncing', this.peerName);
       const packed = await packSnapshot(text);
+      // La session a pu être fermée pendant la compression : la partie ne part plus nulle part.
+      if (this.closed) return;
       // Un autre instantané a pu partir entre-temps (l'invité s'est représenté) : on garde le dernier.
       this.outgoing = { id: this.epoch, z: packed.z, chunks: packed.chunks, next: 0 };
+      this.record(`génération ${this.epoch} prête : ${(text.length / 1024).toFixed(0)} Ko, ${packed.chunks.length} morceau(x)`);
+    } catch (e) {
+      this.syncError(e);
     } finally {
       this.resyncing = false;
     }
   }
 
-  private sendChunk(out: { id: number; z: boolean; chunks: string[] }, i: number): void {
-    this.o.transport.send({ m: 'snap', id: out.id, n: out.chunks.length, i, z: out.z ? 1 : 0, d: out.chunks[i], h: this.o.name });
+  /** Une erreur en préparant la partie : l'hôte reprend seul, et les deux joueurs savent pourquoi (au lieu d'attendre en vain). */
+  private syncError(e: unknown): void {
+    const why = e instanceof Error ? e.message : String(e);
+    console.error('Jeu à deux : la partie n’a pas pu être préparée', e);
+    this.record(`ERREUR en préparant la partie : ${why}`);
+    this.o.transport.send({ m: 'bad', kind: 'host', why: `L’hôte n’a pas pu préparer la partie (${why.slice(0, 120)}).` });
+    this.dropPeer('La partie n’a pas pu être préparée pour votre ami.', false);
+    this.notify('error', `Impossible de faire entrer votre ami : ${why.slice(0, 120)}`, 'bad');
+  }
+
+  /** Envoie le morceau `i` ; faux si les relais sont encombrés (on réessaiera au prochain entretien). */
+  private sendChunk(out: { id: number; z: boolean; chunks: string[] }, i: number): boolean {
+    const msg = { m: 'snap', id: out.id, n: out.chunks.length, i, z: out.z ? 1 : 0, d: out.chunks[i], h: this.o.name };
+    const t = this.o.transport;
+    if (t.trySend) return t.trySend(msg);
+    t.send(msg);
+    return true;
   }
 
   private onNeed(msg: Message): void {
@@ -412,12 +568,13 @@ export class Session {
     if (!out || Number(msg.id) !== out.id || !Array.isArray(msg.miss)) return;
     for (const i of msg.miss.slice(0, 60)) {
       const k = Number(i);
-      if (Number.isInteger(k) && k >= 0 && k < out.chunks.length) this.sendChunk(out, k);
+      if (Number.isInteger(k) && k >= 0 && k < out.chunks.length && !this.sendChunk(out, k)) break;
     }
   }
 
   /** L'invité est parti (silence, au revoir) : on garde ses affaires de côté et on reprend seul. */
-  private dropPeer(reason: string): void {
+  private dropPeer(reason: string, say = true): void {
+    this.record(`l'invité est lâché : ${reason}`);
     const g = this.g;
     if (g) for (const slot of g.presentSlots()) if (slot !== 0) dropGuest(g, slot);
     if (this.ls) this.prevLs = this.ls;
@@ -430,7 +587,8 @@ export class Session {
     this.stallSince = 0;
     this.acc = 0;
     this.dropped = true;
-    this.setStatus('waiting', reason);
+    // `say` faux : un avis plus complet suit (`notify`), inutile de le doubler par le message d'état.
+    this.setStatus('waiting', say ? reason : '');
   }
 
   /** Les deux parties ont divergé : on part d'un état commun, celui de l'hôte. */
@@ -450,7 +608,12 @@ export class Session {
     // doivent pas relancer un second chargement : l'invité repartirait du pas 0 pendant que l'hôte joue, et tout diverge.
     if (id <= this.epoch || id <= this.loadingId) return;
     if (typeof msg.h === 'string' && msg.h) this.peerName = msg.h.slice(0, 24);
-    if (!this.incoming || this.incoming.id !== id) this.incoming = { id, z: !!msg.z, n, got: new Map(), tick: 0 };
+    if (!this.incoming || this.incoming.id !== id) {
+      this.incoming = { id, z: !!msg.z, n, got: new Map(), tick: 0 };
+      this.syncSince = this.now();
+      this.lastNudge = this.syncSince;
+      this.record(`réception de la génération ${id} : ${n} morceau(x)`);
+    }
     const inc = this.incoming;
     this.lastChunk = this.now();
     if (!inc.got.has(i)) inc.got.set(i, msg.d);
@@ -466,6 +629,8 @@ export class Session {
       const chunks: string[] = [];
       for (let k = 0; k < inc.n; k++) chunks.push(inc.got.get(k) ?? '');
       const text = await unpackSnapshot(inc.z, chunks);
+      // La session a pu être fermée pendant le déballage : cette partie ne doit pas remplacer celle de la session suivante.
+      if (this.closed) return;
       const g = deserialize(JSON.parse(text));
       g.setLocal(1);
       this.g = g;
@@ -478,6 +643,9 @@ export class Session {
       this.lastReady = 0;
       this.setStatus('syncing', '');
     } catch (e) {
+      console.error('Jeu à deux : la partie reçue est illisible', e);
+      this.record(`ERREUR en chargeant la partie reçue : ${(e as Error).message}`);
+      this.failure = 'unreadable';
       this.setStatus('lost', `Partie reçue illisible : ${(e as Error).message}`);
     }
   }
@@ -523,6 +691,30 @@ export class Session {
     this.timer = null;
     this.setStatus('closed', '');
     this.o.transport.close();
+  }
+
+  /** Relais joignables, sur le total (null si le canal n'en a pas : essais en local). */
+  get relays(): { open: number; total: number } | null {
+    return this.o.transport.relays?.() ?? null;
+  }
+
+  /** Réception de la partie en cours (invité) : morceaux reçus sur le total ; null sinon. */
+  get progress(): { done: number; total: number } | null {
+    const inc = this.incoming;
+    return inc ? { done: inc.got.size, total: inc.n } : null;
+  }
+
+  /** Un texte à copier-coller pour dire ce qui se passe : version, état, relais, journal des dernières minutes. */
+  diagnostic(): string {
+    const t = this.now();
+    const head = [
+      `Version du jeu à deux : ${PROTOCOL}`,
+      `${this.role === 'host' ? 'Hôte' : 'Invité'} · code ${this.code} · état : ${this.status}${this.info ? ` (${this.info})` : ''}`,
+      `${this.reconnecting ? 'reconnexion en cours · ' : ''}${this.dropped ? 'ami hors ligne · ' : ''}${this.stalled ? 'en attente de l’autre · ' : ''}pas ${this.tick} · génération ${this.epoch} · avance ${this.delay}/${this.ask}`,
+      `Dernier message reçu il y a ${((t - this.lastHeard) / 1000).toFixed(1)} s`,
+    ];
+    const relays = this.o.transport.report?.() ?? [];
+    return [...head, ...(relays.length ? ['Relais :', ...relays.map((l) => `  ${l}`)] : []), 'Journal :', ...this.log.map((l) => `  ${l}`)].join('\n');
   }
 
   /** Avance d'écriture actuelle (pas) : pour l'affichage de la qualité de la liaison. */

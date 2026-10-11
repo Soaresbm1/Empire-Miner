@@ -24,6 +24,17 @@ function simVersion(): string {
   return hash.digest('hex').slice(0, 10);
 }
 
+/** Identifiant de cette construction : la page le connaît, et `version.json` (écrit à côté d'elle) le redit à qui le demande. */
+const BUILD_ID = Date.now().toString(36);
+
+/** Écrit `version.json` : de quoi savoir, depuis une page restée ouverte, qu'une version plus récente est publiée. */
+const versionFile = () => ({
+  name: 'fichier-de-version',
+  generateBundle(this: { emitFile(f: { type: 'asset'; fileName: string; source: string }): void }) {
+    this.emitFile({ type: 'asset', fileName: 'version.json', source: JSON.stringify({ build: BUILD_ID, protocol: `1-${simVersion()}` }) });
+  },
+});
+
 // `vite build` produit un build classique dans dist/.
 // `vite build --mode single` produit un unique fichier HTML autonome (dist-single/)
 // pratique pour partager une version jouable sans serveur.
@@ -37,8 +48,8 @@ const withoutAppFiles = () => ({
 
 export default defineConfig(({ mode }) => ({
   base: './',
-  define: { __SIM_VERSION__: JSON.stringify(simVersion()) },
-  plugins: mode === 'single' || mode === 'artifact' ? [withoutAppFiles(), viteSingleFile()] : [],
+  define: { __SIM_VERSION__: JSON.stringify(simVersion()), __BUILD_ID__: JSON.stringify(mode === 'single' || mode === 'artifact' ? 'dev' : BUILD_ID) },
+  plugins: mode === 'single' || mode === 'artifact' ? [withoutAppFiles(), viteSingleFile()] : [versionFile()],
   build: {
     outDir: mode === 'single' ? 'dist-single' : mode === 'artifact' ? 'dist-artifact' : 'dist',
     target: 'es2022',

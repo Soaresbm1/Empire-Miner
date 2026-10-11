@@ -71,6 +71,17 @@ const seq = gotB.filter((m) => m.m === 'f').map((m) => m.i as number);
 ok(seq.length === 300, `300 messages reçus (${seq.length})`);
 ok(seq.every((v, i) => v === i), 'dans l’ordre');
 
+// Les morceaux de la partie (gros messages) partent par un seul relais : l'autre joueur les reçoit une fois, et le courtier une seule fois.
+const before = b1.messages() + b2.messages();
+gotB.length = 0;
+let accepted = 0;
+for (let i = 0; i < 20; i++) if (a.trySend({ m: 'snap', i, d: 'y'.repeat(6000) })) accepted++;
+await sleep(400);
+const chunks = gotB.filter((m) => m.m === 'snap').map((m) => m.i as number);
+ok(accepted === 20, `20 morceaux de 6 ko acceptés par les relais (${accepted})`);
+ok(chunks.length === 20 && new Set(chunks).size === 20, `l'autre joueur reçoit les 20 morceaux, chacun une fois (${chunks.length})`);
+ok(b1.messages() + b2.messages() - before === 20, `un seul courtier a porté chaque morceau (${b1.messages() + b2.messages() - before} publications pour 20 morceaux)`);
+
 // Un courtier tombe : la partie continue par l'autre.
 await b1.close();
 await sleep(200);

@@ -362,6 +362,18 @@ même simulation à pas fixe ; seules les **entrées** circulent : l'intention d
   et un invité resté sur l'ancienne page est refusé (« rechargez la page des deux côtés ») au lieu de jouer une autre partie ;
   le dessin et l'interface n'y comptent pas. Le numéro ne change à la main que si le format des messages change.
   Les affaires d'un invité qui part sont gardées chez l'hôte (`guestStash`, par identifiant d'appareil) et rendues à son retour.
+  **Synchronisation bornée** : la partie de l'hôte est figée pendant qu'il envoie la partie (le lockstep attend l'invité). Elle ne
+  l'est plus pour toujours : au bout de `SYNC_TIMEOUT_MS` (20 s) l'hôte reprend seul (`giveUpSync` : `dropPeer`, avis au joueur) et
+  ignore les `hello` pendant `SYNC_PAUSE_MS` × le nombre d'échecs de suite (40 s au plus), pour ne pas se figer en boucle. L'invité,
+  lui, se représente quand plus aucun morceau n'arrive depuis 6 s (l'hôte, qui a tout envoyé une fois, recommence) et abandonne au
+  bout d'une minute (`failure = 'slow'`). Une erreur en préparant la partie (`beginSync`) n'est plus une promesse rejetée que
+  personne ne voit : `syncError` prévient l'invité (`bad`, `kind: 'host'`) et l'hôte (`notice`) et l'hôte reprend seul.
+  **Session fermée** : elle ne réagit plus (`closed` : messages en retard, instantané déballé ou compressé après coup, changements
+  d'état) ; sinon un retour asynchrone remplaçait la partie ou l'écran de la session suivante.
+  **Avis et diagnostic** : `SessionOptions.notice` donne à l'hôte ce qu'il ne verrait pas (version différente de l'invité avec les deux
+  versions, mine pleine, erreur), au plus une fois par 15 s et par sujet ; `Session.failure` dit pourquoi un invité a échoué (version,
+  complet, trop lent, hôte parti, illisible, perdu) pour que l'écran propose le bon geste ; `Session.log` garde les 40 derniers
+  événements ; `Session.diagnostic()` assemble version, état, relais (`Transport.report()`) et journal en un texte à copier.
 - **Transports** (`net/transport.ts`, `net/mqtt.ts`) : un canal « au mieux » (perte, doublon, désordre possibles).
   `MqttTransport` : client MQTT 3.1.1 minimal sur WebSocket, abonné à **trois courtiers publics** à la fois
   (`broker.emqx.io`, `broker.hivemq.com`, `test.mosquitto.org`), publie chez **tous ceux qui sont ouverts** (un courtier lent ne
@@ -371,12 +383,25 @@ même simulation à pas fixe ; seules les **entrées** circulent : l'intention d
   toutes les 10 s, et un courtier dont rien n'est venu depuis 25 s (ou dont la connexion n'a jamais réussi à s'ouvrir) est
   abandonné et reconnecté tout de suite (sans attendre la fin de la connexion, qui peut durer des minutes) ; `wake()` (appelé par le jeu quand l'application revient au premier plan)
   fait ce contrôle en 3 s ; on ne publie pas chez un courtier dont plus de 32 Ko attendent d'être envoyés (les paquets du
-  jeu se répètent, inutile de les empiler). `BroadcastTransport` (deux onglets du même navigateur) sert aux essais :
-  `?net=local` dans l'adresse.
+  jeu se répètent, inutile de les empiler). Les morceaux de la partie, eux, partent par **un seul relais**, tiré au hasard parmi
+  les relais ouverts et non encombrés (`Transport.trySend`) : `Session.pumpHost` n'avance au morceau suivant que si un relais l'a
+  pris (avant, les morceaux étaient triplés, et ceux que le plafond de 32 Ko refusait étaient perdus sans que l'envoi le sache : il
+  fallait que l'invité les redemande). `relays()` et `report()` disent combien de relais sont ouverts et pourquoi les autres ne
+  le sont pas (refus du relais avec son code, connexion fermée, relais muet, essais). `BroadcastTransport` (deux onglets du même
+  navigateur) sert aux essais : `?net=local` dans l'adresse.
+- **Mise à jour** (`game/update.ts`, `vite.config.ts`) : la construction écrit `version.json` (`build` : identifiant de la
+  construction, aussi dans la page sous `__BUILD_ID__` ; `protocol`) à côté de la page. `watchForUpdate` le relit 4 s après le
+  démarrage, toutes les 3 minutes et quand la page revient au premier plan (`cache: 'no-store'`, adresse à paramètre variable) ; s'il
+  annonce une autre construction, les menus proposent « Mise à jour disponible » (`UI.setUpdate`). `reloadFresh` recharge par une
+  adresse neuve (`?v=…`, retiré au démarrage par `cleanReloadParam`) : le cache du navigateur (10 min sur GitHub Pages) ne peut pas
+  répondre. Sans cela, un joueur resté sur la page d'avant une mise à jour voit « Versions différentes du jeu » sans savoir quoi faire.
 - **Interface** : `Game` crée la `Session`, route les actions et `runSim` par elle, filtre les événements par joueur
   (`PERSONAL_EVENTS`), n'enregistre jamais côté invité, et désactive pause et vitesse.
 - **Essais** : `tests/multiplayer-sim.test.ts` (simulation à deux, déterminisme), `tests/lockstep.test.ts` (dont l'avance
   d'écriture demandée) et `tests/session.test.ts` (réseau simulé : pertes, doublons, latence de 250 ms, pics, coupures de 20 s et
   à sens unique, `hello` et `bye` en retard, divergence, départ/retour ; les deux appareils se comparent au même pas),
-  `tests/mqtt-transport.test.ts` (faux courtiers : muets, encombrés, réveil), `tests-net/mqtt.check.ts` (vrai courtier local),
-  `e2e/coop.mjs` (deux pages de navigateur, longue coupure comprise).
+  `tests/mqtt-transport.test.ts` (faux courtiers : muets, encombrés, réveil, un seul relais pour les gros messages, état des relais),
+  `tests/session-lifecycle.test.ts` (l'application de chaque joueur ouvre, ferme et recrée ses sessions au milieu de pannes au
+  hasard ; à la fin, l'hôte qui recrée l'invitation et l'invité qui rejoint y arrivent toujours), `tests/update.test.ts`,
+  `tests-net/mqtt.check.ts` (vrai courtier local), `e2e/coop.mjs` (deux pages de navigateur, longue coupure comprise, invitation
+  annulée puis recréée, diagnostic, mise à jour).

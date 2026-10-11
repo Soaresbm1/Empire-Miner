@@ -668,3 +668,7 @@ kbd {
 @keyframes net-spin { to { transform: rotate(360deg); } }
 .net-note { margin: 4px 0; text-align: center; font-size: 13px; color: var(--text); }
 .net-note .code { letter-spacing: 2px; color: var(--gold); }
+
+/* Diagnostic de la connexion (jeu à deux) : un texte à copier, et la version en petit sous les menus. */
+.diag-text { width: min(92vw, 560px); max-width: 100%; box-sizing: border-box; height: 38vh; min-height: 140px; resize: none; padding: 8px 10px; border-radius: 8px; border: 1px solid var(--line, #444); background: rgba(0, 0, 0, 0.45); color: inherit; font: 12px/1.35 ui-monospace, Menlo, Consolas, monospace; user-select: text; -webkit-user-select: text; }
+.pause-version { margin: 8px 0 0; font-size: 12px; text-align: center; opacity: 0.75; }

@@ -15,6 +15,9 @@
  */
 import { Wire, type Message, type Transport, type TransportStatus } from './transport';
 
+/** Un relais par lequel l'autre joueur s'est fait entendre depuis moins que ça (ms) relie sûrement les deux joueurs. */
+const PEER_SEEN_MS = 5000;
+
 /** Courtiers publics MQTT sur WebSocket sécurisé. */
 export const BROKERS = ['wss://broker.emqx.io:8084/mqtt', 'wss://broker.hivemq.com:8884/mqtt', 'wss://test.mosquitto.org:8081/'];
 
@@ -81,7 +84,7 @@ export const WAKE_REPLY_MS = 3000;
 export const MAX_BUFFERED = 32768;
 
 /** Un paquet MQTT reçu. */
-export type Incoming = { type: 'connack'; ok: boolean } | { type: 'suback' } | { type: 'publish'; topic: string; payload: Uint8Array } | { type: 'pingresp' } | { type: 'other' };
+export type Incoming = { type: 'connack'; ok: boolean; code: number } | { type: 'suback' } | { type: 'publish'; topic: string; payload: Uint8Array } | { type: 'pingresp' } | { type: 'other' };
 
 /** Découpe un flux d'octets en paquets MQTT (un message WebSocket peut en contenir plusieurs, ou une moitié). */
 export class MqttParser {
@@ -123,7 +126,7 @@ export class MqttParser {
 
   private static decode(first: number, body: Uint8Array): Incoming {
     const type = first >> 4;
-    if (type === 2) return { type: 'connack', ok: body.length >= 2 && body[1] === 0 };
+    if (type === 2) return { type: 'connack', ok: body.length >= 2 && body[1] === 0, code: body.length >= 2 ? body[1] : -1 };
     if (type === 9) return { type: 'suback' };
     if (type === 13) return { type: 'pingresp' };
     if (type === 3) {
@@ -149,6 +152,13 @@ class Broker {
   /** Dernière fois (ms) qu'un octet est venu de ce courtier. */
   private lastRx = 0;
   closed = false;
+  /** Dernière fois (ms) que l'autre joueur s'est fait entendre par ce relais : il relie donc bien les deux joueurs. */
+  peerSeenAt = 0;
+  /** Pour le diagnostic : pourquoi la dernière connexion s'est arrêtée, combien de fois on s'est connecté, quand. */
+  private lastWhy = '';
+  private opens = 0;
+  private lastOpenAt = 0;
+  private attempts = 0;
 
   constructor(
     readonly url: string,
@@ -172,6 +182,7 @@ class Broker {
     }
     ws.binaryType = 'arraybuffer';
     this.ws = ws;
+    this.attempts++;
     this.parser = new MqttParser();
     ws.onopen = () => {
       this.lastRx = Date.now();
@@ -184,16 +195,28 @@ class Broker {
       for (const p of this.parser.push(data)) {
         if (p.type === 'connack') {
           if (p.ok) ws.send(subscribePacket(1, this.topic));
-          else ws.close();
+          else {
+            this.lastWhy = `connexion refusée par le relais (code ${p.code})`;
+            ws.close();
+          }
         } else if (p.type === 'suback') {
           this.open = true;
           this.tries = 0;
+          this.opens++;
+          this.lastOpenAt = Date.now();
+          this.lastWhy = '';
           this.onChange();
         } else if (p.type === 'publish' && p.topic === this.topic) this.onText(dec.decode(p.payload));
       }
     };
-    ws.onclose = () => this.lose(ws);
-    ws.onerror = () => ws.close();
+    ws.onclose = (ev) => {
+      if (!this.lastWhy) this.lastWhy = `connexion fermée${ev?.code ? ` (code ${ev.code})` : ''}`;
+      this.lose(ws);
+    };
+    ws.onerror = () => {
+      if (!this.lastWhy) this.lastWhy = 'erreur réseau';
+      ws.close();
+    };
     this.lastRx = Date.now();
     this.ping = setInterval(() => {
       // Muet : rien reçu depuis trop longtemps (connexion ouverte qui ne dit plus rien, ou qui n'arrive jamais à s'ouvrir).
@@ -211,6 +234,7 @@ class Broker {
     this.open = false;
     if (this.ws === ws) this.ws = null;
     if (abandon) {
+      this.lastWhy = 'relais muet, connexion abandonnée';
       ws.onclose = null;
       ws.onmessage = null;
       try {
@@ -243,11 +267,20 @@ class Broker {
     }, wait);
   }
 
-  publish(payload: Uint8Array): void {
+  /** Envoie ; faux si ce relais n'est pas ouvert ou si sa connexion est encombrée (on n'empile pas). */
+  publish(payload: Uint8Array): boolean {
     const ws = this.ws;
-    if (!this.open || !ws || ws.readyState !== 1) return;
-    if ((ws.bufferedAmount ?? 0) > MAX_BUFFERED) return;
+    if (!this.open || !ws || ws.readyState !== 1) return false;
+    if ((ws.bufferedAmount ?? 0) > MAX_BUFFERED) return false;
     ws.send(publishPacket(this.topic, payload));
+    return true;
+  }
+
+  /** Une ligne pour le diagnostic. */
+  describe(): string {
+    const host = this.url.replace(/^wss?:\/\//, '').replace(/[:/].*$/, '');
+    const state = this.open ? `ouvert depuis ${Math.round((Date.now() - this.lastOpenAt) / 1000)} s` : this.closed ? 'fermé' : `non joignable${this.lastWhy ? ` : ${this.lastWhy}` : ''}`;
+    return `${host} : ${state} · ${this.opens} connexion(s) réussie(s) sur ${this.attempts} essai(s)`;
   }
 
   close(): void {
@@ -294,8 +327,9 @@ export class MqttTransport implements Transport {
         topic,
         clientId,
         (text) => {
-          const m = this.wire.unwrap(text);
-          if (m) this.onMessage?.(m);
+          const r = this.wire.read(text);
+          if (r.peer) b.peerSeenAt = Date.now();
+          if (r.msg) this.onMessage?.(r.msg);
         },
         () => {
           if (b.open && !this.order.includes(b)) this.order.push(b);
@@ -329,6 +363,35 @@ export class MqttTransport implements Transport {
       b.publish(payload);
       if (++n >= this.publishTo) break;
     }
+  }
+
+  /**
+   * Un seul relais, tiré au hasard parmi ceux qui sont ouverts et pas encombrés (voir `Transport.trySend`), en préférant ceux par
+   * lesquels l'autre joueur s'est fait entendre ces dernières secondes : ils relient sûrement les deux joueurs.
+   */
+  trySend(msg: Message): boolean {
+    const open = this.brokers.filter((b) => b.open);
+    if (!open.length) return false;
+    const payload = enc.encode(this.wire.wrap(msg));
+    const now = Date.now();
+    const shared = open.filter((b) => now - b.peerSeenAt < PEER_SEEN_MS);
+    // Les relais sûrs d'abord (au hasard parmi eux : un relais qui perd des messages ne coince pas toujours le même morceau), puis les autres.
+    const others = open.filter((b) => !shared.includes(b));
+    if (shared.length) {
+      const start = Math.floor(Math.random() * shared.length);
+      for (let i = 0; i < shared.length; i++) if (shared[(start + i) % shared.length].publish(payload)) return true;
+    }
+    const start = Math.floor(Math.random() * Math.max(1, others.length));
+    for (let i = 0; i < others.length; i++) if (others[(start + i) % others.length].publish(payload)) return true;
+    return false;
+  }
+
+  relays(): { open: number; total: number } {
+    return { open: this.openCount, total: this.brokers.length };
+  }
+
+  report(): string[] {
+    return this.brokers.map((b) => b.describe());
   }
 
   /** L'application revient au premier plan : on vérifie que les courtiers répondent encore. */

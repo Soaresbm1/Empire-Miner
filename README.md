@@ -101,7 +101,9 @@ d'aucun compte : il ouvre le lien du jeu et tape un code.
 4. Les deux se voient dans la mine (l'autre porte une chemise verte, son nom flotte au-dessus de sa tête, un point vert sur la
    carte).
 
-**Même version des deux côtés** : si l'un des deux est resté sur une ancienne page (après une mise à jour du jeu), la connexion est refusée avec « Versions différentes du jeu : rechargez la page des deux côtés » ; la version se calcule toute seule à partir du code qui décide du déroulement de la partie.
+**Même version des deux côtés** : si l'un des deux est resté sur une ancienne page (après une mise à jour du jeu), la connexion est refusée avec « Versions différentes du jeu (la vôtre : … · celle de l'hôte : …) » et **l'hôte en est averti** lui aussi ; la version se calcule toute seule à partir du code qui décide du déroulement de la partie et s'affiche au menu principal et au menu pause à deux. Le jeu relit de lui-même, de temps en temps, le fichier `version.json` publié avec la page : dès qu'une version plus récente existe, un message le dit et un bouton **« Mise à jour disponible : recharger le jeu »** apparaît dans les menus (il recharge la page en contournant le cache du navigateur, le code d'invitation est conservé) ; l'écran d'échec d'un invité qui a une ancienne version propose « Mettre à jour le jeu ». À deux, la mise à jour se fait **des deux côtés**.
+
+**Quand ça coince** : « Diagnostic » (menu pause à deux) ou « Diagnostic de la connexion » (écran d'échec de l'invité) ouvre un texte à copier : version du jeu, navigateur, état de la partie à deux, **relais** joignables (ou pourquoi ils ne le sont pas) et journal des dernières minutes (qui s'est présenté, quand, combien de morceaux de partie, empreintes différentes…). La pastille de l'hôte et l'écran de connexion de l'invité montrent aussi le nombre de relais joignables (« relais 2/3 », « aucun relais joignable ») et les morceaux de partie reçus.
 
 **Règles** : 2 joueurs au plus. La partie est celle de l'hôte et se **sauvegarde chez lui** (l'invité ne sauvegarde jamais).
 Pas de pause ni de vitesse ×2/×4 à deux (les deux jeux avancent ensemble). Un menu n'arrête pas la partie : l'autre joueur
@@ -109,10 +111,10 @@ continue de jouer. Si l'invité se déconnecte, l'hôte continue seul ; en reven
 son sac, sa pioche et sa position. Si la connexion est lente ou coupée, un bandeau « En attente de l'autre joueur » apparaît et
 la partie reprend toute seule. Au bout de 8 s sans nouvelle, l'hôte reprend seul (sa pastille dit « Ami hors ligne ») et l'invité,
 qui reste dans la partie (« Connexion interrompue : nouvelle tentative… »), cherche l'hôte : dès que le réseau revient, il est
-repris **sans rien toucher**. Au bout d'une minute sans nouvelle de l'hôte, il abandonne (« Réessayer »). Le jeu règle tout seul
+repris **sans rien toucher**. Au bout d'une minute sans nouvelle de l'hôte, il abandonne (« Réessayer »). La partie de l'hôte est **figée** pendant qu'un ami arrive (le temps de lui envoyer la partie) : si cela dure plus de 20 s, l'hôte reprend seul sans lui (avec un message) et laisse souffler son ami quelques secondes avant de le reprendre, au lieu de rester figé indéfiniment. Une erreur en préparant la partie est dite aux deux joueurs. Le jeu règle tout seul
 l'avance avec laquelle chacun écrit ses actions (≈ 0,13 s, davantage si la connexion est lente, puis il redescend) : une latence de
 250 ms ne fige plus la partie. Chaque message passe par trois relais à la fois ; l'application vérifie leur état au retour au
-premier plan (téléphone rallumé).
+premier plan (téléphone rallumé). Les morceaux de la partie à envoyer à un ami ne partent que par un relais à la fois (au hasard, jamais un relais encombré) : s'il s'en perd, l'invité les redemande.
 
 **Sous le capot** (détails dans [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)) : les deux appareils calculent la même partie,
 pas après pas (« lockstep »), et ne s'échangent que ce que font les joueurs, pas l'état du jeu. Le canal passe par des

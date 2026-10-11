@@ -13,6 +13,16 @@ export type Message = { m: string; [key: string]: unknown };
 export interface Transport {
   /** Envoie (au mieux) un message à l'autre joueur. */
   send(msg: Message): void;
+  /**
+   * Envoie un gros message par un seul relais, tiré au sort parmi ceux qui ne sont pas encombrés (les morceaux de la partie n'ont
+   * pas besoin d'être triplés : s'il s'en perd, l'invité les redemande). Faux si aucun relais ne peut le prendre pour l'instant :
+   * il faut réessayer plus tard. Sans cette méthode, `send` fait l'affaire.
+   */
+  trySend?(msg: Message): boolean;
+  /** Relais joignables en ce moment, sur le total (pour que le joueur voie si le problème vient du réseau). */
+  relays?(): { open: number; total: number };
+  /** Une ligne par relais (ouvert ou non, pourquoi) pour le diagnostic. */
+  report?(): string[];
   onMessage: ((msg: Message) => void) | null;
   onStatus: ((s: TransportStatus) => void) | null;
   /** L'application revient au premier plan (téléphone rallumé, onglet rouvert) : vérifier que le canal est encore vivant. */
@@ -87,17 +97,25 @@ export class Wire {
     return JSON.stringify(e);
   }
 
-  /** Le message contenu, ou null (mal formé, mon propre écho, déjà vu). */
-  unwrap(text: string): Message | null {
+  /**
+   * Lit une enveloppe : le message qu'elle contient s'il est nouveau, et si elle vient bien de l'autre joueur (même si on l'avait déjà
+   * reçue par un autre relais : cela dit que ce relais relie les deux joueurs).
+   */
+  read(text: string): { msg: Message | null; peer: boolean } {
     let e: Partial<Envelope>;
     try {
       e = JSON.parse(text);
     } catch {
-      return null;
+      return { msg: null, peer: false };
     }
-    if (!e || typeof e.f !== 'string' || typeof e.s !== 'number' || !e.p || typeof e.p !== 'object' || typeof (e.p as Message).m !== 'string') return null;
-    if (e.f === this.id) return null;
-    return this.dedupe.fresh(e.f, e.s) ? (e.p as Message) : null;
+    if (!e || typeof e.f !== 'string' || typeof e.s !== 'number' || !e.p || typeof e.p !== 'object' || typeof (e.p as Message).m !== 'string') return { msg: null, peer: false };
+    if (e.f === this.id) return { msg: null, peer: false };
+    return { msg: this.dedupe.fresh(e.f, e.s) ? (e.p as Message) : null, peer: true };
+  }
+
+  /** Le message contenu, ou null (mal formé, mon propre écho, déjà vu). */
+  unwrap(text: string): Message | null {
+    return this.read(text).msg;
   }
 }
 
