@@ -317,27 +317,57 @@ même simulation à pas fixe ; seules les **entrées** circulent : l'intention d
 - **Actions** (`sim/actions.ts`) : tout ce que l'interface change passe par `applyAction(g, SimAction)`. Seul, elle
   s'applique tout de suite ; à deux, elle est mise en file (`Session.send`) et appliquée aux deux appareils au même pas, dans
   l'ordre des emplacements. Les retours à l'écran sont des événements `message` portant l'emplacement du joueur concerné.
-- **Lockstep** (`net/lockstep.ts`) : chacun écrit ses entrées `delay` pas à l'avance (8 pas ≈ 133 ms, jusqu'à 30 si le réseau
-  est lent). Un pas ne s'exécute que si l'on a l'entrée de l'autre, sinon on attend. Fiabilité par redondance : chaque
-  paquet répète les entrées non confirmées (`ack`) et annonce jusqu'où l'on a écrit (`up`) ; un pas sans entrée listée est « sans
-  changement ». Pertes, doublons et désordre sont donc sans effet (testé avec 15 % de pertes).
+- **Lockstep** (`net/lockstep.ts`) : chacun écrit ses entrées `delay` pas à l'avance. Un pas ne s'exécute que si l'on a l'entrée
+  de l'autre, sinon on attend. Fiabilité par redondance : chaque paquet répète les entrées non confirmées (`ack`) et annonce
+  jusqu'où l'on a écrit (`up`) ; un pas sans entrée listée est « sans changement ». Pertes, doublons et désordre sont donc sans
+  effet (testé avec 15 % de pertes).
+  **Avance d'écriture** : `delay` est ce que *l'autre demande* (`dl` de ses paquets, de 8 à 40 pas ≈ 133 à 670 ms), car c'est lui
+  qui attend mes entrées. Celui qui attend mesure son attente (`noteStall`, appelé par `Session.advance` quand elle finit) et
+  demande à l'autre d'écrire plus loin devant d'autant de pas (12 au plus par attente, une demande n'est pas surenchérie avant
+  qu'elle ait fait effet) ; après 20 s de calme il redemande moins, un pas toutes les 3 s (`relax`). Ne comptent pas : une gigue
+  de moins de 40 ms, une panne de plus de 1,5 s, et l'attente des premiers pas (l'autre charge encore sa partie). Un lockstep
+  neuf (resynchronisation) hérite de ce que l'ancien avait appris (`inherit`). L'ancien réglage (`adapt`) remontait puis
+  redescendait aussitôt à 8 pas (la décroissance était appelée toutes les 50 ms) : à 250 ms de latence, 29 % du temps était
+  passé à attendre. Les deux appareils ne sont pas au même numéro de pas au même instant (l'un a quelques pas d'avance : c'est
+  normal) ; les empreintes se comparent par numéro de pas.
 - **Empreintes** (`net/digest.ts`) : toutes les 120 pas (2 s), chacun envoie un hachage de l'état (monde, structures, joueurs).
   Un écart déclenche une **resynchronisation** : l'hôte renvoie sa partie complète.
 - **Session** (`net/session.ts`) : poignée de main (`hello` → l'hôte fait entrer l'invité, écrit la sauvegarde, la recharge
   lui-même, la découpe en morceaux de 6000 signes compressés `deflate-raw` + base64 ; l'invité réclame les morceaux
-  manquants avec `need`, puis dit `ready`), présence (silence > 8 s = parti), `bye`, `full`, version de protocole. Cette dernière
-  (`PROTOCOL`) est « 1- » suivi d'une empreinte (SHA-1) de `src/sim`, `src/data`, `src/core`, `src/save` et `src/net`, calculée à la
+  manquants avec `need` — seulement quand plus aucun n'arrive depuis 350 ms —, puis dit `ready` ; si l'invité répète `hello`
+  alors que l'hôte a déjà tout envoyé une fois, rien n'étant arrivé, l'hôte renvoie la partie), présence, `bye`, `full`,
+  version de protocole.
+  **Un morceau n'est jamais chargé deux fois** : tant qu'un instantané est en cours de déballage (asynchrone), les morceaux du même
+  numéro qui arrivent (renvois, courtiers multiples) sont ignorés (`loadingId`) ; sinon l'invité repartait du pas 0 pendant que
+  l'hôte jouait, perdait ses entrées, divergeait et déclenchait une resynchronisation, qui pouvait recommencer.
+  **Instance** : chaque invité se présente avec un numéro tiré à chaque ouverture de la page (`k`, dans `hello` et `bye`). Un
+  `hello` du même invité et de la même instance, alors que la partie est en route, est un doublon ou un message en retard
+  (courtier lent) : ignoré, au lieu de recharger la partie des deux côtés ; un `hello` d'une autre instance (page rechargée) fait
+  revenir l'invité ; un `bye` d'une instance précédente ne coupe rien.
+  **Silence** (8 s) : l'hôte reprend seul (`dropPeer`, `dropped` pour la pastille « Ami hors ligne ») ; l'invité reste dans la
+  partie (`reconnecting`, bandeau « Connexion interrompue : nouvelle tentative… »), renvoie `hello` toutes les 2 s et, si
+  l'hôte l'entend, reçoit de nouveau la partie tout seul ; il n'abandonne (`lost`, « Réessayer ») qu'au bout d'une minute. L'hôte
+  reprend aussi seul si l'invité écrit encore mais que la partie n'avance plus depuis 20 s.
+  **Version** : `PROTOCOL` est « 1- » suivi d'une empreinte (SHA-1) de `src/sim`, `src/data`, `src/core`, `src/save` et `src/net`, calculée à la
   construction (`define` de `vite.config.ts`) : toute modification de ce qui décide du déroulement d'une partie change la version,
   et un invité resté sur l'ancienne page est refusé (« rechargez la page des deux côtés ») au lieu de jouer une autre partie ;
   le dessin et l'interface n'y comptent pas. Le numéro ne change à la main que si le format des messages change.
   Les affaires d'un invité qui part sont gardées chez l'hôte (`guestStash`, par identifiant d'appareil) et rendues à son retour.
 - **Transports** (`net/transport.ts`, `net/mqtt.ts`) : un canal « au mieux » (perte, doublon, désordre possibles).
   `MqttTransport` : client MQTT 3.1.1 minimal sur WebSocket, abonné à **trois courtiers publics** à la fois
-  (`broker.emqx.io`, `broker.hivemq.com`, `test.mosquitto.org`), publie sur deux ; sujet `empire-miner/v1/<code>` ; messages
-  numérotés par émetteur (anti-écho, anti-doublon). `BroadcastTransport` (deux onglets du même navigateur) sert aux essais :
+  (`broker.emqx.io`, `broker.hivemq.com`, `test.mosquitto.org`), publie chez **tous ceux qui sont ouverts** (un courtier lent ne
+  retarde pas les autres) ; sujet `empire-miner/v1/<code>` ; messages numérotés par émetteur (anti-écho, anti-doublon sur les
+  6000 derniers : chacun arrive jusqu'à trois fois, une par courtier).
+  Un courtier peut devenir muet sans que sa connexion se ferme (réseau mobile qui change, téléphone qui dort) : un « ping »
+  toutes les 10 s, et un courtier dont rien n'est venu depuis 25 s (ou dont la connexion n'a jamais réussi à s'ouvrir) est
+  abandonné et reconnecté tout de suite (sans attendre la fin de la connexion, qui peut durer des minutes) ; `wake()` (appelé par le jeu quand l'application revient au premier plan)
+  fait ce contrôle en 3 s ; on ne publie pas chez un courtier dont plus de 32 Ko attendent d'être envoyés (les paquets du
+  jeu se répètent, inutile de les empiler). `BroadcastTransport` (deux onglets du même navigateur) sert aux essais :
   `?net=local` dans l'adresse.
 - **Interface** : `Game` crée la `Session`, route les actions et `runSim` par elle, filtre les événements par joueur
   (`PERSONAL_EVENTS`), n'enregistre jamais côté invité, et désactive pause et vitesse.
-- **Essais** : `tests/multiplayer-sim.test.ts` (simulation à deux, déterminisme), `tests/lockstep.test.ts` et
-  `tests/session.test.ts` (réseau simulé : pertes, doublons, coupures, divergence, départ/retour), `tests-net/mqtt.check.ts`
-  (vrai courtier local), `e2e/coop.mjs` (deux pages de navigateur).
+- **Essais** : `tests/multiplayer-sim.test.ts` (simulation à deux, déterminisme), `tests/lockstep.test.ts` (dont l'avance
+  d'écriture demandée) et `tests/session.test.ts` (réseau simulé : pertes, doublons, latence de 250 ms, pics, coupures de 20 s et
+  à sens unique, `hello` et `bye` en retard, divergence, départ/retour ; les deux appareils se comparent au même pas),
+  `tests/mqtt-transport.test.ts` (faux courtiers : muets, encombrés, réveil), `tests-net/mqtt.check.ts` (vrai courtier local),
+  `e2e/coop.mjs` (deux pages de navigateur, longue coupure comprise).

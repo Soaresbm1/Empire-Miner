@@ -61,6 +61,8 @@ await until(host, () => window.__EM.session?.status === 'waiting');
 const code = await host.evaluate(() => window.__EM.session.code);
 check(/^[A-Z2-9]{5}$/.test(code), `l'hôte obtient un code à 5 signes (${code})`);
 check(await until(host, (c) => (document.getElementById('hud-net')?.textContent ?? '').includes(c), code, 5000), 'la pastille du HUD montre le code');
+// Deux pages dans la même fenêtre : celle qui n'est pas au premier plan est dessinée au ralenti par Chromium (comme pour la pause plus bas).
+await host.bringToFront();
 await sleep(1500);
 const t0 = await host.evaluate(() => window.__EM.state.time);
 await sleep(500);
@@ -190,6 +192,31 @@ check((await status(host)) === 'playing' && (await status(guest)) === 'playing',
 await record();
 await sleep(1500);
 await compare('après la resynchronisation');
+
+// ---------------------------------------------------------------- longue coupure : l'hôte reprend seul, l'invité revient tout seul
+// Plus de 8 s sans rien : c'est ce qui faisait « changer d'état très souvent » l'hôte (recherche d'un joueur, resynchronisations).
+// Les deux côtés n'envoient plus rien. L'hôte reprend seul ; l'invité garde son écran de jeu et cherche l'hôte. Au retour du
+// réseau, sans que personne touche à rien, l'invité est repris.
+await Promise.all([host, guest].map((p) => cut(p, true)));
+check(await until(host, () => window.__EM.session?.status === 'waiting', null, 16000), "longue coupure : l'hôte, sans nouvelle, reprend seul (il cherche un joueur)");
+check(await host.evaluate(() => document.getElementById('hud-net').textContent.includes('Ami hors ligne')), "la pastille de l'hôte dit que l'ami est hors ligne (et pas seulement « Code »)");
+check(await until(guest, () => document.getElementById('net-stall').textContent.includes('Connexion interrompue'), null, 8000), "l'invité reste dans la partie : « Connexion interrompue : nouvelle tentative… »");
+check(await guest.evaluate(() => window.__EM.mode === 'playing' && window.__EM.session.status === 'playing'), "l'invité n'a pas été renvoyé à l'écran de connexion");
+await guest.evaluate(() => {
+  window.__adopts = 0;
+  window.__EM.session.o.adopt = ((orig) => (g) => {
+    window.__adopts++;
+    orig(g);
+  })(window.__EM.session.o.adopt);
+});
+await Promise.all([host, guest].map((p) => cut(p, false)));
+check(await until(guest, () => window.__adopts > 0, null, 15000), "le réseau revient : l'invité cherchait l'hôte, il reçoit de nouveau la partie tout seul");
+check(await both(), 'les deux sont de nouveau en jeu, sans que personne ait rien fait');
+await sleep(800);
+check(await guest.evaluate(() => document.getElementById('net-stall').classList.contains('hidden')), "le bandeau d'interruption disparaît");
+await record();
+await sleep(1800);
+await compare('après la longue coupure');
 
 // ---------------------------------------------------------------- l'invité s'en va et revient : ses affaires lui sont rendues
 await guest.keyboard.press('Escape');
