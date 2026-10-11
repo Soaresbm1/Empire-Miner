@@ -222,7 +222,7 @@ kbd {
 
 /* Repères dans le panneau de la carte. */
 .marker-kinds { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 6px; }
-.marker-list { list-style: none; margin: 6px 0 0; padding: 0; display: grid; gap: 4px; font-size: 13px; max-height: 190px; overflow-y: auto; }
+.marker-list { list-style: none; margin: 6px 0 0; padding: 0; display: grid; gap: 4px; font-size: 13px; max-height: 190px; overflow-x: hidden; overflow-y: auto; }
 .marker-list li { display: flex; align-items: flex-start; gap: 6px; border-bottom: 1px dashed rgba(91,70,54,0.5); padding-bottom: 4px; }
 .marker-list .mk-body { flex: 1; min-width: 0; }
 .marker-list .mk-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -485,7 +485,7 @@ kbd {
 .buy-row { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
 .miss { color: var(--bad); font-size: 12px; }
 @media (max-width: 640px) {
-  .shop-row { grid-template-columns: 40px 1fr; }
+  .shop-row { grid-template-columns: 40px minmax(0, 1fr); }
   .shop-icon { width: 40px; height: 40px; }
   .shop-icon img { width: 32px; height: 32px; }
   .shop-side { grid-column: 1 / -1; align-items: stretch; min-width: 0; }

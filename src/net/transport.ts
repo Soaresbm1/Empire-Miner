@@ -15,6 +15,8 @@ export interface Transport {
   send(msg: Message): void;
   onMessage: ((msg: Message) => void) | null;
   onStatus: ((s: TransportStatus) => void) | null;
+  /** L'application revient au premier plan (téléphone rallumé, onglet rouvert) : vérifier que le canal est encore vivant. */
+  wake?(): void;
   close(): void;
 }
 
@@ -64,7 +66,8 @@ export class Dedupe {
     if (set.has(seq)) return false;
     set.add(seq);
     this.order.push(`${from}:${seq}`);
-    if (this.order.length > 2000) {
+    // Chaque message arrive jusqu'à trois fois (un par courtier) : de quoi tenir la mémoire de plusieurs minutes de jeu.
+    if (this.order.length > 6000) {
       const old = this.order.shift()!;
       const [f, n] = old.split(':');
       this.seen.get(f)?.delete(Number(n));

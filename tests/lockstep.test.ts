@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { SIM_DT, TILE } from '../src/core/constants';
 import { mulberry32 } from '../src/core/rng';
 import { stateDigest } from '../src/net/digest';
-import { CHECK_EVERY, Lockstep, MIN_DELAY, START_LEAD, type Packet } from '../src/net/lockstep';
+import { CHECK_EVERY, Lockstep, MAX_DELAY, MIN_DELAY, START_LEAD, type Packet } from '../src/net/lockstep';
 import { deserialize, serialize } from '../src/save/save';
 import { GameState, type PlayerIntent } from '../src/sim/GameState';
 import { applyAction, type SimAction } from '../src/sim/actions';
@@ -250,5 +250,99 @@ describe('lockstep : deux appareils, une seule partie', () => {
     expect(ls.tick).toBe(tick);
     p.run(2);
     expect(p.ls[0].desyncAt).toBeNull();
+  });
+});
+
+describe('lockstep : avance d’écriture demandée à l’autre', () => {
+  const make = () => {
+    const ls = new Lockstep(0, { act: () => {}, step: () => {}, digest: () => 0 });
+    ls.reset(0, 1);
+    return ls;
+  };
+  const packet = (extra: Record<string, unknown> = {}) => ({ t: 'f', e: 1, up: START_LEAD - 1, ack: START_LEAD - 1, fr: [], d: [], ...extra });
+
+  it('une attente de 100 ms fait demander à l’autre d’écrire plus loin devant, d’autant de pas (plus un de marge)', () => {
+    const ls = make();
+    expect(ls.ask).toBe(MIN_DELAY);
+    ls.noteStall(100, 5000);
+    expect(ls.ask).toBe(MIN_DELAY + Math.ceil(100 / (1000 / 60)) + 1);
+    expect(ls.packet().dl).toBe(ls.ask);
+  });
+
+  it('une gigue très courte (< 40 ms) ou une vraie panne (> 1,5 s) ne comptent pas comme de la latence', () => {
+    const ls = make();
+    ls.noteStall(30, 5000);
+    ls.noteStall(2000, 6000);
+    ls.noteStall(8000, 9000);
+    expect(ls.ask).toBe(MIN_DELAY);
+  });
+
+  it('une seule attente ne fait pas monter la demande de plus de 12 pas, et jamais au-delà du maximum', () => {
+    const ls = make();
+    ls.noteStall(1400, 5000);
+    expect(ls.ask).toBe(MIN_DELAY + 12);
+    let t = 5000;
+    for (let i = 0; i < 20; i++) ls.noteStall(1400, (t += 1500));
+    expect(ls.ask).toBe(MAX_DELAY);
+  });
+
+  it('une demande qui n’a pas encore eu le temps de faire effet n’est pas surenchérie', () => {
+    const ls = make();
+    ls.noteStall(200, 5000);
+    const after = ls.ask;
+    ls.noteStall(200, 5500);
+    expect(ls.ask).toBe(after);
+    ls.noteStall(200, 6100);
+    expect(ls.ask).toBeGreaterThan(after);
+  });
+
+  it('après un calme de 20 s la demande redescend d’un pas toutes les 3 s, jusqu’au minimum', () => {
+    const ls = make();
+    ls.noteStall(300, 5000);
+    const high = ls.ask;
+    ls.relax(5000 + 19000);
+    expect(ls.ask).toBe(high);
+    ls.relax(5000 + 20000);
+    expect(ls.ask).toBe(high - 1);
+    ls.relax(5000 + 21000);
+    expect(ls.ask).toBe(high - 1);
+    ls.relax(5000 + 23000);
+    expect(ls.ask).toBe(high - 2);
+    for (let t = 5000 + 26000; t < 5000 + 200000; t += 3000) ls.relax(t);
+    expect(ls.ask).toBe(MIN_DELAY);
+  });
+
+  it('l’avance d’écriture est celle que l’autre demande : bornée, et seulement si elle est valable', () => {
+    const ls = make();
+    ls.receive(packet({ dl: 20 }));
+    expect(ls.delay).toBe(20);
+    ls.receive(packet({ dl: 1 }));
+    expect(ls.delay).toBe(MIN_DELAY);
+    ls.receive(packet({ dl: 9999 }));
+    expect(ls.delay).toBe(MAX_DELAY);
+    ls.receive(packet({ dl: 'oups' }));
+    ls.receive(packet({ dl: 12.5 }));
+    expect(ls.delay).toBe(MAX_DELAY);
+    ls.receive(packet({ e: 7, dl: 12 })); // une autre génération : ignorée
+    expect(ls.delay).toBe(MAX_DELAY);
+  });
+
+  it('une avance demandée plus grande fait écrire plus de pas à l’avance', () => {
+    const ls = make();
+    const before = ls.packet().up;
+    ls.receive(packet({ dl: 20 }));
+    ls.author();
+    expect(ls.packet().up).toBe(before + (20 - MIN_DELAY));
+  });
+
+  it('après une resynchronisation, le nouveau lockstep garde ce que l’ancien avait appris du réseau', () => {
+    const a = make();
+    a.noteStall(300, 5000);
+    a.receive(packet({ dl: 22 }));
+    const b = make();
+    b.inherit(a);
+    b.reset(0, 2);
+    expect(b.ask).toBe(a.ask);
+    expect(b.delay).toBe(22);
   });
 });

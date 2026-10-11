@@ -60,7 +60,7 @@ travers**, mais fonctionne aussi debout. Sur iPhone, ouvrez le lien de la versio
 | Construire | **toucher** pose la machine (glisser pour tracer convoyeurs et rails), **↻ Tourner** l'oriente, **✕ Retirer** puis toucher une machine la démonte |
 | Régler plusieurs coffres | **toucher** un coffre pour le choisir, **glisser** un rectangle pour en choisir plusieurs |
 | Carte | glisser pour la déplacer, **pincer** ou boutons **+** **−** pour zoomer, toucher pour poser un repère |
-| Menus et panneaux | un bouton répond **quand on lève le doigt** ; faire défiler une liste en partant d'un bouton (l'Atelier, par exemple) n'achète rien. Les fenêtres (Atelier, Tableau d'affichage, Comptoir, Sac…) se mettent à jour **sans bouger** pendant que le jeu tourne : on les fait défiler et on les touche normalement, même quand l'argent ou les cours changent |
+| Menus et panneaux | un bouton répond **quand on lève le doigt** ; faire défiler une liste en partant d'un bouton (l'Atelier, par exemple) n'achète rien. Les fenêtres (Atelier, Tableau d'affichage, Comptoir, Sac…) se mettent à jour **sans bouger** pendant que le jeu tourne : on les fait défiler et on les touche normalement, même quand l'argent ou les cours changent. Leur intérieur **ne va que de haut en bas** : rien ne glisse de côté (même en diagonale), pas de rebond au bout de la liste ; les onglets passent à la ligne au lieu de défiler, et les tableaux se resserrent sur un téléphone debout |
 
 **L'affichage suit la place réellement visible.** Safari sur iPhone, avec ses barres d'adresse et d'onglets, ne laisse parfois
 que 280 px de haut au jeu ; les tailles se règlent sur la hauteur du jeu et non sur celle de l'écran. Tout est rangé en
@@ -107,7 +107,12 @@ d'aucun compte : il ouvre le lien du jeu et tape un code.
 Pas de pause ni de vitesse ×2/×4 à deux (les deux jeux avancent ensemble). Un menu n'arrête pas la partie : l'autre joueur
 continue de jouer. Si l'invité se déconnecte, l'hôte continue seul ; en revenant **avec le même appareil**, l'invité retrouve
 son sac, sa pioche et sa position. Si la connexion est lente ou coupée, un bandeau « En attente de l'autre joueur » apparaît et
-la partie reprend toute seule ; au bout de 8 s sans nouvelle, la liaison est abandonnée (l'invité peut « Réessayer »).
+la partie reprend toute seule. Au bout de 8 s sans nouvelle, l'hôte reprend seul (sa pastille dit « Ami hors ligne ») et l'invité,
+qui reste dans la partie (« Connexion interrompue : nouvelle tentative… »), cherche l'hôte : dès que le réseau revient, il est
+repris **sans rien toucher**. Au bout d'une minute sans nouvelle de l'hôte, il abandonne (« Réessayer »). Le jeu règle tout seul
+l'avance avec laquelle chacun écrit ses actions (≈ 0,13 s, davantage si la connexion est lente, puis il redescend) : une latence de
+250 ms ne fige plus la partie. Chaque message passe par trois relais à la fois ; l'application vérifie leur état au retour au
+premier plan (téléphone rallumé).
 
 **Sous le capot** (détails dans [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)) : les deux appareils calculent la même partie,
 pas après pas (« lockstep »), et ne s'échangent que ce que font les joueurs, pas l'état du jeu. Le canal passe par des
@@ -384,10 +389,10 @@ Source : GitHub Actions*. On peut aussi le lancer à la main (onglet *Actions* �
 ```bash
 npm test             # tests unitaires de la simulation (Vitest, sans navigateur)
 npm run build && npm run e2e   # partie jouée dans Chromium avec clavier/souris, captures dans e2e/screenshots/
-node e2e/coop.mjs              # jeu à deux : deux pages du même navigateur (canal local ?net=local), après un build
+node e2e/coop.mjs              # jeu à deux : deux pages du même navigateur (canal local ?net=local), longue coupure comprise, après un build
 node e2e/phone.mjs             # mise en page sur téléphone, à 11 tailles d'écran (marges de l'encoche comprises), après un build
 node e2e/touch.mjs             # gestes tactiles réels (CDP) : stick, Miner, Agir, ☰, défilement sans achat, pincer, pose, iPhone
-node e2e/panels.mjs            # fenêtres au doigt sur un jeu qui tourne : défilement, toucher long, contenu exact (après un build)
+node e2e/panels.mjs            # fenêtres au doigt sur un jeu qui tourne : défilement, toucher long, contenu exact, rien ne glisse de côté (après un build)
 npx vite-node tests-net/mqtt.check.ts   # client MQTT contre un vrai courtier local (aedes)
 ```
 

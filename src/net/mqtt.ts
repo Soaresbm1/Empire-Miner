@@ -2,8 +2,13 @@
  * Relais MQTT : des courtiers publics gratuits (sans compte, sans serveur à soi) servent de boîte aux lettres entre les
  * deux téléphones. Un client MQTT 3.1.1 minimal sur WebSocket : se connecter, s'abonner à un sujet, publier, rester vivant.
  *
- * On s'abonne chez tous les courtiers de la liste en même temps et on publie chez deux d'entre eux : les deux joueurs
- * n'ont besoin d'en avoir qu'un en commun. L'enveloppe (`Wire`) écarte son propre écho et les doublons.
+ * On s'abonne chez tous les courtiers de la liste en même temps et on publie chez tous ceux qui sont ouverts : les deux
+ * joueurs n'ont besoin d'en avoir qu'un en commun, et un courtier lent ou muet ne retarde pas les autres. L'enveloppe
+ * (`Wire`) écarte son propre écho et les doublons.
+ *
+ * Un courtier peut cesser de répondre sans que la connexion se ferme (réseau mobile qui change, téléphone qui dort) : on le
+ * remarque à son silence (aucun octet reçu, pas même la réponse à nos « ping »), on l'abandonne tout de suite et on se
+ * reconnecte, au lieu d'attendre la fin de la connexion, qui peut prendre des minutes.
  *
  * Rien de secret ne circule : la partie se tient sur un code de cinq caractères tirés au hasard, et les messages ne
  * contiennent que des intentions de jeu (pas de données personnelles).
@@ -66,6 +71,14 @@ export function publishPacket(topic: string, payload: Uint8Array): Bytes {
 
 const PING = Uint8Array.of(0xc0, 0x00);
 const DISCONNECT = Uint8Array.of(0xe0, 0x00);
+
+/** Un « ping » toutes les 10 s ; un courtier muet depuis 25 s est abandonné. */
+export const PING_EVERY_MS = 10000;
+export const DEAD_AFTER_MS = 25000;
+/** Au réveil de l'application : un courtier qui ne répond pas à un « ping » en si peu de temps est abandonné. */
+export const WAKE_REPLY_MS = 3000;
+/** Au-delà, la connexion est trop lente pour ce qu'on y envoie : on laisse tomber des paquets (le jeu les répète) plutôt que de les empiler. */
+export const MAX_BUFFERED = 32768;
 
 /** Un paquet MQTT reçu. */
 export type Incoming = { type: 'connack'; ok: boolean } | { type: 'suback' } | { type: 'publish'; topic: string; payload: Uint8Array } | { type: 'pingresp' } | { type: 'other' };
@@ -133,6 +146,8 @@ class Broker {
   private ping: ReturnType<typeof setInterval> | null = null;
   private retry: ReturnType<typeof setTimeout> | null = null;
   private tries = 0;
+  /** Dernière fois (ms) qu'un octet est venu de ce courtier. */
+  private lastRx = 0;
   closed = false;
 
   constructor(
@@ -158,10 +173,14 @@ class Broker {
     ws.binaryType = 'arraybuffer';
     this.ws = ws;
     this.parser = new MqttParser();
-    ws.onopen = () => ws.send(connectPacket(this.clientId));
+    ws.onopen = () => {
+      this.lastRx = Date.now();
+      ws.send(connectPacket(this.clientId));
+    };
     ws.onmessage = (e) => {
       const data = e.data instanceof ArrayBuffer ? new Uint8Array(e.data) : null;
       if (!data) return;
+      this.lastRx = Date.now();
       for (const p of this.parser.push(data)) {
         if (p.type === 'connack') {
           if (p.ok) ws.send(subscribePacket(1, this.topic));
@@ -173,19 +192,46 @@ class Broker {
         } else if (p.type === 'publish' && p.topic === this.topic) this.onText(dec.decode(p.payload));
       }
     };
-    ws.onclose = () => {
-      if (this.ping) clearInterval(this.ping);
-      this.ping = null;
-      const was = this.open;
-      this.open = false;
-      if (this.ws === ws) this.ws = null;
-      if (was) this.onChange();
-      this.scheduleRetry();
-    };
+    ws.onclose = () => this.lose(ws);
     ws.onerror = () => ws.close();
+    this.lastRx = Date.now();
     this.ping = setInterval(() => {
-      if (ws.readyState === 1) ws.send(PING);
-    }, 15000);
+      // Muet : rien reçu depuis trop longtemps (connexion ouverte qui ne dit plus rien, ou qui n'arrive jamais à s'ouvrir).
+      if (Date.now() - this.lastRx > DEAD_AFTER_MS) this.lose(ws, true);
+      else if (ws.readyState === 1) ws.send(PING);
+    }, PING_EVERY_MS);
+  }
+
+  /** Cette connexion est finie (fermée, ou muette : alors on la ferme nous-mêmes, sans attendre) : on se reconnecte. */
+  private lose(ws: WebSocket, abandon = false): void {
+    if (this.ws !== ws && !abandon) return;
+    if (this.ping) clearInterval(this.ping);
+    this.ping = null;
+    const was = this.open;
+    this.open = false;
+    if (this.ws === ws) this.ws = null;
+    if (abandon) {
+      ws.onclose = null;
+      ws.onmessage = null;
+      try {
+        ws.close();
+      } catch {
+        /* déjà fermé */
+      }
+    }
+    if (was) this.onChange();
+    this.scheduleRetry();
+  }
+
+  /** L'application revient au premier plan : la connexion est-elle encore vivante ? On le sait vite par un « ping ». */
+  wake(): void {
+    const ws = this.ws;
+    if (!ws || ws.readyState !== 1 || !this.open) return;
+    const since = Date.now();
+    ws.send(PING);
+    setTimeout(() => {
+      if (this.ws === ws && this.lastRx < since) this.lose(ws, true);
+    }, WAKE_REPLY_MS);
   }
 
   private scheduleRetry(): void {
@@ -198,7 +244,10 @@ class Broker {
   }
 
   publish(payload: Uint8Array): void {
-    if (this.open && this.ws && this.ws.readyState === 1) this.ws.send(publishPacket(this.topic, payload));
+    const ws = this.ws;
+    if (!this.open || !ws || ws.readyState !== 1) return;
+    if ((ws.bufferedAmount ?? 0) > MAX_BUFFERED) return;
+    ws.send(publishPacket(this.topic, payload));
   }
 
   close(): void {
@@ -218,7 +267,7 @@ export interface MqttOptions {
   brokers?: string[];
   /** Fabrique de WebSocket (les tests y mettent la leur). */
   makeSocket?: (url: string) => WebSocket;
-  /** Nombre de courtiers chez qui on publie. */
+  /** Nombre de courtiers chez qui on publie (tous ceux qui sont ouverts par défaut). */
   publishTo?: number;
 }
 
@@ -230,14 +279,14 @@ export class MqttTransport implements Transport {
   private readonly wire = new Wire();
   private status: TransportStatus = 'connecting';
   private readonly publishTo: number;
-  /** Courtiers préférés pour publier : ceux qui se sont ouverts en premier. */
+  /** Courtiers ouverts, dans l'ordre où ils se sont ouverts (on publie chez les `publishTo` premiers). */
   private order: Broker[] = [];
 
   constructor(code: string, opts: MqttOptions = {}) {
     const topic = `empire-miner/v1/${code}`;
     const urls = opts.brokers ?? BROKERS;
     const makeSocket = opts.makeSocket ?? ((u: string) => new WebSocket(u, 'mqtt'));
-    this.publishTo = opts.publishTo ?? 2;
+    this.publishTo = opts.publishTo ?? urls.length;
     for (const url of urls) {
       const clientId = `em-${this.wire.id}-${this.brokers.length}`;
       const b: Broker = new Broker(
@@ -280,6 +329,11 @@ export class MqttTransport implements Transport {
       b.publish(payload);
       if (++n >= this.publishTo) break;
     }
+  }
+
+  /** L'application revient au premier plan : on vérifie que les courtiers répondent encore. */
+  wake(): void {
+    for (const b of this.brokers) b.wake();
   }
 
   close(): void {

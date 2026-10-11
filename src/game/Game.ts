@@ -162,7 +162,11 @@ export class Game {
     });
     document.addEventListener('visibilitychange', () => {
       if (document.hidden) this.autoSaveNow();
-      else this.keepAwake();
+      else {
+        this.keepAwake();
+        // Un téléphone qui se rallume a souvent perdu ses connexions sans le savoir : on vérifie tout de suite.
+        this.session?.wake();
+      }
     });
     try {
       this.sfx.setMuted(localStorage.getItem('empire-miner.muted') === '1');
@@ -436,11 +440,16 @@ export class Game {
     const peer = esc(s.peerName || (s.role === 'host' ? 'Invité' : 'Hôte'));
     let chip: string;
     let banner = '';
-    if (s.role === 'host' && !s.linked) chip = `<span class="dot wait"></span>Code <b class="code">${s.code}</b><span class="share">↗ Inviter</span><small>Touchez ici pour inviter un ami</small>`;
+    if (s.role === 'host' && !s.linked && s.dropped)
+      chip = `<span class="dot bad"></span>Ami hors ligne · <b class="code">${s.code}</b><small>Il revient tout seul avec ce code (touchez ici pour le renvoyer)</small>`;
+    else if (s.role === 'host' && !s.linked)
+      chip = `<span class="dot wait"></span>Code <b class="code">${s.code}</b><span class="share">↗ Inviter</span><small>Touchez ici pour inviter un ami</small>`;
     else if (s.status === 'syncing') chip = `<span class="dot wait"></span>Synchronisation…`;
     else if (s.status === 'lost') chip = `<span class="dot bad"></span>Connexion perdue`;
+    else if (s.reconnecting) chip = `<span class="dot bad"></span>Connexion perdue…`;
     else chip = `<span class="dot ${s.stalled ? 'wait' : 'ok'}"></span>À deux · <b>${peer}</b>`;
-    if (s.stalled && s.linked) banner = `En attente de l’autre joueur…<small>Connexion lente ou interrompue. La partie reprend toute seule.</small>`;
+    if (s.reconnecting) banner = `Connexion interrompue : nouvelle tentative…<small>La partie reprend toute seule dès que l’hôte répond.</small>`;
+    else if (s.stalled && s.linked) banner = `En attente de l’autre joueur…<small>Connexion lente ou interrompue. La partie reprend toute seule.</small>`;
     this.ui.setNet(chip, banner);
     this.renderer.peerNames = { [g.local === 0 ? 1 : 0]: s.peerName || (s.role === 'host' ? 'Invité' : 'Hôte') };
   }

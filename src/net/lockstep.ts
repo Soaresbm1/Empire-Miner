@@ -24,7 +24,23 @@ export const CHECK_EVERY = 120;
 export const MIN_DELAY = 8;
 /** Pas convenus vides au départ, identiques pour les deux joueurs. */
 export const START_LEAD = 8;
-export const MAX_DELAY = 30;
+/** Plus grande avance d'écriture (≈ 670 ms) : au-delà, le réseau est trop lent pour jouer ensemble. */
+export const MAX_DELAY = 40;
+/** Durée d'un pas de simulation (ms). */
+const STEP_MS = 1000 / 60;
+/** Une attente plus courte n'est que de la gigue ; plus longue, c'est une panne, pas de la latence. */
+const STALL_MIN_MS = 40;
+const STALL_MAX_MS = 1500;
+/** Une seule attente ne fait pas monter la demande de plus de ce nombre de pas (≈ 200 ms) : les suivantes compléteront si besoin. */
+const RAISE_MAX_STEPS = 12;
+/** Après une demande d'avance supplémentaire, on attend qu'elle fasse effet (le paquet voyage, l'autre écrit plus loin) avant d'en refaire une (ms). */
+const RAISE_SETTLE_MS = 1000;
+/**
+ * Calme nécessaire avant de redemander moins (ms), puis un pas de moins tous les `RELAX_EVERY_MS` : ce qu'on a demandé de trop
+ * se corrige, et si c'était juste, la première attente redemande aussitôt ce qu'il faut.
+ */
+const CALM_MS = 20000;
+const RELAX_EVERY_MS = 3000;
 /** Au plus tant d'actions par pas (le reste attend le pas suivant) : un pair malveillant ne peut pas saturer. */
 const MAX_ACTIONS_PER_FRAME = 24;
 
@@ -44,6 +60,8 @@ export interface Packet {
   fr: FrameWire[];
   /** Empreintes de contrôle : [pas, empreinte]. */
   d: [number, number][];
+  /** Avance d'écriture que l'émetteur demande à l'autre (pas) : c'est lui qui attend, pas l'autre. */
+  dl: number;
 }
 
 export interface Hooks {
@@ -79,9 +97,16 @@ export class Lockstep {
   /** Prochain pas à exécuter. */
   tick = 0;
   epoch = 0;
-  /** Avance d'écriture actuelle (pas). */
+  /**
+   * Avance d'écriture de mes entrées (pas) : c'est ce que l'autre me demande (`dl` de ses paquets), car c'est lui qui attend
+   * mes entrées. Ma propre avance n'y change rien pour mes attentes à moi.
+   */
   delay = MIN_DELAY;
-  /** Pas manqués faute d'entrée de l'autre (pour adapter `delay`). */
+  /** Avance d'écriture que je demande à l'autre, selon mes attentes (pas). */
+  ask = MIN_DELAY;
+  private lastRaise = -Infinity;
+  private lastRelax = 0;
+  /** Pas manqués faute d'entrée de l'autre (pour les essais). */
   stalls = 0;
   private authored = -1;
   private theirHave = -1;
@@ -212,7 +237,7 @@ export class Lockstep {
     for (const [t, f] of this.mine) if (t > this.ackedByPeer) fr.push([t, f.i, f.c]);
     fr.sort((a, b) => a[0] - b[0]);
     const d: [number, number][] = [...this.myDigests].slice(-4);
-    return { t: 'f', e: this.epoch, up: this.authored, ack: this.theirHave, fr, d };
+    return { t: 'f', e: this.epoch, up: this.authored, ack: this.theirHave, fr, d, dl: this.ask };
   }
 
   /** Paquet reçu de l'autre : on retient ses entrées, jusqu'où il a écrit, ce qu'il a bien reçu de nous, ses empreintes. */
@@ -230,6 +255,8 @@ export class Lockstep {
     }
     const up = Number(pk.up);
     if (Number.isInteger(up) && up > this.theirHave && up < this.tick + MAX_DELAY * 4) this.theirHave = up;
+    const dl = Number(pk.dl);
+    if (Number.isInteger(dl)) this.delay = Math.max(MIN_DELAY, Math.min(MAX_DELAY, dl));
     const ack = Number(pk.ack);
     if (Number.isInteger(ack) && ack > this.ackedByPeer) {
       this.ackedByPeer = ack;
@@ -254,9 +281,31 @@ export class Lockstep {
     if (mine !== theirs && this.desyncAt === null) this.desyncAt = tick;
   }
 
-  /** Allonge l'avance d'écriture quand les attentes se répètent, la raccourcit quand tout va bien (appelé de temps en temps). */
-  adapt(stallsSeen: number, calmSeconds: number): void {
-    if (stallsSeen >= 3 && this.delay < MAX_DELAY) this.delay = Math.min(MAX_DELAY, this.delay + 3);
-    else if (stallsSeen === 0 && calmSeconds >= 20 && this.delay > MIN_DELAY) this.delay = Math.max(MIN_DELAY, this.delay - 1);
+  /**
+   * Une attente de `ms` millisecondes vient de finir : les entrées de l'autre sont arrivées trop tard. Il doit écrire plus loin
+   * devant, d'autant de pas que j'ai attendu (plus un de marge) ; il l'apprend par le prochain paquet.
+   */
+  noteStall(ms: number, now: number): void {
+    if (ms < STALL_MIN_MS || ms > STALL_MAX_MS) return;
+    // La demande précédente n'a peut-être pas encore fait effet (le paquet voyage) : on ne s'emballe pas.
+    if (now - this.lastRaise < RAISE_SETTLE_MS) return;
+    this.ask = Math.min(MAX_DELAY, this.ask + Math.min(RAISE_MAX_STEPS, Math.ceil(ms / STEP_MS) + 1));
+    this.lastRaise = now;
+  }
+
+  /** Appelé de temps en temps : après un long calme on redemande moins d'avance, un pas à la fois. */
+  relax(now: number): void {
+    if (this.ask <= MIN_DELAY) return;
+    if (now - this.lastRaise < CALM_MS || now - this.lastRelax < RELAX_EVERY_MS) return;
+    this.lastRelax = now;
+    this.ask--;
+  }
+
+  /** Après une resynchronisation, le réseau est le même : on garde ce qu'on a appris. */
+  inherit(from: Lockstep): void {
+    this.ask = from.ask;
+    this.delay = from.delay;
+    this.lastRaise = from.lastRaise;
+    this.lastRelax = from.lastRelax;
   }
 }
