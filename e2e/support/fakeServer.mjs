@@ -9,6 +9,8 @@ import { createServer as createVite } from 'vite';
 export async function startFakeFirebase() {
   const vite = await createVite({ logLevel: 'silent', server: { middlewareMode: true, hmr: false, watch: null }, appType: 'custom', optimizeDeps: { noDiscovery: true } });
   const { FakeFirebase } = await vite.ssrLoadModule('/tests/support/fakeFirebase.ts');
+  // Le projet Firebase est-il renseigné dans le jeu (src/cloud/config.ts) ? Les essais s'y adaptent.
+  const { FIREBASE } = await vite.ssrLoadModule('/src/cloud/config.ts');
   const fake = new FakeFirebase();
   const cors = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': 'authorization,content-type', 'Access-Control-Allow-Methods': 'GET,POST,PATCH,DELETE,OPTIONS', 'Access-Control-Max-Age': '600' };
   const http = createHttp((req, res) => {
@@ -34,6 +36,7 @@ export async function startFakeFirebase() {
   const port = http.address().port;
   return {
     fake,
+    configured: !!(FIREBASE.apiKey && FIREBASE.projectId),
     url: `http://127.0.0.1:${port}`,
     async close() {
       http.closeAllConnections?.();

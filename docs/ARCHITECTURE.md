@@ -440,5 +440,6 @@ n'a changé : la version du jeu à deux (`PROTOCOL`) n'en dépend pas.
   (formulaire, état, deux parties, partie mise de côté, suppression), HTML pur.
 - **Essais** : `tests/support/fakeFirebase.ts` reproduit les trois API (réponses et erreurs de Google, jetons qui expirent, révisions,
   préconditions, règles) ; `tests/cloud-{client,reconcile,sync,misc}.test.ts` ; `e2e/cloud.mjs` (deux profils de navigateur, faux serveur HTTP
-  `e2e/support/fakeServer.mjs`) ; `e2e/phone.mjs` (écrans du compte sur 11 tailles d'écran). Le vrai Firebase n'est pas joignable depuis
-  l'environnement de développement : les formes des requêtes suivent la documentation de Google.
+  `e2e/support/fakeServer.mjs`) ; `e2e/phone.mjs` (écrans du compte sur 11 tailles d'écran). Le faux serveur ne reçoit jamais les identifiants
+  du vrai projet (`TEST_CONFIG`). `tests-net/firebase.check.ts` est l'essai **réel** : un compte jetable dans le vrai projet (création,
+  jeton, écriture, préconditions, règles, deux appareils), supprimé ensuite.

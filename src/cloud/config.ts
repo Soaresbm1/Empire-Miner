@@ -54,11 +54,14 @@ export function localEndpoints(raw: string): CloudEndpoints | null {
   return { identity: `${url.origin}/identity/v1`, token: `${url.origin}/token/v1`, firestore: `${url.origin}/firestore/v1` };
 }
 
+/** Les identifiants que reçoit un faux serveur de test : jamais ceux du vrai projet. */
+export const TEST_CONFIG: CloudConfig = { apiKey: 'cle-d-essai', projectId: 'projet-d-essai' };
+
 /** Le compte est-il disponible ? Oui si le projet est renseigné, ou si un faux serveur local est désigné en mode `debug`. */
 export function cloudSetup(search: string, configured: CloudConfig = FIREBASE): CloudSetup | null {
   const params = new URLSearchParams(search);
   const fake = params.has('debug') ? localEndpoints(params.get('cloud') ?? '') : null;
-  if (fake) return { config: configured.apiKey ? configured : { apiKey: 'cle-d-essai', projectId: 'projet-d-essai' }, endpoints: fake, local: true };
+  if (fake) return { config: TEST_CONFIG, endpoints: fake, local: true };
   if (!configured.apiKey || !configured.projectId) return null;
   return { config: configured, endpoints: GOOGLE_ENDPOINTS, local: false };
 }

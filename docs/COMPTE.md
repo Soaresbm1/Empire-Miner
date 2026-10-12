@@ -88,6 +88,11 @@ L'écran *Compte* dit pourquoi, avec le détail technique en petit (à transmett
 - `node e2e/cloud.mjs` (après `npm run build`) : **deux appareils** (deux profils de navigateur) et le faux Firebase derrière un petit
   serveur HTTP (`?debug&cloud=http://127.0.0.1:PORT`, réservé à cette machine : un lien piégé ne peut pas envoyer un mot de passe ailleurs).
 - `node e2e/phone.mjs` vérifie aussi les écrans du compte sur 11 tailles d'écran.
+- Les essais ci-dessus ne parlent jamais au vrai Firebase (le faux serveur reçoit des identifiants d'essai, jamais ceux du projet).
 
-**Pas vérifié** : le vrai Firebase (le bac à sable de développement n'y accède pas). Les formes des requêtes et des erreurs suivent la
-documentation de Google ; le premier essai réel est à faire après l'étape 5 (créer un compte, sauvegarder, se connecter ailleurs).
+**Essai réel** : `npx vite-node tests-net/firebase.check.ts` (avec `NODE_USE_ENV_PROXY=1` derrière un mandataire) crée un compte
+jetable dans le **vrai** projet et vérifie de bout en bout ce que le jeu fait avec Google : création, mauvais mot de passe, jeton renouvelé,
+envoi et lecture de la partie, écriture périmée refusée, règles de sécurité (document d'un autre, taille, accès sans jeton), puis la
+synchronisation entre deux appareils (reprise, avance, question quand les deux ont joué) ; il supprime ensuite le compte et sa partie.
+Aucun e-mail n'est envoyé. À relancer après tout changement des règles ou de la configuration. Si Google répond « API key not valid »,
+la clé de `src/cloud/config.ts` est mal recopiée : la reprendre avec l'icône « copier » (*Paramètres du projet* → *Général* → *Vos applications*).

@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { CloudError } from '../src/cloud/client';
-import { GOOGLE_ENDPOINTS, cloudSetup, localEndpoints } from '../src/cloud/config';
+import { GOOGLE_ENDPOINTS, TEST_CONFIG, cloudSetup, localEndpoints } from '../src/cloud/config';
 import { deviceName } from '../src/cloud/device';
 import { packSave, unpackSave } from '../src/cloud/pack';
 import { ASIDE_KEY, CloudStore, SLOT_KEY, browserSaves } from '../src/cloud/store';
@@ -25,23 +25,28 @@ describe('compte : réglages', () => {
   });
 
   it('pas de compte tant que le projet n’est pas renseigné', () => {
-    expect(cloudSetup('')).toBeNull();
-    expect(cloudSetup('?debug')).toBeNull();
+    const none = { apiKey: '', projectId: '' };
+    expect(cloudSetup('', none)).toBeNull();
+    expect(cloudSetup('?debug', none)).toBeNull();
+    expect(cloudSetup('', { apiKey: 'AIza-cle', projectId: '' })).toBeNull();
+    expect(cloudSetup('', { apiKey: '', projectId: 'mon-projet' })).toBeNull();
     // Le faux serveur ne s’active qu’en mode debug, et chez soi.
-    expect(cloudSetup('?cloud=http://127.0.0.1:5123')).toBeNull();
-    expect(cloudSetup('?debug&cloud=https://pirate.example')).toBeNull();
+    expect(cloudSetup('?cloud=http://127.0.0.1:5123', none)).toBeNull();
+    expect(cloudSetup('?debug&cloud=https://pirate.example', none)).toBeNull();
   });
 
-  it('le projet renseigné donne les adresses de Google ; le faux serveur local les remplace en mode debug', () => {
+  it('le projet renseigné donne les adresses de Google ; un faux serveur local, des identifiants d’essai, jamais ceux du projet', () => {
     const config = { apiKey: 'AIza-cle', projectId: 'mon-projet' };
     expect(cloudSetup('', config)).toEqual({ config, endpoints: GOOGLE_ENDPOINTS, local: false });
+    // Sans `debug`, ou hors de cette machine : on reste chez Google, jamais chez l’adresse donnée.
     expect(cloudSetup('?cloud=http://127.0.0.1:5123', config)?.local).toBe(false);
+    expect(cloudSetup('?debug&cloud=https://pirate.example', config)).toEqual({ config, endpoints: GOOGLE_ENDPOINTS, local: false });
     const local = cloudSetup('?debug&cloud=http://127.0.0.1:5123', config);
     expect(local?.local).toBe(true);
     expect(local?.endpoints.firestore).toBe('http://127.0.0.1:5123/firestore/v1');
-    expect(local?.config).toEqual(config);
-    // Même sans projet : les essais fournissent leur propre clé.
-    expect(cloudSetup('?debug&cloud=http://127.0.0.1:5123')?.config.projectId).toBe('projet-d-essai');
+    expect(local?.config).toEqual(TEST_CONFIG);
+    expect(JSON.stringify(local)).not.toContain('AIza-cle');
+    expect(cloudSetup('?debug&cloud=http://127.0.0.1:5123', { apiKey: '', projectId: '' })?.config).toEqual(TEST_CONFIG);
     expect(GOOGLE_ENDPOINTS.identity).toMatch(/^https:\/\/identitytoolkit\.googleapis\.com\//);
   });
 });

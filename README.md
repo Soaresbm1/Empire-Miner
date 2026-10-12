@@ -419,6 +419,7 @@ node e2e/touch.mjs             # gestes tactiles réels (CDP) : stick, Miner, Ag
 node e2e/panels.mjs            # fenêtres au doigt sur un jeu qui tourne : défilement, toucher long, contenu exact, rien ne glisse de côté (après un build)
 node e2e/cloud.mjs             # compte : deux appareils (deux profils de navigateur) et un faux Firebase local : création, reprise sur appareil neuf, parties qui divergent, réseau coupé, suppression (après un build)
 npx vite-node tests-net/mqtt.check.ts   # client MQTT contre un vrai courtier local (aedes)
+npx vite-node tests-net/firebase.check.ts   # compte : le VRAI Firebase, avec un compte jetable supprimé ensuite (réseau nécessaire ; NODE_USE_ENV_PROXY=1 derrière un mandataire)
 ```
 
 Le test de bout en bout rejoue la tranche verticale : lancer une partie, descendre, miner, ramasser,

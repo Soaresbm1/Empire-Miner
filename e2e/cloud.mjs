@@ -86,15 +86,31 @@ const B = await device('appareil B');
 const A_ = A.page;
 const B_ = B.page;
 
-// ---------------------------------------------------------------- sans projet, pas de compte
+// ---------------------------------------------------------------- le projet Firebase du jeu, ou pas
 {
   const plain = await (await browser.newContext()).newPage();
   await plain.goto(`${url.replace(/\/$/, '')}/?debug`);
   await plain.waitForSelector('[data-action="new"]');
-  check(await plain.evaluate(() => window.__EM.cloud === null && !document.querySelector('[data-action="account"]')), 'sans projet Firebase renseigné, le bouton « Compte » n’existe pas');
+  const has = await plain.evaluate(() => window.__EM.cloud !== null && !!document.querySelector('[data-action="account"]'));
+  check(has === fb.configured, fb.configured ? 'le projet Firebase est renseigné : le bouton « Compte » existe sans rien ajouter à l’adresse' : 'sans projet Firebase renseigné, le bouton « Compte » n’existe pas');
+
+  // Un faux serveur hors de cette machine n'est jamais joint : ni identifiants envoyés à cette adresse, ni compte sans projet.
+  const asked = [];
+  plain.on('request', (r) => asked.push(r.url()));
+  await plain.route(/googleapis\.com/, (route) => route.abort());
   await plain.goto(`${url.replace(/\/$/, '')}/?debug&cloud=https://pirate.example`);
   await plain.waitForSelector('[data-action="new"]');
-  check(await plain.evaluate(() => window.__EM.cloud === null), 'un faux serveur hors de cette machine est refusé');
+  if (!fb.configured) {
+    check(await plain.evaluate(() => window.__EM.cloud === null), 'un faux serveur hors de cette machine est refusé');
+  } else {
+    await plain.click('#menu-root [data-action="account"]');
+    await plain.fill('#acct-email', 'ami@exemple.fr');
+    await plain.fill('#acct-pass', 'motdepasse1');
+    await plain.click('[data-action="accountIn"]');
+    await until(plain, () => /Pas de connexion|pas disponible|incorrect/.test(document.querySelector('.account-menu')?.textContent ?? ''), null, 8000);
+    check(!asked.some((u) => new URL(u).hostname === 'pirate.example'), 'un faux serveur hors de cette machine n’est jamais joint');
+    check(asked.some((u) => new URL(u).hostname === 'identitytoolkit.googleapis.com'), 'la connexion passe par le vrai service de Google');
+  }
   await plain.context().close();
 }
 
