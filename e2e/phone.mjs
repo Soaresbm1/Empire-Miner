@@ -214,6 +214,8 @@ const ACCOUNT_MODELS = [
   ['connecte', { view: { ...VIEW, account: SIGNED, cloud: { ...BRIEF, rev: 'r', device: 'téléphone Android' }, syncedAt: Date.parse('2026-10-12T10:30:00') }, form: FORM, canTakeAside: true }],
   ['connecte-cote', { view: { ...VIEW, account: SIGNED, cloud: { ...BRIEF, rev: 'r', device: 'iPhone' }, aside: { ...BRIEF, time: 900, money: 4200 }, syncedAt: Date.parse('2026-10-12T10:30:00') }, form: FORM, canTakeAside: true }],
   ['deux-parties', { view: { ...VIEW, account: SIGNED, ask: { why: 'diverged', cloud: { ...BRIEF, rev: 'r', device: 'Windows' }, local: { ...BRIEF, time: 3000, money: 999 } } }, form: FORM, canTakeAside: true }],
+  // La phrase la plus longue de la question, et deux parties de graines différentes.
+  ['autre-partie', { view: { ...VIEW, account: SIGNED, ask: { why: 'replaced', cloud: { ...BRIEF, seed: 2, rev: 'r', device: 'téléphone Android' }, local: { ...BRIEF, time: 3000, money: 999 } } }, form: FORM, canTakeAside: true }],
   ['supprimer', { view: { ...VIEW, account: SIGNED }, form: { ...FORM, confirmDelete: true, error: 'E-mail ou mot de passe incorrect.' }, canTakeAside: true }],
 ];
 
@@ -316,7 +318,21 @@ for (const dev of DEVICES) {
       await shot(page, dev, `02-compte-${label}`);
       checkScrollMenu(dev, `compte · ${label}`, await page.evaluate(MENU_FIT, '#menu-root .menu'));
     }
-    await page.evaluate(() => window.__EM.ui.hideMenu());
+    // « Confirmer : écraser la sauvegarde, compte compris » (connecté) : le libellé est plus long, il peut passer sur deux lignes.
+    await page.evaluate(() => {
+      const ui = window.__EM.ui;
+      ui.setAccountLabel({ text: 'Compte ✓', title: 'Connecté', on: true });
+      ui.showMainMenu({ savedAt: '2026-10-12T10:12:00.000Z', money: 1234567, depth: 187 }, true);
+    });
+    await page.waitForTimeout(200);
+    await shot(page, dev, '02-confirmer-connecte');
+    const confirm = await page.evaluate(MENU_FIT, '#menu-root .menu');
+    checkScrollMenu(dev, 'menu principal · confirmer l’écrasement (connecté)', confirm);
+    check(await page.evaluate(() => /compte compris/.test(document.querySelector('#menu-root [data-action="new"]')?.textContent ?? '')), `${dev.id} · confirmer l’écrasement : le libellé parle du compte`);
+    await page.evaluate(() => {
+      window.__EM.ui.setAccountLabel({ text: 'Compte', title: '', on: false });
+      window.__EM.ui.hideMenu();
+    });
   }
 
   // ---------------------------------------------------------------- partie

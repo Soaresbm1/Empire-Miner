@@ -114,6 +114,32 @@ const B_ = B.page;
   await plain.context().close();
 }
 
+// ---------------------------------------------------------------- réseau lent : l'écran du compte ne revient pas par-dessus la partie
+// La connexion s'affiche dès que le service a répondu ; la première synchronisation vient après. Quitter l'écran entre les deux
+// (comme avec les centaines de millisecondes de Google) ne doit pas le faire réapparaître par-dessus le menu ou la partie.
+{
+  const slow = await startFakeFirebase();
+  slow.latency = 600;
+  const S = await device('réseau lent');
+  const p = S.page;
+  await p.goto(`${url.replace(/\/$/, '')}/?debug&net=local&cloud=${encodeURIComponent(slow.url)}`);
+  await p.waitForSelector('#menu-root [data-action="account"]');
+  await p.click('#menu-root [data-action="account"]');
+  await p.fill('#acct-email', 'lent@exemple.fr');
+  await p.fill('#acct-pass', PASS);
+  await p.click('[data-action="accountUp"]');
+  check(await waitAccount(p, 'Connecté'), 'réseau lent : la connexion s’affiche dès que le service a répondu');
+  await p.click('[data-action="accountBack"]');
+  await p.waitForSelector('[data-action="new"]');
+  await p.click('[data-action="new"]');
+  await until(p, () => window.__EM.mode === 'playing');
+  check(await until(p, () => window.__EM.cloud.view.phase !== 'busy', null, 15000), 'réseau lent : la première synchronisation se termine');
+  await p.waitForTimeout(500);
+  check(await p.evaluate(() => !document.querySelector('.account-menu') && window.__EM.mode === 'playing'), 'réseau lent : l’écran du compte ne revient pas par-dessus la partie');
+  await S.ctx.close();
+  await slow.close();
+}
+
 // ---------------------------------------------------------------- A : créer le compte
 await A_.goto(base);
 await A_.waitForSelector('#menu-root [data-action="account"]');
@@ -283,6 +309,35 @@ await B_.screenshot({ path: `${SHOTS}cloud-09-deux-parties-en-jeu.png` });
 await B_.click('[data-action="accountKeep"][data-arg="cloud"]');
 check(await until(B_, () => window.__EM.mode === 'playing' && window.__EM.state.money === 2500), 'B prend la partie du compte (2 500 $) et continue');
 
+// ---------------------------------------------------------------- une nouvelle partie ailleurs ne fait pas disparaître celle-ci
+// A, connecté, démarre une nouvelle partie : la confirmation prévient que celle du compte sera remplacée aussi.
+const seedOf = () => Number(docOf()?.fields.seed?.integerValue);
+const seedBefore = seedOf();
+await openPause(A_);
+await A_.click('.pause-menu [data-action="quit"]');
+await A_.waitForSelector('[data-action="new"]');
+await A_.click('[data-action="new"]');
+const confirmText = await A_.textContent('#menu-root [data-action="new"]');
+check(/écraser la sauvegarde, compte compris/.test(confirmText), 'connecté, la confirmation de « Nouvelle partie » prévient que la sauvegarde du compte est écrasée aussi');
+await A_.screenshot({ path: `${SHOTS}cloud-10-nouvelle-partie-connecte.png` });
+await A_.click('[data-action="new"]');
+await until(A_, () => window.__EM.mode === 'playing');
+const freshMoney = await money(A_);
+await saveNow(A_);
+check(await untilNode(() => seedOf() !== seedBefore), 'la nouvelle partie de A prend la place de l’ancienne sur le compte');
+await A_.click('.pause-menu [data-action="resume"]');
+
+// B joue encore l’ancienne partie : ce n’en est pas la suite, le jeu demande au lieu de la remplacer.
+await openPause(B_);
+await B_.click('.pause-menu [data-action="account"]');
+await B_.waitForSelector('[data-action="accountKeep"]');
+check(/Une autre partie a été envoyée sur votre compte/.test(await accountText(B_)), 'B : une autre partie a pris la place sur le compte, le jeu le dit');
+check((await money(B_)) === 2500, 'B joue toujours sa partie (2 500 $) : rien n’a été remplacé');
+await B_.screenshot({ path: `${SHOTS}cloud-11-autre-partie.png` });
+await B_.click('[data-action="accountKeep"][data-arg="cloud"]');
+check(await until(B_, (m) => window.__EM.mode === 'playing' && window.__EM.state.money === m, freshMoney), 'B prend la nouvelle partie du compte');
+check((await B_.evaluate(() => window.__EM.cloud.view.aside?.money)) === 2500, 'et sa partie d’avant (2 500 $) est mise de côté');
+
 // ---------------------------------------------------------------- se déconnecter, supprimer le compte
 await openPause(B_);
 await B_.click('.pause-menu [data-action="account"]');
@@ -302,6 +357,11 @@ check(await B_.evaluate(() => !!localStorage.getItem('empire-miner.save') && !lo
 await B_.click('[data-action="accountBack"]');
 await B_.waitForSelector('.pause-menu');
 check(await B_.evaluate(() => /^Compte$/.test(document.querySelector('.pause-menu [data-action="account"]').textContent.trim())), 'le bouton redevient « Compte »');
+await B_.click('.pause-menu [data-action="quit"]');
+await B_.waitForSelector('[data-action="new"]');
+await B_.click('[data-action="new"]');
+const plainConfirm = await B_.textContent('#menu-root [data-action="new"]');
+check(/écraser la sauvegarde/.test(plainConfirm) && !/compte/.test(plainConfirm), 'sans compte connecté, la confirmation ne parle pas du compte');
 
 // A se déconnecte (son compte n'existe plus côté serveur, la déconnexion est locale).
 await openPause(A_).catch(() => undefined);

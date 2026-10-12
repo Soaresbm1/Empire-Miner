@@ -82,7 +82,7 @@ export class UI {
   /** Une version plus récente du jeu est publiée : les menus proposent de la prendre. */
   private updateReady = false;
   /** Texte et info-bulle du bouton « Compte » des menus ; null : pas de compte dans cette version du jeu (le bouton n'existe pas). */
-  private accountLabel: { text: string; title: string } | null = null;
+  private accountLabel: { text: string; title: string; on?: boolean } | null = null;
   private readonly hud = $('#hud');
   private readonly panelRoot = $('#panel-root');
   private readonly menuRoot = $('#menu-root');
@@ -441,8 +441,17 @@ export class UI {
     return `<div class="btn-row"><button class="btn" data-action="account" title="${esc(a.title)}">${esc(a.text)}</button>${other}</div>`;
   }
 
-  /** Change le texte du bouton « Compte » (null : le compte n'est pas disponible), jusque dans le menu ouvert. */
-  setAccountLabel(label: { text: string; title: string } | null): void {
+  /**
+   * Après « Confirmer : écraser la sauvegarde » : connecté, la partie gardée sur le compte est remplacée aussi (la nouvelle partie
+   * part au compte à la prochaine sauvegarde), et le joueur doit le savoir avant de confirmer. Dans le libellé même : une ligne
+   * `<small>` disparaît des menus sur les écrans courts.
+   */
+  private overwritesAccount(): string {
+    return this.accountLabel?.on ? ', compte compris' : '';
+  }
+
+  /** Change le texte du bouton « Compte » (null : le compte n'est pas disponible), jusque dans le menu ouvert. `on` : un compte est connecté. */
+  setAccountLabel(label: { text: string; title: string; on?: boolean } | null): void {
     this.accountLabel = label;
     const b = this.menuRoot.querySelector('[data-action="account"]');
     if (b && label) {
@@ -675,7 +684,7 @@ export class UI {
       <div class="menu-buttons">
         ${this.updateButton()}
         ${save ? `<button class="btn primary big" data-action="continue">Continuer${saveInfo}</button>` : ''}
-        <button class="btn big ${save ? (confirmNew ? 'danger' : '') : 'primary'}" data-action="new">${confirmNew ? 'Confirmer : écraser la sauvegarde' : 'Nouvelle partie'}</button>
+        <button class="btn big ${save ? (confirmNew ? 'danger' : '') : 'primary'}" data-action="new">${confirmNew ? `Confirmer : écraser la sauvegarde${this.overwritesAccount()}` : 'Nouvelle partie'}</button>
         ${CAN_PLAY2 ? '<button class="btn big" data-action="play2" title="Une mine, deux mineurs : sur deux téléphones ou deux ordinateurs">Jouer à deux<small>avec un ami, sur son propre appareil</small></button>' : ''}
         ${this.withAccount('<button class="btn" data-action="import" title="Reprendre une partie exportée dans un fichier">Importer…</button>')}
         <button class="btn" data-action="help">Commandes</button>
@@ -753,7 +762,7 @@ export class UI {
           <h3>Inviter un ami</h3>
           <p class="muted">Vous créez la partie et envoyez le lien (ou le code à 5 lettres) à votre ami. Elle est sauvegardée chez vous.</p>
           ${opts.hasSave ? '<button class="btn primary big" data-action="hostSave">Reprendre ma partie à deux</button>' : ''}
-          <button class="btn ${opts.confirmNew ? 'danger' : opts.hasSave ? '' : 'primary big'}" data-action="hostNew">${opts.confirmNew ? 'Confirmer : écraser la sauvegarde' : 'Nouvelle partie à deux'}</button>
+          <button class="btn ${opts.confirmNew ? 'danger' : opts.hasSave ? '' : 'primary big'}" data-action="hostNew">${opts.confirmNew ? `Confirmer : écraser la sauvegarde${this.overwritesAccount()}` : 'Nouvelle partie à deux'}</button>
         </div>
         <div class="play-box">
           <h3>Rejoindre un ami</h3>

@@ -424,14 +424,18 @@ n'a changé : la version du jeu à deux (`PROTOCOL`) n'en dépend pas.
 - `reconcile.ts` : la décision, pure (`nothing`, `adopt`, `push`, `pull`, `ask`), à partir de la partie de l'appareil, de celle du compte et
   du **dernier échange réussi** de cet appareil (`SyncLink` : révision, graine, temps de jeu, heure de l'appareil). Une sauvegarde de
   l'appareil faite moins de 90 s après cet échange (`DRIFT_MS`, la dernière sauvegarde d'une page qu'on ferme) n'est pas un « travail à
-  part » : sans cette marge, changer d'appareil poserait la question à chaque fois. `recognizeOwn` : le compte contient notre propre dernier
-  envoi (page fermée en route, réponse perdue) : ce n'est pas un autre appareil.
+  part » : sans cette marge, changer d'appareil poserait la question à chaque fois. On ne reprend en silence que **la suite** de la partie de
+  l'appareil (même graine) : une autre partie arrivée sur le compte (nouvelle partie ou import ailleurs) pose la question `replaced`, car la
+  prendre ferait disparaître celle de l'appareil. `recognizeOwn` : le compte contient notre propre dernier envoi (page fermée en route,
+  réponse perdue) : ce n'est pas un autre appareil.
 - `sync.ts` : `CloudSync`, une file d'opérations (une à la fois). `exchange` lit le résumé du compte, décide, agit (`push`, `pull`) ou pose
   la question (`ask`) ; après une sauvegarde de l'appareil (`localSaved`), un envoi direct d'une seule requête (`fastPush`), repli sur le tour
   complet s'il est refusé. Jamais de remplacement de la partie en cours de jeu (`hooks.playing`) : une partie plus récente du compte devient
   la question « newer ». `resolve(choix)` : la partie qu'on ne garde pas est mise de côté **et vérifiée** avant que l'autre soit remplacée ;
   une partie du compte illisible par cette version (`validate` = `deserialize`) n'est jamais écrite à la place d'une bonne, ni écrasée.
-  `leaving()` (page fermée, arrière-plan) envoie la dernière partie emballée par une requête `keepalive`. Jeton refusé : renouvelé et réessayé
+  `leaving()` (page fermée, arrière-plan) envoie la dernière partie emballée par une requête `keepalive`. Après une attente de réseau, l'écran
+  du compte n'est redessiné que s'il est encore affiché (`Game.refreshAccount`) : la connexion s'affiche dès que Google répond, la première
+  synchronisation vient après, et le joueur a pu quitter l'écran entre-temps. Jeton refusé : renouvelé et réessayé
   une fois ; renouvellement refusé : session terminée, avec un avis. Panne réseau : reste sur l'appareil, nouvel essai au retour du réseau.
 - `store.ts` : session (jeton de renouvellement, jamais le mot de passe), souvenir des échanges, emplacements de sauvegarde (mêmes clés que
   `save/save.ts`, vérifiées par un essai) et partie mise de côté.
@@ -441,5 +445,8 @@ n'a changé : la version du jeu à deux (`PROTOCOL`) n'en dépend pas.
 - **Essais** : `tests/support/fakeFirebase.ts` reproduit les trois API (réponses et erreurs de Google, jetons qui expirent, révisions,
   préconditions, règles) ; `tests/cloud-{client,reconcile,sync,misc}.test.ts` ; `e2e/cloud.mjs` (deux profils de navigateur, faux serveur HTTP
   `e2e/support/fakeServer.mjs`) ; `e2e/phone.mjs` (écrans du compte sur 11 tailles d'écran). Le faux serveur ne reçoit jamais les identifiants
-  du vrai projet (`TEST_CONFIG`). `tests-net/firebase.check.ts` est l'essai **réel** : les autorisations CORS de Google, puis un compte jetable dans
-  le vrai projet (création, jeton, écriture, préconditions, règles, deux appareils), supprimé ensuite.
+  du vrai projet (`TEST_CONFIG`) ; il peut répondre avec retard (`latency`) pour reproduire la lenteur de Google. `tests-net/firebase.check.ts`
+  est l'essai **réel** : les autorisations CORS de Google, puis un compte jetable dans le vrai projet (création, jeton, écriture,
+  préconditions, règles, deux appareils), supprimé ensuite. `tests-net/browser.check.mjs` fait de même **dans un navigateur** : le jeu de `dist/`
+  servi à son adresse publique, les requêtes vers Google relayées par Node (le Chromium d'un bac à sable ne fait pas confiance au certificat de
+  son mandataire, Node si).

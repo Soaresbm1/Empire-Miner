@@ -49,6 +49,7 @@ function facts(b: Brief, device = '', tag = ''): string {
 const WHY: Record<Ask['why'], string> = {
   first: 'Cet appareil a déjà une partie, et votre compte en garde une autre.',
   diverged: 'Vous avez joué ici et ailleurs depuis la dernière synchronisation : les deux parties ont avancé.',
+  replaced: 'Une autre partie a été envoyée sur votre compte depuis un autre appareil (une nouvelle partie, par exemple) : ce n’est pas la suite de celle-ci.',
   newer: 'Votre compte contient une partie plus récente, venue d’un autre appareil. Vous jouez en ce moment l’ancienne.',
 };
 

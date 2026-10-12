@@ -32,9 +32,18 @@ describe('compte : que faire de deux parties', () => {
     expect(reconcile(brief(9, 5), cloud(1, 50, 'r1'), link('r1', 1, 50))).toEqual({ do: 'push' });
   });
 
-  it('le compte a avancé ailleurs et l’appareil n’a pas bougé : on prend celle du compte', () => {
+  it('le compte a avancé ailleurs et l’appareil n’a pas bougé : on prend celle du compte (c’est la suite de la nôtre)', () => {
     expect(reconcile(brief(1, 50), cloud(1, 90, 'r2'), link('r1', 1, 50))).toEqual({ do: 'pull' });
-    expect(reconcile(brief(1, 50), cloud(7, 10, 'r2'), link('r1', 1, 50))).toEqual({ do: 'pull' });
+  });
+
+  it('mais une AUTRE partie sur le compte (nouvelle partie ou import ailleurs) ne remplace pas celle de l’appareil en silence : on demande', () => {
+    expect(reconcile(brief(1, 50), cloud(7, 10, 'r2'), link('r1', 1, 50))).toEqual({ do: 'ask', why: 'replaced' });
+    // Même plus avancée que la nôtre : ce n’est pas la suite de la nôtre.
+    expect(reconcile(brief(1, 50), cloud(7, 9000, 'r2'), link('r1', 1, 50))).toEqual({ do: 'ask', why: 'replaced' });
+  });
+
+  it('un appareil sans partie prend celle du compte, quelle qu’elle soit (rien à remplacer)', () => {
+    expect(reconcile(null, cloud(7, 10, 'r2'), link('r1', 1, 50))).toEqual({ do: 'pull' });
   });
 
   it('les deux ont avancé chacun de leur côté : on demande', () => {
@@ -70,6 +79,10 @@ describe('compte : que faire de deux parties', () => {
       expect(reconcile({ ...at40s(10), savedAt: 'n’importe quoi' }, cloud(1, 90, 'r2'), link('r1', 1, 50, at))).toEqual({ do: 'ask', why: 'diverged' });
     });
 
+    it('même la dernière sauvegarde d’une page fermée ne laisse pas une autre partie prendre la place de la nôtre', () => {
+      expect(reconcile(at40s(40), cloud(7, 90, 'r2'), link('r1', 1, 50, at))).toEqual({ do: 'ask', why: 'replaced' });
+    });
+
     it('une marge nulle désactive la tolérance ; un appareil qui n’a jamais parlé au compte demande toujours', () => {
       expect(reconcile(at40s(1), cloud(1, 90, 'r2'), link('r1', 1, 50, at), 0)).toEqual({ do: 'ask', why: 'diverged' });
       expect(reconcile(at40s(1), cloud(1, 90, 'r2'), null)).toEqual({ do: 'ask', why: 'first' });
@@ -97,7 +110,9 @@ describe('compte : que faire de deux parties', () => {
       const ctx = JSON.stringify({ ls, lt, cs, ct, rev, lk });
       if (!same && localMoved && cloudMoved) expect(plan, ctx).toBe('ask');
       if (plan === 'push') expect(!same && localMoved && !cloudMoved, ctx).toBe(true);
-      if (plan === 'pull') expect(!same && !localMoved && cloudMoved, ctx).toBe(true);
+      // On ne reprend en silence que la suite de la partie de l’appareil (même graine) : jamais une autre partie.
+      if (plan === 'pull') expect(!same && !localMoved && cloudMoved && ls === cs, ctx).toBe(true);
+      if (!same && !localMoved && cloudMoved && ls !== cs) expect(plan, ctx).toBe('ask');
     }
   });
 });

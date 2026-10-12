@@ -21,9 +21,10 @@ export interface Ask {
   /**
    * first : cet appareil n'avait jamais parlé à ce compte et a déjà une autre partie ·
    * diverged : les deux ont avancé de leur côté depuis leur dernier échange ·
-   * newer : le compte a une partie plus récente, venue d'un autre appareil, pendant que l'on jouait.
+   * replaced : une autre partie a pris la place, sur le compte, de celle que cet appareil connaissait (nouvelle partie ou import
+   *   ailleurs) · newer : le compte a une partie plus récente, venue d'un autre appareil, pendant que l'on jouait.
    */
-  why: 'first' | 'diverged' | 'newer';
+  why: 'first' | 'diverged' | 'replaced' | 'newer';
   cloud: CloudBrief;
   local: Brief;
 }

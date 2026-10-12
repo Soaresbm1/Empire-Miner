@@ -41,6 +41,9 @@ Le projet de ce dépôt (`empire-miner`) est renseigné ; la mise en place ci-de
 - **Deux parties qui diffèrent** (on a joué ici et ailleurs sans se synchroniser, ou on se connecte pour la première fois sur un appareil
   qui a déjà une autre partie) : le jeu montre les deux (date, argent, profondeur, temps de jeu) et **demande laquelle garder**. L'autre
   n'est pas perdue : elle est **mise de côté** (écran *Compte* → *La reprendre*, depuis le menu principal).
+- **Une autre partie sur le compte** (une nouvelle partie ou un import fait sur un autre appareil) ne remplace jamais en silence celle de
+  cet appareil : le jeu demande laquelle garder, comme ci-dessus. Et connecté, « Nouvelle partie » le dit avant d'écraser : *Confirmer :
+  écraser la sauvegarde, compte compris*.
 - *Se déconnecter* garde la partie sur l'appareil. *Supprimer mon compte* efface le compte et la partie en ligne (mot de passe redemandé).
 
 ## Vie privée
@@ -67,7 +70,8 @@ serveur) et la partie échangée (graine, temps de jeu). De là (`reconcile.ts`,
 | vide | une partie | l'envoyer |
 | une partie | aucune | la prendre |
 | inchangé depuis le dernier échange | a avancé | l'envoyer |
-| a changé | n'a pas bougé, ou a seulement fait sa dernière sauvegarde (moins de 90 s après le dernier échange) | prendre celle du compte (ce que l'appareil avait en plus, au plus quelques dizaines de secondes de jeu, n'est pas gardé) |
+| a changé, **c'est la suite de la partie de l'appareil** (même graine) | n'a pas bougé, ou a seulement fait sa dernière sauvegarde (moins de 90 s après le dernier échange) | prendre celle du compte (ce que l'appareil avait en plus, au plus quelques dizaines de secondes de jeu, n'est pas gardé) |
+| a changé pour **une autre partie** (autre graine : nouvelle partie ou import ailleurs) | n'a pas bougé | **demander** : ce n'est pas la suite de la sienne, la prendre en silence la ferait disparaître |
 | a changé | a avancé de son côté | **demander** |
 | a une partie | jamais échangé, et une autre partie | **demander** |
 | même partie, même temps de jeu | même partie | rien (on retient la révision) |
@@ -97,6 +101,8 @@ L'écran *Compte* dit pourquoi, avec le détail technique en petit (à transmett
   (parties qui divergent, réseau coupé, réponse perdue, partie illisible, navigateur plein…), écran.
 - `node e2e/cloud.mjs` (après `npm run build`) : **deux appareils** (deux profils de navigateur) et le faux Firebase derrière un petit
   serveur HTTP (`?debug&cloud=http://127.0.0.1:PORT`, réservé à cette machine : un lien piégé ne peut pas envoyer un mot de passe ailleurs).
+  Il rejoue aussi le cas d'un **réseau lent** (le faux serveur répond après 600 ms, comme Google) : l'écran du compte ne doit pas revenir
+  par-dessus la partie quand on l'a quitté avant la fin de la première synchronisation.
 - `node e2e/phone.mjs` vérifie aussi les écrans du compte sur 11 tailles d'écran.
 - Les essais ci-dessus ne parlent jamais au vrai Firebase (le faux serveur reçoit des identifiants d'essai, jamais ceux du projet).
 
@@ -112,6 +118,14 @@ puis il supprime le compte et sa partie. Aucun e-mail n'est envoyé. Réussi le 
 est mal recopiée (`0` et `O`, `I` et `l` se ressemblent) : la reprendre avec l'icône « copier » (*Paramètres du projet* → *Général* →
 *Vos applications*). Le script envoie l'origine et la page du jeu : une clé limitée aux sites autorisés (étape 6) l'accepte.
 
-**Pas essayé** : le jeu dans un vrai navigateur face au vrai Google (le Chromium de l'environnement de développement ne fait pas confiance
-au certificat du mandataire). Les deux moitiés sont vérifiées séparément : l'écran et la synchronisation contre un faux serveur identique
-à Google (e2e), les requêtes elles-mêmes — y compris les autorisations CORS — contre le vrai Google (essai réel).
+**Essai réel dans un navigateur** : `npm run build && node tests-net/browser.check.mjs` (avec `NODE_USE_ENV_PROXY=1` derrière un mandataire)
+ouvre le **vrai jeu** (`dist/`) dans Chromium, servi à son adresse publique (`https://soaresbm1.github.io/Empire-Miner/` : Google voit l'origine
+et la page de la production), face au **vrai Google**. Les requêtes vers Google sont relayées par Node, qui vérifie les certificats ; le
+Chromium de certains environnements (mandataire d'entreprise ou de bac à sable) ne fait pas confiance à leur certificat. Deux appareils et un
+compte jetable : création (mot de passe trop court refusé en français), mot de passe faux, partie envoyée et relue dans la base de Google,
+appareil neuf qui la reprend, progression qui suit, deux parties qui se croisent (la précondition de Firestore refuse l'écriture périmée, le jeu
+pose la question), partie gardée et partie mise de côté, suppression du compte depuis le jeu. Aucun e-mail n'est envoyé.
+
+**Pas essayé** : le courriel « mot de passe oublié » (les essais n'envoient aucun e-mail : il part de Firebase, avec son modèle par défaut ; à
+essayer une fois avec sa propre adresse), un vrai téléphone (les écrans sont mesurés sur 11 tailles d'écran émulées) et les e-mails dans la boîte
+d'un fournisseur (classement en courrier indésirable).

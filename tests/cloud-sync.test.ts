@@ -289,6 +289,71 @@ describe('compte : synchronisation', () => {
       expect(b.saves.readAside()).toBe(mine);
     });
 
+    describe('une autre partie arrive sur le compte (nouvelle partie ou import sur un autre appareil)', () => {
+      /** A et B ont la même partie ; A en démarre une autre (graine 9) qui prend la place de la première sur le compte. */
+      async function replacedByA() {
+        const fake = new FakeFirebase();
+        const { a, b, uid } = await synced(fake);
+        const mine = b.saves.read()!;
+        a.saves.write(makeSave(9, 5, 0, 0));
+        await a.sync.sync();
+        expect(fake.doc(uid)!.fields.seed).toEqual({ integerValue: '9' });
+        return { fake, a, b, uid, mine };
+      }
+
+      it('B n’a pas bougé, mais ce n’est pas la suite de sa partie : il demande au lieu de la remplacer', async () => {
+        const { b, mine } = await replacedByA();
+        const pulled = b.events.pulled;
+        await b.sync.sync();
+        expect(b.sync.view.ask).toMatchObject({ why: 'replaced', cloud: { seed: 9 }, local: { seed: 1 } });
+        expect(b.saves.read()).toBe(mine);
+        expect(b.saves.readAside()).toBeNull();
+        expect(b.events.pulled).toBe(pulled);
+      });
+
+      it('B garde celle du compte : la sienne est mise de côté, telle quelle', async () => {
+        const { b, mine } = await replacedByA();
+        await b.sync.sync();
+        await b.sync.resolve('cloud');
+        expect(briefOf(b.saves.read()!)).toMatchObject({ seed: 9, time: 5 });
+        expect(b.saves.readAside()).toBe(mine);
+        expect(b.sync.view.ask).toBeNull();
+      });
+
+      it('B garde la sienne : elle reprend la place sur le compte, et la nouvelle partie de A est mise de côté', async () => {
+        const { fake, a, b, uid, mine } = await replacedByA();
+        const theirs = a.saves.read()!;
+        await b.sync.sync();
+        await b.sync.resolve('local');
+        expect(b.saves.read()).toBe(mine);
+        expect(b.saves.readAside()).toBe(theirs);
+        expect(fake.doc(uid)!.fields.seed).toEqual({ integerValue: '1' });
+        // A, qui n'a pas bougé depuis, demande à son tour (sa partie n'est plus celle du compte) au lieu de perdre la sienne.
+        await a.sync.sync();
+        expect(a.sync.view.ask?.why).toBe('replaced');
+        expect(a.saves.read()).toBe(theirs);
+      });
+
+      it('en jeu : signalé comme les autres questions, sans rien remplacer', async () => {
+        const { b, mine } = await replacedByA();
+        b.events.playing = true;
+        await b.sync.sync();
+        expect(b.sync.view.ask?.why).toBe('replaced');
+        expect(b.saves.read()).toBe(mine);
+        expect(b.events.notices).toHaveLength(1);
+        await b.sync.sync();
+        expect(b.events.notices).toHaveLength(1);
+      });
+
+      it('un appareil sans partie prend celle du compte sans rien demander', async () => {
+        const { fake } = await replacedByA();
+        const c = makeDevice(fake);
+        await c.sync.signIn(MAIL, PASS);
+        expect(c.sync.view.ask).toBeNull();
+        expect(briefOf(c.saves.read()!)).toMatchObject({ seed: 9 });
+      });
+    });
+
     it('un autre appareil écrit entre notre lecture et notre envoi : refusé, rien n’est écrasé, on redemande', async () => {
       const fake = new FakeFirebase();
       const { a, b, uid } = await synced(fake);

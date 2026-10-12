@@ -6,6 +6,8 @@
  * la partie (graine, temps de jeu) qu'ils avaient en commun. De là :
  *  - le compte n'a pas changé depuis → seul cet appareil a pu avancer : on envoie ;
  *  - le compte a changé et cet appareil n'a pas bougé → on prend celle du compte (rien n'est perdu : elle prolonge la nôtre) ;
+ *  - le compte a changé pour une AUTRE partie (nouvelle partie ou import sur un autre appareil) : elle ne prolonge pas la nôtre,
+ *    la prendre en silence ferait disparaître celle-ci → on demande ;
  *  - les deux ont avancé de leur côté, ou cet appareil n'a jamais parlé à ce compte et a déjà une partie différente → on demande.
  */
 import { sameBrief, type Brief } from './brief';
@@ -41,7 +43,7 @@ export type Plan =
   | { do: 'adopt' }
   | { do: 'push' }
   | { do: 'pull' }
-  | { do: 'ask'; why: 'first' | 'diverged' };
+  | { do: 'ask'; why: 'first' | 'diverged' | 'replaced' };
 
 /** La partie de l'appareil n'a avancé que de quelques secondes de jeu depuis le dernier échange (même partie, moins de `drift` ms). */
 export function lightly(local: Brief, link: SyncLink, drift: number): boolean {
@@ -59,7 +61,10 @@ export function reconcile(local: Brief | null, cloud: (Brief & { rev: string }) 
 
   const moved = !link || local.seed !== link.seed || local.time !== link.time;
   if (link && link.rev === cloud.rev) return moved ? { do: 'push' } : { do: 'nothing' };
-  if (link && (!moved || lightly(local, link, drift))) return { do: 'pull' };
+  if (link && (!moved || lightly(local, link, drift))) {
+    // Le compte prolonge-t-il la partie qu'on lui connaissait (même graine) ? Sinon une autre partie a pris sa place ailleurs.
+    return local.seed === cloud.seed ? { do: 'pull' } : { do: 'ask', why: 'replaced' };
+  }
   return { do: 'ask', why: link ? 'diverged' : 'first' };
 }
 

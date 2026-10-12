@@ -384,10 +384,10 @@ export class Game {
   }
 
   /** Le bouton « Compte » des menus : un crochet une fois connecté, un point d'exclamation si une question attend. */
-  private accountText(c: CloudSync): { text: string; title: string } {
+  private accountText(c: CloudSync): { text: string; title: string; on: boolean } {
     const v = c.view;
     const title = v.account ? `Connecté : ${v.account.email}` : 'Garder la partie en ligne pour la retrouver sur un autre appareil';
-    return { text: !v.account ? 'Compte' : v.ask ? 'Compte ⚠' : 'Compte ✓', title };
+    return { text: !v.account ? 'Compte' : v.ask ? 'Compte ⚠' : 'Compte ✓', title, on: !!v.account };
   }
 
   private onCloudChanged(): void {
@@ -472,6 +472,15 @@ export class Game {
     if (c) this.ui.showAccount({ view: c.view, form: this.acctForm, canTakeAside: this.mode === 'menu' }, this.acctFrom);
   }
 
+  /**
+   * Redessine l'écran « Compte » s'il est encore affiché. À utiliser après une attente de réseau : le joueur a pu quitter l'écran
+   * entre-temps (la connexion s'affiche dès que Google a répondu, la première synchronisation vient après) et il ne doit pas le
+   * voir revenir par-dessus le menu ou la partie.
+   */
+  private refreshAccount(): void {
+    if (this.ui.accountVisible()) this.renderAccount();
+  }
+
   private errorText(e: unknown): string {
     return e instanceof CloudError ? e.text : 'Une erreur est survenue : réessayez.';
   }
@@ -496,7 +505,7 @@ export class Game {
     } catch (e) {
       this.acctForm = { ...this.acctForm, busy: false, error: this.errorText(e) };
     }
-    this.renderAccount();
+    this.refreshAccount();
   }
 
   private async accountReset(): Promise<void> {
@@ -516,7 +525,7 @@ export class Game {
     } catch (e) {
       this.acctForm = { ...this.acctForm, busy: false, error: this.errorText(e) };
     }
-    this.renderAccount();
+    this.refreshAccount();
   }
 
   private accountSignOut(): void {
@@ -544,7 +553,7 @@ export class Game {
     } catch (e) {
       this.acctForm = { ...this.acctForm, busy: false, error: this.errorText(e) };
     }
-    this.renderAccount();
+    this.refreshAccount();
   }
 
   /** Le joueur a choisi laquelle des deux parties garder. */
@@ -569,7 +578,7 @@ export class Game {
         }
       } else this.ui.toast('Partie du compte gardée : touchez « Continuer ».', 'good');
     }
-    this.renderAccount();
+    this.refreshAccount();
   }
 
   /** La partie mise de côté prend la place de celle de l'appareil (qui passe de côté à son tour). */

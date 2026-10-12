@@ -27,15 +27,21 @@ export async function startFakeFirebase() {
         req.socket.destroy();
         return;
       }
-      const out = fake.handle({ method: req.method, url: `http://${req.headers.host}${req.url}`, headers: req.headers, body });
-      res.writeHead(out.status, { ...cors, 'Content-Type': 'application/json' });
-      res.end(out.body);
+      const answer = () => {
+        const out = fake.handle({ method: req.method, url: `http://${req.headers.host}${req.url}`, headers: req.headers, body });
+        res.writeHead(out.status, { ...cors, 'Content-Type': 'application/json' });
+        res.end(out.body);
+      };
+      // Réseau lent (`latency`, en ms) : les vraies réponses de Google prennent des centaines de millisecondes.
+      if (api.latency > 0) setTimeout(answer, api.latency);
+      else answer();
     });
   });
   await new Promise((ok) => http.listen(0, '127.0.0.1', ok));
   const port = http.address().port;
-  return {
+  const api = {
     fake,
+    latency: 0,
     configured: !!(FIREBASE.apiKey && FIREBASE.projectId),
     url: `http://127.0.0.1:${port}`,
     async close() {
@@ -44,4 +50,5 @@ export async function startFakeFirebase() {
       await vite.close();
     },
   };
+  return api;
 }

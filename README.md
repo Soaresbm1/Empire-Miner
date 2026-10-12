@@ -135,8 +135,9 @@ Pour ne plus exporter ni importer de fichier en changeant d'appareil, le jeu peu
 partie part sur le compte à chaque sauvegarde (chaque minute, *Sauvegarder*, en quittant, en mettant l'application en arrière-plan), et
 un appareil neuf la reprend en se connectant (« Continuer »). Sans réseau, la partie reste sur l'appareil et part au retour du réseau.
 
-**Jamais d'écrasement sans le savoir** : si l'on a joué ici et ailleurs sans se synchroniser (ou si l'on se connecte pour la
-première fois sur un appareil qui a déjà une autre partie), le jeu montre les deux parties (date, argent, profondeur, temps de jeu)
+**Jamais d'écrasement sans le savoir** : si l'on a joué ici et ailleurs sans se synchroniser, si l'on se connecte pour la
+première fois sur un appareil qui a déjà une autre partie, ou si une *autre* partie (nouvelle partie, import) est arrivée sur le compte
+depuis un autre appareil, le jeu montre les deux parties (date, argent, profondeur, temps de jeu)
 et **demande laquelle garder** ; l'autre est **mise de côté** (écran Compte → *La reprendre*). Les écritures dans le compte portent la
 révision qu'elles remplacent : si un autre appareil a écrit entre-temps, le serveur refuse. En cours de partie, une partie plus récente
 du compte est signalée, jamais chargée d'office. *Se déconnecter* garde la partie sur l'appareil ; *Supprimer mon compte* efface le
@@ -420,6 +421,7 @@ node e2e/panels.mjs            # fenêtres au doigt sur un jeu qui tourne : déf
 node e2e/cloud.mjs             # compte : deux appareils (deux profils de navigateur) et un faux Firebase local : création, reprise sur appareil neuf, parties qui divergent, réseau coupé, suppression (après un build)
 npx vite-node tests-net/mqtt.check.ts   # client MQTT contre un vrai courtier local (aedes)
 npx vite-node tests-net/firebase.check.ts   # compte : le VRAI Firebase (CORS, règles, compte jetable supprimé ensuite, deux appareils) ; réseau nécessaire, NODE_USE_ENV_PROXY=1 derrière un mandataire
+node tests-net/browser.check.mjs        # compte : le vrai jeu (dist/) dans un navigateur, à son adresse publique, face au VRAI Google (compte jetable supprimé depuis le jeu) ; après un build
 ```
 
 Le test de bout en bout rejoue la tranche verticale : lancer une partie, descendre, miner, ramasser,
