@@ -41,7 +41,11 @@ const code = async (p: Promise<unknown>): Promise<string> => {
 };
 const random = (n: number) => Array.from({ length: n }, () => 'abcdefghijkmnpqrstuvwxyz23456789'[Math.floor(Math.random() * 32)]).join('');
 
-const client = new CloudClient({ config: { apiKey, projectId }, endpoints: GOOGLE_ENDPOINTS, timeout: 30000 });
+/** Le jeu publié : ses appels portent cette origine et cette page (une clé limitée aux sites autorisés les accepte alors). */
+const ORIGIN = 'https://soaresbm1.github.io';
+const SITE = `${ORIGIN}/Empire-Miner/`;
+const asBrowser: typeof fetch = (input, init) => fetch(input, { ...init, headers: { ...Object.fromEntries(new Headers(init?.headers)), Origin: ORIGIN, Referer: SITE } });
+const client = new CloudClient({ config: { apiKey, projectId }, endpoints: GOOGLE_ENDPOINTS, timeout: 30000, fetch: asBrowser });
 const email = `essai-${Date.now().toString(36)}-${random(6)}@example.com`;
 const password = random(20);
 const write = (raw: string, data: string): CloudWrite => {
@@ -49,8 +53,36 @@ const write = (raw: string, data: string): CloudWrite => {
   return { ...b, data, device: 'essai' };
 };
 
+/** Ce que le navigateur demande avant d'envoyer la vraie requête, et ce que Google lui répond. */
+async function preflight(url: string, method: string, headers: string): Promise<boolean> {
+  const r = await fetch(url, { method: 'OPTIONS', headers: { Origin: ORIGIN, Referer: SITE, 'Access-Control-Request-Method': method, 'Access-Control-Request-Headers': headers } });
+  const allowOrigin = r.headers.get('access-control-allow-origin');
+  const methods = (r.headers.get('access-control-allow-methods') ?? '').toUpperCase().split(/\s*,\s*/);
+  const allowed = (r.headers.get('access-control-allow-headers') ?? '').toLowerCase().split(/\s*,\s*/);
+  return r.status < 300 && (allowOrigin === ORIGIN || allowOrigin === '*') && methods.includes(method) && headers.split(',').every((h) => allowed.includes(h));
+}
+async function readable(res: Response): Promise<boolean> {
+  const allowOrigin = res.headers.get('access-control-allow-origin');
+  return allowOrigin === ORIGIN || allowOrigin === '*';
+}
+
 let tokens: Tokens | null = null;
 try {
+  // ---------------------------------------------------------------- les autorisations « CORS » (ce que le navigateur exige)
+  const docUrl = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents/saves/x`;
+  ok(await preflight(`${GOOGLE_ENDPOINTS.identity}/accounts:signUp?key=${apiKey}`, 'POST', 'content-type'), 'CORS : l’identité accepte POST avec Content-Type depuis le site du jeu');
+  ok(await preflight(docUrl, 'GET', 'authorization'), 'CORS : Firestore accepte GET avec Authorization');
+  ok(await preflight(docUrl, 'PATCH', 'authorization,content-type'), 'CORS : Firestore accepte PATCH avec Authorization et Content-Type');
+  ok(await preflight(docUrl, 'DELETE', 'authorization'), 'CORS : Firestore accepte DELETE avec Authorization');
+  const errorBody = await fetch(`${GOOGLE_ENDPOINTS.identity}/accounts:signInWithPassword?key=${apiKey}`, {
+    method: 'POST',
+    headers: { Origin: ORIGIN, Referer: SITE, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email: 'essai@example.com', password: 'faux-faux-1', returnSecureToken: true }),
+  });
+  ok(await readable(errorBody), `CORS : même une réponse d’erreur (HTTP ${errorBody.status}) est lisible par la page`);
+  const refused = await fetch(docUrl, { headers: { Origin: ORIGIN, Referer: SITE, Authorization: 'Bearer faux' } });
+  ok(refused.status === 401 && (await readable(refused)), 'CORS : le refus de Firestore (jeton faux, HTTP 401) est lisible par la page');
+
   // ---------------------------------------------------------------- le compte
   try {
     tokens = await client.signUp(email, password);
@@ -92,7 +124,7 @@ try {
   ok((await code(client.getBrief(tokens.idToken, 'le-document-de-quelqu-un-d-autre'))) === 'denied', 'lire le document d’un autre : « denied »');
   ok((await code(client.putSave(tokens.idToken, 'le-document-de-quelqu-un-d-autre', write(raw1, data1), null))) === 'denied', 'écrire chez un autre : « denied »');
   ok((await code(client.putSave(tokens.idToken, tokens.uid, write(raw1, `z:${'x'.repeat(500000)}`), rev2))) === 'denied', 'une sauvegarde de plus de 500 000 signes : « denied » (règle de taille)');
-  const anonymous = await fetch(`https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents/saves/${tokens.uid}`);
+  const anonymous = await fetch(`https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents/saves/${tokens.uid}`, { headers: { Origin: ORIGIN, Referer: SITE } });
   ok(anonymous.status === 403, `sans jeton, la partie n’est pas lisible (HTTP ${anonymous.status})`);
   await client.deleteSave(tokens.idToken, tokens.uid);
   ok((await client.getBrief(tokens.idToken, tokens.uid)) === null, 'supprimer la partie du compte la fait disparaître');

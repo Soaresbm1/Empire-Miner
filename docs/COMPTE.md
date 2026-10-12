@@ -90,9 +90,18 @@ L'écran *Compte* dit pourquoi, avec le détail technique en petit (à transmett
 - `node e2e/phone.mjs` vérifie aussi les écrans du compte sur 11 tailles d'écran.
 - Les essais ci-dessus ne parlent jamais au vrai Firebase (le faux serveur reçoit des identifiants d'essai, jamais ceux du projet).
 
-**Essai réel** : `npx vite-node tests-net/firebase.check.ts` (avec `NODE_USE_ENV_PROXY=1` derrière un mandataire) crée un compte
-jetable dans le **vrai** projet et vérifie de bout en bout ce que le jeu fait avec Google : création, mauvais mot de passe, jeton renouvelé,
-envoi et lecture de la partie, écriture périmée refusée, règles de sécurité (document d'un autre, taille, accès sans jeton), puis la
-synchronisation entre deux appareils (reprise, avance, question quand les deux ont joué) ; il supprime ensuite le compte et sa partie.
-Aucun e-mail n'est envoyé. À relancer après tout changement des règles ou de la configuration. Si Google répond « API key not valid »,
-la clé de `src/cloud/config.ts` est mal recopiée : la reprendre avec l'icône « copier » (*Paramètres du projet* → *Général* → *Vos applications*).
+**Essai réel** : `npx vite-node tests-net/firebase.check.ts` (avec `NODE_USE_ENV_PROXY=1` derrière un mandataire) parle au **vrai** projet
+(celui de `src/cloud/config.ts`) avec l'origine et la page du jeu publié, et vérifie de bout en bout ce que le jeu fait avec Google :
+- les autorisations « CORS » que le navigateur exige (requêtes préliminaires pour POST, GET, PATCH, DELETE avec `Authorization` et
+  `Content-Type`, réponses d'erreur lisibles par la page) ;
+- un **compte jetable** : création, mauvais mot de passe, jeton renouvelé, adresse ou mot de passe refusés, envoi et lecture de la partie,
+  écriture périmée refusée (`conflict`), règles de sécurité (document d'un autre, taille, accès sans jeton) ;
+- la **synchronisation entre deux appareils** (reprise sans question, avance, question quand les deux ont joué, partie mise de côté) ;
+puis il supprime le compte et sa partie. Aucun e-mail n'est envoyé. Réussi le 12 octobre 2026 sur le projet `empire-miner` (35 vérifications).
+À relancer après tout changement des règles ou de la configuration. Si Google répond « API key not valid », la clé de `src/cloud/config.ts`
+est mal recopiée (`0` et `O`, `I` et `l` se ressemblent) : la reprendre avec l'icône « copier » (*Paramètres du projet* → *Général* →
+*Vos applications*). Le script envoie l'origine et la page du jeu : une clé limitée aux sites autorisés (étape 6) l'accepte.
+
+**Pas essayé** : le jeu dans un vrai navigateur face au vrai Google (le Chromium de l'environnement de développement ne fait pas confiance
+au certificat du mandataire). Les deux moitiés sont vérifiées séparément : l'écran et la synchronisation contre un faux serveur identique
+à Google (e2e), les requêtes elles-mêmes — y compris les autorisations CORS — contre le vrai Google (essai réel).

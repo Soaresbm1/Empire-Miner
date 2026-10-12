@@ -142,9 +142,9 @@ révision qu'elles remplacent : si un autre appareil a écrit entre-temps, le se
 du compte est signalée, jamais chargée d'office. *Se déconnecter* garde la partie sur l'appareil ; *Supprimer mon compte* efface le
 compte et la partie en ligne.
 
-Le compte vit chez **Firebase** (Google, offre gratuite) : le jeu n'a pas de serveur à lui. **Il faut le mettre en place une fois**
-(créer le projet, publier les règles, renseigner `apiKey` et `projectId` dans `src/cloud/config.ts`) : tant que ce n'est pas fait, le
-bouton « Compte » n'existe pas. Mode d'emploi, règles, vie privée, dépannage et fonctionnement détaillé : [docs/COMPTE.md](docs/COMPTE.md).
+Le compte vit chez **Firebase** (Google, offre gratuite) : le jeu n'a pas de serveur à lui. Le projet (`empire-miner`) est
+renseigné dans `src/cloud/config.ts` ; sans cela (autre copie du jeu), le bouton « Compte » n'existe pas et il faut d'abord créer
+le projet, publier les règles et y mettre `apiKey` et `projectId`. Mode d'emploi, règles, vie privée, dépannage et fonctionnement détaillé : [docs/COMPTE.md](docs/COMPTE.md).
 Le jeu à deux n'est pas concerné : l'invité n'a besoin d'aucun compte, et l'hôte garde sa partie comme avant.
 
 ## Contenu de la version 0.1 (tranche verticale)
@@ -419,7 +419,7 @@ node e2e/touch.mjs             # gestes tactiles réels (CDP) : stick, Miner, Ag
 node e2e/panels.mjs            # fenêtres au doigt sur un jeu qui tourne : défilement, toucher long, contenu exact, rien ne glisse de côté (après un build)
 node e2e/cloud.mjs             # compte : deux appareils (deux profils de navigateur) et un faux Firebase local : création, reprise sur appareil neuf, parties qui divergent, réseau coupé, suppression (après un build)
 npx vite-node tests-net/mqtt.check.ts   # client MQTT contre un vrai courtier local (aedes)
-npx vite-node tests-net/firebase.check.ts   # compte : le VRAI Firebase, avec un compte jetable supprimé ensuite (réseau nécessaire ; NODE_USE_ENV_PROXY=1 derrière un mandataire)
+npx vite-node tests-net/firebase.check.ts   # compte : le VRAI Firebase (CORS, règles, compte jetable supprimé ensuite, deux appareils) ; réseau nécessaire, NODE_USE_ENV_PROXY=1 derrière un mandataire
 ```
 
 Le test de bout en bout rejoue la tranche verticale : lancer une partie, descendre, miner, ramasser,

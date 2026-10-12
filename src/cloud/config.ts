@@ -15,8 +15,8 @@ export interface CloudConfig {
   projectId: string;
 }
 
-/** Le projet Firebase du jeu : à remplir une fois le projet créé (voir docs/COMPTE.md). */
-export const FIREBASE: CloudConfig = { apiKey: '', projectId: '' };
+/** Le projet Firebase du jeu (voir docs/COMPTE.md). Vide, le compte n'existe pas. */
+export const FIREBASE: CloudConfig = { apiKey: 'AIzaSyBoayF9nKYq7e6MVtCug-XqueO0a_XIwh0', projectId: 'empire-miner' };
 
 /** Les trois adresses de l'API : l'identité, le renouvellement du jeton, la base de données. */
 export interface CloudEndpoints {
