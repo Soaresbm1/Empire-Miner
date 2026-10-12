@@ -43,6 +43,11 @@ import { releaseGuests } from '../net/guests';
 import { MqttTransport } from '../net/mqtt';
 import { PROTOCOL, Session, type SessionStatus } from '../net/session';
 import { BUILD_ID, reloadFresh, watchForUpdate } from './update';
+import { CloudClient, CloudError } from '../cloud/client';
+import { cloudSetup } from '../cloud/config';
+import { CloudStore, browserSaves, type KeyValue } from '../cloud/store';
+import { CloudSync } from '../cloud/sync';
+import { emptyForm, type AccountForm } from '../ui/account';
 import { BroadcastTransport, cleanCode, newGameCode, randomId, type Transport } from '../net/transport';
 import type { NetMenu } from '../ui/UI';
 
@@ -77,6 +82,15 @@ function loadGuestId(): string {
     return id;
   } catch {
     return randomId(12);
+  }
+}
+
+/** Le stockage du navigateur, ou rien s'il est interdit (navigation privée, réglage du navigateur). */
+function browserStorage(): KeyValue | null {
+  try {
+    return window.localStorage;
+  } catch {
+    return null;
   }
 }
 
@@ -139,6 +153,13 @@ export class Game {
   netTransport: (code: string) => Transport = (code) => (new URLSearchParams(location.search).get('net') === 'local' ? new BroadcastTransport(code) : new MqttTransport(code));
   /** Ventes automatiques récentes (temps de simulation, montant) pour le revenu par minute. */
   private shipLog: { t: number; total: number }[] = [];
+  /** Le compte du joueur (sa partie gardée en ligne) ; null si cette version du jeu n'en propose pas. */
+  readonly cloud: CloudSync | null;
+  /** L'écran « Compte » : ce que le joueur y fait, et le menu d'où il vient. */
+  private acctForm: AccountForm = emptyForm();
+  private acctFrom: 'main' | 'pause' = 'main';
+  /** « Continuer » attend la synchronisation du compte : un second appui ne relance rien. */
+  private continuing = false;
 
   constructor(canvas: HTMLCanvasElement) {
     this.renderer = new Renderer(canvas);
@@ -152,6 +173,7 @@ export class Game {
       touch: () => !!this.touch,
     });
     this.ui.setMenuMotes(PROFILES[this.quality].menuMotes);
+    this.cloud = this.createCloud();
     if (isTouchDevice()) this.setTouch(true);
     // Taille de l'écran : rotation du téléphone, barres de Safari qui apparaissent ou disparaissent. Après une rotation,
     // iOS annonce parfois l'ancienne taille : on mesure aussi un instant plus tard.
@@ -164,16 +186,23 @@ export class Game {
     for (const type of ['pointerdown', 'pointerup', 'touchend', 'click', 'keydown']) window.addEventListener(type, unlock);
     window.addEventListener('beforeunload', () => {
       this.autoSaveNow();
+      this.cloud?.leaving();
       this.session?.close();
     });
     document.addEventListener('visibilitychange', () => {
-      if (document.hidden) this.autoSaveNow();
-      else {
+      if (document.hidden) {
+        this.autoSaveNow();
+        // La dernière partie part dans le compte sans attendre : on change peut-être d'appareil.
+        this.cloud?.leaving();
+      } else {
         this.keepAwake();
         // Un téléphone qui se rallume a souvent perdu ses connexions sans le savoir : on vérifie tout de suite.
         this.session?.wake();
+        // Et le compte a pu recevoir une partie plus récente d'un autre appareil.
+        void this.cloud?.sync();
       }
     });
+    window.addEventListener('online', () => void this.cloud?.sync());
     try {
       this.sfx.setMuted(localStorage.getItem('empire-miner.muted') === '1');
     } catch {
@@ -207,6 +236,7 @@ export class Game {
     // Une version plus récente est-elle publiée ? (Sinon, à deux : « Versions différentes du jeu ».)
     watchForUpdate(() => this.onUpdateAvailable());
     this.showMainMenu();
+    void this.cloud?.boot();
     // Lien d'invitation (?join=CODE) : on propose directement de rejoindre.
     const invited = cleanCode(new URLSearchParams(location.search).get('join') ?? '');
     if (invited) {
@@ -300,7 +330,7 @@ export class Game {
 
   private autoSaveNow(): void {
     // Un invité ne sauvegarde jamais : la partie est celle de l'hôte.
-    if (this.mode === 'playing' && this.state && this.session?.role !== 'guest') saveToBrowser(this.state);
+    if (this.mode === 'playing' && this.state && this.session?.role !== 'guest' && saveToBrowser(this.state)) this.cloud?.localSaved();
   }
 
   private exportSave(): void {
@@ -332,6 +362,230 @@ export class Game {
       }
     };
     input.click();
+  }
+
+  // ------------------------------------------------------------------ compte
+
+  /** Le compte (sa partie gardée en ligne) : absent tant que le projet Firebase n'est pas renseigné (src/cloud/config.ts). */
+  private createCloud(): CloudSync | null {
+    const setup = import.meta.env.MODE === 'artifact' ? null : cloudSetup(location.search);
+    if (!setup) return null;
+    const kv = browserStorage();
+    const cloud = new CloudSync(new CloudClient({ config: setup.config, endpoints: setup.endpoints }), browserSaves(kv), new CloudStore(kv), {
+      playing: () => this.mode === 'playing',
+      pulled: () => this.onCloudPulled(),
+      changed: () => this.onCloudChanged(),
+      notice: (text, kind) => this.ui.toast(text, kind, 7000),
+      // Une partie du compte doit être lisible par cette version du jeu avant de remplacer celle de l'appareil.
+      validate: (json) => void deserialize(JSON.parse(json) as SaveData),
+    });
+    this.ui.setAccountLabel(this.accountText(cloud));
+    return cloud;
+  }
+
+  /** Le bouton « Compte » des menus : un crochet une fois connecté, un point d'exclamation si une question attend. */
+  private accountText(c: CloudSync): { text: string; title: string; on: boolean } {
+    const v = c.view;
+    const title = v.account ? `Connecté : ${v.account.email}` : 'Garder la partie en ligne pour la retrouver sur un autre appareil';
+    return { text: !v.account ? 'Compte' : v.ask ? 'Compte ⚠' : 'Compte ✓', title, on: !!v.account };
+  }
+
+  private onCloudChanged(): void {
+    const c = this.cloud;
+    if (!c) return;
+    this.ui.setAccountLabel(this.accountText(c));
+    if (this.ui.accountVisible()) this.renderAccount();
+    // Une question en attente alors qu'on est au menu principal : on la pose tout de suite.
+    else if (c.view.ask && this.mode === 'menu' && this.ui.homeVisible()) this.openAccount('main');
+  }
+
+  private onCloudPulled(): void {
+    // Au menu principal, « Continuer » montre la date de la partie reçue.
+    if (this.mode === 'menu' && this.ui.homeVisible()) this.showMainMenu();
+    this.ui.toast('Partie du compte récupérée.', 'good');
+  }
+
+  /**
+   * Avant de reprendre une partie de l'appareil : si un compte est connecté, on prend d'abord ce qu'un autre appareil y a laissé
+   * (cinq secondes au plus : sans réseau, on joue avec ce qu'on a). Faux si le compte a une question à poser.
+   */
+  private async freshest(): Promise<boolean> {
+    const c = this.cloud;
+    if (!c?.signedIn) return true;
+    const slow = setTimeout(() => this.ui.toast('Synchronisation du compte…', 'info'), 800);
+    try {
+      await Promise.race([c.sync(), new Promise<void>((done) => setTimeout(done, 5000))]);
+    } finally {
+      clearTimeout(slow);
+    }
+    return !c.view.ask;
+  }
+
+  private async continueGame(): Promise<void> {
+    if (this.continuing) return;
+    this.continuing = true;
+    try {
+      if (!(await this.freshest()) || this.mode !== 'menu') return;
+      const s = loadFromBrowser();
+      if (s) {
+        this.begin(s);
+        this.ui.toast('Bon retour à la mine !', 'good');
+      }
+    } catch (e) {
+      this.ui.toast(`Sauvegarde illisible : ${(e as Error).message}`, 'bad');
+    } finally {
+      this.continuing = false;
+    }
+  }
+
+  private async hostSavedGame(): Promise<void> {
+    if (!(await this.freshest()) || this.mode !== 'menu') return;
+    try {
+      const s = loadFromBrowser();
+      if (s) {
+        this.begin(s);
+        this.startHosting();
+      } else this.ui.showPlayMenu({ hasSave: false, error: 'Aucune sauvegarde trouvée.' });
+    } catch (e) {
+      this.ui.toast(`Sauvegarde illisible : ${(e as Error).message}`, 'bad');
+    }
+  }
+
+  private openAccount(from: 'main' | 'pause'): void {
+    const c = this.cloud;
+    if (!c) return;
+    this.acctFrom = from;
+    this.acctForm = { ...emptyForm(), email: c.view.account?.email ?? this.acctForm.email };
+    this.renderAccount();
+    // Un coup d'œil au compte à l'ouverture : ce qui s'affiche est l'état d'à l'instant.
+    if (c.signedIn) void c.sync();
+  }
+
+  private closeAccount(): void {
+    this.acctForm = emptyForm();
+    if (this.acctFrom === 'pause' && this.mode === 'playing') this.showPause();
+    else this.showMainMenu();
+  }
+
+  private renderAccount(): void {
+    const c = this.cloud;
+    if (c) this.ui.showAccount({ view: c.view, form: this.acctForm, canTakeAside: this.mode === 'menu' }, this.acctFrom);
+  }
+
+  /**
+   * Redessine l'écran « Compte » s'il est encore affiché. À utiliser après une attente de réseau : le joueur a pu quitter l'écran
+   * entre-temps (la connexion s'affiche dès que Google a répondu, la première synchronisation vient après) et il ne doit pas le
+   * voir revenir par-dessus le menu ou la partie.
+   */
+  private refreshAccount(): void {
+    if (this.ui.accountVisible()) this.renderAccount();
+  }
+
+  private errorText(e: unknown): string {
+    return e instanceof CloudError ? e.text : 'Une erreur est survenue : réessayez.';
+  }
+
+  private async accountSignIn(create: boolean): Promise<void> {
+    const c = this.cloud;
+    if (!c || this.acctForm.busy) return;
+    const fields = this.ui.accountFields();
+    const email = fields.email.trim();
+    if (!email || !fields.pass) {
+      this.acctForm = { ...this.acctForm, email, error: 'Tapez votre adresse e-mail et votre mot de passe.', info: '' };
+      this.renderAccount();
+      return;
+    }
+    this.acctForm = { ...this.acctForm, email, error: '', info: '', busy: true };
+    this.renderAccount();
+    try {
+      if (create) await c.signUp(email, fields.pass);
+      else await c.signIn(email, fields.pass);
+      this.acctForm = { ...emptyForm(), email };
+      this.ui.toast(create ? 'Compte créé.' : 'Connecté.', 'good');
+    } catch (e) {
+      this.acctForm = { ...this.acctForm, busy: false, error: this.errorText(e) };
+    }
+    this.refreshAccount();
+  }
+
+  private async accountReset(): Promise<void> {
+    const c = this.cloud;
+    if (!c || this.acctForm.busy) return;
+    const email = this.ui.accountFields().email.trim();
+    if (!email) {
+      this.acctForm = { ...this.acctForm, error: 'Tapez d’abord votre adresse e-mail.', info: '' };
+      this.renderAccount();
+      return;
+    }
+    this.acctForm = { ...this.acctForm, email, error: '', info: '', busy: true };
+    this.renderAccount();
+    try {
+      await c.resetPassword(email);
+      this.acctForm = { ...this.acctForm, busy: false, info: 'Si un compte existe pour cette adresse, un e-mail vient de partir (regardez aussi les courriers indésirables).' };
+    } catch (e) {
+      this.acctForm = { ...this.acctForm, busy: false, error: this.errorText(e) };
+    }
+    this.refreshAccount();
+  }
+
+  private accountSignOut(): void {
+    this.cloud?.signOut();
+    this.acctForm = { ...emptyForm(), email: this.acctForm.email };
+    this.ui.toast('Déconnecté : la partie reste sur cet appareil.', 'info');
+    this.renderAccount();
+  }
+
+  private async accountDelete(): Promise<void> {
+    const c = this.cloud;
+    if (!c || this.acctForm.busy) return;
+    const password = this.ui.accountFields().del;
+    if (!password) {
+      this.acctForm = { ...this.acctForm, error: 'Tapez votre mot de passe pour confirmer.' };
+      this.renderAccount();
+      return;
+    }
+    this.acctForm = { ...this.acctForm, error: '', busy: true };
+    this.renderAccount();
+    try {
+      await c.deleteAccount(password);
+      this.acctForm = emptyForm();
+      this.ui.toast('Compte supprimé. La partie de cet appareil est intacte.', 'info');
+    } catch (e) {
+      this.acctForm = { ...this.acctForm, busy: false, error: this.errorText(e) };
+    }
+    this.refreshAccount();
+  }
+
+  /** Le joueur a choisi laquelle des deux parties garder. */
+  private async accountKeep(choice: 'cloud' | 'local'): Promise<void> {
+    const c = this.cloud;
+    if (!c) return;
+    // En cours de partie, ce qu'on joue doit être dans la sauvegarde avant d'être comparé, remplacé ou mis de côté.
+    if (this.mode === 'playing') this.autoSaveNow();
+    await c.resolve(choice);
+    if (!c.view.error) {
+      if (choice === 'local') this.ui.toast('Partie de cet appareil gardée : elle est maintenant sur le compte.', 'good');
+      else if (this.mode === 'playing') {
+        try {
+          const s = loadFromBrowser();
+          if (s) {
+            this.begin(s);
+            this.ui.toast('Partie du compte chargée.', 'good');
+            return;
+          }
+        } catch (e) {
+          this.ui.toast(`Sauvegarde illisible : ${(e as Error).message}`, 'bad');
+        }
+      } else this.ui.toast('Partie du compte gardée : touchez « Continuer ».', 'good');
+    }
+    this.refreshAccount();
+  }
+
+  /** La partie mise de côté prend la place de celle de l'appareil (qui passe de côté à son tour). */
+  private accountTakeAside(): void {
+    if (this.mode !== 'menu' || !this.cloud?.takeAside()) return;
+    this.ui.toast('Partie mise de côté reprise : touchez « Continuer ». L’autre est mise de côté à son tour.', 'good');
+    this.renderAccount();
   }
 
   // ------------------------------------------------------------------ partie à deux
@@ -595,15 +849,7 @@ export class Game {
         if (this.mode === 'menu') this.showMainMenu();
         return;
       case 'continue':
-        try {
-          const s = loadFromBrowser();
-          if (s) {
-            this.begin(s);
-            this.ui.toast('Bon retour à la mine !', 'good');
-          }
-        } catch (e) {
-          this.ui.toast(`Sauvegarde illisible : ${(e as Error).message}`, 'bad');
-        }
+        void this.continueGame();
         return;
       case 'new':
         if (browserSaveInfo() && !this.confirmNew) {
@@ -625,8 +871,19 @@ export class Game {
         this.ui.hideMenu();
         return;
       case 'save':
-        if (g && saveToBrowser(g)) this.ui.toast('Partie sauvegardée.', 'good');
-        else this.ui.toast('Impossible de sauvegarder dans ce navigateur. Utilisez l\'export.', 'bad');
+        if (g && saveToBrowser(g)) {
+          this.ui.toast('Partie sauvegardée.', 'good');
+          // À la demande du joueur : sur le compte tout de suite, sans attendre l'envoi différé.
+          const c = this.cloud;
+          if (c?.signedIn) {
+            c.localSaved();
+            void c.sync().then(() => {
+              const v = c.view;
+              if (v.account && !v.ask && !v.error) this.ui.toast('Et envoyée sur votre compte.', 'good');
+              else if (v.error?.code === 'network') this.ui.toast('Pas de connexion : elle partira sur votre compte plus tard.', 'warn');
+            });
+          }
+        } else this.ui.toast('Impossible de sauvegarder dans ce navigateur. Utilisez l\'export.', 'bad');
         return;
       case 'load':
         try {
@@ -680,6 +937,7 @@ export class Game {
         return;
       case 'quit':
         this.autoSaveNow();
+        void this.cloud?.sync();
         this.closeSession();
         this.ui.hideMenu();
         this.showMainMenu();
@@ -688,15 +946,7 @@ export class Game {
         this.ui.showPlayMenu({ hasSave: !!browserSaveInfo(), code: this.netCode });
         return;
       case 'hostSave':
-        try {
-          const s = loadFromBrowser();
-          if (s) {
-            this.begin(s);
-            this.startHosting();
-          } else this.ui.showPlayMenu({ hasSave: false, error: 'Aucune sauvegarde trouvée.' });
-        } catch (e) {
-          this.ui.toast(`Sauvegarde illisible : ${(e as Error).message}`, 'bad');
-        }
+        void this.hostSavedGame();
         return;
       case 'hostNew':
         if (browserSaveInfo() && !this.confirmNew) {
@@ -761,6 +1011,44 @@ export class Game {
       }
       case 'invite':
         this.shareOnRelease();
+        return;
+      case 'account':
+        this.openAccount(this.mode === 'playing' ? 'pause' : 'main');
+        return;
+      case 'accountBack':
+        this.closeAccount();
+        return;
+      case 'accountIn':
+        void this.accountSignIn(false);
+        return;
+      case 'accountUp':
+        void this.accountSignIn(true);
+        return;
+      case 'accountReset':
+        void this.accountReset();
+        return;
+      case 'accountSync':
+        void this.cloud?.sync();
+        return;
+      case 'accountOut':
+        this.accountSignOut();
+        return;
+      case 'accountDelete':
+        this.acctForm = { ...this.acctForm, confirmDelete: true, error: '', info: '' };
+        this.renderAccount();
+        return;
+      case 'accountDeleteNo':
+        this.acctForm = { ...this.acctForm, confirmDelete: false, error: '', busy: false };
+        this.renderAccount();
+        return;
+      case 'accountDeleteYes':
+        void this.accountDelete();
+        return;
+      case 'accountKeep':
+        void this.accountKeep(arg === 'local' ? 'local' : 'cloud');
+        return;
+      case 'accountAside':
+        this.accountTakeAside();
         return;
       case 'tab':
         this.ui.setTab(arg);
@@ -1150,7 +1438,10 @@ export class Game {
       this.autosave -= dt;
       if (this.autosave <= 0) {
         this.autosave = AUTOSAVE_EVERY;
-        if (this.session?.role !== 'guest' && saveToBrowser(g)) this.ui.flashSaved();
+        if (this.session?.role !== 'guest' && saveToBrowser(g)) {
+          this.ui.flashSaved();
+          this.cloud?.localSaved();
+        }
       }
     }
 
