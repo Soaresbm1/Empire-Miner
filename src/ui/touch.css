@@ -307,6 +307,7 @@ body.touch .help-touch { grid-column: 1 / -1; padding: 8px 10px; border-radius: 
 
 /* ================================================================ Menus sur écran bas : plus de défilement */
 @container ui (max-height: 470px) {
+  .menu-buttons .btn-row { display: contents; }
   #menu-root { overflow-x: hidden; overflow-y: auto; touch-action: pan-y; overscroll-behavior: none; padding: var(--T, 6px) var(--mr, 6px) var(--B, 6px) var(--ml, 6px); }
   #menu-root > .menu { margin: auto; }
 
@@ -337,6 +338,13 @@ body.touch .help-touch { grid-column: 1 / -1; padding: 8px 10px; border-radius: 
   .play-box .btn { margin: 0; }
   .play-title { margin-bottom: 6px; font-size: 26px; }
   .join-text.tagline { display: block; font-size: 13px; }
+  /* Compte : le formulaire sur toute la largeur ; le texte qui explique le choix reste lisible. */
+  .account-menu .play-box.wide { grid-column: 1 / -1; }
+  .account-menu .menu-buttons > p { grid-column: 1 / -1; display: none; }
+  .acct-row { flex-direction: row; }
+  .acct-why { margin: 0 0 6px; padding: 3px 10px; font-size: 13px; }
+  .acct-privacy { display: none; }
+  .acct-input { padding: 4px 8px; font-size: 16px; }
 }
 
 /* Très bas (Safari avec sa barre d'adresse et sa barre d'onglets) : la pause passe à quatre colonnes. */
@@ -366,6 +374,7 @@ body.touch .help-touch { grid-column: 1 / -1; padding: 8px 10px; border-radius: 
   .pause-menu .menu-buttons { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
   .pause-menu .menu-buttons .btn { margin: 0; }
   .pause-menu .menu-buttons .btn.big { grid-column: 1 / -1; }
+  .pause-menu .btn-row { display: contents; }
 }
 
 body.touch .join-input { font-size: 20px; }

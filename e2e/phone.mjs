@@ -170,8 +170,9 @@ const MENU_FIT = (sel) => {
     l: r.left, t: r.top, r: r.right, b: r.bottom,
     scroll: root ? root.scrollHeight - root.clientHeight : 0,
     scrollX: root ? root.scrollWidth - root.clientWidth : 0,
+    oy: root ? getComputedStyle(root).overflowY : '',
     w: innerWidth, h: innerHeight,
-    btns: [...el.querySelectorAll('.btn, .join-input')].map((b) => { const q = b.getBoundingClientRect(); return { name: (b.textContent || b.id).trim().slice(0, 24), t: q.top, b: q.bottom, w: q.width, h: q.height, l: q.left, r: q.right }; }),
+    btns: [...el.querySelectorAll('.btn, .join-input, .acct-input')].map((b) => { const q = b.getBoundingClientRect(); return { name: (b.textContent || b.id).trim().slice(0, 24), t: q.top, b: q.bottom, w: q.width, h: q.height, l: q.left, r: q.right }; }),
   };
 };
 
@@ -187,6 +188,34 @@ function checkMenu(dev, scene, m) {
   const small = m.btns.filter((b) => b.h < 30);
   check(small.length === 0, `${tag} : boutons du menu de taille de doigt${small.length ? ` — trop petits : ${small.map((b) => `${b.name} ${Math.round(b.h)}`).join(', ')}` : ''}`);
 }
+
+/** Un écran de menu long (le compte) : il peut défiler en hauteur, mais jamais sur le côté, et ses boutons restent dans la zone sûre. */
+function checkScrollMenu(dev, scene, m) {
+  const [, sl, , sr] = dev.safe;
+  const tag = `${dev.id} · ${scene}`;
+  check(!!m, `${tag} : l’écran est affiché`);
+  if (!m) return;
+  check(m.scrollX <= 1, `${tag} : l’écran ne déborde pas sur le côté${m.scrollX > 1 ? ` (dépasse de ${Math.round(m.scrollX)} px)` : ''}`);
+  check(m.scroll <= 1 || m.oy === 'auto' || m.oy === 'scroll', `${tag} : trop haut pour l’écran, il défile${m.scroll > 1 && m.oy !== 'auto' ? ` — pas défilable (dépasse de ${Math.round(m.scroll)} px)` : ''}`);
+  const out = m.btns.filter((b) => b.l < sl - 0.6 || b.r > m.w - sr + 0.6);
+  check(out.length === 0, `${tag} : boutons et champs dans la zone sûre${out.length ? ` — dehors : ${out.map((b) => b.name).join(', ')}` : ''}`);
+  const small = m.btns.filter((b) => b.h < 30);
+  check(small.length === 0, `${tag} : boutons et champs de taille de doigt${small.length ? ` — trop petits : ${small.map((b) => `${b.name} ${Math.round(b.h)}`).join(', ')}` : ''}`);
+}
+
+/** Les écrans du compte, tels que les montre le jeu (modèles fabriqués : ici on ne mesure que la mise en page). */
+const BRIEF = { seed: 1, time: 7300, money: 1234567, depth: 187, savedAt: '2026-10-12T10:12:00.000Z' };
+const SIGNED = { uid: 'u1', email: 'une.adresse.assez.longue@exemple.fr' };
+const VIEW = { account: null, phase: 'idle', error: null, cloud: null, syncedAt: 0, ask: null, aside: null };
+const FORM = { email: '', error: '', info: '', busy: false, confirmDelete: false };
+const ACCOUNT_MODELS = [
+  ['formulaire', { view: VIEW, form: { ...FORM, email: SIGNED.email, error: 'E-mail ou mot de passe incorrect.' }, canTakeAside: true }],
+  ['formulaire-attente', { view: VIEW, form: { ...FORM, busy: true, info: 'Si un compte existe pour cette adresse, un e-mail vient de partir (regardez aussi les courriers indésirables).' }, canTakeAside: true }],
+  ['connecte', { view: { ...VIEW, account: SIGNED, cloud: { ...BRIEF, rev: 'r', device: 'téléphone Android' }, syncedAt: Date.parse('2026-10-12T10:30:00') }, form: FORM, canTakeAside: true }],
+  ['connecte-cote', { view: { ...VIEW, account: SIGNED, cloud: { ...BRIEF, rev: 'r', device: 'iPhone' }, aside: { ...BRIEF, time: 900, money: 4200 }, syncedAt: Date.parse('2026-10-12T10:30:00') }, form: FORM, canTakeAside: true }],
+  ['deux-parties', { view: { ...VIEW, account: SIGNED, ask: { why: 'diverged', cloud: { ...BRIEF, rev: 'r', device: 'Windows' }, local: { ...BRIEF, time: 3000, money: 999 } } }, form: FORM, canTakeAside: true }],
+  ['supprimer', { view: { ...VIEW, account: SIGNED }, form: { ...FORM, confirmDelete: true, error: 'E-mail ou mot de passe incorrect.' }, canTakeAside: true }],
+];
 
 /** Un panneau : dans l'écran, corps défilable. */
 const PANEL_FIT = () => {
@@ -265,7 +294,7 @@ for (const dev of DEVICES) {
   const cdp = await ctx.newCDPSession(page);
   const [st, sl, sb, sr] = dev.safe;
   await cdp.send('Emulation.setSafeAreaInsetsOverride', { insets: { top: st, left: sl, bottom: sb, right: sr } });
-  await page.goto(`${url.replace(/\/$/, '')}/?debug&net=local`);
+  await page.goto(`${url.replace(/\/$/, '')}/?debug&net=local&cloud=${encodeURIComponent('http://127.0.0.1:9')}`);
   await page.waitForSelector('#menu-root .btn', { timeout: 15000 });
   await page.waitForTimeout(500);
 
@@ -277,6 +306,17 @@ for (const dev of DEVICES) {
     await page.waitForTimeout(250);
     await shot(page, dev, '02-jouer-a-deux');
     checkMenu(dev, 'jouer à deux', await page.evaluate(MENU_FIT, '#menu-root .menu'));
+  }
+
+  // ---------------------------------------------------------------- compte
+  if (want('account')) {
+    for (const [label, model] of ACCOUNT_MODELS) {
+      await page.evaluate((m) => window.__EM.ui.showAccount(m, 'main'), model);
+      await page.waitForTimeout(200);
+      await shot(page, dev, `02-compte-${label}`);
+      checkScrollMenu(dev, `compte · ${label}`, await page.evaluate(MENU_FIT, '#menu-root .menu'));
+    }
+    await page.evaluate(() => window.__EM.ui.hideMenu());
   }
 
   // ---------------------------------------------------------------- partie

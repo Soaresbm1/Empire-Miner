@@ -29,6 +29,7 @@ import { boardPanel, borerPanel, counterPanel, smelterPanel, drillPanel, helpPan
 import { displayMode } from './fullscreen';
 import { morph } from './morph';
 import { pinchStep } from './touch';
+import { accountHtml, type AccountModel } from './account';
 
 /** Flèches dans les 8 directions, dans l'ordre des angles (est, sud-est, sud…). */
 const ARROWS8 = ['→', '↘', '↓', '↙', '←', '↖', '↑', '↗'];
@@ -80,6 +81,8 @@ export class UI {
   version = '';
   /** Une version plus récente du jeu est publiée : les menus proposent de la prendre. */
   private updateReady = false;
+  /** Texte et info-bulle du bouton « Compte » des menus ; null : pas de compte dans cette version du jeu (le bouton n'existe pas). */
+  private accountLabel: { text: string; title: string } | null = null;
   private readonly hud = $('#hud');
   private readonly panelRoot = $('#panel-root');
   private readonly menuRoot = $('#menu-root');
@@ -156,9 +159,17 @@ export class UI {
     this.menuRoot.addEventListener('focusout', () => window.scrollTo(0, 0));
     // Entrée dans le champ du code : on rejoint.
     this.menuRoot.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter' && (e.target as HTMLElement).id === 'join-code') {
+      if (e.key !== 'Enter') return;
+      const id = (e.target as HTMLElement).id;
+      if (id === 'join-code') {
         e.preventDefault();
         this.host.onAction('join', '');
+      } else if (id === 'acct-email' || id === 'acct-pass') {
+        e.preventDefault();
+        this.host.onAction('accountIn', '');
+      } else if (id === 'acct-del') {
+        e.preventDefault();
+        this.host.onAction('accountDeleteYes', '');
       }
     });
   }
@@ -423,6 +434,23 @@ export class UI {
     if (ready && buttons && !buttons.querySelector('[data-action="reloadFresh"]')) buttons.insertAdjacentHTML('afterbegin', this.updateButton());
   }
 
+  /** Le bouton « Compte » des menus, côte à côte avec `other` (rien d'autre si le compte n'est pas disponible). */
+  private withAccount(other: string): string {
+    const a = this.accountLabel;
+    if (!a) return other;
+    return `<div class="btn-row"><button class="btn" data-action="account" title="${esc(a.title)}">${esc(a.text)}</button>${other}</div>`;
+  }
+
+  /** Change le texte du bouton « Compte » (null : le compte n'est pas disponible), jusque dans le menu ouvert. */
+  setAccountLabel(label: { text: string; title: string } | null): void {
+    this.accountLabel = label;
+    const b = this.menuRoot.querySelector('[data-action="account"]');
+    if (b && label) {
+      b.textContent = label.text;
+      b.setAttribute('title', label.title);
+    }
+  }
+
   /** Fait briller le compteur d'argent (revenu automatique). */
   pulseMoney(): void {
     const el = document.getElementById('hud-money');
@@ -637,7 +665,7 @@ export class UI {
     const saveInfo = save
       ? `<small>${new Date(save.savedAt).toLocaleString('fr-FR')} · ${money(save.money)} · ${Math.floor(save.depth)} m</small>`
       : '';
-    this.menuRoot.innerHTML = `<div class="menu main-menu">
+    this.menuRoot.innerHTML = `<div class="menu main-menu home-menu">
       ${
         icon('logo')
           ? `<img class="logo" src="${icon('logo')}" alt="Empire Miner">`
@@ -649,7 +677,7 @@ export class UI {
         ${save ? `<button class="btn primary big" data-action="continue">Continuer${saveInfo}</button>` : ''}
         <button class="btn big ${save ? (confirmNew ? 'danger' : '') : 'primary'}" data-action="new">${confirmNew ? 'Confirmer : écraser la sauvegarde' : 'Nouvelle partie'}</button>
         ${CAN_PLAY2 ? '<button class="btn big" data-action="play2" title="Une mine, deux mineurs : sur deux téléphones ou deux ordinateurs">Jouer à deux<small>avec un ami, sur son propre appareil</small></button>' : ''}
-        <button class="btn" data-action="import" title="Reprendre une partie exportée dans un fichier">Importer…</button>
+        ${this.withAccount('<button class="btn" data-action="import" title="Reprendre une partie exportée dans un fichier">Importer…</button>')}
         <button class="btn" data-action="help">Commandes</button>
         <button class="btn" data-action="touch" title="Stick et boutons à l'écran, pour jouer au doigt">Tactile : ${this.host.touch?.() ? 'oui' : 'non'}</button>
         ${this.fullscreenButton()}
@@ -699,7 +727,7 @@ export class UI {
       ${guest ? '' : '<button class="btn" data-action="save">Sauvegarder</button>'}
       ${net ? '' : '<button class="btn" data-action="load" title="Recharger la dernière sauvegarde automatique">Charger la sauvegarde</button>'}
       ${CAN_DOWNLOAD && !guest ? '<button class="btn" data-action="export" title="Enregistrer la partie dans un fichier">Exporter (fichier)</button>' : ''}
-      ${net ? '' : '<button class="btn" data-action="import" title="Reprendre une partie exportée dans un fichier">Importer…</button>'}
+      ${net ? '' : this.withAccount('<button class="btn" data-action="import" title="Reprendre une partie exportée dans un fichier">Importer…</button>')}
       <button class="btn" data-action="mute">Son : ${muted ? 'coupé' : 'activé'}</button>
       <button class="btn" data-action="quality" title="Élevée : tous les effets. Basse : pour les petits appareils.">Qualité : ${QUALITY_LABEL[quality]}</button>
       <button class="btn" data-action="help">Commandes</button>
@@ -796,6 +824,63 @@ export class UI {
   /** Le texte affiché par `showDiagnostic` (pour le copier). */
   diagnosticText(): string {
     return (this.menuRoot.querySelector('#diag-text') as HTMLTextAreaElement | null)?.value ?? '';
+  }
+
+  // ------------------------------------------------------------------ compte
+
+  /** L'écran « Compte » est affiché. */
+  accountVisible(): boolean {
+    return !!this.menuRoot.querySelector('.account-menu');
+  }
+
+  /** Le menu principal lui-même (et non l'un de ses écrans) est affiché. */
+  homeVisible(): boolean {
+    return !!this.menuRoot.querySelector('.home-menu');
+  }
+
+  /** Ce qui est tapé dans l'écran « Compte ». */
+  accountFields(): { email: string; pass: string; del: string } {
+    const value = (id: string) => this.menuRoot.querySelector<HTMLInputElement>(`#${id}`)?.value ?? '';
+    return { email: value('acct-email'), pass: value('acct-pass'), del: value('acct-del') };
+  }
+
+  /** Affiche l'écran « Compte » (`from` : le menu d'où l'on vient, principal ou pause). */
+  showAccount(m: AccountModel, from: 'main' | 'pause'): void {
+    // L'écran se redessine à chaque changement d'état (synchronisation, réponse du serveur) : ce que le joueur est en train de
+    // taper, et le champ où il se trouve, ne doivent pas bouger.
+    const draft = this.accountVisible() ? this.accountDraft() : null;
+    this.menu = from;
+    this.syncOverlay();
+    if (from === 'pause') this.menuFx.stop();
+    else this.menuFx.start(this.menuMotes);
+    this.menuRoot.innerHTML = accountHtml(m);
+    if (draft) this.restoreDraft(draft);
+  }
+
+  private accountDraft(): { values: Record<string, string>; focus: string; at: number } {
+    const values: Record<string, string> = {};
+    for (const id of ['acct-email', 'acct-pass', 'acct-del']) {
+      const el = this.menuRoot.querySelector<HTMLInputElement>(`#${id}`);
+      if (el) values[id] = el.value;
+    }
+    const active = document.activeElement as HTMLInputElement | null;
+    const focus = active && this.menuRoot.contains(active) && active.id in values ? active.id : '';
+    return { values, focus, at: focus ? (active?.selectionStart ?? active?.value.length ?? 0) : 0 };
+  }
+
+  private restoreDraft(d: { values: Record<string, string>; focus: string; at: number }): void {
+    for (const [id, value] of Object.entries(d.values)) {
+      const el = this.menuRoot.querySelector<HTMLInputElement>(`#${id}`);
+      if (el && value !== '') el.value = value;
+    }
+    const el = d.focus ? this.menuRoot.querySelector<HTMLInputElement>(`#${d.focus}`) : null;
+    if (!el) return;
+    el.focus({ preventScroll: true });
+    try {
+      el.setSelectionRange(d.at, d.at);
+    } catch {
+      /* un champ e-mail n'a pas de sélection */
+    }
   }
 
   /** Le texte de l'écran d'attente change sans refaire tout l'écran (le focus et l'animation restent). */

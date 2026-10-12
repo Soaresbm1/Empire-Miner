@@ -128,6 +128,25 @@ Le dépôt contient `.github/workflows/pages.yml` : à chaque fusion dans `main`
 publie sur `https://<utilisateur>.github.io/<dépôt>/`. À faire **une seule fois** : *Settings → Pages → Build and deployment →
 Source : GitHub Actions*. On peut aussi le lancer à la main (onglet *Actions* → *Publier le jeu* → *Run workflow*).
 
+## Compte : sa partie en ligne, sur tous ses appareils
+
+Pour ne plus exporter ni importer de fichier en changeant d'appareil, le jeu peut garder la partie **sur un compte** (adresse e-mail
++ mot de passe) : menu principal ou pause → **Compte** → *Créer un compte* ou *Se connecter*. Ensuite tout est automatique : la
+partie part sur le compte à chaque sauvegarde (chaque minute, *Sauvegarder*, en quittant, en mettant l'application en arrière-plan), et
+un appareil neuf la reprend en se connectant (« Continuer »). Sans réseau, la partie reste sur l'appareil et part au retour du réseau.
+
+**Jamais d'écrasement sans le savoir** : si l'on a joué ici et ailleurs sans se synchroniser (ou si l'on se connecte pour la
+première fois sur un appareil qui a déjà une autre partie), le jeu montre les deux parties (date, argent, profondeur, temps de jeu)
+et **demande laquelle garder** ; l'autre est **mise de côté** (écran Compte → *La reprendre*). Les écritures dans le compte portent la
+révision qu'elles remplacent : si un autre appareil a écrit entre-temps, le serveur refuse. En cours de partie, une partie plus récente
+du compte est signalée, jamais chargée d'office. *Se déconnecter* garde la partie sur l'appareil ; *Supprimer mon compte* efface le
+compte et la partie en ligne.
+
+Le compte vit chez **Firebase** (Google, offre gratuite) : le jeu n'a pas de serveur à lui. **Il faut le mettre en place une fois**
+(créer le projet, publier les règles, renseigner `apiKey` et `projectId` dans `src/cloud/config.ts`) : tant que ce n'est pas fait, le
+bouton « Compte » n'existe pas. Mode d'emploi, règles, vie privée, dépannage et fonctionnement détaillé : [docs/COMPTE.md](docs/COMPTE.md).
+Le jeu à deux n'est pas concerné : l'invité n'a besoin d'aucun compte, et l'hôte garde sa partie comme avant.
+
 ## Contenu de la version 0.1 (tranche verticale)
 
 - Mine explorable persistante générée à partir d'une graine, galeries de départ, cavernes à découvrir.
@@ -398,6 +417,7 @@ node e2e/coop.mjs              # jeu à deux : deux pages du même navigateur (c
 node e2e/phone.mjs             # mise en page sur téléphone, à 11 tailles d'écran (marges de l'encoche comprises), après un build
 node e2e/touch.mjs             # gestes tactiles réels (CDP) : stick, Miner, Agir, ☰, défilement sans achat, pincer, pose, iPhone
 node e2e/panels.mjs            # fenêtres au doigt sur un jeu qui tourne : défilement, toucher long, contenu exact, rien ne glisse de côté (après un build)
+node e2e/cloud.mjs             # compte : deux appareils (deux profils de navigateur) et un faux Firebase local : création, reprise sur appareil neuf, parties qui divergent, réseau coupé, suppression (après un build)
 npx vite-node tests-net/mqtt.check.ts   # client MQTT contre un vrai courtier local (aedes)
 ```
 
