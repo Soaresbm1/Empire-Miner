@@ -10,6 +10,7 @@ pas de serveur à lui : le compte vit chez **Firebase**, le service de Google (o
 
 Le jeu parle directement aux API REST de Google (`fetch`), sans leur bibliothèque : rien à installer, rien de plus à charger.
 Tant que le projet n'est pas renseigné (`src/cloud/config.ts`), le bouton « Compte » **n'existe pas** et le jeu se comporte comme avant.
+Le projet de ce dépôt (`empire-miner`) est renseigné ; la mise en place ci-dessous sert à qui reprend le jeu avec son propre projet.
 
 ## Mise en place (une seule fois, par la personne qui publie le jeu)
 
@@ -46,6 +47,15 @@ Tant que le projet n'est pas renseigné (`src/cloud/config.ts`), le bouton « Co
 
 Chez Google (Firebase) : l'adresse e-mail, une empreinte du mot de passe (que le jeu ne voit ni ne garde), et la sauvegarde. Rien
 d'autre : pas de statistiques, pas de publicité. Sur l'appareil : un jeton de session (`localStorage`), jamais le mot de passe.
+
+## Limites et risques
+
+- **N'importe qui peut créer un compte** avec la clé (elle est publique) : c'est le principe d'un compte ouvert. Chaque compte ne peut écrire
+  que son propre document, de 500 000 signes au plus, et l'offre gratuite a des quotas (1 Gio de stockage, 20 000 écritures par jour) :
+  surveiller l'usage dans la console Firebase. Pour fermer les inscriptions : *Authentication* → *Paramètres* → *Actions de l'utilisateur* →
+  désactiver la création de comptes (les comptes existants continuent de marcher).
+- Une adresse e-mail est demandée, mais **non vérifiée** : un mot de passe oublié n'arrive que si l'adresse est la bonne.
+- Pas de connexion avec Google ou Apple (elles demandent une redirection de page, fragile sur iPhone en plein écran) : e-mail et mot de passe seulement.
 
 ## Comment la synchronisation décide (src/cloud)
 
@@ -97,7 +107,7 @@ L'écran *Compte* dit pourquoi, avec le détail technique en petit (à transmett
 - un **compte jetable** : création, mauvais mot de passe, jeton renouvelé, adresse ou mot de passe refusés, envoi et lecture de la partie,
   écriture périmée refusée (`conflict`), règles de sécurité (document d'un autre, taille, accès sans jeton) ;
 - la **synchronisation entre deux appareils** (reprise sans question, avance, question quand les deux ont joué, partie mise de côté) ;
-puis il supprime le compte et sa partie. Aucun e-mail n'est envoyé. Réussi le 12 octobre 2026 sur le projet `empire-miner` (35 vérifications).
+puis il supprime le compte et sa partie. Aucun e-mail n'est envoyé. Réussi le 12 octobre 2026 sur le projet `empire-miner` (34 vérifications).
 À relancer après tout changement des règles ou de la configuration. Si Google répond « API key not valid », la clé de `src/cloud/config.ts`
 est mal recopiée (`0` et `O`, `I` et `l` se ressemblent) : la reprendre avec l'icône « copier » (*Paramètres du projet* → *Général* →
 *Vos applications*). Le script envoie l'origine et la page du jeu : une clé limitée aux sites autorisés (étape 6) l'accepte.
