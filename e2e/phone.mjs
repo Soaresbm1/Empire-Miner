@@ -304,6 +304,24 @@ for (const dev of DEVICES) {
   if (want('menu')) {
     await shot(page, dev, '01-menu');
     checkMenu(dev, 'menu principal', await page.evaluate(MENU_FIT, '#menu-root .menu'));
+    // « Commandes » depuis le menu : le panneau s'ouvre devant, le menu s'efface, puis revient à la fermeture.
+    await page.evaluate(() => window.__EM.onAction('help', ''));
+    await page.waitForTimeout(250);
+    await shot(page, dev, '01-menu-commandes');
+    checkPanel(dev, 'commandes depuis le menu', await page.evaluate(PANEL_FIT));
+    check(await page.evaluate(() => getComputedStyle(document.querySelector('#menu-root')).visibility === 'hidden'), `${dev.id} · commandes depuis le menu : le menu s’efface`);
+    check(
+      await page.evaluate(() => {
+        const c = document.querySelector('#panel-root .panel .close');
+        if (!c) return false;
+        const r = c.getBoundingClientRect();
+        return c.contains(document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2));
+      }),
+      `${dev.id} · commandes depuis le menu : la croix du panneau est devant (touchée au doigt)`,
+    );
+    await page.evaluate(() => window.__EM.onAction('close', ''));
+    await page.waitForTimeout(250);
+    checkMenu(dev, 'menu principal, après « Commandes »', await page.evaluate(MENU_FIT, '#menu-root .menu'));
     await page.evaluate(() => window.__EM.onAction('play2', ''));
     await page.waitForTimeout(250);
     await shot(page, dev, '02-jouer-a-deux');
@@ -590,6 +608,18 @@ for (const dev of DEVICES) {
     await page.waitForTimeout(250);
     await shot(page, dev, '09-pause-deux');
     checkMenu(dev, 'menu pause à deux', await page.evaluate(MENU_FIT, '#menu-root .menu'));
+    // « Commandes » depuis le menu pause : le panneau passe devant, le menu s'efface, puis revient.
+    await page.evaluate(() => window.__EM.ui.showPauseMenu(false, 'medium', null));
+    await page.waitForTimeout(200);
+    await page.evaluate(() => window.__EM.onAction('help', ''));
+    await page.waitForTimeout(250);
+    await shot(page, dev, '10-pause-commandes');
+    checkPanel(dev, 'commandes depuis le menu pause', await page.evaluate(PANEL_FIT));
+    check(await page.evaluate(() => getComputedStyle(document.querySelector('#menu-root')).visibility === 'hidden'), `${dev.id} · commandes depuis la pause : le menu s’efface`);
+    await page.evaluate(() => window.__EM.onAction('close', ''));
+    await page.waitForTimeout(250);
+    check(await page.evaluate(() => getComputedStyle(document.querySelector('#menu-root')).visibility === 'visible' && !!document.querySelector('.pause-menu')), `${dev.id} · commandes depuis la pause : la fermeture ramène le menu pause`);
+    checkMenu(dev, 'menu pause, après « Commandes »', await page.evaluate(MENU_FIT, '#menu-root .menu'));
   }
 
   check(errors.length === 0, `${dev.id} : aucune erreur dans la console${errors.length ? ` — ${errors[0]}` : ''}`);

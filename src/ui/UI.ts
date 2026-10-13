@@ -511,9 +511,14 @@ export class UI {
     this.syncOverlay();
   }
 
-  /** Quand un panneau ou un menu est ouvert, les messages passent en bas pour ne pas le masquer. */
+  /**
+   * Quand un panneau ou un menu est ouvert, les messages passent en bas pour ne pas le masquer. Un panneau ouvert depuis un menu
+   * (« Commandes », « Plein écran… ») passe devant : le menu s'efface le temps de le lire, et revient à la fermeture du panneau
+   * (croix, Échap). Le menu reste ouvert pour le jeu : seul, le jeu reste figé tant que le menu pause est là.
+   */
   private syncOverlay(): void {
     document.getElementById('ui')?.classList.toggle('overlay-open', !!this.panel || !!this.menu);
+    this.menuRoot.classList.toggle('behind-panel', !!this.panel && !!this.menu);
   }
 
   setTab(tab: string): void {

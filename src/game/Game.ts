@@ -395,13 +395,13 @@ export class Game {
     if (!c) return;
     this.ui.setAccountLabel(this.accountText(c));
     if (this.ui.accountVisible()) this.renderAccount();
-    // Une question en attente alors qu'on est au menu principal : on la pose tout de suite.
-    else if (c.view.ask && this.mode === 'menu' && this.ui.homeVisible()) this.openAccount('main');
+    // Une question en attente alors qu'on est au menu principal : on la pose tout de suite (pas par-dessus « Commandes » : le bouton « Compte ⚠ » la signale).
+    else if (c.view.ask && this.mode === 'menu' && this.ui.homeVisible() && !this.ui.panel) this.openAccount('main');
   }
 
   private onCloudPulled(): void {
-    // Au menu principal, « Continuer » montre la date de la partie reçue.
-    if (this.mode === 'menu' && this.ui.homeVisible()) this.showMainMenu();
+    // Au menu principal, « Continuer » montre la date de la partie reçue (la fermeture de « Commandes » redessine le menu).
+    if (this.mode === 'menu' && this.ui.homeVisible() && !this.ui.panel) this.showMainMenu();
     this.ui.toast('Partie du compte récupérée.', 'good');
   }
 
