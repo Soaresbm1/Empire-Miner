@@ -61,6 +61,11 @@ export const OBJECTIVES: Objective[] = [
     done: (g) => g.project.phase >= 1,
   },
   {
+    id: 'craft',
+    text: 'Fabriquez un produit : la Manufacture (Atelier, onglet Machines) transforme les lingots en plaques et en acier ; les clients et les dernières phases du chantier en demandent',
+    done: (g) => g.stats.crafted >= 1,
+  },
+  {
     id: 'crown',
     text: 'Achevez le Grand Chevalement (cinq phases) : réglez des caisses d’expédition sur « Chantier » pour livrer sans y retourner',
     done: (g) => g.project.done,

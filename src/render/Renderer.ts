@@ -17,6 +17,7 @@ import { Wagon } from '../sim/Wagons';
 import { Building } from '../sim/structures/Building';
 import { Conveyor } from '../sim/structures/Conveyor';
 import { TunnelBorer } from '../sim/structures/Borer';
+import { Crafter } from '../sim/structures/Crafter';
 import { Smelter } from '../sim/structures/Smelter';
 import { Fan, Prop, Pump } from '../sim/structures/Safety';
 import { MARKER_KINDS, type Marker } from '../sim/Markers';
@@ -263,6 +264,8 @@ export class Renderer {
           const big = s.w > 1;
           for (const cx of big ? [s.x * TILE + 7, s.x * TILE + s.w * TILE - 8] : [s.x * TILE + 11])
             this.fx.emit('smoke', cx, s.y * TILE - (big ? 26 : 16), 'rgba(80,76,80,0.6)', 1, 6);
+        } else if (s instanceof Crafter && s.status === 'ok' && this.inView(s.x * TILE, s.y * TILE, 64)) {
+          this.fx.emit('smoke', s.x * TILE + s.w * TILE - 7, s.y * TILE - 24, 'rgba(80,84,92,0.55)', 1, 6);
         } else if (s instanceof TunnelBorer && (s.status === 'digging' || s.status === 'moving' || s.status === 'returning')) {
           const v = this.borerVehicleXY(s);
           if (this.inView(v.x, v.y, 64)) this.fx.emit('smoke', v.x + 8 - DX[s.dir] * 5, v.y + 2 - DY[s.dir] * 5, 'rgba(90,90,96,0.6)', 1, 6);
@@ -840,6 +843,7 @@ export class Renderer {
       if (s.home) this.drawBorer(s, s.x * TILE, s.y * TILE);
     }
     else if (s instanceof Smelter) this.drawSmelter(s);
+    else if (s instanceof Crafter) this.drawCrafter(s);
     else if (s instanceof Prop) this.drawProp(s);
     else if (s instanceof Fan) this.drawFan(s);
     else if (s instanceof Pump) this.drawPump(s);
@@ -1319,6 +1323,84 @@ export class Renderer {
     if (hot && Math.random() < (big ? 0.25 : 0.12)) this.fx.emit('spark', mx + mw / 2, my + mh / 2, '#ffb040', 1, 25);
   }
 
+  /**
+   * Manufacture (2×2) : un bâti d'acier bleuté avec une presse qui monte et descend quand elle travaille, une enclume où
+   * pose la pièce en cours, une cheminée, une lampe d'état, et une plaque au-dessus qui montre ce qu'elle fabrique.
+   */
+  private drawCrafter(s: Crafter): void {
+    const ctx = this.ctx;
+    const pen = this.pen;
+    const x = s.x * TILE;
+    const y = s.y * TILE;
+    const W = s.w * TILE;
+    const H = s.h * TILE;
+    const top = 12; // hauteur du bâti au-dessus de sa case (vue de trois quarts)
+    const working = s.status === 'ok';
+    pen.shadow(x + 1, y + H - 3, W - 1);
+    // Cheminée de tôle à droite, derrière le bâti.
+    pen.slab(x + W - 10, y - top - 8, 5, 9, '#5d626d');
+    pen.rect(x + W - 11, y - top - 9, 7, 2, INK);
+    pen.rect(x + W - 10, y - top - 9, 5, 1, '#8a909c');
+    // Bâti : contour, tôle bleutée, joints et rivets.
+    pen.rect(x, y - top, W, H + top - 1, INK);
+    pen.slab(x + 1, y - top + 1, W - 2, H + top - 3, '#5a6a82', false);
+    pen.rect(x + 1, y - top + 7, W - 2, 1, '#3d4a60');
+    pen.rect(x + 1, y - top + 8, W - 2, 1, '#7c8da6');
+    for (const rx of [x + 3, x + W - 4]) for (const ry of [y - top + 3, y + H - 4]) pen.rivet(rx, ry, '#9aa6ba');
+    // Fenêtre de la presse : un cadre sombre, le piston qui descend sur la pièce.
+    const wx = x + 7;
+    const wy = y - top + 3;
+    pen.rect(wx - 1, wy - 1, W - 12, 12, INK);
+    pen.rect(wx, wy, W - 14, 10, '#242a36');
+    const drop = working ? Math.round(2.5 + 2.5 * Math.sin(s.activeTime * 7)) : 0;
+    pen.rect(x + W / 2 - 1, wy, 2, 3 + drop, '#aab4c4'); // tige
+    pen.slab(x + W / 2 - 4, wy + 3 + drop, 8, 3, '#8a96aa'); // tête
+    // Enclume et pièce en cours : le produit que fabrique la machine.
+    const ay = y + H - 12;
+    pen.slab(x + 6, ay, W - 12, 4, '#3a3f4a');
+    pen.rect(x + 7, ay + 4, W - 14, 3, INK);
+    const piece = s.recipe ? this.nuggets.get(s.recipe) : null;
+    if (piece) ctx.drawImage(piece, Math.round(x + W / 2 - piece.width / 2), ay - piece.height + 2);
+    if (working && drop >= 4 && this.profile.detail && Math.random() < 0.4) this.fx.emit('spark', x + W / 2, ay - 1, '#ffe28a', 1, 22);
+    // Lampe d'état, en haut à gauche.
+    const blink = Math.floor(this.time * 3) % 2 === 0;
+    const lamp = s.status === 'ok' ? '#6fe36a' : s.status === 'nofuel' ? '#d0342c' : s.status === 'full' ? '#e0a020' : s.status === 'norecipe' ? (blink ? '#e0a020' : '#5a4a1a') : '#3f5a3c';
+    pen.rect(x + 3, y - top + 3, 4, 4, INK);
+    pen.rect(x + 4, y - top + 4, 2, 2, lamp);
+    if (working && this.profile.glow) {
+      ctx.fillStyle = 'rgba(120,255,120,0.18)';
+      ctx.fillRect(x + 1, y - top + 2, 6, 6);
+    }
+    // Goulotte de sortie du côté de la flèche, avec le produit qui attend.
+    ctx.save();
+    ctx.translate(x + W / 2, y + H / 2);
+    ctx.rotate((s.dir * Math.PI) / 2);
+    const edge = (s.dir % 2 === 0 ? W : H) / 2;
+    pen.rect(edge - 3, -5, 5, 10, INK);
+    pen.rect(edge - 2, -4, 3, 8, '#7d818b');
+    pen.rect(edge - 2, -4, 1, 8, '#b4b9c4');
+    ctx.restore();
+    if (s.output.length) {
+      const img = this.nuggets.get(s.output[0]);
+      if (img) ctx.drawImage(img, Math.round(x + W / 2 + DX[s.dir] * (W / 2 - 2) - img.width / 2), Math.round(y + H / 2 + DY[s.dir] * (H / 2 - 2) - img.height / 2));
+    }
+    this.drawArrow(x + W / 2 + DX[s.dir] * (W / 2 - 5), y + H / 2 + DY[s.dir] * (H / 2 - 5) - (s.dir % 2 ? 0 : 3), s.dir, '#ffffff');
+    // Plaque de la recette au-dessus du bâti : le produit en petit, ou un point d'interrogation si rien n'est choisi.
+    const px = x + 2;
+    const py = y - top - 10;
+    pen.rect(px, py, 12, 10, INK);
+    pen.rect(px + 1, py + 1, 10, 8, '#e8d8b0');
+    pen.rect(px + 1, py + 1, 10, 1, '#fff3d0');
+    if (piece) ctx.drawImage(piece, px + 1 + Math.floor((10 - piece.width) / 2), py + 1 + Math.floor((8 - piece.height) / 2));
+    else for (const [gx, gy] of [[5, 2], [4, 3], [6, 3], [6, 4], [5, 5], [5, 7]]) pen.px(px + gx, py + gy, '#5a4630');
+    // Jauge de charbon au pied du bâti.
+    const fuel = s.fuelMax ? (s.fuelUnits + (s.burn > 0 ? 1 : 0)) / s.fuelMax : 0;
+    ctx.fillStyle = INK;
+    ctx.fillRect(x + 1, y + H - 1, W - 2, 2);
+    ctx.fillStyle = fuel > 0.2 ? '#f08a24' : '#d0342c';
+    ctx.fillRect(x + 1, y + H - 1, Math.round((W - 2) * Math.min(1, fuel)), 2);
+  }
+
   /** Eau au sol (sous les machines et le joueur) et indices de poches sur les parois qui bordent une galerie. */
   private drawGroundHazards(state: GameState, x0: number, y0: number, x1: number, y1: number): void {
     const ctx = this.ctx;
@@ -1709,6 +1791,11 @@ export class Renderer {
         icon = s.status === 'nofuel' ? 'nofuel' : s.status === 'full' ? 'full' : s.status === 'ok' && s.heat < 1 ? 'hot' : null;
         at = { x: s.x * TILE + (s.w - 1) * 8, y: s.y * TILE - (s.w > 1 ? 14 : 8) };
       }
+      else if (s instanceof Crafter) {
+        // Manufacture sans charbon alors qu'elle a de quoi travailler, ou sortie saturée.
+        icon = s.status === 'nofuel' ? 'nofuel' : s.status === 'full' ? 'full' : s.status === 'ok' && s.heat < 1 ? 'hot' : null;
+        at = { x: s.x * TILE + (s.w - 1) * 8, y: s.y * TILE - 14 };
+      }
       else if (s instanceof TunnelBorer) {
         icon = s.status === 'nofuel' ? 'nofuel' : s.status === 'waiting' ? 'full' : s.status === 'blocked' ? 'stop' : s.status === 'digging' && s.heat < 1 ? 'hot' : null;
         if (icon === 'full' || icon === 'hot') at = this.borerVehicleXY(s);
@@ -2035,6 +2122,8 @@ export class Renderer {
       if (s instanceof Drill) punch((s.x + 0.5) * TILE, (s.y + 0.5) * TILE, s.status === 'ok' ? 3.2 : 1.6, 0.8);
       // Four et fonderie : la bouche éclaire autour d'elle quand ils fondent.
       else if (s instanceof Smelter) punch((s.x + s.w / 2) * TILE, (s.y + s.h - 0.3) * TILE, s.status === 'ok' ? 3 + s.w : 1.4, 0.85);
+      // Manufacture : la lampe et le travail éclairent un peu autour d'elle.
+      else if (s instanceof Crafter) punch((s.x + s.w / 2) * TILE, (s.y + s.h - 0.4) * TILE, s.status === 'ok' ? 3.4 : 1.6, 0.8);
       // Phare de la foreuse de percement : éclaire le front de taille, où qu'elle soit ; la base a sa lampe.
       else if (s instanceof TunnelBorer) {
         const v = this.borerVehicleXY(s);

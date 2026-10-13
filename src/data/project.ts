@@ -80,10 +80,11 @@ export const PHASES: readonly PhaseSpec[] = [
     id: 'gilding',
     name: 'Poulies dorées',
     blurb: "Les poulies sont plaquées d'or : elles ne rouilleront jamais.",
+    // Les dorures se font à la Manufacture : plaques d'or, et de l'acier (2 lingots de fer chacun) pour les poulies.
     needs: [
-      { res: 'gold_ingot', qty: 40 },
+      { res: 'gold_plate', qty: 40 },
       { res: 'silver_ingot', qty: 80 },
-      { res: 'iron_ingot', qty: 100 },
+      { res: 'steel', qty: 50 },
     ],
     money: 25000,
     contracts: 9,
@@ -93,10 +94,11 @@ export const PHASES: readonly PhaseSpec[] = [
     id: 'crown',
     name: 'Couronnement',
     blurb: 'Un diamant au sommet : le Grand Chevalement domine la mine.',
+    // Le diamant du sommet est taillé à la Manufacture, et la couronne se plaque d'or.
     needs: [
-      { res: 'gold_ingot', qty: 100 },
+      { res: 'gold_plate', qty: 100 },
       { res: 'silver_ingot', qty: 100 },
-      { res: 'diamond', qty: 12 },
+      { res: 'cut_diamond', qty: 12 },
     ],
     money: 75000,
     contracts: 14,

@@ -9,6 +9,7 @@ import { GAIN_MINUTES, type MinuteGain, type Rates } from '../sim/Production';
 import type { TunnelBorer } from '../sim/structures/Borer';
 import type { Drill } from '../sim/structures/Drill';
 import type { ShippingCrate } from '../sim/structures/ShippingCrate';
+import type { Crafter } from '../sim/structures/Crafter';
 import type { Smelter } from '../sim/structures/Smelter';
 import type { Storage } from '../sim/structures/Storage';
 import { stuckWorkers } from './crew';
@@ -79,13 +80,14 @@ function cell(v: number): string {
 }
 
 function resourceTable(r: Rates): string {
+  // Un lingot est « fondu », un produit « fabriqué » : une ressource n'est jamais les deux, la colonne les réunit.
   const rows = RESOURCES.filter((res) => res.id !== 'stone')
-    .map((res) => ({ res, ore: r.ore[res.id] ?? 0, ingots: r.ingots[res.id] ?? 0, sold: r.sold[res.id] ?? 0 }))
-    .filter((x) => x.ore > SHOWN || x.ingots > SHOWN || x.sold > SHOWN)
-    .map((x) => `<tr><td>${resIcon(x.res.id)} ${x.res.name}</td>${cell(x.ore)}${cell(x.ingots)}${cell(x.sold)}</tr>`)
+    .map((res) => ({ res, ore: r.ore[res.id] ?? 0, made: (r.ingots[res.id] ?? 0) + (r.made[res.id] ?? 0), sold: r.sold[res.id] ?? 0 }))
+    .filter((x) => x.ore > SHOWN || x.made > SHOWN || x.sold > SHOWN)
+    .map((x) => `<tr><td>${resIcon(x.res.id)} ${x.res.name}</td>${cell(x.ore)}${cell(x.made)}${cell(x.sold)}</tr>`)
     .join('');
-  if (!rows) return '<p class="empty">Rien d’extrait, de fondu ni de vendu depuis un moment : minez, ou lancez une foreuse !</p>';
-  return `<table class="table"><thead><tr><th>Ressource</th><th class="num">Extrait</th><th class="num">Fondu</th><th class="num">Vendu</th></tr></thead><tbody>${rows}</tbody></table>
+  if (!rows) return '<p class="empty">Rien d’extrait, de fondu, de fabriqué ni de vendu depuis un moment : minez, ou lancez une foreuse !</p>';
+  return `<table class="table"><thead><tr><th>Ressource</th><th class="num">Extrait</th><th class="num">Fabriqué</th><th class="num">Vendu</th></tr></thead><tbody>${rows}</tbody></table>
     <p class="hint">Unités par minute (hors pierre).</p>`;
 }
 
@@ -141,6 +143,18 @@ function machineWatch(g: GameState): string {
         } else if (f.status === 'nofuel') flag(f.def.name, 'plus de charbon', 'bad');
         else if (f.status === 'full') flag(f.def.name, 'sortie saturée', 'warn');
         else flag(f.def.name, 'attend du minerai', 'info');
+        break;
+      }
+      case 'crafter': {
+        const c = s as Crafter;
+        count++;
+        if (c.status === 'ok') {
+          running++;
+          if (c.heat < 1) flag(c.def.name, 'ralentie par la chaleur', 'warn');
+        } else if (c.status === 'nofuel') flag(c.def.name, 'plus de charbon', 'bad');
+        else if (c.status === 'full') flag(c.def.name, 'sortie saturée', 'warn');
+        else if (c.status === 'norecipe') flag(c.def.name, 'aucune recette choisie', 'warn');
+        else flag(c.def.name, 'attend des matières', 'info');
         break;
       }
       case 'shipping': {

@@ -7,6 +7,7 @@
  * (« 3 charbons chargés »…) sont donc émis ici, comme événements, et non plus par l'interface.
  */
 import type { Dir } from '../core/dir';
+import { hasRecipe } from '../data/recipes';
 import { getResource, hasResource } from '../data/resources';
 import { MARKER_KINDS, type MarkerKind } from './Markers';
 import type { GameState } from './GameState';
@@ -14,6 +15,7 @@ import { isJob, type WorkerJob } from '../data/workers';
 import { Conveyor } from './structures/Conveyor';
 import { Drill } from './structures/Drill';
 import { TunnelBorer } from './structures/Borer';
+import { Crafter } from './structures/Crafter';
 import { Smelter } from './structures/Smelter';
 import { Sorter } from './structures/Sorter';
 import { RailStation, RailSwitch, type SwitchSetting } from './structures/Rail';
@@ -69,6 +71,10 @@ export type SimAction =
   | ({ k: 'smelterFuel' } & At)
   | ({ k: 'smelterDeposit' } & At)
   | ({ k: 'smelterCollect' } & At)
+  | ({ k: 'crafterFuel' } & At)
+  | ({ k: 'crafterDeposit' } & At)
+  | ({ k: 'crafterCollect' } & At)
+  | ({ k: 'crafterRecipe'; recipe: string } & At)
   | ({ k: 'stationDeposit' } & At)
   | ({ k: 'stationTakeAll' } & At)
   | ({ k: 'switchSet'; setting: string } & At)
@@ -348,6 +354,34 @@ export function applyAction(g: GameState, a: SimAction): void {
       if (!(s instanceof Smelter)) return;
       const n = g.smelterCollect(s);
       if (n) msg(`${n} ${plural(n, 'lingot')} ${plural(n, 'récupéré')}.`);
+      return;
+    }
+    case 'crafterFuel': {
+      const s = at(a);
+      if (!(s instanceof Crafter)) return;
+      const n = g.fuelCrafter(s);
+      if (n) msg(`${n} charbon${n > 1 ? 's' : ''} chargé${n > 1 ? 's' : ''} dans la Manufacture.`);
+      return;
+    }
+    case 'crafterDeposit': {
+      const s = at(a);
+      if (!(s instanceof Crafter)) return;
+      const n = g.crafterDeposit(s);
+      if (n) msg(`${n} ${plural(n, 'objet')} ${plural(n, 'déposé')} dans la Manufacture.`);
+      else msg(s.recipe ? 'Rien dans votre sac que cette recette utilise.' : "Choisissez d'abord ce que la Manufacture fabrique.", 'info');
+      return;
+    }
+    case 'crafterCollect': {
+      const s = at(a);
+      if (!(s instanceof Crafter)) return;
+      const n = g.crafterCollect(s);
+      if (n) msg(`${n} ${plural(n, 'produit')} ${plural(n, 'récupéré')}.`);
+      return;
+    }
+    case 'crafterRecipe': {
+      const s = at(a);
+      if (!(s instanceof Crafter) || !hasRecipe(a.recipe)) return;
+      if (g.setCrafterRecipe(s, a.recipe)) msg(`Manufacture réglée sur : ${getResource(a.recipe).name}.`, 'info');
       return;
     }
     case 'stationDeposit': {

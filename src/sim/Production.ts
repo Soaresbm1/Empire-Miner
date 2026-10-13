@@ -26,6 +26,8 @@ interface Slot {
   machineOre: number;
   /** Lingots sortis des fours et fonderies. */
   ingots: Tally;
+  /** Produits sortis des Manufactures (plaques, acier, diamant taillé). */
+  made: Tally;
   /** Ressources vendues, au comptoir ou par les caisses d'expédition. */
   sold: Tally;
   /** Argent des ventes au comptoir et des caisses d'expédition. */
@@ -33,13 +35,14 @@ interface Slot {
   crate: number;
 }
 
-export type SlotSave = { i: number; o: Tally; m: number; g: Tally; s: Tally; c: number; a: number };
+export type SlotSave = { i: number; o: Tally; m: number; g: Tally; s: Tally; c: number; a: number; f?: Tally };
 
 /** Débits moyens par minute. */
 export interface Rates {
   ore: Tally;
   machineOre: number;
   ingots: Tally;
+  made: Tally;
   sold: Tally;
   counter: number;
   crate: number;
@@ -53,7 +56,7 @@ export interface MinuteGain {
   crate: number;
 }
 
-const emptySlot = (i: number): Slot => ({ i, ore: {}, machineOre: 0, ingots: {}, sold: {}, counter: 0, crate: 0 });
+const emptySlot = (i: number): Slot => ({ i, ore: {}, machineOre: 0, ingots: {}, made: {}, sold: {}, counter: 0, crate: 0 });
 
 function add(t: Tally, res: string, n: number): void {
   t[res] = (t[res] ?? 0) + n;
@@ -97,6 +100,11 @@ export class ProductionLog {
     add(this.current().ingots, res, n);
   }
 
+  /** Un produit sorti d'une Manufacture. */
+  addMade(res: string, n = 1): void {
+    add(this.current().made, res, n);
+  }
+
   /** Une vente : ce qui est parti (`items`) et l'argent obtenu, au comptoir ou par une caisse. */
   addSale(items: Tally, total: number, viaCrate: boolean): void {
     const s = this.current();
@@ -115,10 +123,11 @@ export class ProductionLog {
     const now = this.clock();
     const first = Math.max(0, this.index - RATE_SLOTS + 1);
     const minutes = Math.max(30, now - first * SLOT_SECONDS) / 60;
-    const r: Rates = { ore: {}, machineOre: 0, ingots: {}, sold: {}, counter: 0, crate: 0, minutes };
+    const r: Rates = { ore: {}, machineOre: 0, ingots: {}, made: {}, sold: {}, counter: 0, crate: 0, minutes };
     for (const s of this.since(first)) {
       merge(r.ore, s.ore, 1 / minutes);
       merge(r.ingots, s.ingots, 1 / minutes);
+      merge(r.made, s.made, 1 / minutes);
       merge(r.sold, s.sold, 1 / minutes);
       r.machineOre += s.machineOre / minutes;
       r.counter += s.counter / minutes;
@@ -142,7 +151,7 @@ export class ProductionLog {
   }
 
   serialize(): SlotSave[] {
-    return this.slots.map((s) => ({ i: s.i, o: { ...s.ore }, m: s.machineOre, g: { ...s.ingots }, s: { ...s.sold }, c: s.counter, a: s.crate }));
+    return this.slots.map((s) => ({ i: s.i, o: { ...s.ore }, m: s.machineOre, g: { ...s.ingots }, s: { ...s.sold }, c: s.counter, a: s.crate, ...(Object.keys(s.made).length ? { f: { ...s.made } } : {}) }));
   }
 
   load(data: SlotSave[] | undefined): void {
@@ -150,7 +159,7 @@ export class ProductionLog {
     if (!Array.isArray(data)) return;
     for (const d of data) {
       if (!d || !Number.isFinite(d.i)) continue;
-      this.slots.push({ i: d.i, ore: { ...d.o }, machineOre: Number(d.m) || 0, ingots: { ...d.g }, sold: { ...d.s }, counter: Number(d.c) || 0, crate: Number(d.a) || 0 });
+      this.slots.push({ i: d.i, ore: { ...d.o }, machineOre: Number(d.m) || 0, ingots: { ...d.g }, made: d.f && typeof d.f === 'object' ? { ...d.f } : {}, sold: { ...d.s }, counter: Number(d.c) || 0, crate: Number(d.a) || 0 });
     }
     this.slots.sort((a, b) => a.i - b.i);
   }

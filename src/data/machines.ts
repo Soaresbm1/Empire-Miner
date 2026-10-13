@@ -58,7 +58,7 @@ export interface MachineGroup {
 /** Groupes de machines, dans l'ordre du magasin et de la barre de construction. */
 export const MACHINE_GROUPS: MachineGroup[] = [
   { id: 'extraction', title: 'Extraction', tab: 'Extraction', icon: 'drill', categories: ['extraction'] },
-  { id: 'traitement', title: 'Traitement', tab: 'Fonte', icon: 'furnace', categories: ['traitement'] },
+  { id: 'traitement', title: 'Traitement', tab: 'Usine', icon: 'furnace', categories: ['traitement'] },
   { id: 'transport', title: 'Transport', tab: 'Transport', icon: 'conveyor', categories: ['logistique'] },
   { id: 'rail', title: 'Wagonnets et rails', tab: 'Rails', icon: 'wagon', categories: ['rail'] },
   { id: 'stockage', title: 'Stockage et vente', tab: 'Stockage', icon: 'storage', categories: ['stockage', 'vente'] },
@@ -72,6 +72,14 @@ export interface SmelterSpec {
   /** Minerai en attente de fonte (morceaux). */
   inputMax: number;
   /** Lingots prêts à sortir (morceaux). */
+  outputMax: number;
+}
+
+/** Manufacture : fabrique des produits (plaques, acier, diamant taillé) à partir de lingots, selon la recette choisie. */
+export interface CrafterSpec {
+  /** Place pour chaque matière de la recette en cours (unités). */
+  inputMax: number;
+  /** Produits prêts à sortir (unités). */
   outputMax: number;
 }
 
@@ -164,6 +172,8 @@ export interface MachineDef {
   borer?: BorerSpec;
   /** Four ou fonderie : fond le minerai en lingots. */
   smelter?: SmelterSpec;
+  /** Manufacture : fabrique des produits à partir de lingots (recettes dans `data/recipes.ts`). */
+  crafter?: CrafterSpec;
 }
 
 export const MACHINES: MachineDef[] = [
@@ -451,6 +461,23 @@ export const MACHINES: MachineDef[] = [
     fuel: { res: 'coal', secondsPerUnit: 15, maxUnits: 20 },
     unlock: { pickaxeTier: 3, text: 'Nécessite la Pioche en fer' },
     smelter: { smeltTime: 0.5, inputMax: 40, outputMax: 40 },
+  },
+  {
+    id: 'crafter',
+    name: 'Manufacture',
+    summary: 'Transforme les lingots en plaques et en acier, et taille les diamants. Brûle du charbon.',
+    category: 'traitement',
+    description:
+      "Atelier de transformation de 2×2 cases. Choisissez ce qu'elle fabrique avec E : plaque de cuivre, de fer, d'argent ou d'or (1 lingot), acier (2 lingots de fer) ou diamant taillé. Les matières entrent par un convoyeur ou à la main, sur n'importe quel côté sauf la sortie ; le produit est poussé devant la flèche. Elle brûle du charbon comme un four. Les clients et les dernières phases du Grand Chevalement réclament ces produits.",
+    price: 900,
+    w: 2,
+    h: 2,
+    solid: true,
+    rotatable: true,
+    stats: { speed: 1, power: 0, capacity: 12, efficiency: 1, level: 1 },
+    fuel: { res: 'coal', secondsPerUnit: 20, maxUnits: 12 },
+    unlock: { pickaxeTier: 2, text: 'Nécessite la Pioche améliorée' },
+    crafter: { inputMax: 12, outputMax: 12 },
   },
   {
     id: 'prop',

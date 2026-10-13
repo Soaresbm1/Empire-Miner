@@ -22,6 +22,8 @@ export interface StructureContext {
   hazards: HazardSystem;
   /** Statistique : un four ou une fonderie vient de sortir un lingot. */
   countSmelted(res: string, from: Structure): void;
+  /** Statistique : une Manufacture vient de fabriquer une unité de `res` (plaque, acier, diamant taillé). */
+  countCrafted(res: string, from: Structure): void;
   /** Statistique : une foreuse vient d'extraire une unité de `res`. */
   countExtracted(res: string, from: Structure): void;
   /** Vente automatique (caisse d'expédition) : crédite l'argent du joueur. `items` : ce qui est parti, par ressource. */
@@ -47,6 +49,16 @@ export interface StructureSave {
   y: number;
   dir: Dir;
   [key: string]: unknown;
+}
+
+/** Cases juste devant la sortie d'une machine posée (une machine large en a plusieurs : 1×1 → 1, 2×2 → 2). */
+export function frontTilesOf(s: { x: number; y: number; w: number; h: number; dir: Dir }): { x: number; y: number }[] {
+  const out: { x: number; y: number }[] = [];
+  if (s.dir === 0) for (let k = 0; k < s.h; k++) out.push({ x: s.x + s.w, y: s.y + k });
+  else if (s.dir === 2) for (let k = 0; k < s.h; k++) out.push({ x: s.x - 1, y: s.y + k });
+  else if (s.dir === 1) for (let k = 0; k < s.w; k++) out.push({ x: s.x + k, y: s.y + s.h });
+  else for (let k = 0; k < s.w; k++) out.push({ x: s.x + k, y: s.y - 1 });
+  return out;
 }
 
 export abstract class Structure {

@@ -7,10 +7,12 @@ import { METERS_PER_TILE, SURFACE_ROWS, TILE, depthAt } from '../core/constants'
 import { BorerLevelSpec, MachineLevel, kitName } from '../data/machines';
 import { HEAT } from '../data/hazards';
 import { MARKER_KINDS, MARKER_ORDER, MAX_MARKERS } from '../sim/Markers';
+import { RECIPES, type RecipeSpec } from '../data/recipes';
 import { RESOURCES, getResource } from '../data/resources';
 import { WORKER_JOBS } from '../data/workers';
 import type { GameState } from '../sim/GameState';
 import type { BorerStatus, ReturnReason, TunnelBorer } from '../sim/structures/Borer';
+import type { Crafter, CrafterStatus } from '../sim/structures/Crafter';
 import type { Smelter, SmelterStatus } from '../sim/structures/Smelter';
 import type { Drill } from '../sim/structures/Drill';
 import type { ShipMode, ShippingCrate } from '../sim/structures/ShippingCrate';
@@ -19,7 +21,7 @@ import type { RailStation, RailSwitch, SwitchSetting } from '../sim/structures/R
 import type { Storage } from '../sim/structures/Storage';
 import { filterChips } from './chestFilter';
 import { esc, kg, money, num, rarityTag, resIcon } from './format';
-import { BOARD_TABS, counterBanner, isBoardTab, marketTab, priceCell } from './market';
+import { BOARD_TABS, counterBanner, isBoardTab, knownOre, marketTab, priceCell } from './market';
 import { ordersTab } from './orders';
 import { productionStats } from './stats';
 import { btn, stat } from './widgets';
@@ -596,6 +598,74 @@ export function smelterPanel(g: GameState, s: Smelter): string {
     <p class="hint">Le minerai entre par n'importe quel côté sauf la sortie ${DIR_ARROWS[s.dir]} ; le charbon entre de partout (un coffre de charbon collé le recharge). Les lingots sont poussés devant la flèche (convoyeur, coffre, caisse d'expédition). Le charbon ne brûle que pendant la fonte.</p>`;
 }
 
+// ------------------------------------------------------------------ manufacture
+
+const CRAFTER_STATUS: Record<CrafterStatus, [string, string]> = {
+  ok: ['Fabrique', 'good'],
+  idle: ['En attente de matières (convoyeur ou dépôt du sac)', 'warn'],
+  nofuel: ["À l'arrêt : plus de charbon", 'bad'],
+  full: ['Bloquée : la sortie est saturée (rien ne prend les produits devant la flèche)', 'warn'],
+  norecipe: ['Choisissez ce que la Manufacture fabrique (liste ci-dessous)', 'warn'],
+};
+
+/** « 2 × Lingot de fer » : les matières d'une recette, avec leurs icônes. */
+function recipeInputs(r: RecipeSpec): string {
+  return Object.entries(r.inputs)
+    .map(([res, n]) => `${n} × ${resIcon(res)} ${getResource(res).name}`)
+    .join(' + ');
+}
+
+/** Ce que valent, aux prix de base, les matières d'une recette. */
+const inputsValue = (r: RecipeSpec): number => Object.entries(r.inputs).reduce((v, [res, n]) => v + getResource(res).value * n, 0);
+
+export function crafterPanel(g: GameState, s: Crafter): string {
+  const r = s.current;
+  const product = r ? getResource(r.id) : null;
+  const [label, cls] = CRAFTER_STATUS[s.status];
+  const secs = s.fuelSeconds();
+  const coal = g.inventory.count('coal');
+  const inBag = r ? Object.keys(r.inputs).reduce((n, res) => n + g.inventory.count(res), 0) : 0;
+  const waiting = r
+    ? Object.keys(r.inputs)
+        .map((res) => stat(`${resIcon(res)} ${getResource(res).name}`, `${s.input[res] ?? 0} / ${s.spec.inputMax}`))
+        .join('')
+    : '';
+  // Les recettes dont on connaît les matières (un lingot fondu, un diamant trouvé), plus celle qui est choisie.
+  const known = RECIPES.filter((x) => x.id === s.recipe || Object.keys(x.inputs).every((res) => knownOre(g, res)));
+  const hidden = RECIPES.length - known.length;
+  const choices = known
+    .map((x) => btn('crafterRecipe', `${resIcon(x.id)} ${getResource(x.id).name}`, { arg: x.id, cls: `small ${x.id === s.recipe ? 'on' : 'off'}` }))
+    .join('');
+  const rows = known
+    .map((x) => {
+      const out = getResource(x.id);
+      return `<tr class="${x.id === s.recipe ? 'sel' : ''}"><td>${recipeInputs(x)}</td><td>→</td><td>${x.yield > 1 ? `${x.yield} × ` : ''}${resIcon(out.id)} ${out.name}</td><td class="num">${money(inputsValue(x))} → <b class="gold">${money(out.value * x.yield)}</b></td><td class="num">${num(x.time, 0)} s</td></tr>`;
+    })
+    .join('');
+  return `
+    <div class="status ${cls}">● ${s.status === 'ok' && product ? `Fabrique : ${product.name}` : label}</div>
+    ${heatNote(g, s.x, s.y, 'travaille')}
+    <div class="bar"><div style="width:${Math.round(s.progress * 100)}%"></div><span>${product ? `${product.name} : ${Math.round(s.progress * 100)} %` : 'Aucune recette'}</span></div>
+    <div class="cards" style="margin-top:10px"><div class="card">
+      ${r ? waiting : stat('Matières en attente', '—')}
+      ${stat('Produits prêts', `${s.output.length} / ${s.spec.outputMax}`)}
+      <div class="chips">${chips(s.output)}</div>
+      ${stat('Cadence', r ? `${num(s.perMinute(), 0)} / min` : '—')}
+      ${stat('Fabriqués au total', String(s.made))}
+    </div><div class="card">
+      ${stat('Charbon', `${s.fuelUnits} / ${s.fuelMax}`)}
+      ${stat('Autonomie', `${Math.floor(secs / 60)} min ${Math.floor(secs % 60)} s de travail`)}
+      <div class="buy">${btn('crafterFuel', `Charger le charbon du sac (${coal})`, { cls: 'primary', disabled: coal <= 0 || s.fuelUnits >= s.fuelMax })}</div>
+      <div class="buy">${btn('crafterDeposit', `Déposer mes matières (${inBag})`, { disabled: !r || inBag <= 0 })}
+        ${btn('crafterCollect', `Récupérer les produits (${s.output.length})`, { disabled: !s.output.length })}</div>
+      <div class="buy">${btn('crafterRotate', 'Tourner ↻')}</div>
+    </div></div>
+    <h4>Ce qu'elle fabrique</h4>
+    ${known.length ? `<div class="buy">${choices}</div>` : '<div class="status warn">Aucune recette pour l\'instant : fondez un lingot dans un four, ou trouvez un diamant.</div>'}
+    ${rows ? `<table class="table recipes"><thead><tr><th>Matières</th><th></th><th>Produit</th><th class="num">Valeur</th><th class="num">Durée</th></tr></thead><tbody>${rows}</tbody></table>` : ''}
+    <p class="hint">${hidden > 0 ? 'D\'autres recettes apparaissent quand vous aurez fondu un nouveau métal ou trouvé un diamant. ' : ''}Les matières de la recette entrent par n'importe quel côté sauf la sortie ${DIR_ARROWS[s.dir]} ; le charbon entre de partout (un coffre de charbon collé le recharge, un ravitailleur aussi). Une matière qui n'est pas dans la recette est refusée. Les produits sont poussés devant la flèche (convoyeur, coffre, caisse d'expédition). Changer de recette vous rend les matières qu'elle n'utilise pas.</p>`;
+}
+
 // ------------------------------------------------------------------ carte
 
 /** Carte complète : le canvas est dessiné à chaque image par le jeu ; à droite, la légende. */
@@ -652,6 +722,7 @@ export function mapPanel(g: GameState, colors: Record<string, string>, touch = f
         ${item(sw(colors.drill), 'Foreuse')}
         ${item(sw(colors.borer), 'Foreuse de percement')}
         ${item(sw(colors.furnace), 'Four, fonderie')}
+        ${item(sw(colors.crafter), 'Manufacture')}
         ${item(sw(colors.safety), 'Étai, ventilateur, pompe')}
         ${item(sw(colors.water), 'Galerie inondée')}
         ${item(sw(colors.gas), 'Grisou')}
@@ -718,6 +789,7 @@ export function helpPanel(keys: { move: string; label: (c: string) => string; to
     <div><h4>Commandes</h4><p>Des clients achètent une quantité précise de minerai ou de lingots, plus cher que le marché. Acceptez une proposition au Tableau (onglet <b>Commandes</b>), puis livrez avant l'échéance : à la main (« Livrer mon sac »), ou avec une <b>caisse d'expédition réglée sur « Commandes »</b>. En retard, le client paie seulement ce qui est livré, au prix de base. Chaque commande honorée fait monter votre rang</p></div>
     <div><h4>Grand Chevalement</h4><p>${k('KeyE')} devant le grand chantier, à droite de l'atelier : cinq phases, chacune demande des matériaux, de l'argent pour les ouvriers et des commandes honorées. Livrez à la main, ou réglez une <b>caisse d'expédition sur « Chantier »</b> et amenez-y vos lingots par convoyeur. Chaque phase terminée fait grandir la tour et accorde un avantage</p></div>
     <div><h4>Four et fonderie</h4><p>Minerai (convoyeur ou ${k('KeyE')} : déposer) + charbon → lingots vendus 2,5 fois plus cher, poussés devant la flèche</p></div>
+    <div><h4>Manufacture</h4><p>Machine 2×2 de l'Atelier (onglet Machines, Pioche améliorée). ${k('KeyE')} dessus pour choisir sa recette : <b>plaque</b> de cuivre, de fer, d'argent ou d'or (1 lingot), <b>acier</b> (2 lingots de fer), <b>diamant taillé</b> (1 diamant). Les lingots arrivent par convoyeur ou à la main, elle brûle du charbon comme un four et pousse ses produits devant la flèche. Ils se vendent plus cher que leurs matières, suivent le cours du métal, et les clients comme les dernières phases du Grand Chevalement en réclament</p></div>
     <div><h4>Améliorer une foreuse</h4><p>${k('KeyE')} sur la foreuse : niveau 2 = cases gauche et droite, niveau 3 = aussi derrière</p></div>
     <div><h4>Jouer à deux</h4><p>Menu principal → <b>Jouer à deux</b> : un joueur crée la partie et envoie le lien (ou le code à 5 signes) à l'autre, qui le tape sur son propre téléphone ou ordinateur. Les deux sont dans la même mine : <b>argent, machines, ouvriers et coffres sont communs</b> ; <b>sac, pioche, équipement et position sont à chacun</b>. La partie est celle de l'hôte et se sauvegarde chez lui ; il n'y a ni pause ni vitesse à deux. Si l'un se déconnecte, l'autre continue ; en revenant avec le même appareil, il retrouve ses affaires</p></div>
     <div><h4>Menu</h4><p><kbd>Échap</kbd> : pause, sauvegarde, chargement</p></div>

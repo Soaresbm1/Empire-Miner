@@ -363,11 +363,18 @@ const INGOT = ['.aaaa.', 'abbbbc', 'bbcccc'];
 const SPARKLE = ['.wab.', 'aaabb', 'abbbc', '.bcc.'];
 const SPARKLE_INGOT = ['.awaa.', 'abbbbc', 'bbcccc'];
 
+/** Produits de la Manufacture : une plaque carrée à bord net, une poutre en I (acier), une gemme taillée. */
+const PLATE = ['aaaaaa', 'abbbbc', 'abbbbc', 'cccccc'];
+const SPARKLE_PLATE = ['aawaaa', 'abbbbc', 'abbbbc', 'cccccc'];
+const BAR = ['aaaaaaa', '.bbbbb.', '.bbbbb.', 'ccccccc'];
+const GEM = ['.awaa.', 'abbbbc', '.bbbc.', '..cc..'];
+
 export function buildNuggetSprites(): Map<string, HTMLCanvasElement> {
   const map = new Map<string, HTMLCanvasElement>();
   for (const r of RESOURCES) {
     const rare = r.rarity === 'rare' || r.rarity === 'très rare' || r.rarity === 'légendaire';
-    const art = r.ingot ? (rare ? SPARKLE_INGOT : INGOT) : rare ? SPARKLE : NUGGET;
+    const art =
+      r.shape === 'plate' ? (rare ? SPARKLE_PLATE : PLATE) : r.shape === 'bar' ? BAR : r.shape === 'gem' ? GEM : r.ingot ? (rare ? SPARKLE_INGOT : INGOT) : rare ? SPARKLE : NUGGET;
     map.set(r.id, fromArt(art, { a: r.light, b: r.color, c: r.dark, w: '#ffffff' }, '#120e10'));
   }
   return map;

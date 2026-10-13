@@ -33,7 +33,9 @@ profondeur et roches plus dures, sauvegarde/chargement, première automatisation
   ou par caisse d'expédition réglée sur « Commandes ».
 - ✅ Grand Chevalement : le grand chantier du camp en cinq phases (matériaux, argent, commandes honorées), la tour grandit,
   écran de fin avec les chiffres de la partie.
-- Concasseur (pierre → gravier), alliages (ex. bronze) ; commandes d'alliages et de produits transformés.
+- ✅ Manufacture : plaques (cuivre, fer, argent, or), acier et diamant taillé, à recette choisie ; ils suivent le cours de leur
+  métal, les clients en demandent et les deux dernières phases du Grand Chevalement en réclament.
+- Concasseur (pierre → gravier), alliages (ex. bronze), composants (fils, engrenages…) ; recettes à plusieurs étages.
 
 ## v0.5 — Énergie et contraintes
 - Générateurs (charbon), réseau électrique, consommation des machines.

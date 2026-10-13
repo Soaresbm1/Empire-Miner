@@ -222,7 +222,7 @@ export function deserialize(data: SaveData): GameState {
   g.time = data.time;
   g.market.load(data.market, data.time);
   g.contracts.load(data.contracts, data.time);
-  g.project.load(data.project);
+  const refund = g.project.load(data.project);
   g.money = data.money;
   loadPersonal(g, data);
   g.inventory.kits = { ...data.kits };
@@ -262,6 +262,8 @@ export function deserialize(data: SaveData): GameState {
   }
   // Un joueur resté debout là où un bâtiment du camp a été ajouté depuis ne doit pas y rester coincé.
   g.unstickPlayers();
+  // Ce que le chantier n'attend plus (il a changé depuis la sauvegarde) revient au joueur.
+  g.giveBack(refund, 'Le chantier a changé');
   return g;
 }
 

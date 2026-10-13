@@ -126,8 +126,13 @@ export function sparkline(values: number[], label: string, w = 168, h = 38): str
 function marketRows(g: GameState): string {
   return RESOURCES.filter((r) => COMMODITIES.includes(r.id) && knownOre(g, r.id))
     .map((r) => {
+      // Le lingot de ce minerai et les produits qui en viennent (plaque, acier, diamant taillé) : ceux que l'on a déjà fabriqués.
       const ingot = ingotOf(r.id);
-      const smelted = ingot && g.stats.discovered.includes(ingot) ? `<small>Lingot : ${price(g.market.price(ingot))}</small>` : '';
+      const derived = [
+        ...(ingot && g.stats.discovered.includes(ingot) ? [`Lingot : ${price(g.market.price(ingot))}`] : []),
+        ...RESOURCES.filter((p) => p.follows === r.id && g.stats.discovered.includes(p.id)).map((p) => `${p.short ?? p.name} : ${price(g.market.price(p.id))}`),
+      ];
+      const smelted = derived.length ? `<small>${derived.join(' · ')}</small>` : '';
       const hist = g.market.history(r.id);
       const low = Math.min(...hist);
       const high = Math.max(...hist);
@@ -150,7 +155,7 @@ export function marketTab(g: GameState): string {
     ${
       rows
         ? `<table class="table mk-table"><thead><tr><th>Minerai</th><th>10 dernières minutes</th><th class="num">Prix du moment</th></tr></thead><tbody>${rows}</tbody></table>
-      <p class="hint">Pointillés : le prix de base. Un lingot suit le cours de son minerai. Stockez dans un coffre quand le cours est bas, vendez quand il remonte.${unknown ? ' D\'autres minerais apparaîtront ici à mesure que vous les découvrirez.' : ''}</p>`
+      <p class="hint">Pointillés : le prix de base. Un lingot, une plaque, l'acier ou un diamant taillé suit le cours de son minerai. Stockez dans un coffre quand le cours est bas, vendez quand il remonte.${unknown ? ' D\'autres minerais apparaîtront ici à mesure que vous les découvrirez.' : ''}</p>`
         : '<p class="empty">Aucun minerai connu pour l\'instant : minez-en pour suivre son cours.</p>'
     }`;
 }
