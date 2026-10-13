@@ -312,7 +312,12 @@ Le jeu à deux n'est pas concerné : l'invité n'a besoin d'aucun compte, et l'h
   sans aucune machine en stock, pour démonter au clic droit.
 - Vente automatique : **caisse d'expédition** à poser en surface. Tout ce qui y arrive est vendu au cours du
   moment, comme au comptoir, à chaque passage du transporteur (toutes les 15 s) ; sa capacité est limitée (120 kg), pleine elle
-  bloque les convoyeurs. Le HUD affiche le revenu automatique par minute.
+  bloque les convoyeurs. Le HUD affiche le revenu automatique par minute. Son panneau (`E`) dit **où le transporteur emmène
+  le contenu** : **Marché** (par défaut, tout est vendu), **Commandes** (il apporte au Tableau d'affichage ce que vos commandes
+  acceptées attendent) ou **Chantier** (il apporte au Grand Chevalement ce que la phase en cours attend). Dans les deux
+  derniers cas, **ce dont personne n'a besoin est vendu au cours du moment** : rien ne se perd et la caisse ne se bouche
+  jamais. Le panneau montre, ligne par ligne, ce qui sera livré et ce qui sera vendu ; l'écriteau de la caisse change de
+  couleur (or, bleu, orange), un petit « → 12 » flotte au-dessus d'elle à chaque livraison, et son réglage est sauvegardé.
 - **La Fournaise** (sous 450 m) : roche volcanique aux fissures rougeoyantes, or plus abondant et, sous 500 m, des
   **filons de diamant** (la ressource la plus précieuse, taillée seulement par la Pioche pro en acier, qui ne se
   fond pas). La chaleur y ralentit les foreuses, la foreuse de percement et les fours, de 85 % de leur cadence à
@@ -373,16 +378,49 @@ Le jeu à deux n'est pas concerné : l'invité n'a besoin d'aucun compte, et l'h
   moyen. Les 90 premières secondes sont calmes (tout à 100 %), et les cours, les courbes et les événements en cours
   sont sauvegardés ; les anciennes sauvegardes repartent d'un marché à 100 %.
 - **Tableau d'affichage** : un panneau de bois au milieu du camp, entre le Comptoir et l'Atelier (`E` devant lui),
-  avec deux onglets (`1` et `2`, ou les flèches ; il rouvre le dernier onglet vu). **Marché** : les événements en
+  avec trois onglets (`1`, `2` et `3`, ou les flèches ; il rouvre le dernier onglet vu). **Marché** : les événements en
   cours avec le temps qui reste, un conseil (« bon moment pour vendre : cuivre à +44 % », ou « l'or est bradé :
   gardez-le dans un coffre »), et pour chaque minerai connu sa **courbe des 10 dernières minutes** (pointillés : le
   prix de base), son prix du moment et sa tendance (▲ ▼ sur 30 s, couleur selon l'écart au prix de base). Le prix
-  du lingot s'ajoute dès qu'on en a fondu un. **Production** : les **statistiques de production** : trois chiffres
+  du lingot s'ajoute dès qu'on en a fondu un. **Commandes** : voir plus bas. **Production** : les **statistiques de production** : trois chiffres
   (ventes, minerai extrait, lingots fondus par minute, moyennés sur les 5 dernières minutes), un histogramme des
   gains des 10 dernières minutes (comptoir et caisses d'expédition), un tableau par ressource (extrait, fondu,
   vendu) et la liste des machines à surveiller (sans charbon, sortie bloquée, coffre plein, ralenties par la
   chaleur…). Les mesures sont sauvegardées ; les anciennes sauvegardes trouvent le tableau au camp, avec des mesures
   à zéro. Le Comptoir et le sac montrent eux aussi le prix du jour, avec sa tendance.
+- **Commandes** (onglet du Tableau d'affichage) : des **clients achètent une quantité précise** de minerai ou de lingots,
+  **plus cher que le marché** (+25 à +55 % sur le prix de base, davantage pour une commande à deux lignes ou quand le marché est
+  en forte demande sur la marchandise), **avant une échéance**. Toutes les 45 à 90 secondes, un client laisse une proposition
+  (trois affichées au plus, chacune reste sept minutes) ; on en accepte **deux à la fois** et l'échéance court alors, de 10 à
+  15 minutes selon la marchandise. Chaque carte donne le client, ce qu'il veut, **ce qu'il paie, ce que ce serait au marché
+  et l'écart en pourcents**, le délai et le temps qu'elle reste affichée. On livre **à la main** (« Livrer mon sac », ou « Tout
+  livrer ») ou avec une **caisse d'expédition réglée sur « Commandes »**. Dès que tout est livré, la **récompense fixée à la
+  proposition** est versée ; si l'échéance passe ou si on abandonne (le second appui confirme), **le client paie ce qui est
+  livré au prix de base, sans la prime** : rien n'est perdu, seule la prime l'est. Un client ne demande que **ce que vous avez
+  déjà trouvé**, et les lingots seulement après le premier lingot fondu : ils donnent une vraie raison de bâtir une ligne de
+  fonte et de trier. Le **marché** pèse sur le tirage (une marchandise en forte demande est demandée trois fois plus souvent,
+  une marchandise bradée deux fois et demie moins). Le **rang** (Livreur, Fournisseur, Négociant, Grossiste, Magnat : 3, 8, 16,
+  30 commandes honorées) grossit les commandes de 25 % par rang et ajoute 2 points de prime. Une pastille sur l'onglet
+  signale les propositions qui attendent, une ligne du HUD donne la commande la plus pressée (sur ordinateur), une annonce
+  prévient d'une nouvelle proposition (au plus toutes les quatre minutes) et une autre à **une minute de l'échéance**. Les
+  propositions sortent d'un tirage (graine, numéro) : les deux joueurs d'une partie à deux voient les mêmes, et tout est
+  sauvegardé ; une ancienne sauvegarde repart sans commande, les clients arrivent d'ici peu.
+- **Le Grand Chevalement** : le **grand projet du camp**, à droite de l'Atelier (`E` devant lui) — la tour d'un puits de mine,
+  qui **grandit à chaque phase terminée** (six états dessinés : terrain et plan, fondations, charpente, treuil et poulie,
+  poulies dorées, couronnement avec un diamant qui étincelle), avec une jauge au pied qui montre où en est la phase. **Cinq
+  phases** (Fondations, Charpente, Treuil et poulies, Poulies dorées, Couronnement) demandent chacune des **matériaux**
+  (charbon, cuivre, puis des lingots de cuivre, de fer, d'argent et d'or, et 12 diamants à la fin), de l'**argent versé aux
+  ouvriers** (de 500 $ à 75 000 $) et un nombre de **commandes honorées** (0, 2, 5, 9, 14) : la phase se termine toute seule
+  dès que tout est réuni. On livre **à la main** (« Livrer mon sac », « Verser ») ou avec des **caisses d'expédition réglées sur
+  « Chantier »** que des convoyeurs alimentent : on bâtit une ligne de fonte, on y branche une caisse, et la tour monte sans
+  y retourner. Chaque phase accorde un **avantage** aux commandes (une commande de plus en parallèle, une proposition de plus
+  au Tableau, 10 points de prime de plus, puis encore une commande et 10 points, enfin 5 points). La dernière phase **achève le
+  monument** : un feu d'artifice, le titre d'**Empereur de la mine** et un **écran de fin** avec les chiffres de la partie
+  (temps de jeu, argent gagné, blocs minés, lingots fondus, commandes honorées…) et le temps de chaque phase ; on peut
+  continuer à jouer. Toutes les quantités sont réunies dans `src/data/project.ts` et `src/data/contracts.ts`. Les trois
+  derniers objectifs du parcours guidé en parlent (18 en tout). Le chantier est un bâtiment du camp comme les autres : une
+  ancienne sauvegarde le trouve à sa place (une machine qu'elle y aurait posée revient au stock, avec son contenu, et un
+  joueur resté debout à cet endroit est remis à l'entrée de la mine), avec un chantier à zéro.
 - **Mini-carte** en haut à droite (la mine autour du joueur) et **carte complète** avec `M` : galeries, roche,
   filons et gisements repérés, machines, rails, wagonnets, position du joueur et zones de profondeur (100 m,
   300 m, 450 m). Seul ce que le joueur a déjà vu y apparaît.
@@ -398,7 +436,8 @@ Le jeu à deux n'est pas concerné : l'invité n'a besoin d'aucun compte, et l'h
   « Repère 3 ». Les repères apparaissent sur la carte, la mini-carte et dans la mine (fanion et nom). Un repère
   « suivi » s'affiche sous la mini-carte avec sa distance, et une flèche au bord de l'écran montre sa direction.
 - Sauvegarde automatique (chaque minute), manuelle, export/import de fichier.
-- Sons synthétisés, éclairage de la mine, particules, objectifs guidant les premières minutes.
+- Sons synthétisés, éclairage de la mine, particules, 18 objectifs guidant le parcours (des premières minutes
+  jusqu'au Grand Chevalement).
 - **Graphismes en pixel art**, tous dessinés en code (aucune image externe). La lumière vient toujours d'en haut à
   gauche : le mineur (casque à lampe, sac à dos, marche à 4 images, clignement des yeux), les machines ombrées et
   animées (voyants, gyrophare, flammes, engrenages, vapeur), les bâtiments du camp (étal aux bocaux, atelier à toit
@@ -418,6 +457,7 @@ node e2e/coop.mjs              # jeu à deux : deux pages du même navigateur (c
 node e2e/phone.mjs             # mise en page sur téléphone, à 11 tailles d'écran (marges de l'encoche comprises), après un build
 node e2e/touch.mjs             # gestes tactiles réels (CDP) : stick, Miner, Agir, ☰, défilement sans achat, pincer, pose, iPhone
 node e2e/panels.mjs            # fenêtres au doigt sur un jeu qui tourne : défilement, toucher long, contenu exact, rien ne glisse de côté (après un build)
+node e2e/orders.mjs            # commandes et Grand Chevalement : vrais clics (accepter, livrer, abandonner, caisse réglée sur « Commandes », chantier phase par phase, écran de fin), la tour change à chaque étape, tout survit à un rechargement (après un build)
 node e2e/menus.mjs             # menus : « Commandes » (menu principal et pause) s'ouvre devant le menu, qui s'efface puis revient ; seul, le jeu reste figé depuis la pause (après un build)
 node e2e/cloud.mjs             # compte : deux appareils (deux profils de navigateur) et un faux Firebase local : création, reprise sur appareil neuf, parties qui divergent, réseau coupé, suppression (après un build)
 npx vite-node tests-net/mqtt.check.ts   # client MQTT contre un vrai courtier local (aedes)

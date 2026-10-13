@@ -11,6 +11,7 @@ import { esc, price, resIcon } from './format';
 /** Onglets du Tableau d'affichage. */
 export const BOARD_TABS: readonly (readonly [string, string])[] = [
   ['market', 'Marché'],
+  ['orders', 'Commandes'],
   ['production', 'Production'],
 ];
 

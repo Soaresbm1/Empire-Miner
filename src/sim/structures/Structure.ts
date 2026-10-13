@@ -28,6 +28,11 @@ export interface StructureContext {
   autoSell(total: number, n: number, from: Structure, items?: Record<string, number>): void;
   /** Ce que rapportent `n` unités de `res` au cours du marché du moment ($, arrondi). */
   quote(res: string, n: number): number;
+  /**
+   * Livraison d'une caisse d'expédition réglée sur « commandes » ou « chantier » : donne `items` aux commandes acceptées
+   * ou au chantier du camp, et renvoie ce qui n'a servi à rien (la caisse le vend au marché).
+   */
+  deliver(mode: 'orders' | 'site', items: Record<string, number>, from: Structure): Record<string, number>;
   /** Perce une tuile (foreuse de percement) ; les morceaux tombent en (from.x, from.y), en unités monde. Renvoie les morceaux lâchés. */
   digTile(tx: number, ty: number, from: { x: number; y: number }): Drop[];
   /** Vrai si le joueur ou un wagonnet occupe la tuile. */

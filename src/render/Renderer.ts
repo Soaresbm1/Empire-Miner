@@ -22,7 +22,7 @@ import { Fan, Prop, Pump } from '../sim/structures/Safety';
 import { MARKER_KINDS, type Marker } from '../sim/Markers';
 import { markerShape } from './MineMap';
 import { Drill } from '../sim/structures/Drill';
-import { ShippingCrate } from '../sim/structures/ShippingCrate';
+import { ShippingCrate, type ShipMode } from '../sim/structures/ShippingCrate';
 import { Sorter } from '../sim/structures/Sorter';
 import { Splitter } from '../sim/structures/Splitter';
 import { Storage } from '../sim/structures/Storage';
@@ -47,6 +47,7 @@ import {
   buildPickaxeSprites,
   buildPlayerSprites,
   buildScooterSprites,
+  buildSiteSprites,
   SCOOTER_LIFT,
   ScooterSprites,
   buildWorkshopSprite,
@@ -55,6 +56,13 @@ import {
 /** Dents de la tête de coupe de la foreuse de percement : acier, ou diamant bleu glacier (niveau 5). */
 const STEEL_TEETH = ['#c7ccd6', '#6a6f78'];
 const DIAMOND_TEETH = ['#9ff0fa', '#2f7f92'];
+
+/** Couleurs du panneau d'une caisse d'expédition selon sa destination : marché (or), commandes (bleu), chantier (orange). */
+const SHIP_SIGNS: Record<ShipMode, { base: string; hi: string; lo: string }> = {
+  market: { base: '#f2c230', hi: '#fff3b0', lo: '#a07410' },
+  orders: { base: '#6fb3ff', hi: '#d6ecff', lo: '#2f6fb3' },
+  site: { base: '#e8792a', hi: '#ffc58a', lo: '#8f3f0e' },
+};
 
 export interface Overlay {
   /** Tuile visée par la pioche. */
@@ -119,6 +127,8 @@ export class Renderer {
   private readonly workshop: HTMLCanvasElement;
   private penCache: Pen | null = null;
   private readonly board: HTMLCanvasElement;
+  /** Le chantier du Grand Chevalement, état par état (terrain, fondations, charpente, treuil, dorures, couronnement). */
+  private readonly siteStages: HTMLCanvasElement[];
   private readonly lantern: HTMLCanvasElement;
   private readonly scooter: ScooterSprites;
   private time = 0;
@@ -144,6 +154,7 @@ export class Renderer {
     this.counter = buildCounterSprite();
     this.workshop = buildWorkshopSprite();
     this.board = buildBoardSprite();
+    this.siteStages = buildSiteSprites();
     this.lantern = buildLanternSprite();
     this.scooter = buildScooterSprites();
     this.resize();
@@ -837,7 +848,34 @@ export class Renderer {
     else if (s instanceof Building) this.drawBuilding(s);
   }
 
+  /** Le chantier du Grand Chevalement : la tour grandit à chaque phase terminée, et une jauge dit où en est la phase en cours. */
+  private drawSite(b: Building): void {
+    const ctx = this.ctx;
+    const project = this.state?.project;
+    const stage = Math.min(this.siteStages.length - 1, project?.phase ?? 0);
+    const img = this.siteStages[stage];
+    const x = b.x * TILE;
+    const bottom = (b.y + b.h) * TILE;
+    const y = bottom - img.height;
+    ctx.fillStyle = 'rgba(0,0,0,0.25)';
+    ctx.fillRect(x + 2, bottom - 2, b.w * TILE - 2, 3);
+    ctx.drawImage(img, x, y);
+    if (project && !project.done) {
+      ctx.fillStyle = INK;
+      ctx.fillRect(x + 12, bottom - 9, 40, 5);
+      ctx.fillStyle = '#3a2c25';
+      ctx.fillRect(x + 13, bottom - 8, 38, 3);
+      ctx.fillStyle = '#f2c230';
+      ctx.fillRect(x + 13, bottom - 8, Math.round(38 * project.progress()), 3);
+      ctx.fillStyle = 'rgba(255,255,255,0.4)';
+      ctx.fillRect(x + 13, bottom - 8, Math.round(38 * project.progress()), 1);
+    }
+    if (stage >= 3 && Math.random() < 0.05) this.fx.emit('smoke', x + 57, y + 65, 'rgba(120,120,130,0.5)', 1, 4);
+    if (stage >= 5 && Math.random() < 0.1) this.fx.emit('spark', x + 29 + Math.random() * 8, y + 5 + Math.random() * 4, '#c8f6ff', 1, 16);
+  }
+
   private drawBuilding(b: Building): void {
+    if (b.type === 'site') return this.drawSite(b);
     const img = b.type === 'counter' ? this.counter : b.type === 'workshop' ? this.workshop : this.board;
     const x = b.x * TILE;
     const y = (b.y + b.h) * TILE - img.height;
@@ -1592,15 +1630,27 @@ export class Renderer {
     const x = c.x * TILE;
     const y = c.y * TILE;
     pen.shadow(x + 1, y + 13, 15);
-    // Poteau et panneau « pièce », avec un petit reflet.
+    // Poteau et panneau, avec un petit reflet : une pièce dorée (vente), une feuille bleue (commandes) ou une brique orange (chantier).
+    const sign = SHIP_SIGNS[c.mode];
     pen.rect(x + 12, y - 7, 2, 8, '#4a3020');
     pen.rect(x + 12, y - 7, 1, 8, '#6e4a2c');
     pen.rect(x + 8, y - 14, 10, 8, INK);
-    pen.rect(x + 9, y - 13, 8, 6, '#f2c230');
-    pen.rect(x + 9, y - 13, 8, 1, '#fff3b0');
-    pen.rect(x + 9, y - 8, 8, 1, '#a07410');
-    pen.rect(x + 12, y - 12, 2, 4, '#a07410');
-    pen.px(x + 12, y - 12, '#fff3b0');
+    pen.rect(x + 9, y - 13, 8, 6, sign.base);
+    pen.rect(x + 9, y - 13, 8, 1, sign.hi);
+    pen.rect(x + 9, y - 8, 8, 1, sign.lo);
+    if (c.mode === 'orders') {
+      // Trois lignes de texte.
+      for (const dy of [-11, -10, -9]) pen.rect(x + 10, y + dy, dy === -9 ? 3 : 6, 1, sign.lo);
+    } else if (c.mode === 'site') {
+      // Deux rangées de briques décalées.
+      pen.rect(x + 10, y - 12, 6, 1, sign.lo);
+      pen.rect(x + 10, y - 10, 6, 1, sign.lo);
+      pen.rect(x + 13, y - 11, 1, 1, sign.lo);
+      pen.rect(x + 11, y - 9, 1, 1, sign.lo);
+    } else {
+      pen.rect(x + 12, y - 12, 2, 4, sign.lo);
+      pen.px(x + 12, y - 12, sign.hi);
+    }
     // Minuteur du transporteur (se remplit jusqu'au prochain passage)
     const t = 1 - c.timer / c.interval;
     ctx.fillStyle = INK;
@@ -1636,12 +1686,12 @@ export class Renderer {
     ctx.fillRect(x + 1, y + 15, Math.round(14 * Math.min(1, fill)), 2);
   }
 
-  /** Effet de vente automatique au-dessus d'une caisse. */
-  onShipped(tx: number, ty: number, text: string): void {
+  /** Effet de vente automatique au-dessus d'une caisse (ou de livraison : la couleur change). */
+  onShipped(tx: number, ty: number, text: string, color = '#f2c230'): void {
     const cx = (tx + 0.5) * TILE;
     const cy = ty * TILE;
-    this.fx.text(text, cx, cy - 18, '#f2c230');
-    this.fx.emit('spark', cx, cy - 4, '#f2c230', 14, 55);
+    this.fx.text(text, cx, cy - 18, color);
+    this.fx.emit('spark', cx, cy - 4, color, 14, 55);
   }
 
   private drawStatusIcons(state: GameState): void {

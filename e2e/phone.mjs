@@ -374,6 +374,15 @@ for (const dev of DEVICES) {
       g.hp = 40;
       g.inventory.add('coal', 6);
       g.inventory.add('copper', 3);
+      // Une commande en cours : sa ligne s'ajoute à celles du marché sous l'argent.
+      for (const r of ['coal', 'copper']) g.stats.collected[r] = 5;
+      for (let t = 100; t <= 500 && !g.contracts.offers().length; t += 100) {
+        g.time = t;
+        g.contracts.update(t);
+      }
+      const offer = g.contracts.offers()[0];
+      if (offer) g.contracts.accept(offer.id, g.time);
+      g.events.length = 0; // pas de message « nouvelle commande » en travers des scènes suivantes
       g.hasJackhammer = true;
       g.tool = 'jackhammer';
       g.gear.add('helmet');
@@ -533,6 +542,29 @@ for (const dev of DEVICES) {
           }
         n += 2;
       }
+      // La caisse d'expédition réglée sur « Commandes », avec de quoi livrer et de quoi vendre.
+      const crate = g.structures.list.find((s) => s.type === 'shipping');
+      if (crate) {
+        crate.mode = 'orders';
+        crate.put('coal', 20);
+        crate.put('iron', 6);
+      }
+      // Le Tableau d'affichage et le chantier : de quoi remplir l'onglet « Commandes » (deux commandes acceptées, une proposition
+      // de plus que la place permet) et un chantier bien avancé.
+      for (const r of ['coal', 'copper', 'iron', 'silver']) g.stats.collected[r] = 5;
+      g.stats.discovered.push('copper_ingot', 'iron_ingot');
+      for (let t = 100; t <= 900 && g.contracts.offers().length < 3; t += 100) {
+        g.time = t;
+        g.contracts.update(t);
+      }
+      for (const o of g.contracts.offers().slice(0, 2)) g.contracts.accept(o.id, g.time);
+      const first = g.contracts.active()[0];
+      g.contracts.deliver(first.lines[0].res, 3);
+      g.inventory.items = { ...g.inventory.items, [first.lines[0].res]: 4, coal: 6 };
+      g.stats.contracts = 3;
+      g.project.phase = 1;
+      for (const n of g.project.missing().slice(0, 1)) g.project.deliver(n.res, Math.floor(n.qty / 2));
+      g.project.fund(1000);
       // La foreuse : le premier gisement exposé de la mine.
       g.inventory.addKit('drill', 1);
       const w = g.world;
@@ -556,7 +588,9 @@ for (const dev of DEVICES) {
       ['workshop', 'workshop', 'atelier-ouvriers', 'crew'],
       ['counter', 'counter', 'comptoir'],
       ['board', 'board', 'tableau', 'market'],
+      ['board', 'board', 'tableau-commandes', 'orders'],
       ['board', 'board', 'tableau-production', 'production'],
+      ['site', 'site', 'chantier'],
       ['storage', 'storage', 'coffre'],
       ['shipping', 'shipping', 'expedition'],
       ['drill', 'drill', 'foreuse'],
@@ -565,13 +599,24 @@ for (const dev of DEVICES) {
       ['sorter', 'sorter', 'trieur'],
       ['station', 'rail_load', 'gare'],
       ['switch', 'rail_switch', 'aiguillage'],
+      ['site', 'site', 'chantier-fin', null, 'victory'],
       ['install', null, 'ecran-accueil'],
     ];
-    for (const [i, [kind, finder, label, tab]] of PANELS.entries()) {
+    for (const [i, [kind, finder, label, tab, prep]] of PANELS.entries()) {
       const found = await page.evaluate(
-        ([kind, finder, tab]) => {
+        ([kind, finder, tab, prep]) => {
           const E = window.__EM;
           const g = E.state;
+          // Le monument achevé : l'écran de fin.
+          if (prep === 'victory') {
+            g.stats.contracts = 99;
+            g.stats.playTime = 3 * 3600 + 25 * 60;
+            for (let k = 0; k < 6 && !g.project.done; k++) {
+              for (const n of g.project.missing()) g.project.deliver(n.res, n.qty);
+              g.project.fund(g.project.moneyLeft());
+              g.update(0.1, { mx: 0, my: 0, mine: false, target: null });
+            }
+          }
           const target = finder ? g.structures.list.find((s) => s.type === finder) ?? null : null;
           if (finder && !target) return false;
           // Le jeu referme un panneau quand on s'éloigne de la machine : on se place à côté.
@@ -585,7 +630,7 @@ for (const dev of DEVICES) {
           E.ui.renderPanel(g, 0, true);
           return true;
         },
-        [kind, finder, tab],
+        [kind, finder, tab, prep],
       );
       if (!found) {
         check(false, `${dev.id} · panneau ${label} : la machine n'a pas pu être posée pour le test`);

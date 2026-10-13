@@ -2,7 +2,7 @@
  * Génération procédurale déterministe de la mine à partir d'une graine.
  *
  * Structure :
- *  - Surface (camp) : comptoir, atelier, entrée de la mine.
+ *  - Surface (camp) : comptoir, atelier, tableau d'affichage, chantier du Grand Chevalement, entrée de la mine.
  *  - Galeries de départ creusées à la main (puits, deux galeries, une salle).
  *  - Roches hôtes de plus en plus dures avec la profondeur.
  *  - Cavernes naturelles (bruit fractal) à découvrir.
@@ -19,10 +19,11 @@ import { RESOURCES, ResourceDef, resourceIndex } from '../data/resources';
 import { LEGACY_WORLD_H, SURFACE_ROWS, TILE, WORLD_H, WORLD_W, depthAt, rowForDepth } from '../core/constants';
 import { Rng, fbm } from '../core/rng';
 import { World } from './World';
+import type { BuildingType } from './structures/Building';
 import { hyp } from '../core/dmath';
 
 export interface BuildingPlacement {
-  type: 'counter' | 'workshop' | 'board';
+  type: BuildingType;
   x: number;
   y: number;
 }
@@ -106,9 +107,9 @@ export function generateWorld(seed: number, w = WORLD_W, h = WORLD_H): WorldLayo
   for (let y = 2; y < S; y++) {
     for (let x = 2; x < w - 2; x++) {
       const i = world.idx(x, y);
-      const onMainPath = y >= 9 && y <= 10 && x >= 38 && x <= 62;
+      const onMainPath = y >= 9 && y <= 10 && x >= 38 && x <= 66;
       const onShaftPath = x >= SHAFT_X && x <= SHAFT_X + 1 && y >= 9;
-      const onFrontPath = y === 8 && ((x >= 40 && x <= 42) || (x >= 57 && x <= 59));
+      const onFrontPath = y === 8 && ((x >= 40 && x <= 42) || (x >= 57 && x <= 59) || (x >= 62 && x <= 65));
       if (onMainPath || onShaftPath || onFrontPath) world.floorDeco[i] = 1;
       const inCamp = x >= 33 && x <= 67;
       if (!inCamp && y >= 3 && rng.chance(0.1)) world.tiles[i] = TREE;
@@ -126,6 +127,8 @@ export function generateWorld(seed: number, w = WORLD_W, h = WORLD_H): WorldLayo
       { type: 'workshop', x: 57, y: 6 },
       // Entre les deux : x = 49 et 50, au milieu du camp.
       { type: 'board', x: 49, y: 6 },
+      // À droite de l'atelier : le grand chantier, sur la même ligne que les autres bâtiments (bas à la rangée 7).
+      { type: 'site', x: 62, y: 5 },
     ],
     spawn: { x: 50, y: 9 },
     entrance: { x: SHAFT_X, y: S, w: 2 },

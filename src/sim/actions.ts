@@ -17,7 +17,7 @@ import { TunnelBorer } from './structures/Borer';
 import { Smelter } from './structures/Smelter';
 import { Sorter } from './structures/Sorter';
 import { RailStation, RailSwitch, type SwitchSetting } from './structures/Rail';
-import { ShippingCrate } from './structures/ShippingCrate';
+import { ShippingCrate, isShipMode } from './structures/ShippingCrate';
 import { Storage } from './structures/Storage';
 
 type At = { x: number; y: number };
@@ -57,6 +57,7 @@ export type SimAction =
   | ({ k: 'storageAllow'; res: string } & At)
   | { k: 'chestsAllow'; at: [number, number][]; allow: string[] }
   | ({ k: 'shipDeposit' } & At)
+  | ({ k: 'shipMode'; mode: string } & At)
   | ({ k: 'drillFuel' } & At)
   | ({ k: 'drillCollect' } & At)
   | ({ k: 'machineUpgrade' } & At)
@@ -72,6 +73,13 @@ export type SimAction =
   | ({ k: 'stationTakeAll' } & At)
   | ({ k: 'switchSet'; setting: string } & At)
   | ({ k: 'sorterFilter'; res: string } & At)
+  // commandes du Tableau d'affichage et chantier du Grand Chevalement
+  | { k: 'contractAccept'; id: number }
+  | { k: 'contractDecline'; id: number }
+  | { k: 'contractAbandon'; id: number }
+  | { k: 'contractDeliver'; id?: number }
+  | { k: 'siteDeliver' }
+  | { k: 'siteFund' }
   // repères
   | { k: 'mark'; kind: string; x: number; y: number; here?: boolean }
   | { k: 'markerTrack'; id: number }
@@ -224,6 +232,55 @@ export function applyAction(g: GameState, a: SimAction): void {
       if (!(s instanceof ShippingCrate)) return;
       const n = g.shipDepositAll(s);
       if (n) msg(`${n} ${plural(n, 'minerai')} ${plural(n, 'déposé')} : ${plural(n, 'vendu')} au prochain passage.`);
+      return;
+    }
+    case 'shipMode': {
+      const s = at(a);
+      if (!(s instanceof ShippingCrate) || !isShipMode(a.mode)) return;
+      if (!g.setShipMode(s, a.mode)) return;
+      msg(
+        a.mode === 'orders'
+          ? "Caisse réglée sur « Commandes » : le transporteur apporte au Tableau d'affichage ce que vos commandes attendent, et vend le reste."
+          : a.mode === 'site'
+            ? 'Caisse réglée sur « Chantier » : le transporteur apporte au Grand Chevalement ce que la phase en cours attend, et vend le reste.'
+            : 'Caisse réglée sur « Marché » : tout est vendu au cours du moment.',
+        'info',
+      );
+      return;
+    }
+    case 'contractAccept': {
+      if (!g.isNear('board')) return;
+      const why = g.contracts.accept(Number(a.id), g.time);
+      if (why === 'full') msg(`Vous menez déjà ${g.contracts.slots} commandes : terminez-en une, ou abandonnez-en une.`, 'warn');
+      else if (why === 'gone') msg("Cette proposition n'est plus là.", 'info');
+      else msg("Commande acceptée : l'échéance court. Livrez au Tableau d'affichage, ou réglez une caisse d'expédition sur « Commandes ».", 'info');
+      return;
+    }
+    case 'contractDecline':
+      if (g.isNear('board')) g.contracts.decline(Number(a.id), g.time);
+      return;
+    case 'contractAbandon':
+      if (g.isNear('board')) g.contracts.abandon(Number(a.id));
+      return;
+    case 'contractDeliver': {
+      if (!g.isNear('board')) return;
+      const n = g.deliverToContracts(a.id === undefined ? undefined : Number(a.id));
+      if (n) msg(`${n} ${plural(n, 'objet')} ${plural(n, 'livré')} à vos commandes.`);
+      else msg("Rien dans votre sac que vos commandes n'attendent.", 'info');
+      return;
+    }
+    case 'siteDeliver': {
+      if (!g.isNear('site')) return;
+      const n = g.deliverToSite();
+      if (n) msg(`${n} ${plural(n, 'objet')} ${plural(n, 'livré')} au chantier.`);
+      else msg("Rien dans votre sac que la phase en cours n'attend.", 'info');
+      return;
+    }
+    case 'siteFund': {
+      if (!g.isNear('site')) return;
+      const k = g.fundSite();
+      if (k) msg(`${k.toLocaleString('fr-FR')} $ versés aux ouvriers du chantier.`);
+      else msg(g.project.moneyLeft() > 0 ? "Vous n'avez pas d'argent à verser." : 'Les ouvriers sont déjà payés pour cette phase.', 'info');
       return;
     }
     case 'drillFuel': {

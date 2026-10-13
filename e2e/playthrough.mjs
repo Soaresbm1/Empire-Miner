@@ -1307,7 +1307,7 @@ try {
   await page.keyboard.press('KeyE');
   await page.waitForTimeout(500);
   const boardText = await ev(() => document.querySelector('.panel-board')?.textContent ?? '');
-  check(/Marché/.test(boardText) && /Production/.test(boardText), "le Tableau d'affichage a les onglets Marché et Production");
+  check(/Marché/.test(boardText) && /Commandes/.test(boardText) && /Production/.test(boardText), "le Tableau d'affichage a les onglets Marché, Commandes et Production");
   // La mine est tirée au hasard : d'autres minerais (or…) ont pu être découverts en route, d'où « au moins » ces trois-là.
   const sparkNames = () => page.$$eval('.panel-board svg.spark', (els) => els.map((e) => e.getAttribute('aria-label') ?? ''));
   const hasCurves = (names) => ['Charbon', 'Cuivre', 'Fer'].every((n) => names.some((l) => l.startsWith(n)));
@@ -1317,10 +1317,16 @@ try {
   await shot('27-market-board');
   await page.keyboard.press('Digit2');
   await page.waitForTimeout(300);
-  check(/Gains des 10 dernières minutes/.test(await ev(() => document.querySelector('.panel-board')?.textContent ?? '')), "la touche 2 ouvre l'onglet Production");
+  check(/Vos commandes/.test(await ev(() => document.querySelector('.panel-board')?.textContent ?? '')), "la touche 2 ouvre l'onglet Commandes");
+  await page.keyboard.press('Digit3');
+  await page.waitForTimeout(300);
+  check(/Gains des 10 dernières minutes/.test(await ev(() => document.querySelector('.panel-board')?.textContent ?? '')), "la touche 3 ouvre l'onglet Production");
   await page.keyboard.press('ArrowLeft');
   await page.waitForTimeout(300);
-  check(hasCurves(await sparkNames()), 'la flèche gauche revient au Marché');
+  check(/Vos commandes/.test(await ev(() => document.querySelector('.panel-board')?.textContent ?? '')), 'la flèche gauche revient aux Commandes');
+  await page.keyboard.press('ArrowLeft');
+  await page.waitForTimeout(300);
+  check(hasCurves(await sparkNames()), 'puis au Marché');
   await page.keyboard.press('Escape');
   await page.waitForTimeout(250);
   await ev(() => {

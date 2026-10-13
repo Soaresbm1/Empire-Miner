@@ -18,8 +18,10 @@ import { Wagon, type WagonSave } from '../sim/Wagons';
 import type { StructureSave } from '../sim/structures/Structure';
 import { rleDecode, rleEncode } from './codec';
 import { HEALTH } from '../data/hazards';
+import type { ContractsSave } from '../sim/Contracts';
 import type { MarkerSave } from '../sim/Markers';
 import type { MarketSave } from '../sim/Market';
+import type { ProjectSave } from '../sim/Project';
 import type { WorkerSave } from '../sim/Workers';
 import type { SlotSave } from '../sim/Production';
 
@@ -82,6 +84,10 @@ export interface SaveData extends PersonalSave {
   market?: MarketSave;
   /** Ouvriers : métier, position et charge (absents des anciennes sauvegardes : aucun ouvrier). */
   workers?: WorkerSave[];
+  /** Commandes du Tableau d'affichage (absentes des anciennes sauvegardes : aucune commande, les clients arrivent d'ici peu). */
+  contracts?: ContractsSave;
+  /** Grand Chevalement : phase en cours, livraisons, argent versé (absent des anciennes sauvegardes : chantier à zéro). */
+  project?: ProjectSave;
   /** Jeu à deux : les joueurs présents autres que le premier (identifiant d'invité compris), et les invités partis. */
   players?: (PersonalSave & { id: string })[];
   guests?: Record<string, PersonalSave>;
@@ -170,6 +176,8 @@ export function serialize(g: GameState, opts: SerializeOptions = {}): SaveData {
     markers: g.markers.serialize(),
     production: g.production.serialize(),
     market: g.market.serialize(),
+    contracts: g.contracts.serialize(),
+    project: g.project.serialize(),
     workers: g.workers.serialize(),
     ...(others.length ? { players: others.map((i) => ({ id: g.guestIds[i] ?? '', ...g.withSlot(i, () => personalOf(g)) })) } : {}),
     ...(Object.keys(g.guestStash).length ? { guests: g.guestStash as Record<string, PersonalSave> } : {}),
@@ -213,6 +221,8 @@ export function deserialize(data: SaveData): GameState {
 
   g.time = data.time;
   g.market.load(data.market, data.time);
+  g.contracts.load(data.contracts, data.time);
+  g.project.load(data.project);
   g.money = data.money;
   loadPersonal(g, data);
   g.inventory.kits = { ...data.kits };
@@ -230,7 +240,11 @@ export function deserialize(data: SaveData): GameState {
   }
   for (const s of data.structures) {
     const f = STRUCTURE_FACTORIES[s.type];
-    if (f) g.structures.add(f.load(s));
+    if (!f) continue;
+    const loaded = f.load(s);
+    // Un bâtiment du camp peut avoir été ajouté depuis (le chantier) là où le joueur avait posé une machine : elle rentre au stock.
+    if (g.structures.hitsBuilding(loaded)) g.evict(loaded);
+    else g.structures.add(loaded);
   }
   for (const ws of data.wagons ?? []) {
     const w = g.wagons.add(Wagon.load(ws));
@@ -246,6 +260,8 @@ export function deserialize(data: SaveData): GameState {
     g.guestIds[slot] = typeof p.id === 'string' ? p.id : '';
     g.withSlot(slot, () => loadPersonal(g, p));
   }
+  // Un joueur resté debout là où un bâtiment du camp a été ajouté depuis ne doit pas y rester coincé.
+  g.unstickPlayers();
   return g;
 }
 

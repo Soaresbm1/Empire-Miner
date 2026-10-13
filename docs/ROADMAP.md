@@ -29,12 +29,21 @@ profondeur et roches plus dures, sauvegarde/chargement, première automatisation
 ## v0.4 — Traitement
 - ✅ Trieur (filtre par ressource).
 - ✅ Four et fonderie : minerai → lingots (2,5 fois plus chers), au charbon.
-- Concasseur (pierre → gravier), alliages (ex. bronze), contrats de vente.
+- ✅ Commandes des clients (Tableau d'affichage) : quantités précises, primes sur le prix de base, échéances, rang, livraison à la main
+  ou par caisse d'expédition réglée sur « Commandes ».
+- ✅ Grand Chevalement : le grand chantier du camp en cinq phases (matériaux, argent, commandes honorées), la tour grandit,
+  écran de fin avec les chiffres de la partie.
+- Concasseur (pierre → gravier), alliages (ex. bronze) ; commandes d'alliages et de produits transformés.
 
 ## v0.5 — Énergie et contraintes
 - Générateurs (charbon), réseau électrique, consommation des machines.
 - ✅ Dangers : éboulements (étais), grisou (ventilateurs), eau (pompes), santé du joueur.
 - Chaleur en profondeur, coups de grisou qui explosent près d'une flamme, détecteur de poches.
+
+## Après le Grand Chevalement (idées)
+- Un second chantier plus lointain (un ascenseur de puits, une ville au camp) qui reprend les commandes comme monnaie de progression.
+- Clients récurrents avec une réputation propre, commandes « exclusives » (une fois par rang) et pénalités douces de réputation.
+- Ouvriers « livreurs » qui portent leurs lingots du coffre au chantier ; objectifs quotidiens de commandes.
 
 ## Plus tard
 - Ressources rares et fictives au-delà de 450 m, mine agrandie ou étages multiples.
