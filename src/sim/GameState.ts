@@ -10,6 +10,7 @@ import { DX, DY, Dir, dirFromVector, rotateCW } from '../core/dir';
 import { Rng } from '../core/rng';
 import { AIR, getBlock } from '../data/blocks';
 import { zoneForDepth } from '../data/depth';
+import { hasRecipe } from '../data/recipes';
 import { getMachine, kitId, kitName, MACHINES, parseKit } from '../data/machines';
 import { CAUSE_HAZARD, GEAR, HazardKind, getGear } from '../data/gear';
 import { GAS, HEALTH, HEAT, WATER } from '../data/hazards';
@@ -30,6 +31,7 @@ import { Project } from './Project';
 import { StructureManager } from './StructureManager';
 import { Building, BuildingType } from './structures/Building';
 import { Conveyor } from './structures/Conveyor';
+import type { Crafter } from './structures/Crafter';
 import { Rail, type RailStation, type RailSwitch, type SwitchSetting } from './structures/Rail';
 import { TunnelBorer } from './structures/Borer';
 import { Smelter } from './structures/Smelter';
@@ -88,6 +90,8 @@ export interface Stats {
   autoSold: number;
   /** Lingots sortis des fours et fonderies. */
   smelted: number;
+  /** Produits fabriqués dans les Manufactures (plaques, acier, diamants taillés). */
+  crafted: number;
   /** Évanouissements (grisou, noyade, éboulement). */
   faints: number;
   /** Commandes honorées, et argent qu'elles ont rapporté (partielles comprises). */
@@ -242,6 +246,7 @@ export class GameState implements StructureContext {
     collected: {},
     autoSold: 0,
     smelted: 0,
+    crafted: 0,
     faints: 0,
     contracts: 0,
     contractMoney: 0,
@@ -465,6 +470,16 @@ export class GameState implements StructureContext {
     if (!this.stats.discovered.includes(res)) {
       this.stats.discovered.push(res);
       this.emit({ t: 'discover', text: `Premier ${getResource(res).name.toLowerCase()} sorti du ${from.type === 'foundry' ? 'haut fourneau' : 'four'} !` });
+    }
+  }
+
+  countCrafted(res: string, _from: Structure): void {
+    this.stats.crafted++;
+    this.production.addMade(res);
+    // Premier exemplaire d'un produit : il rejoint le carnet (inventaire, trieur, commandes des clients).
+    if (!this.stats.discovered.includes(res)) {
+      this.stats.discovered.push(res);
+      this.emit({ t: 'discover', text: `Première fabrication : ${getResource(res).name} !` });
     }
   }
 
@@ -1897,6 +1912,73 @@ export class GameState implements StructureContext {
     }
     if (s.output.length) this.emit({ t: 'invFull' });
     return n;
+  }
+
+  /**
+   * Rend au joueur des objets que le jeu ne peut plus garder (le chantier a changé depuis la sauvegarde) : dans le sac tant
+   * qu'il y a de la place, le reste tombe à l'entrée de la mine. `why` ouvre le message qui le dit.
+   */
+  giveBack(items: Record<string, number>, why: string): void {
+    const list = Object.entries(items).filter(([res, n]) => hasResource(res) && n > 0);
+    if (!list.length) return;
+    const at = this.layout.spawn;
+    for (const [res, n] of list) {
+      const k = Math.min(n, Math.floor(this.inventory.room(res)));
+      if (k > 0) this.inventory.add(res, k);
+      if (n - k > 0) this.drops.spawn(res, n - k, (at.x + 0.5) * TILE, (at.y + 0.5) * TILE);
+    }
+    const what = list.map(([res, n]) => `${n} ${getResource(res).name.toLowerCase()}`).join(', ');
+    this.emit({ t: 'message', text: `${why} : ${what} vous ${list.length > 1 || list[0][1] > 1 ? 'sont rendus' : 'est rendu'}.`, kind: 'info' });
+  }
+
+  /** Charge le charbon du sac dans une Manufacture. */
+  fuelCrafter(s: Crafter): number {
+    const fuel = s.def.fuel;
+    if (!fuel) return 0;
+    const k = s.addFuel(this.inventory.count(fuel.res));
+    this.inventory.remove(fuel.res, k);
+    return k;
+  }
+
+  /** Dépose dans une Manufacture les matières de sa recette que le sac contient (dans la limite de sa place). */
+  crafterDeposit(s: Crafter): number {
+    const r = s.current;
+    if (!r) return 0;
+    let n = 0;
+    for (const res of Object.keys(r.inputs)) {
+      const k = s.addInput(res, this.inventory.count(res));
+      this.inventory.remove(res, k);
+      n += k;
+    }
+    return n;
+  }
+
+  /** Récupère dans le sac les produits prêts d'une Manufacture. */
+  crafterCollect(s: Crafter): number {
+    const taken = s.takeOutput((res) => Math.floor(this.inventory.room(res)));
+    let n = 0;
+    for (const [res, k] of Object.entries(taken)) {
+      this.inventory.add(res, k);
+      n += k;
+    }
+    if (s.output.length) this.emit({ t: 'invFull' });
+    return n;
+  }
+
+  /**
+   * Règle la recette d'une Manufacture. Les matières en attente que la nouvelle recette n'utilise pas reviennent dans le sac du
+   * joueur ; ce qui n'y tient pas tombe à ses pieds (rien ne se perd). Renvoie vrai si la recette a changé.
+   */
+  setCrafterRecipe(s: Crafter, recipe: string | null): boolean {
+    if (!hasRecipe(recipe)) recipe = null;
+    if (s.recipe === recipe) return false;
+    const displaced = s.setRecipe(recipe);
+    for (const [res, n] of Object.entries(displaced)) {
+      const k = Math.min(n, Math.floor(this.inventory.room(res)));
+      if (k > 0) this.inventory.add(res, k);
+      if (n - k > 0) this.drops.spawn(res, n - k, this.player.x, this.player.y);
+    }
+    return true;
   }
 
   /** Règle la longueur du prochain tunnel (0 = sans limite). */

@@ -527,9 +527,9 @@ for (const dev of DEVICES) {
       const E = window.__EM;
       const g = E.state;
       g.money = 250000;
-      for (const k of ['storage', 'shipping', 'furnace', 'sorter', 'rail_load', 'rail_switch', 'borer']) g.inventory.addKit(k, 1);
+      for (const k of ['storage', 'shipping', 'furnace', 'crafter', 'sorter', 'rail_load', 'rail_switch', 'borer']) g.inventory.addKit(k, 1);
       let n = 0;
-      for (const k of ['storage', 'shipping', 'furnace', 'sorter', 'rail_load', 'rail_switch', 'borer']) {
+      for (const k of ['storage', 'shipping', 'furnace', 'crafter', 'sorter', 'rail_load', 'rail_switch', 'borer']) {
         if (g.structures.list.some((s) => s.type === k)) continue;
         let done = false;
         for (let dy = 1; dy < 12 && !done; dy++)
@@ -548,6 +548,16 @@ for (const dev of DEVICES) {
         crate.mode = 'orders';
         crate.put('coal', 20);
         crate.put('iron', 6);
+      }
+      // La Manufacture : réglée sur l'acier, avec des lingots en attente, du charbon et des produits prêts.
+      g.stats.discovered.push('gold_ingot');
+      const crafter = g.structures.list.find((s) => s.type === 'crafter');
+      if (crafter) {
+        crafter.setRecipe('steel');
+        crafter.addFuel(5);
+        crafter.addInput('iron_ingot', 6);
+        crafter.output.push('steel', 'steel');
+        crafter.status = 'ok';
       }
       // Le Tableau d'affichage et le chantier : de quoi remplir l'onglet « Commandes » (deux commandes acceptées, une proposition
       // de plus que la place permet) et un chantier bien avancé.
@@ -596,6 +606,7 @@ for (const dev of DEVICES) {
       ['drill', 'drill', 'foreuse'],
       ['borer', 'borer', 'percement'],
       ['furnace', 'furnace', 'four'],
+      ['crafter', 'crafter', 'manufacture'],
       ['sorter', 'sorter', 'trieur'],
       ['station', 'rail_load', 'gare'],
       ['switch', 'rail_switch', 'aiguillage'],

@@ -57,6 +57,11 @@ function phaseBlock(g: GameState): string {
   const bagUseful = p.missing().some((n) => g.inventory.count(n.res) > 0);
   const pay = Math.min(g.money, p.moneyLeft());
   const waitingOrders = p.supplied() && g.stats.contracts < spec.contracts;
+  // Des produits de la Manufacture au programme : on dit d'où ils viennent.
+  const made = spec.needs.filter((n) => getResource(n.res).product);
+  const where = made.length
+    ? `<p class="hint">${made.length > 1 ? 'Ces produits se fabriquent' : 'Ce produit se fabrique'} à la <b>Manufacture</b> (Atelier, onglet Machines), à partir de lingots ou de diamants bruts : posez-en une sur votre ligne, puis réglez une caisse d'expédition sur « Chantier » à sa sortie.</p>`
+    : '';
   return `
     <p class="sub">${esc(spec.blurb)}</p>
     ${
@@ -66,6 +71,7 @@ function phaseBlock(g: GameState): string {
     }
     <h4>Matériaux, salaires, commandes</h4>
     <ul class="site-rows">${rows}${wages}${orders}</ul>
+    ${where}
     <div class="panel-footer">
       <span class="muted">Récompense : <b class="gold">${esc(spec.perk.text)}</b></span>
       <span class="site-acts">${btn('siteFund', pay > 0 ? `Verser ${money(pay)}` : 'Verser des salaires', { disabled: p.moneyLeft() <= 0 || g.money <= 0, title: p.moneyLeft() <= 0 ? 'Les ouvriers sont payés pour cette phase' : g.money <= 0 ? "Vous n'avez pas d'argent" : undefined })}${btn('siteDeliver', 'Livrer mon sac', { cls: 'primary', disabled: !bagUseful, title: bagUseful ? undefined : "Rien dans votre sac que cette phase n'attend" })}</span>
@@ -84,6 +90,7 @@ function victory(g: GameState): string {
     ['Minerais ramassés', num(st.itemsCollected, 0)],
     ['Profondeur maximale', `${Math.floor(st.maxDepth)} m`],
     ['Lingots fondus', num(st.smelted, 0)],
+    ['Produits fabriqués', num(st.crafted, 0)],
     ['Livré par vos machines', num(st.delivered, 0)],
     ['Vendu par les caisses', money(st.autoSold)],
     ['Commandes honorées', num(st.contracts, 0)],
@@ -95,7 +102,7 @@ function victory(g: GameState): string {
   return `
     <div class="victory">
       <p class="victory-title">★ ${esc(PROJECT_TITLE)} ★</p>
-      <p class="sub">Le Grand Chevalement domine la mine : cinq phases, des tonnes de lingots et un diamant au sommet. Vous pouvez continuer à jouer : les commandes et les caisses d'expédition continuent comme avant.</p>
+      <p class="sub">Le Grand Chevalement domine la mine : cinq phases, des tonnes de lingots, de l'acier, des plaques d'or et un diamant taillé au sommet. Vous pouvez continuer à jouer : les commandes et les caisses d'expédition continuent comme avant.</p>
     </div>
     ${steps(g)}
     <h4>Votre empire en chiffres</h4>

@@ -127,13 +127,18 @@ export class Project {
     return { phase: this.phase, delivered: { ...this.delivered }, funded: this.funded, doneAt: [...this.doneAt] };
   }
 
-  /** Recharge le chantier sauvegardé ; les valeurs aberrantes sont ignorées. Sans données (ancienne sauvegarde), tout repart à zéro. */
-  load(data: ProjectSave | undefined): void {
+  /**
+   * Recharge le chantier sauvegardé ; les valeurs aberrantes sont ignorées. Sans données (ancienne sauvegarde), tout repart à
+   * zéro. Renvoie ce qui avait été livré à la phase en cours et qu'elle n'attend plus (le chantier a changé depuis la
+   * sauvegarde : une autre matière, ou une quantité moindre) : à l'appelant de le rendre au joueur, rien ne se perd.
+   */
+  load(data: ProjectSave | undefined): Record<string, number> {
     this.phase = 0;
     this.delivered = {};
     this.funded = 0;
     this.doneAt = [];
-    if (!data || typeof data !== 'object') return;
+    const refund: Record<string, number> = {};
+    if (!data || typeof data !== 'object') return refund;
     const phase = Number(data.phase);
     this.phase = Number.isInteger(phase) ? Math.min(PHASES.length, Math.max(0, phase)) : 0;
     this.doneAt = (Array.isArray(data.doneAt) ? data.doneAt : [])
@@ -144,12 +149,18 @@ export class Project {
     while (this.doneAt.length < this.phase) this.doneAt.push(0);
     const spec = this.spec;
     if (spec) {
-      for (const n of spec.needs) {
-        const d = Number(data.delivered?.[n.res]);
-        if (hasResource(n.res) && Number.isFinite(d) && d > 0) this.delivered[n.res] = Math.min(n.qty, Math.floor(d));
+      const saved = data.delivered && typeof data.delivered === 'object' ? data.delivered : {};
+      for (const [res, v] of Object.entries(saved)) {
+        const d = Math.floor(Number(v));
+        if (!hasResource(res) || !Number.isFinite(d) || d <= 0) continue;
+        const need = spec.needs.find((n) => n.res === res);
+        const kept = need ? Math.min(need.qty, d) : 0;
+        if (kept > 0) this.delivered[res] = kept;
+        if (d > kept) refund[res] = d - kept;
       }
       const f = Number(data.funded);
       this.funded = Number.isFinite(f) && f > 0 ? Math.min(spec.money, Math.floor(f)) : 0;
     }
+    return refund;
   }
 }

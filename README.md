@@ -280,6 +280,19 @@ Le jeu à deux n'est pas concerné : l'invité n'a besoin d'aucun compte, et l'h
   brûle que pendant la fonte. Les lingots sont poussés devant la flèche (convoyeur, coffre, caisse d'expédition) ou
   récupérés dans le sac. Four : un lingot toutes les 3 s (8 lingots par charbon) ; fonderie : toutes les 0,5 s
   (30 lingots par charbon). Objectif : fondre 10 lingots.
+- **Manufacture** (900 $, pioche améliorée, 2×2 cases, onglet « Usine » de la barre de construction) : elle **transforme les
+  lingots en produits**, plus chers que leurs matières. `E` dessus ouvre son panneau, où l'on **choisit la recette** :
+  **plaque** de cuivre, de fer, d'argent ou d'or (1 lingot, 2 s, ×1,5 la valeur du lingot), **acier** (2 lingots de fer, 4 s,
+  170 $ l'unité) ou **diamant taillé** (1 diamant brut, 5 s, ×2). Le panneau ne propose que les recettes dont on connaît les
+  matières (un lingot fondu, un diamant trouvé). Les lingots entrent par un convoyeur ou se déposent du sac, sur n'importe quel côté
+  sauf la sortie ; une matière hors recette est refusée (le convoyeur attend). Elle brûle du charbon comme un four (un
+  ravitailleur peut la recharger) et ralentit dans la Fournaise ; les produits sont poussés devant la flèche (convoyeur,
+  coffre, caisse d'expédition) ou récupérés dans le sac. **Changer de recette rend les matières qu'elle n'utilise pas**
+  (dans le sac, sinon à vos pieds). Un produit suit le **cours du métal** dont il est fait (une forte demande de fer fait aussi
+  monter la plaque de fer et l'acier ; la ligne du minerai, au Tableau d'affichage, donne le prix de ses lingots et de ses
+  produits), les **clients en demandent** une fois le premier fabriqué, et les **deux dernières phases du Grand Chevalement**
+  en réclament. Les statistiques de production comptent les produits dans la colonne « Fabriqué ». Objectif : fabriquer un
+  produit. Les recettes sont des données (`src/data/recipes.ts`).
 - **Dangers** en profondeur, avec une **barre de santé** (on récupère hors de danger ; à 0, on s'évanouit et on se
   réveille au camp, le sac reste là où on est tombé) :
   - **éboulements** (dès 60 m, rares) : une salle creusée à la main **très** grande (plus de 16 cases creusées dans le
@@ -398,7 +411,7 @@ Le jeu à deux n'est pas concerné : l'invité n'a besoin d'aucun compte, et l'h
   proposition** est versée ; si l'échéance passe ou si on abandonne (le second appui confirme), **le client paie ce qui est
   livré au prix de base, sans la prime** : rien n'est perdu, seule la prime l'est. Un client ne demande que **ce que vous avez
   déjà trouvé**, et les lingots seulement après le premier lingot fondu : ils donnent une vraie raison de bâtir une ligne de
-  fonte et de trier. Le **marché** pèse sur le tirage (une marchandise en forte demande est demandée trois fois plus souvent,
+  fonte et de trier. Même chose pour les **produits de la Manufacture** (plaques, acier, diamant taillé), après le premier fabriqué. Le **marché** pèse sur le tirage (une marchandise en forte demande est demandée trois fois plus souvent,
   une marchandise bradée deux fois et demie moins). Le **rang** (Livreur, Fournisseur, Négociant, Grossiste, Magnat : 3, 8, 16,
   30 commandes honorées) grossit les commandes de 25 % par rang et ajoute 2 points de prime. Une pastille sur l'onglet
   signale les propositions qui attendent, une ligne du HUD donne la commande la plus pressée (sur ordinateur), une annonce
@@ -409,7 +422,8 @@ Le jeu à deux n'est pas concerné : l'invité n'a besoin d'aucun compte, et l'h
   qui **grandit à chaque phase terminée** (six états dessinés : terrain et plan, fondations, charpente, treuil et poulie,
   poulies dorées, couronnement avec un diamant qui étincelle), avec une jauge au pied qui montre où en est la phase. **Cinq
   phases** (Fondations, Charpente, Treuil et poulies, Poulies dorées, Couronnement) demandent chacune des **matériaux**
-  (charbon, cuivre, puis des lingots de cuivre, de fer, d'argent et d'or, et 12 diamants à la fin), de l'**argent versé aux
+  (charbon, cuivre, puis des lingots de cuivre, de fer et d'argent ; aux deux dernières phases, des **produits de la Manufacture** :
+  plaques d'or, acier, et 12 diamants taillés à la fin), de l'**argent versé aux
   ouvriers** (de 500 $ à 75 000 $) et un nombre de **commandes honorées** (0, 2, 5, 9, 14) : la phase se termine toute seule
   dès que tout est réuni. On livre **à la main** (« Livrer mon sac », « Verser ») ou avec des **caisses d'expédition réglées sur
   « Chantier »** que des convoyeurs alimentent : on bâtit une ligne de fonte, on y branche une caisse, et la tour monte sans
@@ -417,8 +431,8 @@ Le jeu à deux n'est pas concerné : l'invité n'a besoin d'aucun compte, et l'h
   au Tableau, 10 points de prime de plus, puis encore une commande et 10 points, enfin 5 points). La dernière phase **achève le
   monument** : un feu d'artifice, le titre d'**Empereur de la mine** et un **écran de fin** avec les chiffres de la partie
   (temps de jeu, argent gagné, blocs minés, lingots fondus, commandes honorées…) et le temps de chaque phase ; on peut
-  continuer à jouer. Toutes les quantités sont réunies dans `src/data/project.ts` et `src/data/contracts.ts`. Les trois
-  derniers objectifs du parcours guidé en parlent (18 en tout). Le chantier est un bâtiment du camp comme les autres : une
+  continuer à jouer. Toutes les quantités sont réunies dans `src/data/project.ts` et `src/data/contracts.ts`. Les quatre
+  derniers objectifs du parcours guidé en parlent (19 en tout, dont « fabriquer un produit »). Le chantier est un bâtiment du camp comme les autres : une
   ancienne sauvegarde le trouve à sa place (une machine qu'elle y aurait posée revient au stock, avec son contenu, et un
   joueur resté debout à cet endroit est remis à l'entrée de la mine), avec un chantier à zéro.
 - **Mini-carte** en haut à droite (la mine autour du joueur) et **carte complète** avec `M` : galeries, roche,
@@ -436,7 +450,7 @@ Le jeu à deux n'est pas concerné : l'invité n'a besoin d'aucun compte, et l'h
   « Repère 3 ». Les repères apparaissent sur la carte, la mini-carte et dans la mine (fanion et nom). Un repère
   « suivi » s'affiche sous la mini-carte avec sa distance, et une flèche au bord de l'écran montre sa direction.
 - Sauvegarde automatique (chaque minute), manuelle, export/import de fichier.
-- Sons synthétisés, éclairage de la mine, particules, 18 objectifs guidant le parcours (des premières minutes
+- Sons synthétisés, éclairage de la mine, particules, 19 objectifs guidant le parcours (des premières minutes
   jusqu'au Grand Chevalement).
 - **Graphismes en pixel art**, tous dessinés en code (aucune image externe). La lumière vient toujours d'en haut à
   gauche : le mineur (casque à lampe, sac à dos, marche à 4 images, clignement des yeux), les machines ombrées et
@@ -458,6 +472,7 @@ node e2e/phone.mjs             # mise en page sur téléphone, à 11 tailles d'�
 node e2e/touch.mjs             # gestes tactiles réels (CDP) : stick, Miner, Agir, ☰, défilement sans achat, pincer, pose, iPhone
 node e2e/panels.mjs            # fenêtres au doigt sur un jeu qui tourne : défilement, toucher long, contenu exact, rien ne glisse de côté (après un build)
 node e2e/orders.mjs            # commandes et Grand Chevalement : vrais clics (accepter, livrer, abandonner, caisse réglée sur « Commandes », chantier phase par phase, écran de fin), la tour change à chaque étape, tout survit à un rechargement (après un build)
+node e2e/crafter.mjs           # la Manufacture : achat à l'Atelier, pose, panneau (recette, charbon, dépôt, récupération), chaîne par convoyeurs, commande de plaques, sauvegarde, ancienne partie (après un build)
 node e2e/menus.mjs             # menus : « Commandes » (menu principal et pause) s'ouvre devant le menu, qui s'efface puis revient ; seul, le jeu reste figé depuis la pause (après un build)
 node e2e/cloud.mjs             # compte : deux appareils (deux profils de navigateur) et un faux Firebase local : création, reprise sur appareil neuf, parties qui divergent, réseau coupé, suppression (après un build)
 npx vite-node tests-net/mqtt.check.ts   # client MQTT contre un vrai courtier local (aedes)

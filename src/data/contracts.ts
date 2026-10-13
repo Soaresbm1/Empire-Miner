@@ -21,6 +21,7 @@ export interface GoodSpec {
 /**
  * Marchandises demandées, du plus courant au plus rare. Un client ne demande que ce que le joueur connaît déjà ; les
  * lingots n'apparaissent qu'après le premier lingot fondu : ce sont eux qui donnent une raison de bâtir une ligne de fonte.
+ * Même chose pour les produits de la Manufacture (plaques, acier, diamant taillé), après le premier fabriqué.
  */
 export const GOODS: readonly GoodSpec[] = [
   { res: 'coal', qty: [30, 80], weight: 3, time: 600, step: 5 },
@@ -33,6 +34,12 @@ export const GOODS: readonly GoodSpec[] = [
   { res: 'iron_ingot', qty: [8, 24], weight: 2, time: 780, step: 2 },
   { res: 'silver_ingot', qty: [4, 12], weight: 1.5, time: 840, step: 1 },
   { res: 'gold_ingot', qty: [2, 6], weight: 1, time: 900, step: 1 },
+  { res: 'copper_plate', qty: [8, 24], weight: 1.5, time: 780, step: 2 },
+  { res: 'iron_plate', qty: [6, 18], weight: 1.5, time: 840, step: 2 },
+  { res: 'silver_plate', qty: [3, 9], weight: 1, time: 900, step: 1 },
+  { res: 'steel', qty: [4, 12], weight: 1.2, time: 900, step: 1 },
+  { res: 'gold_plate', qty: [2, 5], weight: 0.8, time: 960, step: 1 },
+  { res: 'cut_diamond', qty: [1, 2], weight: 0.5, time: 1000, step: 1 },
 ];
 
 export const CONTRACTS = {

@@ -8,6 +8,7 @@ import { getMachine } from '../data/machines';
 import type { GameState } from '../sim/GameState';
 import { OBJECTIVES, currentObjective } from '../sim/objectives';
 import type { TunnelBorer } from '../sim/structures/Borer';
+import type { Crafter } from '../sim/structures/Crafter';
 import type { Smelter } from '../sim/structures/Smelter';
 import { GEAR, HAZARD_LABEL } from '../data/gear';
 import { GAS, HEALTH, WATER } from '../data/hazards';
@@ -27,7 +28,7 @@ import { WORKSHOP_TABS, isWorkshopTab } from './workshop';
 import { hudMarket, BOARD_TABS, isBoardTab } from './market';
 import { hudOrders } from './orders';
 import { sitePanel } from './site';
-import { boardPanel, borerPanel, counterPanel, smelterPanel, drillPanel, helpPanel, installPanel, inventoryPanel, mapPanel, shippingPanel, sorterPanel, stationPanel, storagePanel, switchPanel, workshopPanel } from './panels';
+import { boardPanel, borerPanel, counterPanel, crafterPanel, smelterPanel, drillPanel, helpPanel, installPanel, inventoryPanel, mapPanel, shippingPanel, sorterPanel, stationPanel, storagePanel, switchPanel, workshopPanel } from './panels';
 import { displayMode } from './fullscreen';
 import { morph } from './morph';
 import { pinchStep } from './touch';
@@ -39,7 +40,7 @@ const ARROWS8 = ['→', '↘', '↓', '↙', '←', '↖', '↑', '↗'];
 /** Un doigt qui bouge de plus que cela (px CSS) entre l'appui et le relâchement ne fait pas un appui sur un bouton. */
 const TAP_SLOP = 10;
 
-export type PanelKind = 'counter' | 'workshop' | 'board' | 'site' | 'inventory' | 'storage' | 'drill' | 'borer' | 'furnace' | 'shipping' | 'sorter' | 'station' | 'switch' | 'map' | 'help' | 'install';
+export type PanelKind = 'counter' | 'workshop' | 'board' | 'site' | 'inventory' | 'storage' | 'drill' | 'borer' | 'furnace' | 'crafter' | 'shipping' | 'sorter' | 'station' | 'switch' | 'map' | 'help' | 'install';
 
 export interface UIHost {
   onAction(action: string, arg: string): void;
@@ -632,6 +633,10 @@ export class UI {
       case 'furnace':
         title = (target as Smelter).def.name;
         body = smelterPanel(g, target as Smelter);
+        break;
+      case 'crafter':
+        title = (target as Crafter).def.name;
+        body = crafterPanel(g, target as Crafter);
         break;
       case 'shipping':
         title = getMachine('shipping').name;

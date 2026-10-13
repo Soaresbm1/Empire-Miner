@@ -2,6 +2,7 @@
 import type { Dir } from '../../core/dir';
 import { TunnelBorer } from './Borer';
 import { Conveyor } from './Conveyor';
+import { Crafter } from './Crafter';
 import { Bridge } from './Bridge';
 import { Drill } from './Drill';
 import { Rail, RailStation, RailSwitch } from './Rail';
@@ -32,6 +33,7 @@ export const STRUCTURE_FACTORIES: Record<string, Factory> = {
   shipping: { create: (x, y, d) => new ShippingCrate(x, y, d), load: (s) => ShippingCrate.load(s) },
   furnace: { create: (x, y, d) => new Smelter('furnace', x, y, d), load: (s) => Smelter.load('furnace', s) },
   foundry: { create: (x, y, d) => new Smelter('foundry', x, y, d), load: (s) => Smelter.load('foundry', s) },
+  crafter: { create: (x, y, d) => new Crafter(x, y, d), load: (s) => Crafter.load(s) },
   prop: { create: (x, y) => new Prop(x, y), load: (s) => new Prop(s.x, s.y) },
   fan: { create: (x, y) => new Fan(x, y, 0), load: (s) => new Fan(s.x, s.y, 0) },
   pump: { create: (x, y) => new Pump(x, y, 0), load: (s) => new Pump(s.x, s.y, 0) },

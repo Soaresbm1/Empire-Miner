@@ -15,6 +15,7 @@ import { Bridge } from '../sim/structures/Bridge';
 import { Building, BUILDING_INFO } from '../sim/structures/Building';
 import { Conveyor } from '../sim/structures/Conveyor';
 import { TunnelBorer } from '../sim/structures/Borer';
+import { Crafter } from '../sim/structures/Crafter';
 import { Smelter } from '../sim/structures/Smelter';
 import { MARKER_KINDS, MarkerKind } from '../sim/Markers';
 import { Fan, Prop, Pump } from '../sim/structures/Safety';
@@ -1214,6 +1215,7 @@ export class Game {
         break;
       case 'drillRotate':
       case 'smelterRotate':
+      case 'crafterRotate':
       case 'borerRotate':
       case 'switchRotate':
         if (at) this.act({ k: 'rotate', ...at });
@@ -1238,6 +1240,18 @@ export class Game {
         break;
       case 'smelterCollect':
         if (at) this.act({ k: 'smelterCollect', ...at });
+        break;
+      case 'crafterFuel':
+        if (at) this.act({ k: 'crafterFuel', ...at });
+        break;
+      case 'crafterDeposit':
+        if (at) this.act({ k: 'crafterDeposit', ...at });
+        break;
+      case 'crafterCollect':
+        if (at) this.act({ k: 'crafterCollect', ...at });
+        break;
+      case 'crafterRecipe':
+        if (at) this.act({ k: 'crafterRecipe', ...at, recipe: arg });
         break;
       case 'borerUpgrade':
       case 'drillUpgrade':
@@ -1566,6 +1580,7 @@ export class Game {
     else if (s instanceof Drill) this.ui.openPanel('drill', s);
     else if (s instanceof TunnelBorer) this.ui.openPanel('borer', s);
     else if (s instanceof Smelter) this.ui.openPanel('furnace', s);
+    else if (s instanceof Crafter) this.ui.openPanel('crafter', s);
     else if (s instanceof Sorter) this.ui.openPanel('sorter', s);
     else if (s instanceof RailStation) this.ui.openPanel('station', s);
     else if (s instanceof RailSwitch) this.ui.openPanel('switch', s);
@@ -1595,6 +1610,7 @@ export class Game {
     if (near instanceof Drill) return `${e} Foreuse niv. ${near.level} — charbon, production, amélioration`;
     if (near instanceof TunnelBorer) return `${e} Foreuse de percement niv. ${near.level} — charbon, départ, améliorations`;
     if (near instanceof Smelter) return `${e} ${near.def.name} — charbon, minerai, lingots`;
+    if (near instanceof Crafter) return `${e} ${near.def.name} — ${near.recipe ? `fabrique : ${getResource(near.recipe).name}` : 'choisir ce qu’elle fabrique'}`;
     if (near instanceof Sorter) return `${e} Trieur — choisir le minerai trié`;
     if (near instanceof RailStation) return `${e} ${near.def.name}`;
     if (near instanceof RailSwitch) return `${e} Aiguillage — choisir la branche`;
@@ -2112,6 +2128,11 @@ export class Game {
     if (s instanceof Smelter) {
       const st = { ok: 'fond le minerai', idle: 'attend du minerai', nofuel: 'sans charbon', full: 'sortie saturée' }[s.status];
       return `<b>${s.def.name}</b> ${['→', '↓', '←', '↑'][s.dir]} — ${st}<br>Minerai : ${s.input.length} · lingots prêts : ${s.output.length} · charbon : ${s.fuelUnits}${this.heatLine(g, s.x, s.y)}`;
+    }
+    if (s instanceof Crafter) {
+      const st = { ok: 'fabrique', idle: 'attend des matières', nofuel: 'sans charbon', full: 'sortie saturée', norecipe: 'aucune recette choisie' }[s.status];
+      const what = s.recipe ? ` : ${getResource(s.recipe).name}` : '';
+      return `<b>${s.def.name}</b> ${['→', '↓', '←', '↑'][s.dir]} — ${st}${what}<br>Matières : ${s.inputCount()} · produits prêts : ${s.output.length} · charbon : ${s.fuelUnits}${this.heatLine(g, s.x, s.y)}`;
     }
     if (s instanceof Storage)
       return `<b>Coffre</b><br>${kg(s.weight())} / ${kg(s.capacity)}${

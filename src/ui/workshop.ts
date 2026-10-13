@@ -357,6 +357,13 @@ function machineSpecs(m: MachineDef): [string, string][] {
       ['Lingot', '2,5 × le prix du minerai'],
       ...(m.w > 1 ? [['Taille', `${m.w}×${m.h} cases`] as [string, string]] : []),
     ];
+  if (m.crafter && m.fuel)
+    return [
+      ['Fabrique', 'plaques, acier, diamant taillé'],
+      ['Recette', 'au choix, avec E'],
+      ['Charbon', `1 unité / ${m.fuel.secondsPerUnit} s de travail`],
+      ['Taille', `${m.w}×${m.h} cases`],
+    ];
   if (m.borer && m.fuel)
     return [
       ['Tunnel', "jusqu'à 50 cases, ou sans limite"],

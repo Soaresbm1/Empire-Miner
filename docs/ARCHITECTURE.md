@@ -11,7 +11,7 @@ src/
     Drops.ts             minerais physiques au sol (la pierre s'effrite après `groundLife` secondes)
     Inventory.ts         sac limité en poids + kits de construction
     StructureManager.ts  index spatial des structures et ordre de mise à jour
-    structures/          Conveyor, Drill, TunnelBorer, Smelter, Storage, ShippingCrate, Building (+ registre de fabrication)
+    structures/          Conveyor, Drill, TunnelBorer, Smelter, Crafter, Storage, ShippingCrate, Building (+ registre de fabrication)
     Market.ts            cours du marché (prix variables, événements) ; tirages par hachage, rien d'aléatoire à sauvegarder
     Contracts.ts         commandes des clients : propositions, acceptation, livraison, échéance, rang
     Project.ts           le Grand Chevalement : cinq phases, livraisons, argent versé, avantages
@@ -330,8 +330,37 @@ partie à deux). Les nombres sont des données : `data/contracts.ts` (marchandis
 - **Interface** : `ui/orders.ts` (onglet « Commandes », ligne du HUD, annonces), `ui/site.ts` (panneau du chantier et écran de fin),
   `ui/panels.ts` (`shippingPanel` : destination du transporteur). Le rendu du chantier (`render/sprites.ts` : six états, `Renderer.drawSite`)
   lit `project.phase`.
+- **Ajouter un produit** : une ressource `product(...)` (`data/resources.ts`), une recette (`data/recipes.ts`), et si les clients
+  doivent le demander, une ligne dans `GOODS` ; rien d'autre (marché, dessin, listes et panneau s'en servent tout seuls).
 - **Ajouter une marchandise demandable** : une ligne dans `GOODS` (`data/contracts.ts`). **Changer le chantier** : `PHASES`
   (`data/project.ts`) ; si le nombre de phases change, `buildSiteSprites` doit dessiner un état de plus.
+
+## Manufacture et produits fabriqués
+
+La Manufacture (`sim/structures/Crafter.ts`) est le second étage de la chaîne : le four fait des lingots, elle en fait des
+**produits** (plaques, acier, diamant taillé). Elle est écrite sur le modèle du four (`Smelter`) : mêmes entrées par convoyeur
+ou à la main, même charbon qui ne brûle que pendant le travail (donc un ravitailleur la recharge sans rien changer à
+`Workers`, qui reconnaît une machine à charbon à ses membres `addFuel`, `fuelUnits`, `fuelMax`), même sortie poussée devant la
+flèche (la fonction `frontTilesOf` de `Structure.ts` donne les cases de sortie des deux machines), même cadence réduite par la
+chaleur. Ce qui change : une **recette choisie** par le joueur.
+
+- **Données** : `data/resources.ts` (les produits sont des `product(...)`, rangés après les lingots pour ne pas décaler les
+  index des gisements sauvegardés ; `follows` dit de quel minerai ils suivent le cours, `shape` comment les dessiner),
+  `data/recipes.ts` (matières, quantité, durée), `CrafterSpec` de la machine (`data/machines.ts`).
+- **Marché** : un produit n'est pas une marchandise cotée (`COMMODITIES` ne change pas, donc le marché sauvegardé non plus) ; il
+  suit le cours de son minerai (`FOLLOWS`), si bien qu'un événement sur le fer touche aussi la plaque de fer et l'acier.
+- **Une recette par produit** : l'identifiant de la recette est celui du produit. `Crafter.canAccept` ne laisse entrer que les
+  matières de la recette (sinon le convoyeur attend) ; `Crafter.setRecipe` renvoie les matières en attente que la nouvelle
+  recette n'utilise pas, et `GameState.setCrafterRecipe` les rend au joueur (sac, puis à ses pieds).
+- **Statistiques** : `countCrafted` (contexte des structures) compte la fabrication, la range dans le tableau `made` du journal de
+  production (clé facultative `f` de la sauvegarde) et fait entrer le produit dans le carnet (`stats.discovered`) : c'est ce
+  qui le rend demandable par les clients (`GOODS` de `data/contracts.ts`) et visible dans les listes (coffres, trieur, marché).
+- **Interface** : `crafterPanel` (`ui/panels.ts`) montre les recettes dont on connaît les matières ; les actions `crafterRecipe`,
+  `crafterFuel`, `crafterDeposit`, `crafterCollect` passent par `SimAction` (donc par le jeu à deux). Le dessin est `drawCrafter`
+  (`render/Renderer.ts`) ; les petits objets (plaque, poutre d'acier, gemme) sont dessinés par `buildNuggetSprites` selon `shape`.
+- **Sauvegarde** : `Crafter.load` n'accepte que des valeurs saines (recette connue, matières de la recette, nombres bornés).
+  Les deux dernières phases du chantier réclament des produits : `Project.load` rend (`GameState.giveBack`) ce qui avait été
+  livré à une phase qui ne l'attend plus, pour qu'un changement de recette du chantier ne fasse rien perdre.
 
 ## Étendre le jeu
 

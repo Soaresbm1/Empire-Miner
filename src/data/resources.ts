@@ -52,6 +52,14 @@ export interface ResourceDef {
   smeltsTo?: string;
   /** Lingot (produit par un four ou une fonderie, jamais trouvé dans la roche). */
   ingot?: boolean;
+  /** Produit fabriqué à la Manufacture (plaque, acier, diamant taillé) : jamais trouvé dans la roche ni fondu. */
+  product?: boolean;
+  /** Pour un produit : le minerai dont il suit le cours au marché. */
+  follows?: string;
+  /** Dessin de l'objet quand ce n'est ni une pépite ni un lingot : plaque, barre (acier) ou gemme (diamant taillé). */
+  shape?: 'plate' | 'bar' | 'gem';
+  /** Nom court dans les listes serrées (« Plaque »). */
+  short?: string;
 }
 
 /** Lingot d'un minerai : même poids, vendu 2,5 fois plus cher. Il ne se trouve pas dans la roche. */
@@ -73,6 +81,47 @@ function ingot(id: string, name: string, value: number, weight: number, rarity: 
     dark,
     uses: ['Vente (2,5 fois le prix du minerai)'],
     ingot: true,
+  };
+}
+
+/**
+ * Produit de la Manufacture : se vend plus cher que ses matières, suit le cours du métal dont il est fait et ne se trouve
+ * jamais dans la roche. Les recettes qui le fabriquent sont dans `data/recipes.ts`.
+ */
+function product(
+  id: string,
+  name: string,
+  short: string,
+  value: number,
+  weight: number,
+  rarity: Rarity,
+  follows: string,
+  shape: NonNullable<ResourceDef['shape']>,
+  color: string,
+  light: string,
+  dark: string,
+  uses: string[],
+): ResourceDef {
+  return {
+    id,
+    name,
+    veinName: name,
+    value,
+    weight,
+    rarity,
+    resistance: 0,
+    tier: 0,
+    minDepth: 0,
+    maxDepth: 0,
+    drops: [0, 0],
+    color,
+    light,
+    dark,
+    uses,
+    product: true,
+    follows,
+    shape,
+    short,
   };
 }
 
@@ -220,6 +269,14 @@ export const RESOURCES: ResourceDef[] = [
   ingot('iron_ingot', 'Lingot de fer', 40, 3, 'peu commun', '#9aa3b0', '#e2e7ee', '#565d69'),
   ingot('silver_ingot', "Lingot d'argent", 95, 2, 'rare', '#dfe5ee', '#ffffff', '#8b95a4'),
   ingot('gold_ingot', "Lingot d'or", 240, 3.5, 'très rare', '#f5c21f', '#fff3a6', '#a8740a'),
+  // Produits de la Manufacture : toujours après les lingots (même raison : l'ordre sert aux gisements sauvegardés).
+  // Chacun vaut plus que ce qu'il faut pour le fabriquer, et suit le cours du métal dont il est fait.
+  product('copper_plate', 'Plaque de cuivre', 'Plaque', 27, 2.5, 'commun', 'copper', 'plate', '#e0894a', '#ffc590', '#8a4520', ['Vente (1,5 fois le lingot)', 'Commandes des clients']),
+  product('iron_plate', 'Plaque de fer', 'Plaque', 60, 3, 'peu commun', 'iron', 'plate', '#aab3c0', '#eef2f7', '#5a6270', ['Vente (1,5 fois le lingot)', 'Commandes des clients']),
+  product('silver_plate', "Plaque d'argent", 'Plaque', 140, 2, 'rare', 'silver', 'plate', '#e8edf5', '#ffffff', '#8f9aab', ['Vente (1,5 fois le lingot)', 'Commandes des clients']),
+  product('gold_plate', "Plaque d'or", 'Plaque', 360, 3.5, 'très rare', 'gold', 'plate', '#f7cc3a', '#fff6b8', '#a8740a', ['Vente (1,5 fois le lingot)', 'Commandes des clients', 'Grand Chevalement']),
+  product('steel', 'Acier', 'Acier', 170, 5, 'peu commun', 'iron', 'bar', '#7f93ad', '#d3e0f0', '#3d4b60', ['Vente (plus de 2 fois les lingots de fer)', 'Commandes des clients', 'Grand Chevalement']),
+  product('cut_diamond', 'Diamant taillé', 'Diamant taillé', 520, 0.4, 'légendaire', 'diamond', 'gem', '#9aeaf5', '#ffffff', '#2f8aa0', ['Vente (2 fois le diamant brut)', 'Commandes des clients', 'Grand Chevalement']),
 ];
 
 const byId = new Map(RESOURCES.map((r) => [r.id, r]));

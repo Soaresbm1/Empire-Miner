@@ -10,7 +10,7 @@
 import { opposite, type Dir } from '../../core/dir';
 import { getMachine, MachineDef, SmelterSpec } from '../../data/machines';
 import { getResource, hasResource } from '../../data/resources';
-import { Structure, StructureContext, StructureSave } from './Structure';
+import { Structure, StructureContext, StructureSave, frontTilesOf } from './Structure';
 
 export type SmelterStatus = 'idle' | 'ok' | 'nofuel' | 'full';
 
@@ -63,12 +63,7 @@ export class Smelter extends Structure {
 
   /** Cases devant la sortie (une pour le four, deux pour la fonderie). */
   frontTiles(): { x: number; y: number }[] {
-    const out: { x: number; y: number }[] = [];
-    if (this.dir === 0) for (let k = 0; k < this.h; k++) out.push({ x: this.x + this.w, y: this.y + k });
-    else if (this.dir === 2) for (let k = 0; k < this.h; k++) out.push({ x: this.x - 1, y: this.y + k });
-    else if (this.dir === 1) for (let k = 0; k < this.w; k++) out.push({ x: this.x + k, y: this.y + this.h });
-    else for (let k = 0; k < this.w; k++) out.push({ x: this.x + k, y: this.y - 1 });
-    return out;
+    return frontTilesOf(this);
   }
 
   canAccept(res: string, travel: Dir): boolean {

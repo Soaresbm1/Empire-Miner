@@ -367,9 +367,9 @@ describe('Grand Chevalement : les phases s’enchaînent', () => {
     expect(g.contracts.capacity).toBe(offers + 1);
   });
 
-  it('les objectifs suivent : commande, première phase, monument achevé', () => {
+  it('les objectifs suivent : commande, première phase, premier produit fabriqué, monument achevé', () => {
     const ids = OBJECTIVES.map((o) => o.id);
-    expect(ids.slice(-3)).toEqual(['contract', 'site', 'crown']);
+    expect(ids.slice(-4)).toEqual(['contract', 'site', 'craft', 'crown']);
     expect(ids.indexOf('contract')).toBe(ids.indexOf('diamond') + 1); // elles viennent après la dernière du parcours guidé
     const g = new GameState(7);
     const need = (id: string) => OBJECTIVES.find((o) => o.id === id)!;
@@ -380,6 +380,9 @@ describe('Grand Chevalement : les phases s’enchaînent', () => {
     supply(g.project);
     run(g, 0.1);
     expect(need('site').done(g)).toBe(true);
+    expect(need('craft').done(g)).toBe(false);
+    g.stats.crafted = 1;
+    expect(need('craft').done(g)).toBe(true);
     expect(need('crown').done(g)).toBe(false);
     g.stats.contracts = 99; // assez de commandes honorées pour franchir les autres phases
     for (let i = 1; i < PHASES.length; i++) {

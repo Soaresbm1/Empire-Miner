@@ -768,3 +768,7 @@ kbd {
   .site-steps { margin-bottom: 8px; }
   .site-head { margin-bottom: 4px; font-size: 16px; }
 }
+
+/* Manufacture : la recette choisie se lit d'un coup d'œil dans le tableau des recettes. */
+.table.recipes tr.sel td { background: rgba(111, 207, 106, 0.1); }
+.table.recipes td:nth-child(2) { text-align: center; opacity: 0.7; }

@@ -16,12 +16,15 @@ import { MARKET } from '../data/market';
 import { RESOURCES, getResource } from '../data/resources';
 import { dexp, dlog } from '../core/dmath';
 
-/** Minerais qui s'échangent : tout sauf la pierre et les lingots. */
-export const COMMODITIES: readonly string[] = RESOURCES.filter((r) => !r.ingot && r.id !== 'stone').map((r) => r.id);
+/** Minerais qui s'échangent : tout sauf la pierre, les lingots et les produits de la Manufacture (ils suivent le cours d'un minerai). */
+export const COMMODITIES: readonly string[] = RESOURCES.filter((r) => !r.ingot && !r.product && r.id !== 'stone').map((r) => r.id);
 
-/** Pour chaque ressource, le minerai dont elle suit le cours (un lingot suit son minerai). */
+/** Pour chaque ressource, le minerai dont elle suit le cours (un lingot ou un produit suit son minerai). */
 const FOLLOWS = new Map<string, string>(COMMODITIES.map((id) => [id, id]));
-for (const r of RESOURCES) if (r.smeltsTo) FOLLOWS.set(r.smeltsTo, r.id);
+for (const r of RESOURCES) {
+  if (r.smeltsTo) FOLLOWS.set(r.smeltsTo, r.id);
+  if (r.follows) FOLLOWS.set(r.id, r.follows);
+}
 
 /** Minerai dont une ressource suit le cours (null : la pierre, qui ne s'échange pas). */
 export function commodityOf(res: string): string | null {
