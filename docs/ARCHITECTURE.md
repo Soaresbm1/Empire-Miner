@@ -274,13 +274,21 @@ Plein écran (`ui/fullscreen.ts`) : `displayMode()` dit si le jeu est déjà une
 par `node scripts/make-icons.mjs`) et les balises `apple-mobile-web-app-*` de `index.html` permettent « Sur l'écran d'accueil ». `Game`
 garde l'écran allumé (Screen Wake Lock) et refait l'ajustement au changement d'orientation ou de `visualViewport`.
 
+Un panneau ouvert depuis un menu (« Commandes » du menu principal ou du menu pause, « Plein écran… » sur iPhone) passe devant : le menu
+s'efface (`#menu-root.behind-panel`, `visibility: hidden`, posé par `UI.syncOverlay` dès qu'un panneau et un menu sont ouverts ensemble ;
+le DOM du menu, sa place et son défilement restent) et revient à la fermeture du panneau (croix, Échap). Le menu reste « ouvert » pour le jeu :
+seul, `tickPlaying` garde le jeu figé tant que `ui.menu === 'pause'`, y compris pendant la lecture du panneau. (Le panneau est avant le menu
+dans `index.html` : sans cette règle, il s'ouvrait derrière lui.) Les rappels du compte (`onCloudChanged`, `onCloudPulled`) ne redessinent pas
+le menu par-dessus un panneau ouvert.
+
 Tests : `e2e/phone.mjs` ouvre le jeu dans Chromium en émulation tactile à 11 tailles (dont celle d'un iPhone dans Safari avec ses
 barres, 874×282, et des marges d'encoche simulées par `Emulation.setSafeAreaInsetsOverride`), mesure les rectangles de chaque cadre et
 bouton (dans la zone sûre, sans recouvrement, taille de doigt, part de monde visible, menus sans défilement, panneaux de toutes sortes) et
 écrit des captures dans `e2e/screenshots/phone/` ; `e2e/touch.mjs` envoie de vrais gestes (`Input.dispatchTouchEvent`) ;
 `e2e/panels.mjs` fait de même sur un jeu qui tourne (argent et cours qui bougent) : défilement des fenêtres et de la bande de construction,
 toucher long, bouton qui change de sens sous le doigt, contenu exact de chaque fenêtre, et `morph` contre `innerHTML` sur 1 500 paires de
-contenus tirées au hasard ; `e2e/playthrough.mjs` rejoue une partie complète au clavier et à la souris.
+contenus tirées au hasard ; `e2e/menus.mjs` (clics et touches, ce qu'un doigt toucherait) vérifie « Commandes » depuis le menu principal et le menu pause ;
+`e2e/playthrough.mjs` rejoue une partie complète au clavier et à la souris.
 
 Repères (`sim/Markers.ts`) : `GameState.markers` (un `MarkerBook`) garde la liste, le repère suivi et
 les sauvegarde ; `GameState.addMarker` les nomme d'après le terrain et les machines. La carte complète

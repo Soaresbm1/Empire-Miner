@@ -546,6 +546,8 @@ kbd {
 /* ---------------------------------------------------------------- menus */
 #menu-root { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; }
 #menu-root:empty { display: none; }
+/* Un panneau (Commandes, Plein écran…) ouvert depuis un menu passe devant : le menu s'efface (sans perdre sa place ni son défilement) et revient à la fermeture. */
+#menu-root.behind-panel { visibility: hidden; pointer-events: none; }
 /* Voile sombre autour du menu principal : la mine reste visible, le logo ressort. */
 #menu-root:has(.main-menu) {
   background: radial-gradient(ellipse at 50% 46%, rgba(8, 6, 10, 0.05) 0, rgba(8, 6, 10, 0.72) 78%),
