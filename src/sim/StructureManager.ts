@@ -22,6 +22,16 @@ export class StructureManager {
     return this.byTile.get(y * this.worldW + x);
   }
 
+  /** La structure (pas encore ajoutée) recouvrirait-elle un bâtiment du camp ? */
+  hitsBuilding(s: Structure): boolean {
+    for (let y = s.y; y < s.y + s.h; y++)
+      for (let x = s.x; x < s.x + s.w; x++) {
+        const o = this.at(x, y);
+        if (o && !o.removable) return true;
+      }
+    return false;
+  }
+
   add(s: Structure): Structure {
     s.id = this.nextId++;
     this.list.push(s);

@@ -642,3 +642,200 @@ export function buildBoardSprite(): HTMLCanvasElement {
 export function buildLanternSprite(): HTMLCanvasElement {
   return fromArt(['..K..', '.KKK.', 'KYLYK', 'KLLLK', 'KYLYK', '.KKK.'], { K: '#3a2d22', Y: '#f2a93b', L: '#fff3b0' });
 }
+
+// ------------------------------------------------------------------ chantier du Grand Chevalement
+
+/** Le chantier : 4 × 3 tuiles de socle, et une tour qui monte jusqu'à 128 px au-dessus du sol. */
+const SITE_W = 4 * TILE;
+const SITE_H = 128;
+/** Sommet de la tour (les jambes s'y rejoignent), base des jambes, et rangées d'entretoises, de bas en haut. */
+const SITE_TOP = 34;
+const SITE_BASE = 104;
+const SITE_BRACES = [96, 84, 72, 60, 50, 42, 36];
+
+/** Segment épais de `w` pixels entre deux points, en pixels entiers. */
+function beam(ctx: CanvasRenderingContext2D, x0: number, y0: number, x1: number, y1: number, w: number, color: string): void {
+  const n = Math.max(Math.abs(x1 - x0), Math.abs(y1 - y0), 1);
+  ctx.fillStyle = color;
+  for (let i = 0; i <= n; i++) ctx.fillRect(Math.round(x0 + ((x1 - x0) * i) / n - w / 2), Math.round(y0 + ((y1 - y0) * i) / n - w / 2), w, w);
+}
+
+/** Abscisse de l'axe de la jambe gauche à la hauteur `y` (la droite en est le miroir). */
+const legX = (y: number): number => 9 + ((27 - 9) * (SITE_BASE - y)) / (SITE_BASE - SITE_TOP);
+
+/** Disque ou anneau de pixels (sans crénelage adouci), éclairé en haut à gauche. */
+function ring(ctx: CanvasRenderingContext2D, cx: number, cy: number, r: number, thick: number, tones: { hi: string; base: string; dark: string }): void {
+  for (let y = -r - 1; y <= r + 1; y++)
+    for (let x = -r - 1; x <= r + 1; x++) {
+      const d = Math.hypot(x, y);
+      if (d > r + 0.4 || d < r - thick + 0.4) continue;
+      ctx.fillStyle = x + y < -r * 0.6 ? tones.hi : x + y > r * 0.5 ? tones.dark : tones.base;
+      ctx.fillRect(cx + x, cy + y, 1, 1);
+    }
+}
+
+/** Les six états du chantier : terrain (0), fondations (1), charpente (2), treuil (3), poulies dorées (4), couronnement (5). */
+export function buildSiteSprites(): HTMLCanvasElement[] {
+  const stages: HTMLCanvasElement[] = [];
+  const steel = ramp('#5d6577');
+  const gold = ramp('#f2c230');
+  for (let stage = 0; stage <= 5; stage++) {
+    const [c, ctx] = canvas(SITE_W, SITE_H);
+    const pen = new Pen(ctx);
+    const gilded = stage >= 4;
+    // Terrain battu, gravillons.
+    pen.slab(1, 111, SITE_W - 2, 15, '#6e5a46');
+    pen.dither(2, 113, SITE_W - 4, 4, '#6e5a46', '#7d6850');
+    pen.rect(2, 118, SITE_W - 4, 1, 'rgba(0,0,0,0.25)');
+
+    if (stage === 0) {
+      // Panneau de chantier : le plan de la tour sur papier bleu, sous un petit auvent.
+      for (const x of [12, 49]) {
+        pen.rect(x, 90, 3, 22, '#5a3a22');
+        pen.rect(x, 90, 1, 22, '#7a5231');
+      }
+      pen.rect(7, 62, 50, 34, INK);
+      pen.rect(8, 63, 48, 32, '#7a5231');
+      pen.rect(9, 67, 46, 27, '#2f5f9a');
+      pen.rect(9, 67, 46, 1, '#5b8ad0');
+      pen.rect(5, 59, 54, 5, INK);
+      pen.rect(6, 60, 52, 3, '#a8894a');
+      pen.rect(6, 60, 52, 1, '#d0b070');
+      // Le plan : une tour en fil blanc, sa roue et la ligne du sol.
+      beam(ctx, 24, 91, 30, 71, 1, '#e8f0ff');
+      beam(ctx, 40, 91, 34, 71, 1, '#e8f0ff');
+      for (const y of [86, 80, 75]) pen.rect(Math.round(24 + (91 - y) * 0.3) + 1, y, Math.round(16 - (91 - y) * 0.6), 1, '#e8f0ff');
+      ring(ctx, 32, 70, 3, 1, { hi: '#e8f0ff', base: '#e8f0ff', dark: '#e8f0ff' });
+      pen.rect(14, 92, 36, 1, '#e8f0ff');
+      for (const [x, w] of [[12, 5], [18, 3], [22, 7]]) pen.rect(x, 64, w, 1, '#9dc0ee');
+      // Pierres de taille en tas, et sacs de ciment.
+      pen.slab(3, 100, 8, 8, '#8d857c');
+      pen.slab(8, 104, 8, 6, '#b9b1a6');
+      pen.slab(2, 106, 7, 5, '#84796c');
+      pen.slab(52, 100, 9, 10, '#c9bd9c');
+      pen.slab(54, 94, 7, 6, '#d6cba8');
+    }
+
+    if (stage >= 1) {
+      // Socle de pierre et boulons d'ancrage.
+      pen.slab(3, 100, SITE_W - 6, 11, '#84796c');
+      for (let x = 6; x < SITE_W - 6; x += 9) pen.rect(x, 102, 1, 8, '#5e574d');
+      pen.rect(3, 105, SITE_W - 6, 1, '#5e574d');
+      for (const x of [8, 18, 44, 54]) {
+        pen.px(x, 99, '#c9bd9c');
+        pen.px(x, 98, '#8a8e99');
+      }
+    }
+    if (stage === 1) {
+      // Acier d'attente : des fers à béton dressés, rouillés, et une poutre posée à terre.
+      for (const x of [9, 13, 50, 54]) pen.rect(x, 82, 1, 17, '#a5654e');
+      pen.rect(26, 94, 14, 3, INK);
+      pen.rect(27, 95, 12, 1, steel.light);
+      pen.rect(21, 90, 22, 3, INK);
+      pen.rect(22, 91, 20, 1, steel.light);
+    }
+
+    if (stage >= 2) {
+      const top = stage >= 3 ? SITE_TOP : 66;
+      // Jambes inclinées, accotées l'une à l'autre vers le haut.
+      for (const mirrorIt of [false, true]) {
+        const X = (x: number) => (mirrorIt ? SITE_W - 1 - x : x);
+        beam(ctx, X(legX(SITE_BASE)), SITE_BASE, X(legX(top)), top, 6, INK);
+        beam(ctx, X(legX(SITE_BASE)), SITE_BASE, X(legX(top)), top, 4, steel.base);
+        beam(ctx, X(legX(SITE_BASE) - 1), SITE_BASE, X(legX(top) - 1), top, 1, steel.light);
+        beam(ctx, X(legX(SITE_BASE) + 1), SITE_BASE, X(legX(top) + 1), top, 1, steel.dark);
+        for (let y = SITE_BASE - 8; y >= top; y -= 14) pen.rivet(Math.round(X(legX(y))), y, '#8a8e99');
+      }
+      // Entretoises et croix de Saint-André entre les jambes.
+      const rows = SITE_BRACES.filter((y) => y >= top);
+      rows.forEach((y, i) => {
+        const x0 = Math.round(legX(y)) + 2;
+        const x1 = SITE_W - 1 - x0;
+        pen.rect(x0, y - 1, x1 - x0 + 1, 3, INK);
+        pen.rect(x0, y, x1 - x0 + 1, 1, steel.light);
+        pen.rect(x0, y + 1, x1 - x0 + 1, 1, steel.dark);
+        const up = rows[i + 1];
+        if (up !== undefined) {
+          const u0 = Math.round(legX(up)) + 2;
+          beam(ctx, x0, y, SITE_W - 1 - u0, up, 1, steel.base);
+          beam(ctx, x1, y, u0, up, 1, steel.base);
+        }
+      });
+    }
+    if (stage === 2) {
+      // Plancher de chantier en haut de l'ouvrage, garde-corps et une échelle.
+      const x0 = Math.round(legX(66)) + 1;
+      pen.rect(x0, 63, SITE_W - 2 * x0, 3, INK);
+      pen.rect(x0 + 1, 64, SITE_W - 2 * x0 - 2, 1, '#c9a46a');
+      for (const x of [x0 + 2, SITE_W - x0 - 3]) pen.rect(x, 55, 1, 8, '#e8792a');
+      pen.rect(x0 + 2, 55, SITE_W - 2 * x0 - 4, 1, '#e8792a');
+      pen.rect(30, 66, 2, 34, '#a8894a');
+      for (let y = 69; y < 98; y += 5) pen.rect(30, y, 6, 1, '#a8894a');
+    }
+
+    if (stage >= 3) {
+      const tones = gilded ? { hi: gold.hi, base: gold.base, dark: gold.dark } : { hi: '#e3e7f0', base: '#b4b9c4', dark: '#5b5f68' };
+      // Plate-forme du sommet, axe et grande poulie (la molette) : anneau, rayons, moyeu.
+      pen.rect(21, 33, SITE_W - 42, 4, INK);
+      pen.rect(22, 34, SITE_W - 44, 1, gilded ? gold.hi : steel.light);
+      pen.rect(22, 35, SITE_W - 44, 1, gilded ? gold.dark : steel.dark);
+      ring(ctx, 32, 24, 9, 2, tones);
+      for (const [dx, dy] of [[0, 7], [5, 5], [7, 0], [5, -5], [0, -7], [-5, -5], [-7, 0], [-5, 5]]) beam(ctx, 32, 24, 32 + dx, 24 + dy, 1, tones.base);
+      pen.rect(30, 22, 5, 5, INK);
+      pen.rect(31, 23, 3, 3, tones.hi);
+      pen.px(33, 25, tones.dark);
+      // Câble de la cage : il descend du sommet et pend, avec sa cage, au milieu de la tour.
+      pen.rect(32, 36, 1, 60, '#2a2024');
+      pen.slab(28, 96, 9, 9, '#8a8e99');
+      pen.rect(29, 99, 7, 1, '#3f4049');
+      pen.rect(29, 102, 7, 1, '#3f4049');
+      // Salle des machines : briques, toit d'ardoise, fenêtre éclairée, cheminée.
+      pen.slab(43, 86, 19, 24, '#9a4a3a');
+      for (let y = 89; y < 109; y += 4) pen.rect(44, y, 17, 1, '#6e2f24');
+      for (let y = 87; y < 109; y += 8) for (let x = 45; x < 60; x += 6) pen.px(x + ((y >> 3) % 2) * 3, y + 1, '#c0684f');
+      pen.rect(41, 83, 23, 4, INK);
+      pen.rect(42, 80, 21, 5, '#443f4c');
+      pen.rect(42, 80, 21, 1, '#8a8598');
+      pen.rect(47, 92, 6, 6, INK);
+      pen.rect(48, 93, 4, 4, '#f0b850');
+      pen.rect(50, 93, 1, 4, '#5a3a22');
+      pen.rect(55, 98, 4, 11, INK);
+      pen.rect(56, 99, 2, 10, '#1e1512');
+      pen.slab(55, 66, 5, 15, '#6a5a54');
+      pen.rect(54, 65, 7, 2, '#3f3230');
+      // Le câble de traction rejoint la salle des machines.
+      beam(ctx, 41, 26, 56, 88, 1, '#2a2024');
+    }
+
+    if (gilded) {
+      // Dorures : coiffes des jambes, garde-corps du sommet, lanternes aux angles du socle.
+      for (const mirrorIt of [false, true]) {
+        const x = Math.round(mirrorIt ? SITE_W - 1 - legX(SITE_TOP) : legX(SITE_TOP));
+        pen.rect(x - 2, SITE_TOP - 2, 5, 3, gold.base);
+        pen.rect(x - 2, SITE_TOP - 2, 5, 1, gold.hi);
+      }
+      for (const x of [4, SITE_W - 6]) {
+        pen.rect(x, 90, 2, 10, '#4a3020');
+        pen.slab(x - 1, 86, 4, 5, '#fff3b0');
+        pen.px(x, 87, '#ffffff');
+      }
+      for (const y of [101, 107]) for (let x = 6; x < SITE_W - 6; x += 18) pen.px(x, y, gold.base);
+    }
+
+    if (stage === 5) {
+      // Couronnement : un diamant taillé sur le sommet, et deux fanions.
+      const diamond = fromArt(
+        ['...WW...', '..WCCW..', '.WCCCCW.', 'WCCWWCCW', '.dCCCCd.', '..dCCd..', '...dd...'],
+        { W: '#ffffff', C: '#8fe3ee', d: '#2f7f92' },
+      );
+      ctx.drawImage(diamond, 23, 1);
+      for (const [x, dir] of [[21, -1], [42, 1]] as const) {
+        pen.rect(x, 20, 1, 14, '#4a3020');
+        for (let i = 0; i < 5; i++) pen.rect(x + (dir > 0 ? 1 : -i), 21 + i, dir > 0 ? 5 - i : i + 1, 1, '#c0392b');
+        pen.px(x, 19, gold.hi);
+      }
+    }
+    stages.push(c);
+  }
+  return stages;
+}

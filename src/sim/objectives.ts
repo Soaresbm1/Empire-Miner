@@ -50,6 +50,21 @@ export const OBJECTIVES: Objective[] = [
     text: 'Trouvez un diamant, sous 500 m (Pioche pro en acier)',
     done: (g) => (g.stats.collected.diamond ?? 0) > 0,
   },
+  {
+    id: 'contract',
+    text: "Honorez une commande : Tableau d'affichage, onglet Commandes, avec une prime sur le prix de base",
+    done: (g) => g.stats.contracts >= 1,
+  },
+  {
+    id: 'site',
+    text: 'Terminez la première phase du Grand Chevalement, à droite de l’Atelier : matériaux, argent, puis la tour grandit',
+    done: (g) => g.project.phase >= 1,
+  },
+  {
+    id: 'crown',
+    text: 'Achevez le Grand Chevalement (cinq phases) : réglez des caisses d’expédition sur « Chantier » pour livrer sans y retourner',
+    done: (g) => g.project.done,
+  },
 ];
 
 export function currentObjective(g: GameState): { objective: Objective | null; index: number } {

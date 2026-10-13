@@ -43,8 +43,9 @@ describe('cours du marché : textes', () => {
   });
 
   it('les onglets du Tableau d’affichage', () => {
-    expect(BOARD_TABS.map(([id]) => id)).toEqual(['market', 'production']);
+    expect(BOARD_TABS.map(([id]) => id)).toEqual(['market', 'orders', 'production']);
     expect(isBoardTab('market')).toBe(true);
+    expect(isBoardTab('orders')).toBe(true);
     expect(isBoardTab('tools')).toBe(false);
   });
 });

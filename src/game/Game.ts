@@ -23,6 +23,9 @@ import { Drill, reachTiles } from '../sim/structures/Drill';
 import { ShippingCrate } from '../sim/structures/ShippingCrate';
 import { Sorter } from '../sim/structures/Sorter';
 import { BOARD_TABS, marketNews } from '../ui/market';
+import { clientName, contractNews } from '../ui/orders';
+import { siteNews } from '../ui/site';
+import { PHASES } from '../data/project';
 import { WORKSHOP_TABS } from '../ui/workshop';
 import { Rail, RailStation, RailSwitch } from '../sim/structures/Rail';
 import { Splitter } from '../sim/structures/Splitter';
@@ -52,6 +55,10 @@ import { BroadcastTransport, cleanCode, newGameCode, randomId, type Transport } 
 import type { NetMenu } from '../ui/UI';
 
 const AUTOSAVE_EVERY = 60;
+/** Au plus une annonce de nouvelle commande tous les ce nombre de secondes de jeu. */
+const OFFER_NEWS_EVERY = 240;
+/** Une commande acceptée prévient le joueur quand il lui reste ce nombre de secondes. */
+const ORDER_WARNING = 60;
 /** Facteur de zoom de la carte complète pour un cran de molette ou un appui sur + / −. */
 const MAP_ZOOM_STEP = 1.35;
 const MENU_SEED = 20260928;
@@ -129,6 +136,10 @@ export class Game {
   private autosave = AUTOSAVE_EVERY;
   private confirmNew = false;
   private lastDeniedToast = -10;
+  /** Temps de jeu de la dernière annonce de nouvelle commande. */
+  private lastOfferNews = -1e9;
+  /** Commandes dont l'échéance proche a déjà été annoncée. */
+  private readonly warnedOrders = new Set<number>();
   private ambientTimer = 0;
   private menuPan = 0;
   debug = false;
@@ -305,6 +316,8 @@ export class Game {
     this.simRate = 1;
     this.confirmNew = false;
     this.shipLog = [];
+    this.warnedOrders.clear();
+    this.lastOfferNews = -1e9;
     this.renderer.setState(state);
     this.ui.hideMenu();
     this.ui.closePanel();
@@ -714,6 +727,8 @@ export class Game {
     this.simRate = 1;
     this.confirmNew = false;
     this.shipLog = [];
+    this.warnedOrders.clear();
+    this.lastOfferNews = -1e9;
     this.renderer.setState(g);
     this.renderer.snapCamera();
     this.ui.closePanel();
@@ -1170,6 +1185,27 @@ export class Game {
       case 'shipDeposit':
         if (at) this.act({ k: 'shipDeposit', ...at });
         break;
+      case 'shipMode':
+        if (at) this.act({ k: 'shipMode', ...at, mode: arg });
+        break;
+      case 'contractAccept':
+        this.act({ k: 'contractAccept', id: Number(arg) });
+        break;
+      case 'contractDecline':
+        this.act({ k: 'contractDecline', id: Number(arg) });
+        break;
+      case 'contractAbandon':
+        if (this.ui.confirmAbandon(Number(arg))) this.act({ k: 'contractAbandon', id: Number(arg) });
+        break;
+      case 'contractDeliver':
+        this.act(arg ? { k: 'contractDeliver', id: Number(arg) } : { k: 'contractDeliver' });
+        break;
+      case 'siteDeliver':
+        this.act({ k: 'siteDeliver' });
+        break;
+      case 'siteFund':
+        this.act({ k: 'siteFund' });
+        break;
       case 'drillFuel':
         if (at) this.act({ k: 'drillFuel', ...at });
         break;
@@ -1469,6 +1505,7 @@ export class Game {
     this.renderer.update(dt, true);
     this.renderer.draw(overlay);
     this.ui.setTooltip(tooltip, inp.mouseX, inp.mouseY);
+    this.warnOrders(g);
     this.ui.updateHud(g, {
       prompt: this.promptText(g, near),
       build: this.buildBarHtml(g),
@@ -1487,6 +1524,21 @@ export class Game {
     this.buildInset = this.buildMode || this.chestMode ? Math.max(this.buildInset, this.ui.buildBarHeight) : 0;
     this.renderer.bottomInset = this.buildInset;
     if (this.debug) this.drawDebug(g);
+  }
+
+  /**
+   * Une commande acceptée touche à sa fin : un message à une minute de l'échéance (une seule fois). Sur téléphone, où le HUD n'a
+   * pas la place de la ligne des commandes, c'est ce message qui prévient.
+   */
+  private warnOrders(g: GameState): void {
+    const active = g.contracts.active();
+    for (const c of active) {
+      if (c.until - g.time > ORDER_WARNING || this.warnedOrders.has(c.id)) continue;
+      this.warnedOrders.add(c.id);
+      this.ui.toast(`Commande de ${clientName(c.client)} : plus qu'une minute pour livrer !`, 'warn', 4200);
+    }
+    // On oublie les commandes qui ne sont plus là (la mémoire ne grossit pas, et un numéro ne se reproduit jamais).
+    if (this.warnedOrders.size > 40) for (const id of this.warnedOrders) if (!active.some((c) => c.id === id)) this.warnedOrders.delete(id);
   }
 
   /** Pose un repère là où se trouve le joueur (touche N). */
@@ -1508,7 +1560,7 @@ export class Game {
     const s = g.nearestInteractable();
     if (!s) return;
     this.setBuildMode(false);
-    if (s instanceof Building) this.ui.openPanel(s.type === 'counter' ? 'counter' : s.type === 'board' ? 'board' : 'workshop', s);
+    if (s instanceof Building) this.ui.openPanel(s.type === 'counter' ? 'counter' : s.type === 'board' ? 'board' : s.type === 'site' ? 'site' : 'workshop', s);
     else if (s instanceof Storage) this.ui.openPanel('storage', s);
     else if (s instanceof ShippingCrate) this.ui.openPanel('shipping', s);
     else if (s instanceof Drill) this.ui.openPanel('drill', s);
@@ -1533,9 +1585,13 @@ export class Game {
     if (!near) return '';
     // Au doigt, le bouton « Agir » remplace la touche E.
     const e = this.touch ? '<b class="act-tag">Agir</b>' : `<kbd>${this.input.label('KeyE')}</kbd>`;
+    if (near instanceof Building && near.type === 'site' && this.state) {
+      const p = this.state.project;
+      return `${e} Grand Chevalement — ${p.done ? 'achevé, voir les chiffres de la partie' : `phase ${p.phase + 1} sur ${PHASES.length} : ${p.spec!.name}`}`;
+    }
     if (near instanceof Building) return `${e} ${BUILDING_INFO[near.type].name} — ${BUILDING_INFO[near.type].prompt}`;
     if (near instanceof Storage) return `${e} Ouvrir le coffre`;
-    if (near instanceof ShippingCrate) return `${e} Caisse d'expédition — vente automatique`;
+    if (near instanceof ShippingCrate) return `${e} Caisse d'expédition — ${near.mode === 'orders' ? 'livre aux commandes' : near.mode === 'site' ? 'livre au chantier' : 'vente automatique'}`;
     if (near instanceof Drill) return `${e} Foreuse niv. ${near.level} — charbon, production, amélioration`;
     if (near instanceof TunnelBorer) return `${e} Foreuse de percement niv. ${near.level} — charbon, départ, améliorations`;
     if (near instanceof Smelter) return `${e} ${near.def.name} — charbon, minerai, lingots`;
@@ -2062,7 +2118,9 @@ export class Game {
         s.allow.length ? `<br>Accepte seulement : ${s.allow.map((r) => `${resIcon(r)} ${getResource(r).name}`).join(', ')}` : ''
       }`;
     if (s instanceof ShippingCrate)
-      return `<b>Caisse d'expédition</b><br>${kg(s.weight())} / ${kg(s.capacity)} · ${money(s.pendingValue())} en attente<br>Passage dans ${Math.ceil(s.timer)} s`;
+      return `<b>Caisse d'expédition</b>${s.mode === 'market' ? '' : ` — <span class="good">livre ${s.mode === 'orders' ? 'aux commandes' : 'au chantier'}</span>`}<br>${kg(s.weight())} / ${kg(s.capacity)} · ${money(s.pendingValue())} en attente<br>Passage dans ${Math.ceil(s.timer)} s`;
+    if (s instanceof Building && s.type === 'site')
+      return `<b>${s.name}</b><br>${g.project.done ? 'Achevé' : `Phase ${g.project.phase + 1} sur ${PHASES.length} : ${g.project.spec!.name} (${Math.round(g.project.progress() * 100)} %)`}`;
     if (s instanceof Building) return `<b>${s.name}</b>`;
     const id = w.get(tx, ty);
     const b = getBlock(id);
@@ -2173,6 +2231,32 @@ export class Game {
           this.sfx.market(e.up);
           this.ui.toast(marketNews(e), e.up ? 'good' : 'warn');
           break;
+        case 'delivered':
+          r.onShipped(e.tx, e.ty, `→ ${e.n}`, e.to === 'site' ? '#e8792a' : '#6fb3ff');
+          if (g.distanceToTile(e.tx, e.ty) < 16) this.sfx.coins();
+          break;
+        case 'contract':
+          if (e.kind === 'offer') {
+            // Une proposition toutes les minutes ou presque : on n'annonce que de loin en loin (la pastille du Tableau fait le reste).
+            if (g.time - this.lastOfferNews >= OFFER_NEWS_EVERY) {
+              this.lastOfferNews = g.time;
+              this.sfx.market(true);
+              this.ui.toast(contractNews(e), 'info', 4200);
+            }
+          } else if (e.kind === 'done') {
+            this.sfx.sell();
+            this.ui.pulseMoney();
+            this.ui.toast(contractNews(e), 'good', 4200);
+          } else {
+            this.sfx.error();
+            this.ui.toast(contractNews(e), e.kind === 'late' ? 'warn' : 'info', 4200);
+          }
+          break;
+        case 'site':
+          this.sfx.discover();
+          // Le monument achevé a son écran de fin ; le message ne sert que si on ne peut pas l'ouvrir (un menu est à l'écran).
+          if (!(e.last && this.celebrate(g))) this.ui.toast(siteNews(e.phase, e.last), 'good', e.last ? 7000 : 4600);
+          break;
         case 'worker':
           // Un petit éclat à l'endroit du geste, et un tintement discret si l'ouvrier est près du joueur.
           r.fx.emit('spark', e.x, e.y - 8, e.kind === 'fuel' ? '#e8662a' : e.kind === 'store' ? '#f2c230' : e.kind === 'place' ? '#8fb8ff' : '#d8f5c0', e.kind === 'place' ? 8 : 4, 22);
@@ -2220,6 +2304,17 @@ export class Game {
       }
     }
     g.events.length = 0;
+  }
+
+  /** Le Grand Chevalement est achevé : feu d'artifice autour du joueur, puis l'écran de fin (sauf pendant un menu). Renvoie vrai s'il s'est ouvert. */
+  private celebrate(g: GameState): boolean {
+    const r = this.renderer;
+    const colors = ['#f2c230', '#ff6b5b', '#6fb3ff', '#7fd07a', '#d38cff', '#ffffff'];
+    colors.forEach((c, i) => r.fx.emit('spark', g.player.x + (i - 2.5) * 22, g.player.y - 30 - (i % 2) * 14, c, 24, 90));
+    if (this.mode !== 'playing' || this.ui.menu) return false;
+    this.setBuildMode(false);
+    this.ui.openPanel('site');
+    return true;
   }
 
   /** Ce que fait l'autre joueur : ses coups de pioche et ses poses se voient et s'entendent de près, le reste ne me regarde pas. */

@@ -13,13 +13,14 @@ import type { GameState } from '../sim/GameState';
 import type { BorerStatus, ReturnReason, TunnelBorer } from '../sim/structures/Borer';
 import type { Smelter, SmelterStatus } from '../sim/structures/Smelter';
 import type { Drill } from '../sim/structures/Drill';
-import type { ShippingCrate } from '../sim/structures/ShippingCrate';
+import type { ShipMode, ShippingCrate } from '../sim/structures/ShippingCrate';
 import type { Sorter } from '../sim/structures/Sorter';
 import type { RailStation, RailSwitch, SwitchSetting } from '../sim/structures/Rail';
 import type { Storage } from '../sim/structures/Storage';
 import { filterChips } from './chestFilter';
 import { esc, kg, money, num, rarityTag, resIcon } from './format';
 import { BOARD_TABS, counterBanner, isBoardTab, marketTab, priceCell } from './market';
+import { ordersTab } from './orders';
 import { productionStats } from './stats';
 import { btn, stat } from './widgets';
 
@@ -55,19 +56,31 @@ export function counterPanel(g: GameState): string {
 
 // ------------------------------------------------------------------ tableau d'affichage
 
-/** Onglets du Tableau d'affichage (Marché, Production), collés en haut comme ceux de l'Atelier. */
-function boardTabs(tab: string): string {
+/** Onglets du Tableau d'affichage (Marché, Commandes, Production), collés en haut comme ceux de l'Atelier. */
+function boardTabs(g: GameState, tab: string): string {
+  // Une pastille sur « Commandes » quand des propositions attendent et qu'il y a de la place pour en accepter une.
+  const open = g.contracts.active().length < g.contracts.slots ? g.contracts.offers().length : 0;
   return `<div class="tabs">${BOARD_TABS.map(
-    ([id, label], i) => `<button class="tab ${tab === id ? 'active' : ''}" data-action="tab" data-arg="${id}" title="${label} (touche ${i + 1})"><kbd class="tab-key">${i + 1}</kbd>${label}</button>`,
+    ([id, label], i) =>
+      `<button class="tab ${tab === id ? 'active' : ''}" data-action="tab" data-arg="${id}" title="${label} (touche ${i + 1})"><kbd class="tab-key">${i + 1}</kbd>${label}${
+        id === 'orders' && open > 0 && tab !== id ? `<span class="badge" title="${open} proposition${open > 1 ? 's' : ''} à regarder">${open}</span>` : ''
+      }</button>`,
   ).join('')}</div>`;
 }
 
-/** Tableau d'affichage du camp, entre le comptoir et l'atelier : le cours du marché, et les statistiques de production. */
-export function boardPanel(g: GameState, tab = 'market'): string {
+/**
+ * Tableau d'affichage du camp, entre le comptoir et l'atelier : le cours du marché, les commandes des clients et les
+ * statistiques de production. `abandon` : la commande dont l'abandon attend une confirmation.
+ */
+export function boardPanel(g: GameState, tab = 'market', abandon: number | null = null): string {
   const id = isBoardTab(tab) ? tab : 'market';
   const body =
-    id === 'market' ? marketTab(g) : `<p class="sub">Ce que produit votre mine, et ce qui se vend. Mis à jour en direct.</p>${productionStats(g)}`;
-  return `<div class="shop-nav">${boardTabs(id)}</div>${body}`;
+    id === 'market'
+      ? marketTab(g)
+      : id === 'orders'
+        ? ordersTab(g, abandon)
+        : `<p class="sub">Ce que produit votre mine, et ce qui se vend. Mis à jour en direct.</p>${productionStats(g)}`;
+  return `<div class="shop-nav">${boardTabs(g, id)}</div>${body}`;
 }
 
 // ------------------------------------------------------------------ atelier
@@ -149,24 +162,49 @@ export function storagePanel(g: GameState, s: Storage): string {
 
 // ------------------------------------------------------------------ caisse d'expédition
 
+/** Où le transporteur emmène le contenu de la caisse : le libellé du bouton et ce que ça veut dire. */
+const SHIP_MODE_INFO: Record<ShipMode, { label: string; blurb: string }> = {
+  market: { label: 'Marché', blurb: 'Tout est vendu au cours du moment, comme au comptoir.' },
+  orders: { label: 'Commandes', blurb: "Le transporteur apporte au Tableau d'affichage ce que vos commandes acceptées attendent. Le reste est vendu au cours du moment." },
+  site: { label: 'Chantier', blurb: 'Le transporteur apporte au Grand Chevalement ce que la phase en cours attend. Le reste est vendu au cours du moment.' },
+};
+
+/** Ce que le prochain passage livrera de `res` (sur `n` unités en caisse) : le reste sera vendu. */
+export function shipDelivery(g: GameState, mode: ShipMode, res: string, n: number): number {
+  if (mode === 'orders') return Math.min(n, g.contracts.wanted(res));
+  if (mode === 'site') return Math.min(n, g.project.need(res));
+  return 0;
+}
+
 export function shippingPanel(g: GameState, c: ShippingCrate): string {
   const items = sortedItems(c.items);
   const w = c.weight();
+  const delivery = (res: string, n: number) => shipDelivery(g, c.mode, res, n);
   const rows = items
     .map(([res, n]) => {
       const r = getResource(res);
-      return `<tr><td>${resIcon(res)} ${r.name}</td><td class="num">×${n}</td><td class="num gold">${money(g.quote(res, n))}</td></tr>`;
+      const given = delivery(res, n);
+      const value = g.quote(res, n - given);
+      return `<tr><td>${resIcon(res)} ${r.name}</td><td class="num">×${n}</td><td class="num">${given > 0 ? `<span class="good">${given} livré${given > 1 ? 's' : ''}</span>${n > given ? ' · ' : ''}` : ''}${n > given ? `<b class="gold">${money(value)}</b>` : ''}</td></tr>`;
     })
     .join('');
   const secs = Math.max(0, Math.ceil(c.timer));
   const bag = g.inventory.weight();
+  const sale = items.reduce((v, [res, n]) => v + g.quote(res, n - delivery(res, n)), 0);
+  const given = items.reduce((v, [res, n]) => v + delivery(res, n), 0);
+  const modes = (['market', 'orders', 'site'] as const)
+    .map((m) => btn('shipMode', SHIP_MODE_INFO[m].label, { arg: m, cls: `small ${c.mode === m ? 'on' : 'off'}` }))
+    .join('');
   return `
     <div class="status good">● Prochain passage du transporteur dans ${secs} s</div>
+    <h4>Le transporteur emmène le contenu…</h4>
+    <div class="buy">${modes}</div>
+    <p class="hint">${SHIP_MODE_INFO[c.mode].blurb}</p>
     <div class="bar big ${w / c.capacity > 0.9 ? 'full' : ''}"><div style="width:${Math.min(100, (w / c.capacity) * 100)}%"></div><span>${kg(w)} / ${kg(c.capacity)}</span></div>
     ${items.length ? `<table class="table"><tbody>${rows}</tbody></table>` : '<p class="empty">Caisse vide. Amenez-y vos minerais avec des convoyeurs.</p>'}
-    <div class="panel-footer"><span>En attente : <b class="gold">${money(c.pendingValue((res, n) => g.quote(res, n)))}</b> · Vendu par cette caisse : <b class="gold">${money(c.soldTotal)}</b></span>
+    <div class="panel-footer"><span>En attente : ${given > 0 ? `<b class="good">${given} à livrer</b> · ` : ''}<b class="gold">${money(sale)}</b> de ventes · Vendu par cette caisse : <b class="gold">${money(c.soldTotal)}</b></span>
     ${btn('shipDeposit', `Déposer mon sac (${kg(bag)})`, { cls: 'primary', disabled: g.inventory.isEmpty() })}</div>
-    <p class="hint">Tout ce qui entre ici est vendu au cours du moment, comme au comptoir, à chaque passage. Si la caisse est pleine, elle refuse les minerais et les convoyeurs s'arrêtent.</p>`;
+    <p class="hint">Si la caisse est pleine, elle refuse les minerais et les convoyeurs s'arrêtent.</p>`;
 }
 
 // ------------------------------------------------------------------ quais
@@ -676,7 +714,9 @@ export function helpPanel(keys: { move: string; label: (c: string) => string; to
     <div><h4>Corde de rappel</h4><p>Achetée à l'atelier (onglet Transport). ${k('KeyV')} dans la mine : restez immobile 3 s, vous remontez à la surface, juste au-dessus d'où vous étiez, avec tout votre sac. ${k('KeyV')} en surface : vous redescendez gratuitement là où la corde est accrochée. Bouger ou un gros choc annule</p></div>
     <div><h4>Équipement de protection</h4><p>À l'atelier (onglet Équipement) : <b>casque</b> contre les éboulements, <b>masque à gaz</b>, <b>cuissardes</b> pour l'eau, <b>combinaison ignifugée</b> pour la Fournaise. Chaque pièce absorbe une part des dégâts du danger qu'elle contre</p></div>
     <div><h4>Fournaise (sous 450 m)</h4><p>Roche volcanique, plus d'or et, sous 500 m, des diamants (Pioche pro en acier). La chaleur ralentit foreuses et fours et <b>épuise le mineur</b> : un <b>ventilateur</b> à ${HEAT.fanRadius} cases rafraîchit les machines et vous laisse souffler ; la combinaison ignifugée absorbe l'essentiel</p></div>
-    <div><h4>Tableau d'affichage</h4><p>${k('KeyE')} devant le tableau, entre le comptoir et l'atelier : ventes, minerai et lingots par minute, gains des 10 dernières minutes, machines à l'arrêt</p></div>
+    <div><h4>Tableau d'affichage</h4><p>${k('KeyE')} devant le tableau, entre le comptoir et l'atelier. Trois onglets (<kbd>1</kbd> à <kbd>3</kbd> ou <kbd>←</kbd> <kbd>→</kbd>) : le marché, les commandes, et la production (ventes, minerai et lingots par minute, gains des 10 dernières minutes, machines à l'arrêt)</p></div>
+    <div><h4>Commandes</h4><p>Des clients achètent une quantité précise de minerai ou de lingots, plus cher que le marché. Acceptez une proposition au Tableau (onglet <b>Commandes</b>), puis livrez avant l'échéance : à la main (« Livrer mon sac »), ou avec une <b>caisse d'expédition réglée sur « Commandes »</b>. En retard, le client paie seulement ce qui est livré, au prix de base. Chaque commande honorée fait monter votre rang</p></div>
+    <div><h4>Grand Chevalement</h4><p>${k('KeyE')} devant le grand chantier, à droite de l'atelier : cinq phases, chacune demande des matériaux, de l'argent pour les ouvriers et des commandes honorées. Livrez à la main, ou réglez une <b>caisse d'expédition sur « Chantier »</b> et amenez-y vos lingots par convoyeur. Chaque phase terminée fait grandir la tour et accorde un avantage</p></div>
     <div><h4>Four et fonderie</h4><p>Minerai (convoyeur ou ${k('KeyE')} : déposer) + charbon → lingots vendus 2,5 fois plus cher, poussés devant la flèche</p></div>
     <div><h4>Améliorer une foreuse</h4><p>${k('KeyE')} sur la foreuse : niveau 2 = cases gauche et droite, niveau 3 = aussi derrière</p></div>
     <div><h4>Jouer à deux</h4><p>Menu principal → <b>Jouer à deux</b> : un joueur crée la partie et envoie le lien (ou le code à 5 signes) à l'autre, qui le tape sur son propre téléphone ou ordinateur. Les deux sont dans la même mine : <b>argent, machines, ouvriers et coffres sont communs</b> ; <b>sac, pioche, équipement et position sont à chacun</b>. La partie est celle de l'hôte et se sauvegarde chez lui ; il n'y a ni pause ni vitesse à deux. Si l'un se déconnecte, l'autre continue ; en revenant avec le même appareil, il retrouve ses affaires</p></div>

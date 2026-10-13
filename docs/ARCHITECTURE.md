@@ -12,6 +12,9 @@ src/
     Inventory.ts         sac limité en poids + kits de construction
     StructureManager.ts  index spatial des structures et ordre de mise à jour
     structures/          Conveyor, Drill, TunnelBorer, Smelter, Storage, ShippingCrate, Building (+ registre de fabrication)
+    Market.ts            cours du marché (prix variables, événements) ; tirages par hachage, rien d'aléatoire à sauvegarder
+    Contracts.ts         commandes des clients : propositions, acceptation, livraison, échéance, rang
+    Project.ts           le Grand Chevalement : cinq phases, livraisons, argent versé, avantages
     Wagons.ts            wagonnets (véhicules qui roulent sur la voie : rails et quais)
     visibility.ts        exploration (révélation des galeries)
     objectives.ts        objectifs calculés depuis l'état réel
@@ -295,6 +298,41 @@ les sauvegarde ; `GameState.addMarker` les nomme d'après le terrain et les mach
 convertit un clic en case (`MineMap.tileAt`, via la dernière vue dessinée, donc aussi quand la carte est zoomée) ;
 l'interface transmet la position du clic (en pixels du canvas) au relâchement, s'il n'y a pas eu de glissé.
 
+## Commandes et Grand Chevalement
+
+Deux systèmes de **buts**, tous deux dans la simulation (donc déterministes, sauvegardés, identiques sur les deux appareils d'une
+partie à deux). Les nombres sont des données : `data/contracts.ts` (marchandises, quantités, primes, délais, rangs, clients) et
+`data/project.ts` (phases : matériaux, argent, commandes honorées, avantage).
+
+- **`sim/Contracts.ts`** suit le modèle de `Market` : un tirage par hachage `hash2(numéro de proposition, indice, graine)`, jamais
+  de `Math.random`, donc aucun état aléatoire à sauvegarder. Elle ne connaît pas la partie : un **hôte** (`ContractsHost`) lui
+  dit ce que le joueur connaît (`known`), ce que le chantier accorde (`perks`), combien de commandes sont honorées
+  (`completed`, qui fait le rang) et reçoit les règlements (`settle`) et les nouvelles propositions (`offered`) ; `GameState`
+  les branche sur l'argent, les statistiques et les `SimEvent`. `update(temps)` retire les propositions périmées, règle les
+  commandes en retard (le client paie la part livrée au prix de base) et en tire une nouvelle quand c'est l'heure. Une
+  proposition garde sa récompense, fixée au tirage. `deliver(res, n, seulement?)` sert d'abord la commande la plus pressée.
+- **`sim/Project.ts`** ne connaît que le chantier : `deliver`, `fund` (l'argent versé), `ready(commandesHonorées)`, `advance`.
+  `GameState.checkProject()` (à chaque pas) termine les phases dont tout est réuni et émet `{ t: 'site' }`.
+- **Livrer** : à la main (actions `contractDeliver`, `siteDeliver`, `siteFund`, qui exigent d'être devant le Tableau ou le
+  chantier, comme `sell` exige le comptoir), ou par une **caisse d'expédition** (`ShippingCrate.mode` : `market`, `orders`,
+  `site`). La caisse accepte tout, comme avant (`canAccept` ne change pas : un convoyeur ne se bouche jamais pour une raison
+  nouvelle) ; à chaque passage, `StructureContext.deliver(mode, objets, caisse)` donne les objets aux commandes ou au chantier et
+  renvoie le reste, que la caisse **vend** au cours du moment. Le mode n'est écrit dans la sauvegarde que s'il n'est pas `market`.
+- **Sauvegarde** : `contracts` et `project` (champs facultatifs de `SaveData`, validés au chargement comme `market` : une valeur
+  aberrante est ignorée, une ancienne sauvegarde repart de zéro) et deux compteurs dans `Stats` (`contracts`, `contractMoney`). La
+  carte régénère le chantier avec les autres bâtiments du camp ; `deserialize` écarte (`GameState.evict`) toute machine d'une
+  ancienne sauvegarde qui tomberait dessus (son kit revient au stock, son contenu tombe devant l'entrée) et remet à l'entrée de
+  la mine un joueur qui s'y trouverait (`unstickPlayers`).
+- **Jeu à deux** : tout passe par des `SimAction` (`contractAccept`, `contractDecline`, `contractAbandon`, `contractDeliver`,
+  `siteDeliver`, `siteFund`, `shipMode`) ; les événements `contract`, `site` et `delivered` ne sont pas « personnels » : les deux
+  joueurs les voient et les entendent. Le test `tests/coop-orders.test.ts` rejoue un même scénario sur deux copies, et sur une copie
+  qui a reçu la partie en cours de route : commandes, chantier, argent et sacs restent identiques.
+- **Interface** : `ui/orders.ts` (onglet « Commandes », ligne du HUD, annonces), `ui/site.ts` (panneau du chantier et écran de fin),
+  `ui/panels.ts` (`shippingPanel` : destination du transporteur). Le rendu du chantier (`render/sprites.ts` : six états, `Renderer.drawSite`)
+  lit `project.phase`.
+- **Ajouter une marchandise demandable** : une ligne dans `GOODS` (`data/contracts.ts`). **Changer le chantier** : `PHASES`
+  (`data/project.ts`) ; si le nombre de phases change, `buildSiteSprites` doit dessiner un état de plus.
+
 ## Étendre le jeu
 
 - **Nouveau minerai** : ajouter une entrée dans `src/data/resources.ts` (valeur, poids, rareté, résistance,
@@ -315,7 +353,7 @@ l'interface transmet la position du clic (en pixels du canvas) au relâchement, 
 `save/save.ts` régénère le monde depuis la graine puis réapplique : blocs, gisements, réserves, dégâts partiels,
 exploration, objets au sol (avec leur âge, pour que les pierres ne repartent pas pour un délai complet),
 structures (avec leur contenu : objets sur convoyeurs, charbon, tampons, coffres), joueur, argent, inventaire,
-kits, améliorations et statistiques. Stockage : `localStorage` (+ copie de secours), export/import de fichier JSON, et,
+kits, améliorations, statistiques, commandes et chantier. Stockage : `localStorage` (+ copie de secours), export/import de fichier JSON, et,
 si le joueur a un compte, une copie en ligne (voir « Compte » plus bas).
 
 ## Jeu à deux (lockstep)

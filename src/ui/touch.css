@@ -385,3 +385,6 @@ body.touch .join-input { font-size: 20px; }
 .install .how { margin: 0 0 10px; padding-left: 22px; font-size: 14px; line-height: 1.5; }
 .install .how li { margin-bottom: 6px; }
 .install .share-ico { display: inline-block; padding: 0 6px; border-radius: 4px; background: #3f3338; color: var(--gold); }
+
+/* Commandes : sur téléphone, le HUD n'a pas la place de leur ligne (le Tableau d'affichage les montre, un message prévient à une minute de l'échéance). */
+body.touch .ord-hud { display: none; }

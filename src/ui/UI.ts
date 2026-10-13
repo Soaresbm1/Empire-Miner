@@ -25,6 +25,8 @@ import { MAP_COLORS } from '../render/MineMap';
 import { QUALITY_LABEL, type Quality } from '../render/quality';
 import { WORKSHOP_TABS, isWorkshopTab } from './workshop';
 import { hudMarket, BOARD_TABS, isBoardTab } from './market';
+import { hudOrders } from './orders';
+import { sitePanel } from './site';
 import { boardPanel, borerPanel, counterPanel, smelterPanel, drillPanel, helpPanel, installPanel, inventoryPanel, mapPanel, shippingPanel, sorterPanel, stationPanel, storagePanel, switchPanel, workshopPanel } from './panels';
 import { displayMode } from './fullscreen';
 import { morph } from './morph';
@@ -37,7 +39,7 @@ const ARROWS8 = ['→', '↘', '↓', '↙', '←', '↖', '↑', '↗'];
 /** Un doigt qui bouge de plus que cela (px CSS) entre l'appui et le relâchement ne fait pas un appui sur un bouton. */
 const TAP_SLOP = 10;
 
-export type PanelKind = 'counter' | 'workshop' | 'board' | 'inventory' | 'storage' | 'drill' | 'borer' | 'furnace' | 'shipping' | 'sorter' | 'station' | 'switch' | 'map' | 'help' | 'install';
+export type PanelKind = 'counter' | 'workshop' | 'board' | 'site' | 'inventory' | 'storage' | 'drill' | 'borer' | 'furnace' | 'shipping' | 'sorter' | 'station' | 'switch' | 'map' | 'help' | 'install';
 
 export interface UIHost {
   onAction(action: string, arg: string): void;
@@ -70,8 +72,10 @@ export class UI {
   panel: { kind: PanelKind; target: Structure | null; tab: string } | null = null;
   /** Dernier onglet de l'Atelier : on y revient à la prochaine visite. */
   workshopTab = 'tools';
-  /** Dernier onglet du Tableau d'affichage (Marché ou Production). */
+  /** Dernier onglet du Tableau d'affichage (Marché, Commandes ou Production). */
   boardTab = 'market';
+  /** Commande dont l'abandon attend une confirmation (un second appui sur le même bouton). */
+  private abandoning: number | null = null;
   /** Réglages de l'onglet Machines (catégorie, « achetables seulement », détails dépliés). */
   readonly shopView: { cat: string; only: boolean; open: Set<string>; fire: number | null } = { cat: 'all', only: false, open: new Set<string>(), fire: null };
   /** Au prochain dessin du panneau, on remonte en haut de la liste. */
@@ -313,7 +317,7 @@ export class UI {
     this.set('hud-money', `<span class="coin"></span>${money(g.money)}`);
     this.set('hud-income', extra.income);
     this.set('hud-speed', extra.speed);
-    this.set('hud-market', hudMarket(g));
+    this.set('hud-market', hudMarket(g) + hudOrders(g));
     // Fournaise : température, qui ralentit les machines et épuise le mineur (sauf près d'un ventilateur).
     const temp = surface ? null : g.hazards.temperature(g.player.tileY);
     const cooled = temp !== null && g.hazards.cooled(g.player.tileX, g.player.tileY);
@@ -498,6 +502,7 @@ export class UI {
   openPanel(kind: PanelKind, target: Structure | null = null, tab = kind === 'workshop' ? this.workshopTab : kind === 'board' ? this.boardTab : 'tools'): void {
     this.panel = { kind, target, tab };
     this.shopView.fire = null;
+    this.abandoning = null;
     this.scrollTop = true;
     this.panelSig = '';
     this.popNext = true;
@@ -506,6 +511,7 @@ export class UI {
 
   closePanel(): void {
     this.panel = null;
+    this.abandoning = null;
     this.panelRoot.innerHTML = '';
     this.panelSig = '';
     this.syncOverlay();
@@ -532,6 +538,7 @@ export class UI {
     }
     this.panel.tab = tab;
     this.shopView.fire = null;
+    this.abandoning = null;
     this.scrollTop = true;
     this.panelSig = '';
   }
@@ -565,6 +572,16 @@ export class UI {
     return false;
   }
 
+  /** Abandonner une commande : le premier appui demande confirmation (vrai au second appui, sur la même commande). */
+  confirmAbandon(id: number): boolean {
+    if (this.abandoning === id) {
+      this.abandoning = null;
+      return true;
+    }
+    this.abandoning = id;
+    return false;
+  }
+
   /** Déplie ou replie le détail d'une machine. */
   toggleShopDetail(id: string): void {
     if (!this.shopView.open.delete(id)) this.shopView.open.add(id);
@@ -586,7 +603,11 @@ export class UI {
         break;
       case 'board':
         title = "Tableau d'affichage";
-        body = boardPanel(g, tab);
+        body = boardPanel(g, tab, this.abandoning);
+        break;
+      case 'site':
+        title = 'Grand Chevalement';
+        body = sitePanel(g);
         break;
       case 'workshop':
         title = 'Atelier';
@@ -641,7 +662,7 @@ export class UI {
         body = installPanel();
         break;
     }
-    const money$ = kind === 'counter' || kind === 'workshop' ? `<span class="panel-money"><span class="coin"></span>${money(g.money)}</span>` : '';
+    const money$ = kind === 'counter' || kind === 'workshop' || kind === 'site' ? `<span class="panel-money"><span class="coin"></span>${money(g.money)}</span>` : '';
     const inner = `<header><h2>${title}</h2>${money$}<button class="close" data-action="close" title="Fermer">✕</button></header><div class="panel-body">${body}</div>`;
     const sig = `${kind}|${inner}`;
     if (sig === this.panelSig) return;

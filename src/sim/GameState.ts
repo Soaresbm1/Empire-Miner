@@ -23,8 +23,10 @@ import { ProductionLog } from './Production';
 import type { SimEvent, ToolKind } from './events';
 import { generateWorld, WorldLayout } from './generator';
 import { Inventory, type KitHolder } from './Inventory';
+import { Contracts, type Contract, type Outcome } from './Contracts';
 import { Market } from './Market';
 import { Player } from './Player';
+import { Project } from './Project';
 import { StructureManager } from './StructureManager';
 import { Building, BuildingType } from './structures/Building';
 import { Conveyor } from './structures/Conveyor';
@@ -32,7 +34,7 @@ import { Rail, type RailStation, type RailSwitch, type SwitchSetting } from './s
 import { TunnelBorer } from './structures/Borer';
 import { Smelter } from './structures/Smelter';
 import { Drill } from './structures/Drill';
-import { ShippingCrate } from './structures/ShippingCrate';
+import { ShippingCrate, type ShipMode } from './structures/ShippingCrate';
 import type { Sorter } from './structures/Sorter';
 import { STRUCTURE_FACTORIES } from './structures/registry';
 import { Storage, normalizeAllow } from './structures/Storage';
@@ -88,6 +90,9 @@ export interface Stats {
   smelted: number;
   /** Évanouissements (grisou, noyade, éboulement). */
   faints: number;
+  /** Commandes honorées, et argent qu'elles ont rapporté (partielles comprises). */
+  contracts: number;
+  contractMoney: number;
 }
 
 export const PLAYER_SPEED = 72; // unités monde / s
@@ -175,6 +180,10 @@ export class GameState implements StructureContext {
   readonly production = new ProductionLog(() => this.time);
   /** Cours du marché : prix de vente variables, événements « forte demande de cuivre »… */
   readonly market: Market;
+  /** Commandes du Tableau d'affichage : des clients achètent une quantité précise, avec une prime, avant une échéance. */
+  readonly contracts: Contracts;
+  /** Le Grand Chevalement : le grand chantier du camp, en cinq phases. */
+  readonly project = new Project();
   /** Ouvriers achetés à l'Atelier : ramasseurs et ravitailleurs. */
   readonly workers = new WorkerSystem();
   /** Type de repère choisi dans le panneau de la carte (pour le prochain repère posé). */
@@ -234,6 +243,8 @@ export class GameState implements StructureContext {
     autoSold: 0,
     smelted: 0,
     faints: 0,
+    contracts: 0,
+    contractMoney: 0,
   };
   /** Santé du joueur (0 à HEALTH.max) ; à 0, il s'évanouit et se réveille au camp. */
   hp = HEALTH.max;
@@ -254,6 +265,18 @@ export class GameState implements StructureContext {
       seed,
       (res) => this.stats.discovered.includes(res) || (this.stats.collected[res] ?? 0) > 0,
       (e) => this.emit({ t: 'market', res: e.res, up: e.up, pct: e.pct }),
+    );
+    // Un client ne demande que ce que le joueur a déjà vu ; le chantier accorde des places et des primes.
+    this.contracts = new Contracts(
+      seed,
+      {
+        known: (res) => this.stats.discovered.includes(res) || (this.stats.collected[res] ?? 0) > 0,
+        perks: () => this.project.perks(),
+        completed: () => this.stats.contracts,
+        settle: (c, outcome, paid) => this.settleContract(c, outcome, paid),
+        offered: (c) => this.emit({ t: 'contract', kind: 'offer', client: c.client, paid: c.reward, lines: c.lines.map((l): [string, number] => [l.res, l.qty]) }),
+      },
+      this.market,
     );
     this.hazards = new HazardSystem(this);
     this.rng = new Rng(seed ^ 0x5bd1e995);
@@ -457,6 +480,15 @@ export class GameState implements StructureContext {
     this.emit({ t: 'shipped', tx: from.x, ty: from.y, total, n });
   }
 
+  deliver(mode: 'orders' | 'site', items: Record<string, number>, _from: Structure): Record<string, number> {
+    const rest: Record<string, number> = {};
+    for (const [res, n] of Object.entries(items)) {
+      const used = mode === 'orders' ? this.contracts.deliver(res, n) : this.project.deliver(res, n);
+      if (n - used > 0) rest[res] = n - used;
+    }
+    return rest;
+  }
+
   digTile(tx: number, ty: number, from: { x: number; y: number }): Drop[] {
     return this.breakTile(tx, ty, from);
   }
@@ -496,6 +528,8 @@ export class GameState implements StructureContext {
       this.time += dt;
       this.stats.playTime += dt;
       this.market.update(this.time);
+      this.contracts.update(this.time);
+      this.checkProject();
       this.workers.update(dt, this);
       this.eachPlayer((i) => this.stepControls(dt, intents[i] ?? NO_INTENT));
       for (const d of this.drops.update(dt, this.world)) this.emit({ t: 'crumble', res: d.res, x: d.x, y: d.y });
@@ -1237,6 +1271,68 @@ export class GameState implements StructureContext {
     return true;
   }
 
+  // ---------------------------------------------------------------- commandes et chantier
+
+  /** Une commande est réglée (honorée, arrivée à échéance ou abandonnée) : le client verse `paid` $. */
+  private settleContract(c: Contract, outcome: Outcome, paid: number): void {
+    if (paid > 0) {
+      this.money += paid;
+      this.stats.earned += paid;
+      this.stats.contractMoney += paid;
+    }
+    if (outcome === 'done') this.stats.contracts++;
+    this.emit({ t: 'contract', kind: outcome, client: c.client, paid, lines: c.lines.map((l): [string, number] => [l.res, l.qty]) });
+  }
+
+  /** Livre le contenu du sac aux commandes acceptées (à la seule commande `id` si on la donne), au Tableau d'affichage. Renvoie le nombre d'objets livrés. */
+  deliverToContracts(id?: number): number {
+    if (!this.isNear('board')) return 0;
+    let n = 0;
+    for (const [res, count] of Object.entries(this.inventory.items)) {
+      const k = this.contracts.deliver(res, count, id);
+      if (k > 0) n += this.inventory.remove(res, k);
+    }
+    return n;
+  }
+
+  /** Livre au chantier du Grand Chevalement les matériaux que la phase en cours attend et que le sac contient. Renvoie le nombre d'objets livrés. */
+  deliverToSite(): number {
+    if (!this.isNear('site')) return 0;
+    let n = 0;
+    for (const need of this.project.missing()) {
+      const k = this.project.deliver(need.res, this.inventory.count(need.res));
+      if (k > 0) n += this.inventory.remove(need.res, k);
+    }
+    return n;
+  }
+
+  /** Verse aux ouvriers du chantier tout l'argent que l'on peut, dans la limite de ce que la phase en cours réclame. Renvoie la somme versée. */
+  fundSite(): number {
+    if (!this.isNear('site')) return 0;
+    const k = this.project.fund(Math.min(this.money, this.project.moneyLeft()));
+    if (k > 0) {
+      this.money -= k;
+      this.stats.spent += k;
+    }
+    return k;
+  }
+
+  /** Règle une caisse d'expédition : vendre, livrer aux commandes ou livrer au chantier. */
+  setShipMode(c: ShippingCrate, mode: ShipMode): boolean {
+    if (c.mode === mode) return false;
+    c.mode = mode;
+    return true;
+  }
+
+  /** Termine les phases du chantier dont tout est réuni (matériaux, argent, commandes honorées). */
+  private checkProject(): void {
+    while (this.project.ready(this.stats.contracts)) {
+      const phase = this.project.phase;
+      this.project.advance(this.time);
+      this.emit({ t: 'site', phase, last: this.project.done });
+    }
+  }
+
   buyNextPickaxe(): boolean {
     const next = PICKAXES[this.pickaxeLevel + 1];
     if (!next || !this.isNear('workshop') || !this.pay(next.price)) return false;
@@ -1534,6 +1630,37 @@ export class GameState implements StructureContext {
     for (const [res, n] of Object.entries(s.contents())) this.drops.spawn(res, n, (s.x + 0.5) * TILE, (s.y + 0.5) * TILE);
     this.emit({ t: 'removed', type: s.type, tx, ty });
     return true;
+  }
+
+  /**
+   * Écarte une structure qui n'a pas pu être posée là (une machine qui tombe sur un bâtiment du camp ajouté depuis, à
+   * l'ouverture d'une ancienne sauvegarde) : son kit revient dans le stock et son contenu tombe devant l'entrée de la mine.
+   */
+  evict(s: Structure): void {
+    this.inventory.addKit(s instanceof Drill || s instanceof TunnelBorer ? kitId(s.type, s.level) : s.type);
+    const at = this.layout.spawn;
+    for (const [res, n] of Object.entries(s.contents())) this.drops.spawn(res, n, (at.x + 0.5) * TILE, (at.y + 0.5) * TILE);
+  }
+
+  /** Remet à l'entrée de la mine tout joueur qui se trouve dans un bâtiment du camp (ancienne sauvegarde : le bâtiment est arrivé depuis). */
+  unstickPlayers(): void {
+    for (const slot of this.presentSlots()) {
+      this.withSlot(slot, () => {
+        const p = this.player;
+        const x0 = Math.floor((p.x - p.halfW) / TILE);
+        const x1 = Math.floor((p.x + p.halfW - 0.001) / TILE);
+        const y0 = Math.floor((p.y - p.halfH) / TILE);
+        const y1 = Math.floor((p.y + p.halfH - 0.001) / TILE);
+        for (let y = y0; y <= y1; y++)
+          for (let x = x0; x <= x1; x++) {
+            const s = this.structures.at(x, y);
+            if (!s || s.removable || !s.solid) continue;
+            p.x = (this.layout.spawn.x + 0.5 + slot) * TILE;
+            p.y = (this.layout.spawn.y + 0.5) * TILE;
+            return;
+          }
+      });
+    }
   }
 
   rotateAt(tx: number, ty: number): boolean {
