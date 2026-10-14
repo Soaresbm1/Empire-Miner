@@ -1,0 +1,5 @@
+# Fins de ligne : LF partout, y compris dans une copie de travail Windows.
+# L'empreinte du jeu à deux (`simVersion`, vite.config.ts) et le test du déterminisme (tests/multiplayer-sim.test.ts)
+# lisent les fichiers tels quels : une copie en CRLF donnait une autre version que celle publiée et faisait échouer le test.
+* text=auto eol=lf
+*.png binary

@@ -3,3 +3,4 @@ dist/
 dist-single/
 dist-artifact/
 e2e/screenshots/
+.claude/settings.local.json
