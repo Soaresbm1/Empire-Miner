@@ -10,8 +10,9 @@
 import { chromium } from 'playwright-core';
 import { preview } from 'vite';
 import { mkdirSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 
-const SHOTS = new URL('./screenshots/', import.meta.url).pathname;
+const SHOTS = fileURLToPath(new URL('./screenshots/', import.meta.url));
 mkdirSync(SHOTS, { recursive: true });
 const S = 12; // SURFACE_ROWS
 

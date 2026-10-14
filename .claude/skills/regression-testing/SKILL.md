@@ -48,9 +48,9 @@ lenteur (ils passent avec plus de temps). Ce n'est pas une régression : le dire
 - Toujours `npm run build` d'abord ; les scripts servent `dist/` avec `vite preview`.
 - `CHROME_PATH` : défini pour ce poste dans `.claude/settings.local.json` (le défaut des scripts est un chemin Linux).
 - `node e2e/<script>.mjs` ; captures dans `e2e/screenshots/` (ignoré par git).
-- **Sous Windows, tant que ce n'est pas corrigé** : `cloud`, `coop`, `crafter`, `flow`, `menus`, `orders`, `phone` et
-  `playthrough` s'arrêtent au démarrage (chemin des captures, voir `CLAUDE.md`, « Points ouverts ») ; le dire dans le rapport
-  au lieu de les compter comme lancés. `touch` fonctionne (vérifié le 14/10/2026) ; `panels` n'utilise pas ce chemin.
+- **Sous Windows**, échecs connus qui ne sont pas des régressions (détail dans `CLAUDE.md`, « Points ouverts ») : `cloud` (1
+  vérification attend `'Linux'`), `phone` (4 problèmes de taille ou de zone sûre), `orders` (intermittent selon la graine : le
+  relancer avant de conclure). Toute **autre** vérification en échec est à examiner. Durées : `playthrough` ≈ 8 min, `phone` ≈ 6 min.
 - Liste et contenu : section « Tests » du `README.md`.
 
 ## Interdit sans accord explicite

@@ -74,7 +74,8 @@ Fichiers très longs (`render/Renderer.ts`, `game/Game.ts`, `sim/GameState.ts`, 
 - `npm audit` : 4 vulnérabilités « high », toutes dans des outils de développement (`braces` et `micromatch` via
   `vite-plugin-singlefile`, `source-map-js`). La correction complète impose une version cassante de `vite-plugin-singlefile`.
 - Les scripts `e2e/` ont un `CHROME_PATH` par défaut pour Linux ; sous Windows, il vient de `.claude/settings.local.json`.
-- Sous Windows, 8 scripts e2e (`cloud`, `coop`, `crafter`, `flow`, `menus`, `orders`, `phone`, `playthrough`) s'arrêtent au
-  démarrage : `new URL('./screenshots/', import.meta.url).pathname` donne `C:\C:\…`. Correction possible : `fileURLToPath`
-  (`node:url`). `touch.mjs` et `panels.mjs` n'en dépendent pas (`touch.mjs` vérifié : 43 vérifications réussies ;
-  `panels.mjs` non lancé).
+- e2e sous Windows (essais du 14/10/2026) : `menus`, `flow`, `crafter`, `coop`, `playthrough` et `touch` réussissent. Restent :
+  `e2e/cloud.mjs:191` attend le genre d'appareil `'Linux'` en dur (le jeu dit `'Windows'`, à juste titre) ; `e2e/phone.mjs` relève
+  4 problèmes sur 3 553 vérifications (deux boutons du menu pause à deux hors zone sûre sur iPhone-Safari ; boutons « Oui » du
+  sac à 28×38 en portrait), peut-être liés aux polices de Windows ; `e2e/orders.mjs` échoue parfois (la première vérification
+  attend 2 propositions après 2 min de jeu, ce qui dépend de la graine tirée au hasard : réussi 3 fois sur 3 ensuite).
