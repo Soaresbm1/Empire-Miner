@@ -38,6 +38,7 @@ import { UI, PanelKind } from '../ui/UI';
 import { chestBar, chestsInRect, pickChests, toggleDraft } from '../ui/chestFilter';
 import { Speed, advance, isSpeed, keepsUp, nextSpeed, smoothRate, speedDanger } from './speed';
 import { speedBar } from '../ui/speedBar';
+import { flowLegend, flowTip } from '../ui/flow';
 import { esc, kg, money, resIcon } from '../ui/format';
 import { workerAt, workerTooltip } from '../ui/crew';
 import { applyAction, type SimAction } from '../sim/actions';
@@ -130,6 +131,8 @@ export class Game {
   private chestDraft: string[] = [];
   private chestDrag: { wx: number; wy: number; sx: number; sy: number } | null = null;
   private chestHover: Storage | null = null;
+  /** Vue « goulots » (touche G) : machines et convoyeurs teints selon ce qui les bloque. Rien de tout cela n'est sauvegardé. */
+  private flowView = false;
   /** Vitesse de jeu (×1, ×2, ×4), pause du joueur (P) et vitesse réellement obtenue, lissée. Rien de tout cela n'est sauvegardé. */
   private speed: Speed = 1;
   private userPaused = false;
@@ -312,6 +315,7 @@ export class Game {
     this.autosave = AUTOSAVE_EVERY;
     this.buildMode = false;
     this.setChestMode(false);
+    this.flowView = false;
     this.speed = 1;
     this.userPaused = false;
     this.simRate = 1;
@@ -723,6 +727,7 @@ export class Game {
     this.acc = 0;
     this.buildMode = false;
     this.setChestMode(false);
+    this.flowView = false;
     this.speed = 1;
     this.userPaused = false;
     this.simRate = 1;
@@ -1337,6 +1342,7 @@ export class Game {
         hasScooter: !!g?.hasScooter,
         buildMode: this.buildMode,
         chestMode: this.chestMode,
+        flowView: this.flowView,
         paused: this.userPaused,
         speed: this.speed,
         barHeight: this.buildMode || this.chestMode ? this.ui.buildBarHeight : 0,
@@ -1420,6 +1426,7 @@ export class Game {
       if (inp.wasTyped('n') && !this.ui.panel) this.markHere();
       if (inp.wasPressed('KeyB') && !this.ui.panel) this.setBuildMode(!this.buildMode);
       if (inp.wasPressed('KeyC') && !this.ui.panel) this.setChestMode(!this.chestMode);
+      if (inp.wasPressed('KeyG') && !this.ui.panel) this.flowView = !this.flowView;
       if (inp.wasPressed('KeyP')) this.togglePause();
       if (inp.wasPressed('KeyX')) this.setSpeed(nextSpeed(this.speed), g);
       if (this.chestMode && inp.wasPressed('Enter', 'NumpadEnter')) this.applyChestDraft(g);
@@ -1438,7 +1445,7 @@ export class Game {
     const mtx = Math.floor(wpos.x / TILE);
     const mty = Math.floor(wpos.y / TILE);
     let intent: PlayerIntent = NO_INTENT;
-    const overlay: Overlay = { target: null, ghost: null, removeHint: null, interact: null };
+    const overlay: Overlay = { target: null, ghost: null, removeHint: null, interact: null, flow: this.flowView };
     let tooltip: string | null = null;
 
     if (!this.ui.blocking) {
@@ -1525,6 +1532,7 @@ export class Game {
       build: this.buildBarHtml(g),
       hints: this.hintsHtml(),
       income: this.incomeHtml(g),
+      flow: this.flowView ? flowLegend() : '',
       speed: this.session ? '' : speedBar({
         speed: this.speed,
         paused: this.userPaused,
@@ -1632,7 +1640,9 @@ export class Game {
     const rope = g && (g.ropes > 0 || g.ropeAnchor) ? `<span${g.ropeT > 0 ? ' class="on"' : ''}><kbd>${l('KeyV')}</kbd> ${g.atCamp ? (g.ropeAnchor ? 'Redescendre' : 'Corde') : 'Remonter'}${g.ropes > 0 ? ` <b>×${g.ropes}</b>` : ''}</span>` : '';
     const scooter = this.state?.hasScooter ? `<span${this.state.scootering ? ' class="on"' : ''}><kbd>Maj</kbd> Trottinette</span>` : '';
     const chests = g && g.storages().length > 1 ? `<span${this.chestMode ? ' class="on"' : ''}><kbd>${l('KeyC')}</kbd> Coffres</span>` : '';
-    return `${rope}${scooter}<span><kbd>${l('KeyB')}</kbd> Construire</span>${chests}<span><kbd>${l('KeyI')}</kbd> Sac</span>${this.session ? '' : `<span${this.userPaused ? ' class="on"' : ''}><kbd>${l('KeyP')}</kbd> Pause</span><span${this.speed > 1 ? ' class="on"' : ''}><kbd>${l('KeyX')}</kbd> Vitesse</span>`}<span><kbd>M</kbd> Carte</span><span><kbd>N</kbd> Repère</span><span><kbd>${l('KeyH')}</kbd> Aide</span><span><kbd>Échap</kbd> Menu</span>`;
+    // Dès qu'il y a quelques machines à surveiller, la vue « goulots » est proposée.
+    const flow = g && g.stats.structuresBuilt >= 3 ? `<span${this.flowView ? ' class="on"' : ''}><kbd>${l('KeyG')}</kbd> Goulots</span>` : '';
+    return `${rope}${scooter}<span><kbd>${l('KeyB')}</kbd> Construire</span>${chests}${flow}<span><kbd>${l('KeyI')}</kbd> Sac</span>${this.session ? '' : `<span${this.userPaused ? ' class="on"' : ''}><kbd>${l('KeyP')}</kbd> Pause</span><span${this.speed > 1 ? ' class="on"' : ''}><kbd>${l('KeyX')}</kbd> Vitesse</span>`}<span><kbd>M</kbd> Carte</span><span><kbd>N</kbd> Repère</span><span><kbd>${l('KeyH')}</kbd> Aide</span><span><kbd>Échap</kbd> Menu</span>`;
   }
 
   // ------------------------------------------------------------------ construction
@@ -2081,27 +2091,27 @@ export class Game {
       const load = s.items.length;
       return `<b>${s.def.name}</b> ${['→', '↓', '←', '↑'][s.dir]}<br>${load}/${s.capacity} objets · ${s.speed.toLocaleString('fr-FR')} tuile/s${
         s.blocked ? ' · <span class="bad">saturé</span>' : ''
-      }`;
+      }${flowTip(s)}`;
     }
     if (s instanceof Sorter)
       return `<b>Trieur</b> ${['→', '↓', '←', '↑'][s.dir]}<br>${
         s.filters.length
           ? `${s.filters.map((r) => `${resIcon(r)} ${getResource(r).name}`).join(', ')} tout droit · le reste sur les côtés`
           : 'Aucun filtre : tout va tout droit'
-      }<br><span class="muted">[E] pour régler</span>`;
+      }<br><span class="muted">[E] pour régler</span>${flowTip(s)}`;
     if (s instanceof Splitter)
       return `<b>Séparateur</b> ${['→', '↓', '←', '↑'][s.dir]}<br>Entrée par l'arrière · sorties : devant, gauche, droite (à tour de rôle)${
         s.blocked ? '<br><span class="bad">toutes les sorties sont bloquées</span>' : ''
-      }`;
+      }${flowTip(s)}`;
     if (s instanceof Bridge) {
       const arrow = ['→', '↓', '←', '↑'][s.dir];
-      if (s.target) return `<b>Pont de convoyeur</b> ${arrow} — entrée<br>Relié à la sortie ${s.span()} cases plus loin · ${s.transit.length} objet(s) en l'air`;
-      if (s.source) return `<b>Pont de convoyeur</b> ${arrow} — sortie<br>Pose le minerai devant lui`;
+      if (s.target) return `<b>Pont de convoyeur</b> ${arrow} — entrée<br>Relié à la sortie ${s.span()} cases plus loin · ${s.transit.length} objet(s) en l'air${flowTip(s)}`;
+      if (s.source) return `<b>Pont de convoyeur</b> ${arrow} — sortie<br>Pose le minerai devant lui${flowTip(s)}`;
       return `<b>Pont de convoyeur</b> ${arrow} — non relié<br><span class="muted">Posez un second pont dans la même direction, jusqu'à ${s.range} cases devant</span>`;
     }
     if (s instanceof Drill) {
       const st = { ok: 'en marche', nofuel: 'sans charbon', full: 'sortie bloquée', depleted: 'gisement épuisé' }[s.status];
-      return `<b>Foreuse</b> niveau ${s.level} — ${st}<br>${s.sources(g).length} case(s) forée(s) · charbon : ${s.fuelUnits} · extrait : ${s.extracted}${this.heatLine(g, s.x, s.y)}`;
+      return `<b>Foreuse</b> niveau ${s.level} — ${st}<br>${s.sources(g).length} case(s) forée(s) · charbon : ${s.fuelUnits} · extrait : ${s.extracted}${this.heatLine(g, s.x, s.y)}${flowTip(s)}`;
     }
     if (s instanceof TunnelBorer) {
       const st = {
@@ -2127,19 +2137,19 @@ export class Game {
     if (s instanceof Pump) return `<b>Pompe</b> — ${s.status === 'ok' ? 'assèche la galerie' : "pas d'eau à portée"}<br>Portée : ${WATER.pumpRadius} cases · sans charbon`;
     if (s instanceof Smelter) {
       const st = { ok: 'fond le minerai', idle: 'attend du minerai', nofuel: 'sans charbon', full: 'sortie saturée' }[s.status];
-      return `<b>${s.def.name}</b> ${['→', '↓', '←', '↑'][s.dir]} — ${st}<br>Minerai : ${s.input.length} · lingots prêts : ${s.output.length} · charbon : ${s.fuelUnits}${this.heatLine(g, s.x, s.y)}`;
+      return `<b>${s.def.name}</b> ${['→', '↓', '←', '↑'][s.dir]} — ${st}<br>Minerai : ${s.input.length} · lingots prêts : ${s.output.length} · charbon : ${s.fuelUnits}${this.heatLine(g, s.x, s.y)}${flowTip(s)}`;
     }
     if (s instanceof Crafter) {
       const st = { ok: 'fabrique', idle: 'attend des matières', nofuel: 'sans charbon', full: 'sortie saturée', norecipe: 'aucune recette choisie' }[s.status];
       const what = s.recipe ? ` : ${getResource(s.recipe).name}` : '';
-      return `<b>${s.def.name}</b> ${['→', '↓', '←', '↑'][s.dir]} — ${st}${what}<br>Matières : ${s.inputCount()} · produits prêts : ${s.output.length} · charbon : ${s.fuelUnits}${this.heatLine(g, s.x, s.y)}`;
+      return `<b>${s.def.name}</b> ${['→', '↓', '←', '↑'][s.dir]} — ${st}${what}<br>Matières : ${s.inputCount()} · produits prêts : ${s.output.length} · charbon : ${s.fuelUnits}${this.heatLine(g, s.x, s.y)}${flowTip(s)}`;
     }
     if (s instanceof Storage)
       return `<b>Coffre</b><br>${kg(s.weight())} / ${kg(s.capacity)}${
         s.allow.length ? `<br>Accepte seulement : ${s.allow.map((r) => `${resIcon(r)} ${getResource(r).name}`).join(', ')}` : ''
-      }`;
+      }${flowTip(s)}`;
     if (s instanceof ShippingCrate)
-      return `<b>Caisse d'expédition</b>${s.mode === 'market' ? '' : ` — <span class="good">livre ${s.mode === 'orders' ? 'aux commandes' : 'au chantier'}</span>`}<br>${kg(s.weight())} / ${kg(s.capacity)} · ${money(s.pendingValue())} en attente<br>Passage dans ${Math.ceil(s.timer)} s`;
+      return `<b>Caisse d'expédition</b>${s.mode === 'market' ? '' : ` — <span class="good">livre ${s.mode === 'orders' ? 'aux commandes' : 'au chantier'}</span>`}<br>${kg(s.weight())} / ${kg(s.capacity)} · ${money(s.pendingValue())} en attente<br>Passage dans ${Math.ceil(s.timer)} s${flowTip(s)}`;
     if (s instanceof Building && s.type === 'site')
       return `<b>${s.name}</b><br>${g.project.done ? 'Achevé' : `Phase ${g.project.phase + 1} sur ${PHASES.length} : ${g.project.spec!.name} (${Math.round(g.project.progress() * 100)} %)`}`;
     if (s instanceof Building) return `<b>${s.name}</b>`;

@@ -9,6 +9,7 @@
  */
 import { DX, DY, type Dir } from '../../core/dir';
 import { getMachine, MachineDef } from '../../data/machines';
+import type { FlowState } from '../Flow';
 import { Structure, StructureContext, StructureSave } from './Structure';
 
 export interface SplitItem {
@@ -100,10 +101,20 @@ export class Splitter extends Structure {
       const next = ctx.structureAt(this.x + DX[d], this.y + DY[d]);
       if (next && next.accept(head.res, d, ctx)) {
         this.items.shift();
+        this.flow.add();
         return;
       }
     }
     this.blocked = true;
+  }
+
+  flowState(): FlowState {
+    return this.blocked ? 'stuck' : this.items.length ? 'busy' : 'dry';
+  }
+
+  /** Objets par minute à pleine charge : tuiles par seconde × objets par tuile. */
+  maxPerMinute(): number {
+    return 60 * this.speed * this.capacity;
   }
 
   downstream(at: (x: number, y: number) => Structure | undefined): Structure[] {

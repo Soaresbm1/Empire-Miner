@@ -5,7 +5,10 @@
 import { CLIENTS, CONTRACTS, GOODS, rankOf } from '../data/contracts';
 import { getResource } from '../data/resources';
 import { baseValue, type Contract } from '../sim/Contracts';
+import { orderForecast } from '../sim/Forecast';
 import type { GameState } from '../sim/GameState';
+import type { Rates } from '../sim/Production';
+import { activeForecastHtml, offerForecastHtml } from './forecast';
 import { esc, money, resIcon } from './format';
 import { btn } from './widgets';
 
@@ -66,8 +69,8 @@ function lineRow(g: GameState, l: { res: string; qty: number; done: number }, ac
   return `<li><span class="ord-what">${resIcon(l.res)} ${esc(r.name)}</span><b class="ord-n ${l.done >= l.qty ? 'ok' : ''}">${l.done} / ${l.qty}</b>${bag}<div class="ord-meter"><i style="width:${pct}%"></i></div></li>`;
 }
 
-/** Une commande acceptée : où elle en est, combien il reste de temps, et ses boutons. */
-function activeCard(g: GameState, c: Contract, confirmAbandon: number | null): string {
+/** Une commande acceptée : où elle en est, combien il reste de temps, et ses boutons. `rates` : la production récente (prévision). */
+function activeCard(g: GameState, c: Contract, confirmAbandon: number | null, rates: Rates): string {
   const left = c.until - g.time;
   const useful = c.lines.some((l) => l.done < l.qty && g.inventory.count(l.res) > 0);
   const clockCls = left < 60 ? 'late' : left < 180 ? 'soon' : '';
@@ -76,6 +79,7 @@ function activeCard(g: GameState, c: Contract, confirmAbandon: number | null): s
     <div class="ord-head"><b>${esc(clientName(c.client))}</b><span class="ord-time ${clockCls}" title="Temps restant pour livrer">⏱ ${clock(left)}</span></div>
     <ul class="ord-lines">${c.lines.map((l) => lineRow(g, l, true)).join('')}</ul>
     <div class="stat"><span>Récompense</span><b class="gold">${money(c.reward)}</b></div>
+    ${activeForecastHtml(orderForecast(c, (res) => g.inventory.count(res), rates), left)}
     <div class="buy">${btn('contractDeliver', 'Livrer mon sac', { arg: String(c.id), cls: 'primary small', disabled: !useful, title: useful ? undefined : "Rien dans votre sac que cette commande n'attend" })}${btn(
       'contractAbandon',
       sure ? 'Sûr ? Appuyez encore' : 'Abandonner',
@@ -84,8 +88,8 @@ function activeCard(g: GameState, c: Contract, confirmAbandon: number | null): s
   </div>`;
 }
 
-/** Une proposition : de quoi se décider (ce que ça rapporte, par rapport au marché, en combien de temps). */
-function offerCard(g: GameState, c: Contract): string {
+/** Une proposition : de quoi se décider (ce que ça rapporte, par rapport au marché, en combien de temps, et si la production suffit). */
+function offerCard(g: GameState, c: Contract, rates: Rates): string {
   const market = c.lines.reduce((s, l) => s + g.quote(l.res, l.qty), 0);
   const full = g.contracts.active().length >= g.contracts.slots;
   const left = c.until - g.time;
@@ -95,6 +99,7 @@ function offerCard(g: GameState, c: Contract): string {
     <div class="stat"><span>Il paie</span><b class="gold">${money(c.reward)} <em>${bonusTag(c.reward, market)}</em></b></div>
     <div class="stat"><span>Au marché, ce serait</span><b>${money(market)}</b></div>
     <div class="stat"><span>Délai une fois acceptée</span><b>${minutes(c.limit)}</b></div>
+    ${offerForecastHtml(orderForecast(c, (res) => g.inventory.count(res), rates), c.limit)}
     <div class="stat"><span>Reste affichée encore</span><b>${clock(left)}</b></div>
     <div class="buy">${btn('contractAccept', 'Accepter', { arg: String(c.id), cls: 'primary small', disabled: full, title: full ? `Vous menez déjà ${g.contracts.slots} commandes : terminez-en une, ou abandonnez-en une` : undefined })}${btn('contractDecline', 'Refuser', { arg: String(c.id), cls: 'small' })}</div>
   </div>`;
@@ -122,18 +127,20 @@ export function ordersTab(g: GameState, abandon: number | null = null): string {
   const empty = `<p class="empty">${
     knows ? 'Les clients arrivent : la prochaine proposition ne devrait pas tarder.' : "Aucun client pour l'instant. Ils achètent ce que vous avez déjà trouvé : minez du charbon ou du cuivre, puis revenez."
   }</p>`;
+  // Production récente, pour dire si chaque commande est à la portée de vos machines.
+  const rates = g.production.recent();
   return `
     <p class="sub ord-intro">Des clients achètent une quantité précise, plus cher que le marché, avant une échéance. Ce que vous ne livrez pas à temps est payé au prix de base.</p>
     ${rankBlock(g)}
     <h4>Vos commandes <small class="ord-count">${active.length} / ${slots}</small></h4>
     ${
       active.length
-        ? `<div class="cards one">${active.map((c) => activeCard(g, c, abandon)).join('')}</div>
+        ? `<div class="cards one">${active.map((c) => activeCard(g, c, abandon, rates)).join('')}</div>
       <div class="panel-footer"><span class="muted">Livrez ce qu'il y a dans votre sac, ou réglez une caisse d'expédition sur « Commandes ».</span>${btn('contractDeliver', 'Tout livrer', { arg: '', cls: 'primary', disabled: !useful, title: useful ? undefined : "Rien dans votre sac que vos commandes n'attendent" })}</div>`
         : '<p class="empty">Aucune commande en cours : acceptez une proposition ci-dessous.</p>'
     }
     <h4>Propositions <small class="ord-count">${offers.length} / ${g.contracts.capacity}</small></h4>
-    ${offers.length ? `<div class="cards">${offers.map((c) => offerCard(g, c)).join('')}</div>` : waiting ? empty : '<p class="empty">Plus de proposition pour le moment : un client reviendra bientôt.</p>'}
+    ${offers.length ? `<div class="cards">${offers.map((c) => offerCard(g, c, rates)).join('')}</div>` : waiting ? empty : '<p class="empty">Plus de proposition pour le moment : un client reviendra bientôt.</p>'}
     <p class="hint">Une commande honorée à temps verse la récompense complète. Le grand chantier du camp (<b>Grand Chevalement</b>) demande lui aussi des commandes honorées, et lui apporter du travail ouvre plus de commandes en parallèle et de meilleures primes.</p>`;
 }
 

@@ -9,6 +9,7 @@
  */
 import { DX, DY, opposite, type Dir } from '../../core/dir';
 import { getMachine, MachineDef } from '../../data/machines';
+import type { FlowState } from '../Flow';
 import { Structure, StructureContext, StructureSave } from './Structure';
 
 /** Objets en attente de sortie devant un pont. */
@@ -89,12 +90,29 @@ export class Bridge extends Structure {
         it.t = Math.min(it.t + dt, Math.max(it.t, limit));
       }
       const head = this.transit[0];
-      if (head && head.t >= T && this.target.receive(head.res)) this.transit.shift();
+      if (head && head.t >= T && this.target.receive(head.res)) {
+        this.transit.shift();
+        this.flow.add();
+      }
     }
     if (this.out.length) {
       const next = ctx.structureAt(this.x + DX[this.dir], this.y + DY[this.dir]);
-      if (next && next.accept(this.out[0], this.dir, ctx)) this.out.shift();
+      if (next && next.accept(this.out[0], this.dir, ctx)) {
+        this.out.shift();
+        this.flow.add();
+      }
     }
+  }
+
+  /** Bloqué quand la file de sortie est pleine, ou que la travée ne peut plus rien recevoir ; à sec quand rien ne passe. */
+  flowState(): FlowState {
+    if (this.out.length >= OUT_MAX || (this.target && this.transit.length >= this.perTile * this.span())) return 'stuck';
+    return this.transit.length + this.out.length > 0 ? 'busy' : 'dry';
+  }
+
+  /** Objets par minute à pleine charge. */
+  maxPerMinute(): number {
+    return 60 * this.speed * this.perTile;
   }
 
   /** Appelé quand la liaison change : ce qui était en l'air redescend devant le pont. */
