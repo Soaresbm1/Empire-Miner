@@ -12,6 +12,7 @@
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
+    "balance": "vitest run --config tests/balance/vitest.config.ts",
     "e2e": "node e2e/playthrough.mjs"
   },
   "devDependencies": {

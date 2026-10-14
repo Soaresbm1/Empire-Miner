@@ -3,4 +3,5 @@ dist/
 dist-single/
 dist-artifact/
 e2e/screenshots/
+tests/balance/out/
 .claude/settings.local.json

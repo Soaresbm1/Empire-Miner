@@ -27,7 +27,8 @@ Ta mission : exécuter les vérifications demandées et en rendre un compte exac
 
 ## Mesures d'équilibrage (si demandé)
 
-La simulation se pilote sans navigateur : `new GameState(graine)`, `g.update(1/60, intention)`, `applyAction(g, action)`
+D’abord le banc : `npm run balance` (≈ 3 min, voir `.claude/skills/balance-lab/SKILL.md`), puis citer `tests/balance/out/rapport.md`.
+Pour une mesure qu'il ne fait pas encore, la simulation se pilote sans navigateur : `new GameState(graine)`, `g.update(1/60, intention)`, `applyAction(g, action)`
 (`src/sim/actions.ts`), aides `run`, `teleport`, `goTo`, `timeToBreak` dans `tests/helpers.ts`. Même graine et mêmes entrées
 donnent la même partie : indique toujours la graine et la durée simulée. Indicateurs utiles : `g.money`, `g.stats` (`earned`,
 `spent`, `autoSold`, `contractMoney`, `smelted`, `crafted`), `g.production`, état des structures (`flow.stateOf`).
