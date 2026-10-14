@@ -11,7 +11,8 @@
  */
 import type { Dir } from '../../core/dir';
 import { getMachine, MachineDef } from '../../data/machines';
-import { getResource } from '../../data/resources';
+import { getResource, LIGHTEST_WEIGHT } from '../../data/resources';
+import type { FlowState } from '../Flow';
 import { Structure, StructureContext, StructureSave } from './Structure';
 
 /** Ce que fait le transporteur : vendre au marché, livrer aux commandes, ou livrer au chantier. */
@@ -72,8 +73,18 @@ export class ShippingCrate extends Structure {
   accept(res: string, _travel: Dir, ctx: StructureContext): boolean {
     if (!this.canAccept(res)) return false;
     this.items[res] = (this.items[res] ?? 0) + 1;
+    this.flow.addIn();
     ctx.countDelivered(1);
     return true;
+  }
+
+  /** Pleine : elle ne reçoit plus rien, les convoyeurs qui l'alimentent s'arrêtent. */
+  get full(): boolean {
+    return this.capacity - this.weight() < LIGHTEST_WEIGHT - 1e-6;
+  }
+
+  flowState(): FlowState {
+    return this.full ? 'stuck' : 'busy';
   }
 
   /** Dépôt manuel. Renvoie la quantité acceptée. */

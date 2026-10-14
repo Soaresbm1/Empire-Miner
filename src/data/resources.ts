@@ -296,6 +296,9 @@ export function resourceIndex(id: string): number {
   return RESOURCES.findIndex((r) => r.id === id);
 }
 
+/** Poids de la ressource la plus légère (kg) : un coffre qui a moins de place que ça ne reçoit plus rien. */
+export const LIGHTEST_WEIGHT = Math.min(...RESOURCES.map((r) => r.weight));
+
 export const RARITY_COLORS: Record<Rarity, string> = {
   commun: '#c9c2b8',
   'peu commun': '#7fd07a',

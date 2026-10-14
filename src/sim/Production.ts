@@ -11,6 +11,9 @@ export const SLOT_COUNT = 60;
 /** Créneaux d'une minute, et de la fenêtre des débits (5 minutes). */
 export const SLOTS_PER_MINUTE = 6;
 export const RATE_SLOTS = 30;
+/** Fenêtre des débits « récents » (les prévisions) : 2 minutes, et le recul minimal (s) en deçà duquel on ne s'emballe pas. */
+export const RECENT_SLOTS = 12;
+const RECENT_MIN_SECONDS = 30;
 /** Nombre de barres de l'histogramme des gains. */
 export const GAIN_MINUTES = SLOT_COUNT / SLOTS_PER_MINUTE;
 
@@ -134,6 +137,46 @@ export class ProductionLog {
       r.crate += s.crate / minutes;
     }
     return r;
+  }
+
+  /**
+   * Débits récents par minute, pour les prévisions. Comme `rates`, sur une fenêtre plus courte (2 minutes) ; et chaque
+   * ressource (ou les ventes) est ramenée au temps écoulé depuis son premier relevé dans la fenêtre, 30 s au moins : une ligne
+   * qu'on vient de bâtir se lit juste tout de suite, sans attendre que la fenêtre se remplisse. Une ligne arrêtée, elle, s'éteint
+   * à mesure que ses derniers relevés sortent de la fenêtre.
+   */
+  recent(window = RECENT_SLOTS): Rates {
+    const now = this.clock();
+    const first = Math.max(0, this.index - window + 1);
+    const slots = this.since(first);
+    const per = (value: (s: Slot) => number): number => {
+      let sum = 0;
+      let from = -1;
+      for (const s of slots) {
+        const v = value(s);
+        if (v <= 0) continue;
+        sum += v;
+        if (from < 0) from = s.i;
+      }
+      return from < 0 ? 0 : (sum / Math.max(RECENT_MIN_SECONDS, now - from * SLOT_SECONDS)) * 60;
+    };
+    const tally = (pick: (s: Slot) => Tally): Tally => {
+      const out: Tally = {};
+      const seen = new Set<string>();
+      for (const s of slots) for (const res of Object.keys(pick(s))) seen.add(res);
+      for (const res of seen) out[res] = per((s) => pick(s)[res] ?? 0);
+      return out;
+    };
+    return {
+      ore: tally((s) => s.ore),
+      machineOre: per((s) => s.machineOre),
+      ingots: tally((s) => s.ingots),
+      made: tally((s) => s.made),
+      sold: tally((s) => s.sold),
+      counter: per((s) => s.counter),
+      crate: per((s) => s.crate),
+      minutes: Math.max(RECENT_MIN_SECONDS, now - first * SLOT_SECONDS) / 60,
+    };
   }
 
   /** Gains des 10 dernières minutes, de la plus ancienne à la plus récente (la dernière barre finit maintenant). */

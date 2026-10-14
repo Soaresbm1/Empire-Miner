@@ -9,7 +9,8 @@
  */
 import { DX, DY, type Dir } from '../../core/dir';
 import { getMachine } from '../../data/machines';
-import { getResource, hasResource, resourceIndex } from '../../data/resources';
+import { getResource, hasResource, LIGHTEST_WEIGHT, resourceIndex } from '../../data/resources';
+import type { FlowState } from '../Flow';
 import { Structure, StructureContext, StructureSave } from './Structure';
 
 /** Liste de minerais acceptés propre : doublons et ressources inconnues écartés, dans l'ordre des ressources. */
@@ -74,6 +75,7 @@ export class Storage extends Structure {
       const res = keys[this.resCursor % keys.length];
       if (!this.pushToAdjacentConveyor(res, ctx)) return;
       this.take(res, 1);
+      this.flow.add();
       this.resCursor++;
     }
   }
@@ -81,8 +83,18 @@ export class Storage extends Structure {
   accept(res: string, _travel: Dir, ctx: StructureContext): boolean {
     if (!this.canAccept(res)) return false;
     this.items[res] = (this.items[res] ?? 0) + 1;
+    this.flow.addIn();
     ctx.countDelivered(1);
     return true;
+  }
+
+  /** Plein : il ne reçoit plus rien, les convoyeurs qui l'alimentent s'arrêtent. */
+  get full(): boolean {
+    return this.capacity - this.weight() < LIGHTEST_WEIGHT - 1e-6;
+  }
+
+  flowState(): FlowState {
+    return this.full ? 'stuck' : 'busy';
   }
 
   /** Remplit le réservoir des machines collées qui réclament un combustible présent dans le coffre. */
@@ -93,6 +105,7 @@ export class Storage extends Structure {
       let res = machine.fuelWanted();
       while (res && (this.items[res] ?? 0) > 0 && machine.accept(res, d as Dir, ctx)) {
         this.take(res, 1);
+        this.flow.add();
         res = machine.fuelWanted();
       }
     }

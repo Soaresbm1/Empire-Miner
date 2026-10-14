@@ -13,6 +13,7 @@ import { opposite, type Dir } from '../../core/dir';
 import { getMachine, type CrafterSpec, type MachineDef } from '../../data/machines';
 import { getRecipe, hasRecipe, type RecipeSpec } from '../../data/recipes';
 import { hasResource } from '../../data/resources';
+import type { FlowState } from '../Flow';
 import { Structure, type StructureContext, type StructureSave, frontTilesOf } from './Structure';
 
 export type CrafterStatus = 'norecipe' | 'idle' | 'ok' | 'nofuel' | 'full';
@@ -195,11 +196,30 @@ export class Crafter extends Structure {
       for (let i = 0; i < r.yield; i++) {
         this.output.push(r.id);
         this.made++;
+        this.flow.add();
         ctx.countCrafted(r.id, this);
       }
     }
     if (!this.canMake(r)) this.progress = 0;
     this.progress = Math.min(this.progress, 1);
+  }
+
+  flowState(): FlowState {
+    return this.status === 'ok' ? 'busy' : this.status === 'idle' || this.status === 'norecipe' ? 'dry' : 'stuck';
+  }
+
+  /** Produits par minute à pleine cadence (null sans recette). */
+  maxPerMinute(): number | null {
+    return this.recipe ? this.perMinute() : null;
+  }
+
+  /**
+   * Une matière de la recette s'accumule plus vite qu'elle n'est employée : sa file d'attente est pleine (à une fabrication
+   * près : celle qui vient de prendre ses matières).
+   */
+  backedUp(): boolean {
+    const r = this.current;
+    return !!r && Object.entries(r.inputs).some(([res, n]) => (this.input[res] ?? 0) >= this.spec.inputMax - n);
   }
 
   /** Pousse un produit par pas dans la structure devant la sortie (les deux cases à tour de rôle). */

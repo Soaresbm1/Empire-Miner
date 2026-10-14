@@ -14,6 +14,7 @@
  */
 import { DX, DY, opposite, rotateCW, type Dir } from '../../core/dir';
 import { getMachine, MachineDef, MachineLevel, ReachSide } from '../../data/machines';
+import type { FlowState } from '../Flow';
 import type { World } from '../World';
 import { Structure, StructureContext, StructureSave } from './Structure';
 
@@ -179,11 +180,21 @@ export class Drill extends Structure {
       if (res) {
         this.buffer.push(res);
         this.extracted++;
+        this.flow.add();
         ctx.countExtracted(res, this);
         ctx.emit({ t: 'extract', tx: src.x, ty: src.y, res });
         this.tryOutput(ctx);
       }
     }
+  }
+
+  flowState(): FlowState {
+    return this.status === 'ok' ? 'busy' : this.status === 'depleted' ? 'dry' : 'stuck';
+  }
+
+  /** Extractions par minute à pleine cadence : une par tête de forage en activité, ralentie par la chaleur. */
+  maxPerMinute(): number {
+    return 60 * this.def.stats.speed * this.heads * this.heat;
   }
 
   /** Sortie : la tuile devant la flèche en priorité, sinon un convoyeur collé sur un autre côté. */

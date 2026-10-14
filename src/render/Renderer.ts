@@ -10,6 +10,7 @@ import { getMachine } from '../data/machines';
 import { getResource } from '../data/resources';
 import { ROPE } from '../data/tools';
 import { FADE_TIME } from '../sim/Drops';
+import { toneOf, type FlowTone } from '../sim/Flow';
 import type { GameState } from '../sim/GameState';
 import { Bridge } from '../sim/structures/Bridge';
 import { Rail, RailStation, RailSwitch } from '../sim/structures/Rail';
@@ -58,6 +59,13 @@ import {
 const STEEL_TEETH = ['#c7ccd6', '#6a6f78'];
 const DIAMOND_TEETH = ['#9ff0fa', '#2f7f92'];
 
+/** Teintes de la vue « goulots » : couleur, opacité sur une machine et sur un convoyeur. */
+const FLOW_TINT: Record<Exclude<FlowTone, 'none'>, { rgb: string; belt: number; machine: number }> = {
+  bad: { rgb: '255,72,56', belt: 0.5, machine: 0.45 },
+  warn: { rgb: '255,176,40', belt: 0.4, machine: 0.4 },
+  good: { rgb: '96,224,112', belt: 0.22, machine: 0.3 },
+};
+
 /** Couleurs du panneau d'une caisse d'expédition selon sa destination : marché (or), commandes (bleu), chantier (orange). */
 const SHIP_SIGNS: Record<ShipMode, { base: string; hi: string; lo: string }> = {
   market: { base: '#f2c230', hi: '#fff3b0', lo: '#a07410' },
@@ -85,6 +93,8 @@ export interface Overlay {
   interact: Structure | null;
   /** Foreuse dont on montre les cases forées (proche du joueur ou visée). */
   reach?: Drill | null;
+  /** Vue « goulots » : machines et convoyeurs teints selon ce qui les bloque ou les laisse à sec, avec leur débit. */
+  flow?: boolean;
   /** Mode « Régler les coffres » : coffres choisis (cases), coffre sous la souris et rectangle en cours (pixels du monde). */
   chests?: {
     selected: { tx: number; ty: number }[];
@@ -405,6 +415,8 @@ export class Renderer {
 
     // Surcouches d'interface dans le monde (au-dessus de l'obscurité).
     ctx.setTransform(this.zoom, 0, 0, this.zoom, ox, oy);
+    this.flowView = !!overlay.flow;
+    if (this.flowView) this.drawFlowView(state);
     this.drawStatusIcons(state);
     this.drawOverlay(overlay);
     this.drawTexts(ox, oy);
@@ -1776,6 +1788,62 @@ export class Renderer {
     this.fx.emit('spark', cx, cy - 4, color, 14, 55);
   }
 
+  /** Vue « goulots » en cours (pour les étiquettes, dessinées avec les textes). */
+  private flowView = false;
+
+  /**
+   * Vue « goulots » : chaque machine et chaque convoyeur est teint de la couleur de ce qui a dominé sa dernière minute
+   * (rouge : bloqué, ambre : à sec ou à pleine charge, vert : ça tourne). Un convoyeur vide ne dit rien.
+   */
+  private drawFlowView(state: GameState): void {
+    const ctx = this.ctx;
+    const pulse = 0.85 + Math.sin(this.time * 6) * 0.15;
+    for (const s of state.structures.list) {
+      if (s.isTrack || !this.inView(s.x * TILE, s.y * TILE, 64)) continue;
+      const tone = toneOf(s);
+      if (tone === 'none') continue;
+      const tint = FLOW_TINT[tone];
+      const x = s.x * TILE;
+      const y = s.y * TILE;
+      const w = s.w * TILE;
+      const h = s.h * TILE;
+      ctx.fillStyle = `rgba(${tint.rgb},${(s.isBelt ? tint.belt : tint.machine) * (tone === 'bad' ? pulse : 1)})`;
+      ctx.fillRect(x, y, w, h);
+      if (!s.isBelt) {
+        ctx.strokeStyle = `rgba(${tint.rgb},0.95)`;
+        ctx.lineWidth = 1;
+        ctx.strokeRect(x + 0.5, y + 0.5, w - 1, h - 1);
+      }
+    }
+  }
+
+  /** Étiquettes de débit de la vue « goulots » : « 18/min » sur un fond sombre, juste sous les machines et les caisses (pixels de l'écran). */
+  private drawFlowLabels(ox: number, oy: number): void {
+    const ctx = this.ctx;
+    const state = this.state!;
+    const z = this.zoom;
+    ctx.font = `bold ${Math.max(11, Math.round(z * 3.6))}px "Pixelify Sans", monospace`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    const h = Math.max(13, Math.round(z * 4.6));
+    for (const s of state.structures.list) {
+      if (s.isBelt || s.isTrack || !this.inView(s.x * TILE, s.y * TILE, 64)) continue;
+      const kind = s.type === 'shipping' ? 'in' : s.type === 'storage' ? null : s.flowState() === null ? null : 'out';
+      if (!kind) continue;
+      const rate = kind === 'in' ? s.flow.inPerMinute() : s.flow.perMinute();
+      if (rate === null) continue;
+      const tone = toneOf(s);
+      const x = (s.x + s.w / 2) * TILE * z + ox;
+      const y = ((s.y + s.h) * TILE + 4) * z + oy;
+      const text = `${rate < 10 ? rate.toFixed(1).replace('.', ',') : Math.round(rate)}/min`;
+      const w = Math.ceil(ctx.measureText(text).width) + 8;
+      ctx.fillStyle = 'rgba(18,14,16,0.8)';
+      ctx.fillRect(Math.round(x - w / 2), Math.round(y - h / 2), w, h);
+      ctx.fillStyle = tone === 'bad' ? '#ff9d90' : tone === 'warn' ? '#ffd27a' : '#c6f5b8';
+      ctx.fillText(text, Math.round(x), Math.round(y) + 1);
+    }
+  }
+
   private drawStatusIcons(state: GameState): void {
     const ctx = this.ctx;
     const blink = Math.floor(this.time * 2.5) % 2 === 0;
@@ -2291,6 +2359,7 @@ export class Renderer {
       ctx.fillStyle = '#f2e6c8';
       ctx.fillText(s.name, x, y);
     }
+    if (this.flowView) this.drawFlowLabels(ox, oy);
     this.drawMarkerTexts(ox, oy);
   }
 

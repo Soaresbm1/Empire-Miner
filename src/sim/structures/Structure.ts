@@ -5,6 +5,7 @@
  * l'implémenter pour se connecter aux convoyeurs existants.
  */
 import { DX, DY, type Dir } from '../../core/dir';
+import { Flow, type FlowState } from '../Flow';
 import type { World } from '../World';
 import type { SimEvent } from '../events';
 import type { Drop, DropSystem } from '../Drops';
@@ -85,11 +86,31 @@ export abstract class Structure {
 
   /** Côté par lequel commencer la prochaine sortie (répartition équitable entre convoyeurs). */
   private outCursor = 0;
+  /** Compteur de débit (voir `flow`) : créé à la première utilisation. */
+  private meter: Flow | undefined;
 
   constructor(x: number, y: number, dir: Dir) {
     this.x = x;
     this.y = y;
     this.dir = dir;
+  }
+
+  /**
+   * Débit mesuré de la structure (objets par minute, temps en marche / bloquée / à sec). Affichage seulement : il n'est ni
+   * sauvegardé ni compté dans l'empreinte de la partie, et seules les structures mesurées en ont un (voir `flowState`).
+   */
+  get flow(): Flow {
+    return (this.meter ??= new Flow());
+  }
+
+  /** Ce que fait la structure en ce moment, pour la mesure des débits ; null : elle n'est pas mesurée (rails, bâtiments, étais…). */
+  flowState(): FlowState | null {
+    return null;
+  }
+
+  /** Débit maximal en objets par minute, à pleine cadence (null : sans objet pour cette structure). */
+  maxPerMinute(): number | null {
+    return null;
   }
 
   /**

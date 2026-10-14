@@ -35,6 +35,8 @@ profondeur et roches plus dures, sauvegarde/chargement, première automatisation
   écran de fin avec les chiffres de la partie.
 - ✅ Manufacture : plaques (cuivre, fer, argent, or), acier et diamant taillé, à recette choisie ; ils suivent le cours de leur
   métal, les clients en demandent et les deux dernières phases du Grand Chevalement en réclament.
+- ✅ Rendement des lignes : débit réel de chaque machine et convoyeur (infobulle, panneau), vue « goulots » (touche G), prévisions
+  « au rythme actuel » au Grand Chevalement et sur les commandes.
 - Concasseur (pierre → gravier), alliages (ex. bronze), composants (fils, engrenages…) ; recettes à plusieurs étages.
 
 ## v0.5 — Énergie et contraintes
@@ -46,6 +48,11 @@ profondeur et roches plus dures, sauvegarde/chargement, première automatisation
 - Un second chantier plus lointain (un ascenseur de puits, une ville au camp) qui reprend les commandes comme monnaie de progression.
 - Clients récurrents avec une réputation propre, commandes « exclusives » (une fois par rang) et pénalités douces de réputation.
 - Ouvriers « livreurs » qui portent leurs lingots du coffre au chantier ; objectifs quotidiens de commandes.
+
+## Idées pour la suite du rendement
+- Copier-coller une ligne de machines et de convoyeurs, avec un « annuler » pour la dernière pose.
+- Un débit par ligne entière (de la foreuse à la caisse), nommé et gardé dans la sauvegarde ; une alerte quand une ligne s'arrête.
+- Déduire de la prévision le charbon que brûlent les machines, et partager la production entre plusieurs besoins sur la même ressource.
 
 ## Plus tard
 - Ressources rares et fictives au-delà de 450 m, mine agrandie ou étages multiples.

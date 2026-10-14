@@ -123,6 +123,8 @@ body.touch .hud-bc { position: absolute; left: 50%; bottom: 0; transform: transl
 body.touch .prompt:not(:empty) { margin: 0 0 2px; padding: 3px 10px; font-size: 12px; text-align: center; }
 body.touch .hud-bc:has(.buildbar) { left: 0; right: 0; max-width: none; width: auto; transform: none; }
 body.touch #hud.building .prompt { display: none; }
+body.touch .flowlegend:not(:empty) { padding: 2px 8px; margin-bottom: 6px; font-size: 11px; }
+body.touch #hud.building .flowlegend { display: none; }
 
 body.touch #save-indicator { right: auto; bottom: calc(var(--u) * 0.2); left: 50%; transform: translateX(-50%); font-size: 11px; }
 

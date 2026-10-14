@@ -6,6 +6,7 @@
  */
 import { DX, DY, Dir, opposite } from '../../core/dir';
 import { getMachine, MachineDef } from '../../data/machines';
+import type { FlowState } from '../Flow';
 import { Structure, StructureContext, StructureSave } from './Structure';
 
 export interface BeltItem {
@@ -62,9 +63,20 @@ export class Conveyor extends Structure {
     const head = this.items[0];
     if (head && head.p >= 1) {
       const next = ctx.structureAt(this.x + DX[this.dir], this.y + DY[this.dir]);
-      if (next && next.accept(head.res, this.dir, ctx)) this.items.shift();
-      else this.blocked = true;
+      if (next && next.accept(head.res, this.dir, ctx)) {
+        this.items.shift();
+        this.flow.add();
+      } else this.blocked = true;
     }
+  }
+
+  flowState(): FlowState {
+    return this.blocked ? 'stuck' : this.items.length ? 'busy' : 'dry';
+  }
+
+  /** Objets par minute à pleine charge : tuiles par seconde × objets par tuile. */
+  maxPerMinute(): number {
+    return 60 * this.speed * this.capacity;
   }
 
   downstream(at: (x: number, y: number) => Structure | undefined): Structure[] {

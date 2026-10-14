@@ -145,6 +145,12 @@ kbd {
 }
 @keyframes bob { 50% { transform: translateY(-3px); } }
 
+/* Vue « goulots » (G) : sa légende, au-dessus de l'invite d'action. */
+.flowlegend:not(:empty) { display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 2px 6px; max-width: 100%; box-sizing: border-box; padding: 3px 10px; font-size: 13px; text-shadow: 1px 1px 0 #000; background: rgba(18, 14, 16, 0.85); box-shadow: 0 0 0 2px #120e10, inset 0 0 0 1px #6b5039; pointer-events: none; }
+.fl-dot { display: inline-block; width: 9px; height: 9px; margin-left: 4px; box-shadow: 0 0 0 1px #120e10; }
+.fl-dot:first-child { margin-left: 0; }
+.fl-dot.bad { background: #ff4838; } .fl-dot.warn { background: #ffb028; } .fl-dot.good { background: #60e070; }
+
 .hud-br { position: absolute; bottom: 14px; right: 14px; display: flex; gap: 12px; font-size: 13px; color: var(--muted); text-shadow: 1px 1px 0 #000; }
 
 /* Barre de construction (B) : onglets, tuiles, fiche de la machine, état de la pose. */
@@ -737,6 +743,19 @@ kbd {
 /* Ligne du HUD : la commande la plus pressée. */
 .ord-hud { color: var(--gold); font-size: 13px; white-space: nowrap; }
 .ord-hud.late { color: var(--bad); }
+
+/* Prévisions « au rythme actuel » : un bloc sous les lignes du chantier, une pastille par besoin, une ligne par commande. */
+.forecast { display: flex; flex-direction: column; gap: 2px; margin: 8px 0 4px; padding: 7px 10px; font-size: 14px; background: rgba(0, 0, 0, 0.22); box-shadow: inset 3px 0 0 var(--gold); }
+.forecast b { color: var(--gold); font-size: 15px; }
+.forecast span { color: var(--muted); font-size: 13px; }
+.forecast.good { box-shadow: inset 3px 0 0 var(--good); }
+.forecast.good b { color: var(--good); }
+.forecast.bad { box-shadow: inset 3px 0 0 var(--bad); }
+.forecast.bad b { color: var(--bad); }
+.eta { color: var(--muted); white-space: nowrap; }
+.eta.slow { color: var(--warn); }
+.eta.none { color: var(--bad); }
+.stat b.good { color: var(--good); } .stat b.warn { color: var(--warn); } .stat b.bad { color: var(--bad); }
 
 /* Panneau du chantier : frise des cinq phases, lignes d'avancement, écran de fin. */
 .site-head { display: flex; align-items: baseline; gap: 8px; margin-bottom: 8px; font-size: 18px; }

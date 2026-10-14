@@ -20,6 +20,7 @@ import type { Sorter } from '../sim/structures/Sorter';
 import type { RailStation, RailSwitch, SwitchSetting } from '../sim/structures/Rail';
 import type { Storage } from '../sim/structures/Storage';
 import { filterChips } from './chestFilter';
+import { flowRows } from './flow';
 import { esc, kg, money, num, rarityTag, resIcon } from './format';
 import { BOARD_TABS, counterBanner, isBoardTab, knownOre, marketTab, priceCell } from './market';
 import { ordersTab } from './orders';
@@ -154,6 +155,7 @@ export function storagePanel(g: GameState, s: Storage): string {
   const depositable = Object.keys(g.inventory.items).some((res) => s.accepts(res));
   return `
     <div class="bar big"><div style="width:${Math.min(100, (w / s.capacity) * 100)}%"></div><span>${kg(w)} / ${kg(s.capacity)}</span></div>
+    ${flowRows(s)}
     <h4>Ce que ce coffre accepte</h4>${filter}
     <h4>Contenu</h4>
     ${items.length ? `<table class="table"><tbody>${rows}</tbody></table>` : '<p class="empty">Coffre vide. Reliez-le à une foreuse avec des convoyeurs, ou déposez-y votre sac.</p>'}
@@ -203,6 +205,7 @@ export function shippingPanel(g: GameState, c: ShippingCrate): string {
     <div class="buy">${modes}</div>
     <p class="hint">${SHIP_MODE_INFO[c.mode].blurb}</p>
     <div class="bar big ${w / c.capacity > 0.9 ? 'full' : ''}"><div style="width:${Math.min(100, (w / c.capacity) * 100)}%"></div><span>${kg(w)} / ${kg(c.capacity)}</span></div>
+    ${flowRows(c)}
     ${items.length ? `<table class="table"><tbody>${rows}</tbody></table>` : '<p class="empty">Caisse vide. Amenez-y vos minerais avec des convoyeurs.</p>'}
     <div class="panel-footer"><span>En attente : ${given > 0 ? `<b class="good">${given} à livrer</b> · ` : ''}<b class="gold">${money(sale)}</b> de ventes · Vendu par cette caisse : <b class="gold">${money(c.soldTotal)}</b></span>
     ${btn('shipDeposit', `Déposer mon sac (${kg(bag)})`, { cls: 'primary', disabled: g.inventory.isEmpty() })}</div>
@@ -393,6 +396,7 @@ export function drillPanel(g: GameState, d: Drill): string {
       ${stat('Gisements forés', depositList || 'épuisés')}
       ${stat('Réserve restante', `${reserve} unités`)}
       ${stat('Cadence', `${num(d.def.stats.speed * sources.length * 60 * heat, 0)} unités/min`)}
+      ${flowRows(d)}
       ${stat('Extrait au total', String(d.extracted))}
     </div><div class="card">
       ${stat('Charbon chargé', `${d.fuelUnits} / ${d.fuelMax}`)}
@@ -584,6 +588,7 @@ export function smelterPanel(g: GameState, s: Smelter): string {
       ${stat('Lingots prêts', `${s.output.length} / ${s.spec.outputMax}`)}
       <div class="chips">${chips(s.output)}</div>
       ${stat('Cadence', `${num(rate, 0)} lingots / min`)}
+      ${flowRows(s)}
       ${stat('Fondus au total', String(s.smelted))}
     </div><div class="card">
       ${stat('Charbon', `${s.fuelUnits} / ${s.fuelMax}`)}
@@ -651,6 +656,7 @@ export function crafterPanel(g: GameState, s: Crafter): string {
       ${stat('Produits prêts', `${s.output.length} / ${s.spec.outputMax}`)}
       <div class="chips">${chips(s.output)}</div>
       ${stat('Cadence', r ? `${num(s.perMinute(), 0)} / min` : '—')}
+      ${flowRows(s)}
       ${stat('Fabriqués au total', String(s.made))}
     </div><div class="card">
       ${stat('Charbon', `${s.fuelUnits} / ${s.fuelMax}`)}
@@ -771,6 +777,7 @@ export function helpPanel(keys: { move: string; label: (c: string) => string; to
     <div><h4>Sac</h4><p>${k('KeyI')} ou <kbd>Tab</kbd></p></div>
     <div><h4>Construire</h4><p>${k('KeyB')} : mode construction. <kbd>Tab</kbd> change d'onglet, <kbd>1-9</kbd> choisit la machine. <kbd>Clic gauche</kbd> poser (glisser pour tracer des convoyeurs), <kbd>clic droit</kbd> démonter, ${k('KeyR')} tourner</p></div>
     <div><h4>Régler plusieurs coffres</h4><p>${k('KeyC')} : choisissez ce que les coffres acceptent (puces « Tout », « Cuivre »…), puis désignez les coffres : un <kbd>clic</kbd> en choisit un, un <kbd>glissé</kbd> en choisit tous ceux d'une zone, le <kbd>clic droit</kbd> vide la sélection. <kbd>Entrée</kbd> applique le réglage à tous les coffres choisis. Dans un coffre ouvert, « Sélectionner plusieurs coffres » reprend son réglage comme modèle</p></div>
+    <div><h4>Rendement des lignes</h4><p>Passez la souris sur une machine ou un convoyeur : son <b>débit réel</b> (objets par minute, sur ce qu'il pourrait faire) et le temps passé en marche, bloqué ou à sec. ${k('KeyG')} : la vue <b>goulots</b> teint tout d'un coup d'œil : <b>rouge</b> bloqué (sortie pleine, plus de charbon, file arrêtée), <b>ambre</b> à sec (rien à traiter) ou convoyeur à pleine charge, <b>vert</b> ça tourne. Une file rouge qui se termine devant une machine verte : c'est elle le goulot, ajoutez-en une. Au Grand Chevalement et sur chaque commande, une <b>prévision</b> dit dans combien de temps tout sera prêt au rythme de vos 2 dernières minutes, et ce qui retient</p></div>
     <div><h4>Vitesse de jeu et pause</h4><p>${k('KeyX')} : vitesse suivante (×1, ×2, ×4), ou cliquez sur le bandeau en haut. ${k('KeyP')} : pause : le temps s'arrête, mais on peut construire, acheter et ouvrir les panneaux. Les machines, ouvriers, marché et le mineur vont tous plus vite. Le jeu repasse tout seul à ×1 en cas de danger (santé basse, plafond qui craque, grisou, eau profonde)</p></div>
     <div><h4>Zoom</h4><p>Molette de la souris</p></div>
     <div><h4>Trottinette</h4><p>Achetée à l'atelier (onglet Transport) : maintenez <kbd>Maj</kbd> pour rouler vite, relâchez pour descendre. Pas de minage en roulant</p></div>

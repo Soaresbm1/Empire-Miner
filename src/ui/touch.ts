@@ -89,6 +89,8 @@ export interface TouchContext {
   hasScooter: boolean;
   buildMode: boolean;
   chestMode: boolean;
+  /** Vue « goulots » active. */
+  flowView: boolean;
   /** Pause demandée par le joueur. */
   paused: boolean;
   /** Vitesse de jeu (1, 2 ou 4). */
@@ -113,6 +115,7 @@ const SHEET: Btn[] = [
   { code: 'KeyM', char: 'm', label: 'Carte', hint: 'Carte de la mine' },
   { code: 'KeyB', label: 'Bâtir', hint: 'Poser des machines' },
   { code: 'KeyC', label: 'Coffres', hint: 'Régler plusieurs coffres' },
+  { code: 'KeyG', label: 'Goulots', hint: 'Voir ce qui bloque vos lignes' },
   { code: 'KeyN', char: 'n', label: 'Repère', hint: 'Poser un repère ici' },
   { code: 'KeyT', label: 'Outil', hint: 'Pioche ou marteau-piqueur' },
   { code: 'KeyV', label: 'Corde', hint: 'Corde de rappel' },
@@ -412,7 +415,7 @@ export class TouchControls {
   update(ctx: TouchContext, dt: number): void {
     this.ctx = ctx;
     const show = ctx.playing && !ctx.blocking;
-    const sig = [show, ctx.near, ctx.riding, ctx.wagonNear, ctx.hasScooter, ctx.buildMode, ctx.chestMode, ctx.paused, ctx.speed, !!ctx.net, Math.round(ctx.barHeight)].join('|');
+    const sig = [show, ctx.near, ctx.riding, ctx.wagonNear, ctx.hasScooter, ctx.buildMode, ctx.chestMode, ctx.flowView, ctx.paused, ctx.speed, !!ctx.net, Math.round(ctx.barHeight)].join('|');
     if (sig !== this.sig) {
       this.sig = sig;
       this.root.classList.toggle('hidden', !show);
@@ -431,6 +434,7 @@ export class TouchControls {
       }
       for (const b of this.root.querySelectorAll<HTMLElement>('[data-code="KeyB"]')) b.classList.toggle('on', ctx.buildMode);
       for (const b of this.root.querySelectorAll<HTMLElement>('[data-code="KeyC"]')) b.classList.toggle('on', ctx.chestMode);
+      for (const b of this.root.querySelectorAll<HTMLElement>('[data-code="KeyG"]')) b.classList.toggle('on', ctx.flowView);
       for (const b of this.root.querySelectorAll<HTMLElement>('[data-code="KeyP"]')) b.classList.toggle('on', ctx.paused);
       for (const b of this.root.querySelectorAll<HTMLElement>('[data-code="KeyX"]')) b.classList.toggle('on', ctx.speed > 1);
       for (const b of this.root.querySelectorAll<HTMLElement>('[data-code="KeyP"], [data-code="KeyX"]')) b.classList.toggle('hidden', !!ctx.net);

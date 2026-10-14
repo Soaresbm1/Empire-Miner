@@ -8,7 +8,7 @@
  * se comporte comme la souris (`touchDown`, `touchMove`, `touchUp`) : le jeu ne voit pas la différence.
  */
 /** Nom, sur un téléphone, du bouton qui remplace une touche. */
-const TOUCH_LABELS: Record<string, string> = { KeyE: 'Agir', KeyF: 'Wagon', KeyV: 'Corde', KeyB: 'Bâtir', KeyI: 'Sac', KeyP: 'Pause', KeyX: 'Vitesse', KeyC: 'Coffres', KeyR: 'Tourner', KeyH: 'Aide' };
+const TOUCH_LABELS: Record<string, string> = { KeyE: 'Agir', KeyF: 'Wagon', KeyV: 'Corde', KeyB: 'Bâtir', KeyI: 'Sac', KeyP: 'Pause', KeyX: 'Vitesse', KeyC: 'Coffres', KeyG: 'Goulots', KeyR: 'Tourner', KeyH: 'Aide' };
 
 export class Input {
   readonly down = new Set<string>();

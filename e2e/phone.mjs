@@ -89,6 +89,7 @@ const MEASURE = () => {
   add('mini-carte', '#minimap-box', 'hud');
   add('repère suivi', '#hud-track', 'hud', { nonEmpty: true });
   add('invite', '.prompt', 'hud', { nonEmpty: true });
+  add('légende goulots', '.flowlegend', 'hud', { nonEmpty: true });
   add('barre de construction', '#hud-build > *', 'hud', { nonEmpty: true, group: 'bar' });
   // Le titre et le ✕ débordent au-dessus du cadre de la barre : ils ne doivent pas toucher le stick ni les boutons.
   add('titre de la barre', '#hud-build .bb-title', 'hud', { group: 'bar' });
@@ -419,7 +420,36 @@ for (const dev of DEVICES) {
     await page.waitForTimeout(700);
     await shot(page, dev, '05-construction');
     checkLayout(dev, 'construction', await page.evaluate(MEASURE), { minFree: 45 });
-    await page.evaluate(() => window.__EM.setBuildMode(false));
+    // La vue « goulots » reste affichée pendant la construction (on s'en sert pour planifier) : sa légende ne gêne pas la barre.
+    await page.evaluate(() => {
+      window.__EM.flowView = true;
+    });
+    await page.waitForTimeout(400);
+    await shot(page, dev, '05a-construction-goulots');
+    checkLayout(dev, 'construction avec la vue goulots', await page.evaluate(MEASURE), { minFree: 45 });
+    await page.evaluate(() => {
+      window.__EM.flowView = false;
+      window.__EM.setBuildMode(false);
+    });
+    await page.waitForTimeout(200);
+  }
+
+  // ---------------------------------------------------------------- vue « goulots »
+  if (want('build')) {
+    await page.evaluate(() => {
+      const E = window.__EM;
+      E.state.player.x = 50.5 * 16;
+      E.state.player.y = 8 * 16;
+      E.renderer.snapCamera();
+      E.flowView = true;
+    });
+    await page.waitForTimeout(500);
+    await shot(page, dev, '05a2-goulots');
+    checkLayout(dev, 'vue goulots', await page.evaluate(MEASURE), { minFree: dev.id === 'portrait-se' ? 45 : 50 });
+    check(await page.evaluate(() => (document.getElementById('hud-flow')?.textContent ?? '').includes('Ça tourne')), `${dev.id} · vue goulots : la légende est affichée`);
+    await page.evaluate(() => {
+      window.__EM.flowView = false;
+    });
     await page.waitForTimeout(200);
   }
 
@@ -498,7 +528,17 @@ for (const dev of DEVICES) {
       await page.waitForTimeout(250);
       await shot(page, dev, '06-menu-plus');
       checkLayout(dev, 'menu ☰', await page.evaluate(MEASURE), {});
+      // Le bouton « Goulots » est dans le menu, et un toucher ouvre (puis ferme) la vue ; le menu se referme à chaque choix.
+      check(await page.evaluate(() => !!document.querySelector('.tc-sheet [data-code="KeyG"]')), `${dev.id} · menu ☰ : le bouton « Goulots » est là`);
+      await page.tap('.tc-sheet [data-code="KeyG"]');
+      await page.waitForTimeout(300);
+      check(await page.evaluate(() => window.__EM.flowView === true), `${dev.id} · menu ☰ : un toucher sur « Goulots » ouvre la vue`);
       await more.tap();
+      await page.waitForTimeout(250);
+      check(await page.evaluate(() => document.querySelector('.tc-sheet [data-code="KeyG"]')?.classList.contains('on') ?? false), `${dev.id} · menu ☰ : le bouton s’allume`);
+      await page.tap('.tc-sheet [data-code="KeyG"]');
+      await page.waitForTimeout(300);
+      check(await page.evaluate(() => window.__EM.flowView === false), `${dev.id} · menu ☰ : un second toucher la referme`);
     }
   }
 
@@ -601,6 +641,7 @@ for (const dev of DEVICES) {
       ['board', 'board', 'tableau-commandes', 'orders'],
       ['board', 'board', 'tableau-production', 'production'],
       ['site', 'site', 'chantier'],
+      ['site', 'site', 'chantier-prevision', null, 'forecast'],
       ['storage', 'storage', 'coffre'],
       ['shipping', 'shipping', 'expedition'],
       ['drill', 'drill', 'foreuse'],
@@ -618,6 +659,13 @@ for (const dev of DEVICES) {
         ([kind, finder, tab, prep]) => {
           const E = window.__EM;
           const g = E.state;
+          // Le chantier à la phase « Treuil », avec de la production relevée : la prévision au complet.
+          if (prep === 'forecast') {
+            g.project.phase = 2;
+            g.production.addIngot('iron_ingot', 30);
+            g.production.addIngot('silver_ingot', 6);
+            g.production.addSale({ copper: 3 }, 450, true);
+          }
           // Le monument achevé : l'écran de fin.
           if (prep === 'victory') {
             g.stats.contracts = 99;

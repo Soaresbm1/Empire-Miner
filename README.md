@@ -26,6 +26,7 @@ Version autonome en un seul fichier HTML (ouvrable sans serveur) : `npm run buil
 | Miner | maintenir le **clic gauche** sur une paroi proche, ou `Espace` pour frapper devant soi |
 | Interagir (comptoir, atelier, coffre, foreuse) | `E` |
 | Régler plusieurs coffres (sélection au clic ou au rectangle) | `C` |
+| Vue « goulots » : colorie ce qui est bloqué, à sec ou en marche | `G` |
 | Pause | `P` |
 | Vitesse de jeu suivante (×1 → ×2 → ×4) | `X` |
 | Sac et carnet | `I` ou `Tab` (hors construction) |
@@ -418,6 +419,23 @@ Le jeu à deux n'est pas concerné : l'invité n'a besoin d'aucun compte, et l'h
   prévient d'une nouvelle proposition (au plus toutes les quatre minutes) et une autre à **une minute de l'échéance**. Les
   propositions sortent d'un tirage (graine, numéro) : les deux joueurs d'une partie à deux voient les mêmes, et tout est
   sauvegardé ; une ancienne sauvegarde repart sans commande, les clients arrivent d'ici peu.
+- **Rendement des lignes** : on voit enfin ce que rapporte chaque ligne, et ce qui la bride. **Débit réel** : une infobulle sur
+  une foreuse, un four, une Manufacture, un convoyeur, un séparateur, un pont, un coffre ou une caisse d'expédition donne ce qui
+  en sort chaque minute, **sur ce qu'elle pourrait faire** (« Débit : 20 /min sur 20 possibles »), et comment elle a passé sa
+  dernière minute : en marche, **bloquée** (sortie pleine, plus de charbon, file arrêtée) ou **à sec** (rien à traiter). Le
+  panneau de la machine (`E`) a les mêmes lignes (« Débit réel », « Temps passé »). Une machine qui travaille à plein régime
+  alors que sa file d'attente déborde est signalée **goulot** : une machine de plus sur la ligne augmenterait le débit. Un
+  convoyeur qui porte plus de 85 % de sa charge est « à pleine charge ». **Vue goulots** (`G`, ou « Goulots » dans le menu ☰ du
+  téléphone) : chaque machine et chaque convoyeur prend la couleur de ce qui a dominé sa dernière minute, avec son débit écrit
+  au pied : **rouge** bloqué, **ambre** à sec ou à pleine charge, **vert** ça tourne, rien pour un convoyeur vide ; une légende
+  s'affiche en bas. Lecture : une file rouge qui se termine devant une machine verte, c'est elle le goulot. **Prévisions** : au
+  **Grand Chevalement**, un bloc dit « au rythme actuel, la phase est prête dans ~25 min » et **ce qui la retient** (lingots
+  d'argent, salaires…), et chaque matériau porte sa durée ; sur le **Tableau d'affichage**, une commande acceptée dit si elle tient
+  avant l'échéance (« ~7 min · dans les temps », « trop long ») et une proposition si vos machines suffiraient (« Réalisable ? oui,
+  ~6 min »). Elles partent de ce que vos machines ont produit depuis **2 minutes** (ce que les fours et la Manufacture
+  consomment est déduit, ce que vous portez compte) : un ordre de grandeur pour décider s'il faut bâtir une ligne de plus.
+  Les débits sont des **mesures d'affichage** (`sim/Flow.ts`), calculées pas à pas par chaque appareil, jamais sauvegardées ni
+  envoyées : un chargement les remet à zéro, ils se remplissent en une dizaine de secondes.
 - **Le Grand Chevalement** : le **grand projet du camp**, à droite de l'Atelier (`E` devant lui) — la tour d'un puits de mine,
   qui **grandit à chaque phase terminée** (six états dessinés : terrain et plan, fondations, charpente, treuil et poulie,
   poulies dorées, couronnement avec un diamant qui étincelle), avec une jauge au pied qui montre où en est la phase. **Cinq
@@ -472,6 +490,7 @@ node e2e/phone.mjs             # mise en page sur téléphone, à 11 tailles d'�
 node e2e/touch.mjs             # gestes tactiles réels (CDP) : stick, Miner, Agir, ☰, défilement sans achat, pincer, pose, iPhone
 node e2e/panels.mjs            # fenêtres au doigt sur un jeu qui tourne : défilement, toucher long, contenu exact, rien ne glisse de côté (après un build)
 node e2e/orders.mjs            # commandes et Grand Chevalement : vrais clics (accepter, livrer, abandonner, caisse réglée sur « Commandes », chantier phase par phase, écran de fin), la tour change à chaque étape, tout survit à un rechargement (après un build)
+node e2e/flow.mjs              # rendement des lignes : une ligne saturée mesurée en vrai (infobulles, panneau), vue goulots (touche G, légende, pixels teintés), prévisions du chantier et des commandes, rechargement (après un build)
 node e2e/crafter.mjs           # la Manufacture : achat à l'Atelier, pose, panneau (recette, charbon, dépôt, récupération), chaîne par convoyeurs, commande de plaques, sauvegarde, ancienne partie (après un build)
 node e2e/menus.mjs             # menus : « Commandes » (menu principal et pause) s'ouvre devant le menu, qui s'efface puis revient ; seul, le jeu reste figé depuis la pause (après un build)
 node e2e/cloud.mjs             # compte : deux appareils (deux profils de navigateur) et un faux Firebase local : création, reprise sur appareil neuf, parties qui divergent, réseau coupé, suppression (après un build)

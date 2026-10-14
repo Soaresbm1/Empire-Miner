@@ -4,7 +4,9 @@
  */
 import { PHASES, PROJECT_TITLE } from '../data/project';
 import { getResource } from '../data/resources';
+import { projectForecast } from '../sim/Forecast';
 import type { GameState } from '../sim/GameState';
+import { needTag, projectForecastHtml } from './forecast';
 import { esc, money, num, resIcon } from './format';
 import { btn } from './widgets';
 
@@ -41,18 +43,30 @@ function earned(g: GameState): string {
   return list.length ? `<h4>Acquis</h4><ul class="site-perks">${list.join('')}</ul>` : '';
 }
 
+/** Petite ligne sous un besoin : ce qu'il y a dans le sac, et le temps qu'il faut encore au rythme actuel. */
+function note(...parts: string[]): string {
+  const shown = parts.filter(Boolean);
+  return shown.length ? `<small class="ord-bag">${shown.join(' · ')}</small>` : '';
+}
+
 /** La phase en cours : matériaux, salaires, commandes honorées, boutons. */
 function phaseBlock(g: GameState): string {
   const p = g.project;
   const spec = p.spec!;
+  // Au rythme de la production récente : dans combien de temps chaque besoin, et la phase entière, seront couverts.
+  const fc = projectForecast(p, g.money, (res) => g.inventory.count(res), g.production.recent());
+  const tagOf = (res: string | null) => {
+    const need = fc.needs.find((x) => x.res === res);
+    return needTag(need, !!need && need === fc.slowest);
+  };
   const rows = spec.needs
     .map((n) => {
       const got = p.delivered[n.res] ?? 0;
       const bag = g.inventory.count(n.res);
-      return row(`${resIcon(n.res)} ${esc(getResource(n.res).name)}`, got, n.qty, bag > 0 && got < n.qty ? `<small class="ord-bag">dans le sac : ${bag}</small>` : '');
+      return row(`${resIcon(n.res)} ${esc(getResource(n.res).name)}`, got, n.qty, note(bag > 0 && got < n.qty ? `dans le sac : ${bag}` : '', tagOf(n.res)));
     })
     .join('');
-  const wages = row('Salaires des ouvriers', p.funded, spec.money, '', (v) => money(v));
+  const wages = row('Salaires des ouvriers', p.funded, spec.money, note(tagOf(null)), (v) => money(v));
   const orders = spec.contracts > 0 ? row('Commandes honorées', g.stats.contracts, spec.contracts, '<small class="ord-bag">Tableau d’affichage</small>') : '';
   const bagUseful = p.missing().some((n) => g.inventory.count(n.res) > 0);
   const pay = Math.min(g.money, p.moneyLeft());
@@ -71,6 +85,7 @@ function phaseBlock(g: GameState): string {
     }
     <h4>Matériaux, salaires, commandes</h4>
     <ul class="site-rows">${rows}${wages}${orders}</ul>
+    ${projectForecastHtml(fc)}
     ${where}
     <div class="panel-footer">
       <span class="muted">Récompense : <b class="gold">${esc(spec.perk.text)}</b></span>

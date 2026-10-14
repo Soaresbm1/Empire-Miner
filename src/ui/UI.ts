@@ -312,7 +312,7 @@ export class UI {
     else col.insertBefore(obj, col.firstChild);
   }
 
-  updateHud(g: GameState, extra: { prompt: string; build: string; hints: string; income: string; speed: string }): void {
+  updateHud(g: GameState, extra: { prompt: string; build: string; hints: string; income: string; speed: string; flow: string }): void {
     const depth = depthAt(g.player.tileY);
     const surface = g.player.tileY < 12;
     this.set('hud-money', `<span class="coin"></span>${money(g.money)}`);
@@ -404,6 +404,7 @@ export class UI {
     }
     this.set('hud-track', track);
     this.set('hud-prompt', extra.prompt);
+    this.set('hud-flow', extra.flow);
     // La barre de construction est redessinée à chaque case visée : sur place, pour que la bande des machines garde son défilement.
     if (this.set('hud-build', extra.build, true)) {
       // Hauteur de la barre de construction : sur un écran étroit, l'équipement passe au-dessus.

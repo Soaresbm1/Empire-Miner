@@ -10,6 +10,7 @@
 import { opposite, type Dir } from '../../core/dir';
 import { getMachine, MachineDef, SmelterSpec } from '../../data/machines';
 import { getResource, hasResource } from '../../data/resources';
+import type { FlowState } from '../Flow';
 import { Structure, StructureContext, StructureSave, frontTilesOf } from './Structure';
 
 export type SmelterStatus = 'idle' | 'ok' | 'nofuel' | 'full';
@@ -140,10 +141,25 @@ export class Smelter extends Structure {
       const ingot = ingotOf(this.input.shift()!)!;
       this.output.push(ingot);
       this.smelted++;
+      this.flow.add();
       ctx.countSmelted(ingot, this);
     }
     if (!this.input.length) this.progress = 0;
     this.progress = Math.min(this.progress, 1);
+  }
+
+  flowState(): FlowState {
+    return this.status === 'ok' ? 'busy' : this.status === 'idle' ? 'dry' : 'stuck';
+  }
+
+  /** Lingots par minute à pleine cadence, ralentie par la chaleur. */
+  maxPerMinute(): number {
+    return (60 / this.spec.smeltTime) * this.heat;
+  }
+
+  /** Le minerai s'accumule plus vite qu'elle ne le fond : sa file d'attente est pleine (à un minerai près, celui qu'elle vient de prendre). */
+  backedUp(): boolean {
+    return this.input.length >= this.spec.inputMax - 1;
   }
 
   /** Pousse un lingot par pas dans la structure devant la sortie (les deux cases de la fonderie à tour de rôle). */

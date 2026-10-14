@@ -362,6 +362,45 @@ chaleur. Ce qui change : une **recette choisie** par le joueur.
   Les deux dernières phases du chantier réclament des produits : `Project.load` rend (`GameState.giveBack`) ce qui avait été
   livré à une phase qui ne l'attend plus, pour qu'un changement de recette du chantier ne fasse rien perdre.
 
+## Rendement des lignes : débits, goulots, prévisions
+
+Trois outils pour juger une ligne, tous **en lecture seule** : rien ne change la partie, rien n'est sauvegardé, rien ne passe par
+le réseau, et l'empreinte du jeu à deux ne les voit pas.
+
+- **`sim/Flow.ts`** : un compteur (`Flow`) par structure mesurée, créé à la première utilisation (`Structure.flow`, donc les rails et les
+  bâtiments n'en ont pas). C'est un anneau de 12 tranches de 5 s : par tranche, les objets **sortis** (`add`), les objets **entrés**
+  (`addIn`, pour les coffres et les caisses) et les secondes passées **en marche, bloqué ou à sec** (`tick(dt, état)`). Le temps
+  vient des pas de simulation (jamais de l'horloge de la machine) : la pause et les vitesses ×2 / ×4 comptent comme il faut.
+  `StructureManager.update` relève `flowState()` de chaque structure toutes les 0,05 s (pas à chaque pas : un tiers du coût) et
+  fait avancer son compteur ; les
+  structures appellent `flow.add()` là où un objet passe (`Conveyor`, `Splitter`, `Bridge` : l'objet est pris par la structure
+  suivante ; `Drill`, `Smelter`, `Crafter` : à l'extraction, la fonte ou la fabrication ; `Storage` : `addIn` à l'arrivée, `add`
+  au départ ; `ShippingCrate` : `addIn`). Chaque classe dit aussi son **débit maximal** (`maxPerMinute()` : cadence de la machine
+  avec la chaleur, vitesse × capacité pour un convoyeur) et ce qu'est pour elle « bloquée » ou « à sec » (`flowState()` :
+  sortie pleine ou plus de charbon, ou rien à traiter).
+- **Lecture** : `stateOf` (l'état qui a dominé la minute, celui du moment tant que la mesure a moins de 10 s), `saturated`
+  (convoyeur à 85 % de sa charge) et `toneOf` (rouge / ambre / vert / rien) servent la vue goulots du rendu
+  (`Renderer.drawFlowView`, `drawFlowLabels`, activée par `Overlay.flow` et la touche `G`) ; `ui/flow.ts` écrit les infobulles
+  (`flowTip`, appelée par `Game.describeTile`) et les lignes des panneaux (`flowRows`). `Smelter.backedUp()` et
+  `Crafter.backedUp()` disent que la file d'attente est pleine (à une fabrication près) : avec une machine qui travaille en
+  continu, c'est le goulot (`limiting`).
+- **`sim/Forecast.ts`** : « au rythme actuel, dans combien de temps ? ». `ProductionLog.recent()` donne les débits des 2 dernières
+  minutes, chaque ressource ramenée au temps écoulé depuis son premier relevé dans la fenêtre (30 s au moins) : une ligne qu'on
+  vient de bâtir se lit juste tout de suite, une ligne arrêtée s'éteint à mesure que ses relevés sortent. `supply` en retire ce que
+  consomment les fours (un lingot fondu a coûté un minerai) et les recettes de la Manufacture ; `materialNeed` et `moneyNeed`
+  déduisent le sac et la bourse ; `combine` retient le besoin le plus long (un besoin qui n'avance pas passe avant) ;
+  `projectForecast` et `orderForecast` appliquent cela à la phase du chantier et à une commande, `fitIn` la compare au temps dont
+  on dispose. `ui/forecast.ts` écrit le bloc du chantier, l'étiquette de chaque besoin et les lignes « À votre rythme » (commande
+  acceptée) et « Réalisable ? » (proposition).
+- **Limites assumées** : une prévision suppose que toute la production arrive à destination et que deux besoins sur la même
+  ressource ne se la partagent pas (la phrase le dit en infobulle) ; le charbon brûlé par les machines n'est pas déduit. Un
+  chargement ou une resynchronisation remet les compteurs de débit à zéro (ils se remplissent en 10 s) ; les compteurs
+  `outCursor`, `frontCursor` et `resCursor` des structures, eux, ne sont pas sauvegardés non plus (c'est le cas depuis toujours).
+- **Tests** : `tests/flow.test.ts` (compteur, chaînes réelles : four saturé, foreuse, Manufacture, séparateur et pont, caisse
+  pleine ; rechargement et déterminisme des mesures), `tests/flow-ui.test.ts` (infobulles, panneaux, légende, aide),
+  `tests/forecast.test.ts` (production récente, calcul, textes du chantier et des commandes), `e2e/flow.mjs` (navigateur réel :
+  pixels de la vue goulots lus sur le canvas).
+
 ## Étendre le jeu
 
 - **Nouveau minerai** : ajouter une entrée dans `src/data/resources.ts` (valeur, poids, rareté, résistance,

@@ -8,6 +8,9 @@ import { Bridge } from './structures/Bridge';
 import type { Structure, StructureContext } from './structures/Structure';
 import type { World } from './World';
 
+/** Intervalle (s) entre deux relevés de l'état des structures pour la mesure des débits. */
+const FLOW_SAMPLE = 0.05;
+
 export class StructureManager {
   list: Structure[] = [];
   /** Foreuses de percement (leur foreuse peut occuper des cases hors de la base). */
@@ -16,6 +19,8 @@ export class StructureManager {
   private nextId = 1;
   /** Ordre de mise à jour (convoyeurs aval d'abord), recalculé si le réseau change. */
   private order: Structure[] | null = null;
+  /** Temps de simulation écoulé depuis le dernier relevé des états pour la mesure des débits (s). */
+  private sampled = 0;
   constructor(private readonly worldW: number) {}
 
   at(x: number, y: number): Structure | undefined {
@@ -58,6 +63,15 @@ export class StructureManager {
   update(dt: number, ctx: StructureContext): void {
     if (!this.order) this.order = this.computeOrder(ctx.world);
     for (const s of this.order) s.update(dt, ctx);
+    // Mesure des débits (affichage seulement) : l'état de chaque structure est relevé toutes les 0,05 s, pas à chaque pas.
+    this.sampled += dt;
+    if (this.sampled >= FLOW_SAMPLE - 1e-9) {
+      for (const s of this.order) {
+        const state = s.flowState();
+        if (state) s.flow.tick(this.sampled, state);
+      }
+      this.sampled = 0;
+    }
   }
 
   /**
