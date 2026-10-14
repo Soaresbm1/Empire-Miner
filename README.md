@@ -418,7 +418,15 @@ Le jeu à deux n'est pas concerné : l'invité n'a besoin d'aucun compte, et l'h
   signale les propositions qui attendent, une ligne du HUD donne la commande la plus pressée (sur ordinateur), une annonce
   prévient d'une nouvelle proposition (au plus toutes les quatre minutes) et une autre à **une minute de l'échéance**. Les
   propositions sortent d'un tirage (graine, numéro) : les deux joueurs d'une partie à deux voient les mêmes, et tout est
-  sauvegardé ; une ancienne sauvegarde repart sans commande, les clients arrivent d'ici peu.
+  sauvegardé ; une ancienne sauvegarde repart sans commande, les clients arrivent d'ici peu. **Clients récurrents** : chacun
+  des seize clients se souvient de vous. Une commande **honorée à temps** lui donne un point de confiance ; un **retard** ou un
+  **abandon** lui en retire un (jamais sous zéro, jamais plus de douze : les clients sont doux, et ce que vous avez livré est
+  toujours payé). Cinq niveaux — Nouveau, Connaissance (1 point), Habitué (3), Fidèle (6), Partenaire (10) — : plus il vous fait
+  confiance, **plus il revient souvent**, **plus sa prime monte** (jusqu'à +8 points) et **plus il laisse de temps** (jusqu'à
+  +20 %). Le Tableau montre des visages différents : un client qui a déjà une proposition ou une commande passe son tour. Son niveau s'affiche sur ses cartes, et une liste
+  « Vos clients » classe les habitués. À **chaque nouveau rang**, le client le plus fidèle vous réserve **une commande
+  exclusive** (★) : deux marchandises, une fois et demie plus grosse, 15 points de prime et 25 % de temps en plus, affichée deux
+  fois plus longtemps, qui rapporte deux points de confiance ; il n'y en a qu'une par rang. Un changement de niveau est annoncé.
 - **Rendement des lignes** : on voit enfin ce que rapporte chaque ligne, et ce qui la bride. **Débit réel** : une infobulle sur
   une foreuse, un four, une Manufacture, un convoyeur, un séparateur, un pont, un coffre ou une caisse d'expédition donne ce qui
   en sort chaque minute, **sur ce qu'elle pourrait faire** (« Débit : 20 /min sur 20 possibles »), et comment elle a passé sa
@@ -489,7 +497,7 @@ node e2e/coop.mjs              # jeu à deux : deux pages du même navigateur (c
 node e2e/phone.mjs             # mise en page sur téléphone, à 11 tailles d'écran (marges de l'encoche comprises), après un build
 node e2e/touch.mjs             # gestes tactiles réels (CDP) : stick, Miner, Agir, ☰, défilement sans achat, pincer, pose, iPhone
 node e2e/panels.mjs            # fenêtres au doigt sur un jeu qui tourne : défilement, toucher long, contenu exact, rien ne glisse de côté (après un build)
-node e2e/orders.mjs            # commandes et Grand Chevalement : vrais clics (accepter, livrer, abandonner, caisse réglée sur « Commandes », chantier phase par phase, écran de fin), la tour change à chaque étape, tout survit à un rechargement (après un build)
+node e2e/orders.mjs            # commandes et Grand Chevalement : vrais clics (accepter, livrer, abandonner, caisse réglée sur « Commandes », chantier phase par phase, écran de fin), réputation des clients et commande exclusive, la tour change à chaque étape, tout survit à un rechargement (après un build)
 node e2e/flow.mjs              # rendement des lignes : une ligne saturée mesurée en vrai (infobulles, panneau), vue goulots (touche G, légende, pixels teintés), prévisions du chantier et des commandes, rechargement (après un build)
 node e2e/crafter.mjs           # la Manufacture : achat à l'Atelier, pose, panneau (recette, charbon, dépôt, récupération), chaîne par convoyeurs, commande de plaques, sauvegarde, ancienne partie (après un build)
 node e2e/menus.mjs             # menus : « Commandes » (menu principal et pause) s'ouvre devant le menu, qui s'efface puis revient ; seul, le jeu reste figé depuis la pause (après un build)

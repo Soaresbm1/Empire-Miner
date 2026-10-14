@@ -81,6 +81,53 @@ export const CONTRACTS = {
   rankPremium: 0.02,
 } as const;
 
+/**
+ * Réputation : chaque client se souvient de vous. Une commande honorée à temps lui donne confiance ; un retard ou un abandon
+ * lui en retire un peu (jamais sous zéro : les clients sont doux). Plus un client a confiance, plus il revient souvent, mieux
+ * il paie et plus il laisse de temps. À chaque nouveau rang, le plus fidèle d'entre eux vous réserve une commande exclusive.
+ */
+export const REPUTATION = {
+  /** Points gagnés par commande honorée à temps (le double pour une exclusive), perdus par un retard ou un abandon. */
+  gain: 1,
+  exclusiveGain: 2,
+  late: 1,
+  abandon: 1,
+  /** Points gardés au plus par client. */
+  max: 12,
+  /** Un client de confiance revient plus souvent : son poids dans le tirage est 1 + ce nombre × ses points. */
+  returnWeight: 1,
+  /** Niveaux de confiance : points à avoir, nom, prime en plus (0,02 = 2 points de prime) et délai en plus (0,05 = 5 %). */
+  levels: [
+    { at: 0, name: 'Nouveau', premium: 0, time: 0 },
+    { at: 1, name: 'Connaissance', premium: 0.02, time: 0.05 },
+    { at: 3, name: 'Habitué', premium: 0.04, time: 0.1 },
+    { at: 6, name: 'Fidèle', premium: 0.06, time: 0.15 },
+    { at: 10, name: 'Partenaire', premium: 0.08, time: 0.2 },
+  ],
+  /** Commande exclusive : quantités et délai multipliés, prime en plus, durée d'affichage multipliée. */
+  exclusive: { qty: 1.5, time: 1.25, premium: 0.15, life: 2 },
+} as const;
+
+export interface Trust {
+  /** Indice du niveau (0 : nouveau client). */
+  index: number;
+  name: string;
+  premium: number;
+  time: number;
+  /** Points pour atteindre ce niveau, et le suivant (null au dernier niveau). */
+  at: number;
+  next: number | null;
+}
+
+/** Niveau de confiance d'un client qui a `points` points. */
+export function trustOf(points: number): Trust {
+  let index = 0;
+  for (let i = 0; i < REPUTATION.levels.length; i++) if (points >= REPUTATION.levels[i].at) index = i;
+  const l = REPUTATION.levels[index];
+  const next = REPUTATION.levels[index + 1];
+  return { index, name: l.name, premium: l.premium, time: l.time, at: l.at, next: next ? next.at : null };
+}
+
 /** Nom d'un client : prénom et métier, tirés au sort pour chaque commande. */
 export const CLIENTS: readonly string[] = [
   'Forge de Maître Aubin',

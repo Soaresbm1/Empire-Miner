@@ -181,6 +181,89 @@ describe('onglet Commandes', () => {
   });
 });
 
+describe('commandes : réputation des clients', () => {
+  it('un client qu’on ne connaît pas n’a pas d’étiquette, et la liste « Vos clients » est absente', () => {
+    const g = game();
+    give(g, [['coal', 30]], { client: 2 });
+    const html = ordersTab(g);
+    expect(html).not.toContain('class="tag trust');
+    expect(html).not.toContain('Vos clients');
+    expect(html).not.toContain('Exclusive');
+  });
+
+  it('un client de confiance porte son niveau, avec dans l’infobulle ce que ça rapporte', () => {
+    const g = game();
+    g.contracts.reputation[2] = 4;
+    give(g, [['coal', 30]], { client: 2 });
+    const html = ordersTab(g);
+    expect(html).toContain('class="tag trust t2"');
+    expect(html).toContain('>Habitué</span>');
+    expect(html).toContain('4 points de confiance');
+    expect(html).toContain('encore 2 points avant le niveau suivant');
+    expect(html).toContain('4 points de prime de plus');
+    expect(html).toContain('10 % de temps en plus');
+  });
+
+  it('au niveau maximal, l’infobulle le dit', () => {
+    const g = game();
+    g.contracts.reputation[2] = 12;
+    give(g, [['coal', 30]], { client: 2 });
+    expect(ordersTab(g)).toContain('niveau maximal');
+  });
+
+  it('une commande exclusive est marquée sur la proposition et sur la commande en cours', () => {
+    const g = game();
+    give(g, [['coal', 30]], { exclusive: true });
+    give(g, [['copper', 20]], { exclusive: true, accepted: true });
+    const html = ordersTab(g);
+    expect(html.match(/class="tag excl"/g)).toHaveLength(2);
+    expect(html).toContain('★ Exclusive');
+  });
+
+  it('« Vos clients » liste les habitués, du plus fidèle au moins fidèle, et condense au-delà de six', () => {
+    const g = game();
+    g.contracts.reputation[3] = 2;
+    g.contracts.reputation[5] = 7;
+    const html = ordersTab(g);
+    expect(html).toContain('Vos clients <small class="ord-count">2</small>');
+    expect(html.indexOf(CLIENTS[5].replace('&', '&amp;'))).toBeLessThan(html.indexOf(CLIENTS[3].replace('&', '&amp;')));
+    expect(html).toContain('>Fidèle</span>');
+    expect(html).toContain('3 points avant le suivant');
+    expect(html).not.toContain('autre');
+    for (let i = 0; i < 9; i++) g.contracts.reputation[i] = 1 + i;
+    const many = ordersTab(g);
+    expect(many).toContain('… et 3 autres');
+    expect(many.match(/<li><span class="ord-what">/g)!.length).toBeGreaterThanOrEqual(6);
+  });
+
+  it('le nom d’un client est échappé dans la liste', () => {
+    const g = game();
+    g.contracts.reputation[3] = 1; // Maison Bertrand & Fils
+    const html = ordersTab(g);
+    expect(html).toContain('Maison Bertrand &amp; Fils');
+    expect(html).not.toContain('Maison Bertrand & Fils');
+  });
+
+  it('les annonces disent ce que le client retient', () => {
+    const base = { client: 0, paid: 480, lines: [['copper', 40]] as [string, number][] };
+    expect(contractNews({ ...base, kind: 'done', trust: { level: 2, up: true } })).toContain(`${CLIENTS[0]} vous fait désormais confiance : Habitué.`);
+    expect(contractNews({ ...base, kind: 'late', paid: 0, trust: { level: 1, up: false } })).toContain('est moins sûr de vous : Connaissance.');
+    expect(contractNews({ ...base, kind: 'abandoned', paid: 0, trust: { level: 0, up: false } })).toContain('ne vous fait plus confiance.');
+    expect(contractNews({ ...base, kind: 'done' })).not.toContain('confiance');
+    const ex = contractNews({ ...base, kind: 'offer', exclusive: true });
+    expect(ex).toContain('Commande exclusive');
+    expect(ex).toContain('compte sur vous');
+  });
+
+  it('abandonner prévient qu’un point de confiance est en jeu', () => {
+    const g = game();
+    const c = give(g, [['coal', 30]], { accepted: true, client: 2 });
+    expect(ordersTab(g, c.id)).not.toContain('perd 1 point de confiance');
+    g.contracts.reputation[2] = 2;
+    expect(ordersTab(g, c.id)).toContain('perd 1 point de confiance');
+  });
+});
+
 describe('Tableau d’affichage : onglets', () => {
   it('une pastille sur « Commandes » quand des propositions attendent et qu’il y a de la place', () => {
     const g = game();

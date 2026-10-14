@@ -278,8 +278,9 @@ export class GameState implements StructureContext {
         known: (res) => this.stats.discovered.includes(res) || (this.stats.collected[res] ?? 0) > 0,
         perks: () => this.project.perks(),
         completed: () => this.stats.contracts,
-        settle: (c, outcome, paid) => this.settleContract(c, outcome, paid),
-        offered: (c) => this.emit({ t: 'contract', kind: 'offer', client: c.client, paid: c.reward, lines: c.lines.map((l): [string, number] => [l.res, l.qty]) }),
+        settle: (c, outcome, paid, trust) => this.settleContract(c, outcome, paid, trust),
+        offered: (c) =>
+          this.emit({ t: 'contract', kind: 'offer', client: c.client, paid: c.reward, lines: c.lines.map((l): [string, number] => [l.res, l.qty]), ...(c.exclusive ? { exclusive: true } : {}) }),
       },
       this.market,
     );
@@ -1289,14 +1290,22 @@ export class GameState implements StructureContext {
   // ---------------------------------------------------------------- commandes et chantier
 
   /** Une commande est réglée (honorée, arrivée à échéance ou abandonnée) : le client verse `paid` $. */
-  private settleContract(c: Contract, outcome: Outcome, paid: number): void {
+  private settleContract(c: Contract, outcome: Outcome, paid: number, trust: { before: number; after: number }): void {
     if (paid > 0) {
       this.money += paid;
       this.stats.earned += paid;
       this.stats.contractMoney += paid;
     }
     if (outcome === 'done') this.stats.contracts++;
-    this.emit({ t: 'contract', kind: outcome, client: c.client, paid, lines: c.lines.map((l): [string, number] => [l.res, l.qty]) });
+    this.emit({
+      t: 'contract',
+      kind: outcome,
+      client: c.client,
+      paid,
+      lines: c.lines.map((l): [string, number] => [l.res, l.qty]),
+      ...(c.exclusive ? { exclusive: true } : {}),
+      ...(trust.after !== trust.before ? { trust: { level: trust.after, up: trust.after > trust.before } } : {}),
+    });
   }
 
   /** Livre le contenu du sac aux commandes acceptées (à la seule commande `id` si on la donne), au Tableau d'affichage. Renvoie le nombre d'objets livrés. */

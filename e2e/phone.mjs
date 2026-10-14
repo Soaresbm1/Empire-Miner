@@ -612,6 +612,9 @@ for (const dev of DEVICES) {
       g.contracts.deliver(first.lines[0].res, 3);
       g.inventory.items = { ...g.inventory.items, [first.lines[0].res]: 4, coal: 6 };
       g.stats.contracts = 3;
+      // Des clients qui connaissent le joueur : étiquettes de confiance sur les cartes, liste « Vos clients » (sept, donc condensée).
+      for (const [i, c] of g.contracts.list.entries()) g.contracts.reputation[c.client] = 1 + ((i * 3) % 11);
+      for (let i = 0; i < 7; i++) if (!g.contracts.reputation[i]) g.contracts.reputation[i] = 1 + i;
       g.project.phase = 1;
       for (const n of g.project.missing().slice(0, 1)) g.project.deliver(n.res, Math.floor(n.qty / 2));
       g.project.fund(1000);

@@ -2268,8 +2268,13 @@ export class Game {
           break;
         case 'contract':
           if (e.kind === 'offer') {
-            // Une proposition toutes les minutes ou presque : on n'annonce que de loin en loin (la pastille du Tableau fait le reste).
-            if (g.time - this.lastOfferNews >= OFFER_NEWS_EVERY) {
+            if (e.exclusive) {
+              // Une exclusivité de rang est rare : on l'annonce toujours, plus longtemps.
+              this.lastOfferNews = g.time;
+              this.sfx.discover();
+              this.ui.toast(contractNews(e), 'good', 7000);
+            } else if (g.time - this.lastOfferNews >= OFFER_NEWS_EVERY) {
+              // Une proposition toutes les minutes ou presque : on n'annonce que de loin en loin (la pastille du Tableau fait le reste).
               this.lastOfferNews = g.time;
               this.sfx.market(true);
               this.ui.toast(contractNews(e), 'info', 4200);
@@ -2277,10 +2282,10 @@ export class Game {
           } else if (e.kind === 'done') {
             this.sfx.sell();
             this.ui.pulseMoney();
-            this.ui.toast(contractNews(e), 'good', 4200);
+            this.ui.toast(contractNews(e), 'good', e.trust ? 5600 : 4200);
           } else {
             this.sfx.error();
-            this.ui.toast(contractNews(e), e.kind === 'late' ? 'warn' : 'info', 4200);
+            this.ui.toast(contractNews(e), e.kind === 'late' ? 'warn' : 'info', e.trust ? 5600 : 4200);
           }
           break;
         case 'site':

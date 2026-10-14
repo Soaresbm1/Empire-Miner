@@ -311,6 +311,15 @@ partie à deux). Les nombres sont des données : `data/contracts.ts` (marchandis
   les branche sur l'argent, les statistiques et les `SimEvent`. `update(temps)` retire les propositions périmées, règle les
   commandes en retard (le client paie la part livrée au prix de base) et en tire une nouvelle quand c'est l'heure. Une
   proposition garde sa récompense, fixée au tirage. `deliver(res, n, seulement?)` sert d'abord la commande la plus pressée.
+- **Réputation** (`Contracts.reputation`, un entier par client de `CLIENTS`, réglages dans `REPUTATION`) : `close()` ajoute un point
+  (deux pour une exclusive) à une commande honorée, en retire un à un retard ou un abandon (plancher 0, plafond 12) et dit à l'hôte le
+  niveau avant et après (`settle(…, {before, after})`), d'où l'annonce « fait désormais confiance ». Le niveau (`trustOf`) donne une
+  prime et un délai en plus à la **proposition suivante** (une proposition tirée garde ses chiffres). Le client d'une proposition
+  ordinaire est tiré parmi ceux qui n'ont rien sur le Tableau, avec un poids `1 + points` (`pickClient`) ; une partie neuve (tous à zéro) tire
+  donc comme avant. **Exclusive** : si le rang (`rankOf(completed())`) dépasse `exclusiveRank` (dernier rang servi), la prochaine proposition
+  est une exclusive du client le plus fidèle (au hasard par hachage parmi les ex æquo) et `exclusiveRank` avance ; elle ne revient pas si on
+  la laisse passer. Sauvegarde : `rep` (absent si tous à zéro), `x` (absent à 0), `e: 1` par commande ; tout est validé au chargement, une
+  ancienne sauvegarde repart à zéro. Ces champs sont dans l'empreinte de synchro (ils comptent pour la simulation).
 - **`sim/Project.ts`** ne connaît que le chantier : `deliver`, `fund` (l'argent versé), `ready(commandesHonorées)`, `advance`.
   `GameState.checkProject()` (à chaque pas) termine les phases dont tout est réuni et émet `{ t: 'site' }`.
 - **Livrer** : à la main (actions `contractDeliver`, `siteDeliver`, `siteFund`, qui exigent d'être devant le Tableau ou le
@@ -328,7 +337,8 @@ partie à deux). Les nombres sont des données : `data/contracts.ts` (marchandis
   joueurs les voient et les entendent. Le test `tests/coop-orders.test.ts` rejoue un même scénario sur deux copies, et sur une copie
   qui a reçu la partie en cours de route : commandes, chantier, argent et sacs restent identiques.
 - **Interface** : `ui/orders.ts` (onglet « Commandes », ligne du HUD, annonces), `ui/site.ts` (panneau du chantier et écran de fin),
-  `ui/panels.ts` (`shippingPanel` : destination du transporteur). Le rendu du chantier (`render/sprites.ts` : six états, `Renderer.drawSite`)
+  `ui/panels.ts` (`shippingPanel` : destination du transporteur). Étiquettes de confiance et « ★ Exclusive » sur les cartes, liste « Vos clients »
+  (six au plus) et annonces de niveau dans `ui/orders.ts`. Le rendu du chantier (`render/sprites.ts` : six états, `Renderer.drawSite`)
   lit `project.phase`.
 - **Ajouter un produit** : une ressource `product(...)` (`data/resources.ts`), une recette (`data/recipes.ts`), et si les clients
   doivent le demander, une ligne dans `GOODS` ; rien d'autre (marché, dessin, listes et panneau s'en servent tout seuls).
