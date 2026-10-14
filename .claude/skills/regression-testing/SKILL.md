@@ -48,9 +48,10 @@ lenteur (ils passent avec plus de temps). Ce n'est pas une régression : le dire
 - Toujours `npm run build` d'abord ; les scripts servent `dist/` avec `vite preview`.
 - `CHROME_PATH` : défini pour ce poste dans `.claude/settings.local.json` (le défaut des scripts est un chemin Linux).
 - `node e2e/<script>.mjs` ; captures dans `e2e/screenshots/` (ignoré par git).
-- **Sous Windows**, échecs connus qui ne sont pas des régressions (détail dans `CLAUDE.md`, « Points ouverts ») : `cloud` (1
-  vérification attend `'Linux'`), `phone` (4 problèmes de taille ou de zone sûre), `orders` (intermittent selon la graine : le
-  relancer avant de conclure). Toute **autre** vérification en échec est à examiner. Durées : `playthrough` ≈ 8 min, `phone` ≈ 6 min.
+- **Sous Windows**, échec connu qui n'est pas une régression (détail dans `CLAUDE.md`, « Points ouverts ») : `phone` (4 problèmes
+  de taille ou de zone sûre). Toute **autre** vérification en échec est à examiner. Durées : `playthrough` ≈ 8 min, `phone` ≈ 6 min.
+- Une vérification e2e sur l'interface **attend** son résultat (`until`), elle ne le lit pas une seule fois (`ev`) : le HUD et les
+  panneaux se redessinent à leur rythme. Une partie d'essai part d'une **graine fixe** (`window.__EM.newGame(7)`).
 - Liste et contenu : section « Tests » du `README.md`.
 
 ## Interdit sans accord explicite

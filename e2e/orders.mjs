@@ -70,7 +70,9 @@ const goTo = (type) =>
 
 await page.goto(`${url.replace(/\/$/, '')}/?debug`);
 await page.waitForSelector('#menu-root [data-action="new"]');
-await page.click('#menu-root [data-action="new"]');
+// Graine fixe, comme e2e/panels, phone et touch : l'arrivée des clients dépend du tirage (première proposition après 20 à 40 s,
+// puis toutes les 45 à 90 s), et une graine au hasard ne laissait parfois qu'une proposition au bout de deux minutes.
+await ev(() => window.__EM.newGame(7));
 await until(() => window.__EM.mode === 'playing');
 await sleep(400);
 
@@ -118,8 +120,9 @@ const offer = await ev(() => {
 await page.click(`#panel-root [data-action="contractAccept"][data-arg="${offer.id}"]`);
 check(await until((id) => window.__EM.state.contracts.get(id)?.accepted === true, offer.id), 'un clic sur « Accepter » accepte la commande');
 check(await until(() => !!document.querySelector('#panel-root .card.st-active')), 'elle passe dans « Vos commandes »');
-check(await ev(() => !!document.querySelector('.ord-hud')), 'la ligne du HUD annonce la commande en cours');
-check(await ev(() => /\d+\/\d+/.test(document.querySelector('.ord-hud')?.textContent ?? '')), 'avec son avancement et son décompte');
+// Le HUD se redessine à son rythme, pas à chaque action : on l'attend, comme les vérifications du Tableau ci-dessus.
+check(await until(() => !!document.querySelector('.ord-hud')), 'la ligne du HUD annonce la commande en cours');
+check(await until(() => /\d+\/\d+/.test(document.querySelector('.ord-hud')?.textContent ?? '')), 'avec son avancement et son décompte');
 
 // La livrer du sac : le sac contient largement de quoi (charbon 80, cuivre 30).
 await ev((o) => {
