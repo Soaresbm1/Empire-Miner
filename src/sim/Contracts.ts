@@ -9,12 +9,15 @@
  *   est livré, au prix de base : rien n'est perdu, seule la prime l'est.
  * - Ce que les clients demandent suit le joueur (seulement ce qu'il connaît) et le marché : une marchandise en forte demande
  *   est demandée plus souvent, avec une prime plus grosse.
+ * - Chaque client se souvient du joueur (`reputation`) : honorer une commande à temps lui donne confiance, un retard ou un
+ *   abandon lui en retire un peu (jamais sous zéro). Un client de confiance revient plus souvent, paie une meilleure prime
+ *   et laisse plus de temps. À chaque nouveau rang, le plus fidèle des clients laisse une commande exclusive (une par rang).
  *
  * Les tirages viennent d'un hash (graine, numéro de la proposition) : pas d'état aléatoire à sauvegarder, et les deux
  * téléphones d'une partie à deux voient exactement les mêmes propositions.
  */
 import { hash2 } from '../core/rng';
-import { CLIENTS, CONTRACTS, GOODS, rankOf, type GoodSpec } from '../data/contracts';
+import { CLIENTS, CONTRACTS, GOODS, REPUTATION, rankOf, trustOf, type GoodSpec, type Trust } from '../data/contracts';
 import { getResource } from '../data/resources';
 import { commodityOf, type Market } from './Market';
 
@@ -36,6 +39,8 @@ export interface Contract {
   premium: number;
   /** Une forte demande avait lieu sur l'une des marchandises quand la proposition est arrivée. */
   hot: boolean;
+  /** Commande exclusive : le client le plus fidèle la réserve au joueur, à l'arrivée d'un nouveau rang. */
+  exclusive?: boolean;
   /** Délai accordé à l'acceptation (s de jeu). */
   limit: number;
   /** Proposition : temps de jeu où elle disparaît. Commande acceptée : temps de jeu de l'échéance. */
@@ -53,8 +58,8 @@ export interface ContractsHost {
   perks(): { slots: number; offers: number; premium: number };
   /** Commandes honorées jusqu'ici (elles font le rang). */
   completed(): number;
-  /** Une commande est réglée : `paid` ($) est à verser au joueur. */
-  settle(c: Contract, outcome: Outcome, paid: number): void;
+  /** Une commande est réglée : `paid` ($) est à verser au joueur ; `trust` : niveau de confiance du client avant et après. */
+  settle(c: Contract, outcome: Outcome, paid: number, trust: { before: number; after: number }): void;
   /** Une proposition vient d'arriver. */
   offered(c: Contract): void;
 }
@@ -64,6 +69,10 @@ export interface ContractsSave {
   n: number;
   /** Temps de jeu de la prochaine proposition. */
   next: number;
+  /** Points de confiance de chaque client (absent : tous à zéro). */
+  rep?: number[];
+  /** Rang pour lequel un client a laissé sa dernière commande exclusive (absent : 0). */
+  x?: number;
   list: {
     id: number;
     c: number;
@@ -74,6 +83,7 @@ export interface ContractsSave {
     t: number;
     u: number;
     a?: 1;
+    e?: 1;
   }[];
 }
 
@@ -92,9 +102,13 @@ export function baseValue(c: Pick<Contract, 'lines'>, delivered = false): number
 
 export class Contracts {
   list: Contract[] = [];
+  /** Confiance de chaque client en points (indice dans `CLIENTS`). */
+  reputation: number[] = [];
   /** Propositions tirées depuis le début : numéro du prochain tirage. */
   private count = 0;
   private next = 0;
+  /** Rang (indice) pour lequel un client a laissé sa dernière commande exclusive : une seule par rang. */
+  private exclusiveRank = 0;
 
   constructor(
     private readonly seed: number,
@@ -106,6 +120,8 @@ export class Contracts {
 
   private reset(time: number): void {
     this.list = [];
+    this.reputation = CLIENTS.map(() => 0);
+    this.exclusiveRank = 0;
     this.count = 0;
     this.next = Math.ceil(time + lerp(CONTRACTS.first[0], CONTRACTS.first[1], hash2(0, 600, this.seed ^ 0x2c9b3a1d)));
   }
@@ -134,6 +150,19 @@ export class Contracts {
   /** Propositions affichées en même temps, au plus. */
   get capacity(): number {
     return CONTRACTS.offers + this.host.perks().offers;
+  }
+
+  /** Niveau de confiance d'un client. */
+  trust(client: number): Trust {
+    return trustOf(this.reputation[client] ?? 0);
+  }
+
+  /** Les clients qui connaissent le joueur (au moins un point), le plus fidèle d'abord. */
+  regulars(): { client: number; points: number; trust: Trust }[] {
+    return this.reputation
+      .map((points, client) => ({ client, points, trust: trustOf(points) }))
+      .filter((r) => r.points > 0)
+      .sort((a, b) => b.points - a.points || a.client - b.client);
   }
 
   /** Combien d'unités de `res` les commandes acceptées attendent encore. */
@@ -174,11 +203,15 @@ export class Contracts {
       this.next = Math.ceil(time + 5);
       return;
     }
-    const c = this.draw(time);
+    // Un nouveau rang : à la place d'une proposition ordinaire, le client le plus fidèle laisse une commande exclusive.
+    const rank = rankOf(this.host.completed()).index;
+    const exclusive = rank > this.exclusiveRank;
+    const c = this.draw(time, exclusive);
     if (!c) {
       this.next = Math.ceil(time + 15);
       return;
     }
+    if (exclusive) this.exclusiveRank = rank;
     this.list.push(c);
     const r = hash2(c.id, 610, this.seed ^ 0x2c9b3a1d);
     this.next = Math.ceil(time + lerp(CONTRACTS.gap[0], CONTRACTS.gap[1], r));
@@ -206,21 +239,45 @@ export class Contracts {
     return items[items.length - 1];
   }
 
-  /** Construit la proposition n° `count + 1`, ou null si le joueur ne connaît encore rien à demander. */
-  private draw(time: number): Contract | null {
+  /**
+   * Le client d'une proposition ordinaire, tiré au sort : les clients qui ont déjà une proposition ou une commande en cours
+   * passent leur tour (le Tableau montre des visages différents), et un client de confiance revient plus souvent.
+   */
+  private pickClient(u: number): number {
+    const busy = new Set(this.list.map((c) => c.client));
+    const all = CLIENTS.map((_, i) => i);
+    const free = all.filter((i) => !busy.has(i));
+    const from = (free.length ? free : all).map((i) => ({ i, weight: 1 + REPUTATION.returnWeight * Math.min(this.reputation[i] ?? 0, REPUTATION.max) }));
+    return this.pick(from, u).i;
+  }
+
+  /** Le client le plus fidèle (au hasard parmi les ex æquo, donc parmi tous tant que personne ne vous connaît). */
+  private bestClient(u: number): number {
+    const top = Math.max(0, ...this.reputation);
+    const tied = CLIENTS.map((_, i) => i).filter((i) => (this.reputation[i] ?? 0) === top);
+    return tied[Math.min(tied.length - 1, Math.floor(u * tied.length))];
+  }
+
+  /**
+   * Construit la proposition n° `count + 1` (la commande exclusive d'un nouveau rang si `exclusive`), ou null si le joueur ne
+   * connaît encore rien à demander. Une commande exclusive est plus grosse, mieux payée et reste plus longtemps affichée.
+   */
+  private draw(time: number, exclusive = false): Contract | null {
     const pool = this.pool();
     if (!pool.length) return null;
     const n = this.count++;
     const r = (j: number) => hash2(n + 1, 620 + j, this.seed ^ 0x2c9b3a1d);
     const rank = rankOf(this.host.completed());
     const perks = this.host.perks();
-    const qty = (g: GoodSpec, u: number, scale = 1) => Math.max(g.step, roundTo(lerp(g.qty[0], g.qty[1], u) * (1 + rank.index * CONTRACTS.rankQty) * scale, g.step));
+    const ex = REPUTATION.exclusive;
+    const qty = (g: GoodSpec, u: number, scale = 1) =>
+      Math.max(g.step, roundTo(lerp(g.qty[0], g.qty[1], u) * (1 + rank.index * CONTRACTS.rankQty) * scale * (exclusive ? ex.qty : 1), g.step));
 
     const first = this.pick(pool, r(0));
     const lines: ContractLine[] = [{ res: first.good.res, qty: qty(first.good, r(1)), done: 0 }];
     let hot = first.hot;
     let time$ = first.good.time;
-    if (pool.length >= 3 && r(2) < CONTRACTS.twoLines) {
+    if (exclusive ? pool.length >= 2 : pool.length >= 3 && r(2) < CONTRACTS.twoLines) {
       const second = this.pick(
         pool.filter((p) => p.good.res !== first.good.res),
         r(3),
@@ -229,21 +286,30 @@ export class Contracts {
       hot = hot || second.hot;
       time$ = Math.max(time$, second.good.time) + CONTRACTS.extraTime;
     }
+    const client = exclusive ? this.bestClient(r(6)) : this.pickClient(r(6));
+    const trust = this.trust(client);
     const premium = Math.min(
       1.5,
-      lerp(CONTRACTS.premium[0], CONTRACTS.premium[1], r(5)) + rank.index * CONTRACTS.rankPremium + perks.premium + (lines.length > 1 ? CONTRACTS.twoLinesBonus : 0) + (hot ? CONTRACTS.hotBonus : 0),
+      lerp(CONTRACTS.premium[0], CONTRACTS.premium[1], r(5)) +
+        rank.index * CONTRACTS.rankPremium +
+        perks.premium +
+        (lines.length > 1 ? CONTRACTS.twoLinesBonus : 0) +
+        (hot ? CONTRACTS.hotBonus : 0) +
+        trust.premium +
+        (exclusive ? ex.premium : 0),
     );
     const base = baseValue({ lines });
     const reward = Math.max(CONTRACTS.roundTo, roundTo(base * (1 + premium), CONTRACTS.roundTo));
     return {
       id: n + 1,
-      client: Math.floor(r(6) * CLIENTS.length),
+      client,
       lines,
       reward,
       premium: Math.round(premium * 1000) / 1000,
       hot,
-      limit: Math.max(60, roundTo(time$ * (1 + 0.15 * rank.index), 30)),
-      until: Math.ceil(time + CONTRACTS.offerLife),
+      ...(exclusive ? { exclusive: true } : {}),
+      limit: Math.max(60, roundTo(time$ * (1 + 0.15 * rank.index) * (1 + trust.time) * (exclusive ? ex.time : 1), 30)),
+      until: Math.ceil(time + CONTRACTS.offerLife * (exclusive ? ex.life : 1)),
       accepted: false,
     };
   }
@@ -303,7 +369,11 @@ export class Contracts {
   private close(c: Contract, outcome: Outcome): void {
     this.remove(c);
     const paid = outcome === 'done' ? c.reward : Math.round(baseValue(c, true) * CONTRACTS.partialPay);
-    this.host.settle(c, outcome, paid);
+    // Le client se souvient : de la confiance en plus si c'est honoré à temps, un peu en moins sinon (jamais sous zéro).
+    const before = this.trust(c.client).index;
+    const delta = outcome === 'done' ? (c.exclusive ? REPUTATION.exclusiveGain : REPUTATION.gain) : -(outcome === 'late' ? REPUTATION.late : REPUTATION.abandon);
+    this.reputation[c.client] = Math.min(REPUTATION.max, Math.max(0, (this.reputation[c.client] ?? 0) + delta));
+    this.host.settle(c, outcome, paid, { before, after: this.trust(c.client).index });
   }
 
   // ------------------------------------------------------------------ sauvegarde
@@ -312,6 +382,8 @@ export class Contracts {
     return {
       n: this.count,
       next: this.next,
+      ...(this.reputation.some((p) => p > 0) ? { rep: [...this.reputation] } : {}),
+      ...(this.exclusiveRank > 0 ? { x: this.exclusiveRank } : {}),
       list: this.list.map((c) => ({
         id: c.id,
         c: c.client,
@@ -322,6 +394,7 @@ export class Contracts {
         t: c.limit,
         u: c.until,
         ...(c.accepted ? { a: 1 as const } : {}),
+        ...(c.exclusive ? { e: 1 as const } : {}),
       })),
     };
   }
@@ -336,6 +409,8 @@ export class Contracts {
     };
     this.count = int(data.n, 0, 1e7, 0);
     this.next = int(data.next, 0, Math.ceil(time) + CONTRACTS.gap[1] + CONTRACTS.first[1] + 1000, this.next);
+    this.exclusiveRank = int(data.x, 0, CONTRACTS.ranks.length - 1, 0);
+    if (Array.isArray(data.rep)) this.reputation = CLIENTS.map((_, i) => int(data.rep![i], 0, REPUTATION.max, 0));
     const seen = new Set<number>();
     for (const s of Array.isArray(data.list) ? data.list.slice(0, MAX_LIST) : []) {
       if (!s || typeof s !== 'object') continue;
@@ -361,6 +436,7 @@ export class Contracts {
         reward: int(s.r, 0, 1e9, 0),
         premium: Math.min(5, Math.max(0, Number(s.p) || 0)),
         hot: s.h === 1,
+        ...(s.e === 1 ? { exclusive: true } : {}),
         limit,
         until: Math.min(until, Math.ceil(time) + Math.max(limit, CONTRACTS.offerLife)),
         accepted,

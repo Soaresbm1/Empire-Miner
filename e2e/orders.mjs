@@ -135,6 +135,26 @@ check(await until(() => /Commande honorée/.test(document.querySelector('#toasts
 check((await ev((o) => window.__EM.state.inventory.count(o.res), offer)) === 3, 'le surplus reste dans le sac');
 await page.screenshot({ path: `${SHOTS}orders-02-honoree.png` });
 
+// Réputation : le client se souvient (un point, niveau « Connaissance »), et le Tableau montre « Vos clients ».
+check(await ev(() => window.__EM.state.contracts.reputation.reduce((a, b) => a + b, 0) === 1), 'le client de la commande honorée a gagné un point de confiance');
+check(await until(() => /vous fait désormais confiance : Connaissance/.test(document.querySelector('#toasts')?.textContent ?? '')), 'un message dit que le client vous fait désormais confiance');
+check(await until(() => !!document.querySelector('#panel-root .ord-clients .tag.trust.t1')), 'la liste « Vos clients » montre le niveau de confiance');
+check(await ev(() => /Vos clients/.test(document.querySelector('#panel-root')?.textContent ?? '')), 'avec son titre');
+await page.screenshot({ path: `${SHOTS}orders-02b-clients.png` });
+
+// Un nouveau rang : le client le plus fidèle laisse une commande exclusive, annoncée et marquée sur sa carte.
+await ev(() => {
+  const g = window.__EM.state;
+  g.stats.contracts = 3; // rang Fournisseur
+  for (const o of g.contracts.offers()) g.contracts.decline(o.id, g.time);
+  for (let t = Math.ceil(g.time); !g.contracts.offers().some((o) => o.exclusive) && t < g.time + 600; t += 5) g.contracts.update(t);
+  g.events.length = 0;
+});
+check(await ev(() => window.__EM.state.contracts.offers().filter((o) => o.exclusive).length === 1), 'au nouveau rang, une commande exclusive arrive');
+check(await ev(() => window.__EM.state.contracts.offers().find((o) => o.exclusive).client === window.__EM.state.contracts.regulars()[0].client), 'elle vient du client le plus fidèle');
+check(await until(() => !!document.querySelector('#panel-root .card .tag.excl')), 'la carte porte la marque « Exclusive »');
+await page.screenshot({ path: `${SHOTS}orders-02c-exclusive.png` });
+
 // Abandonner demande une confirmation.
 const second = await ev(() => window.__EM.state.contracts.offers()[0]?.id);
 await page.click(`#panel-root [data-action="contractAccept"][data-arg="${second}"]`);
@@ -274,6 +294,11 @@ check(await ev(() => window.__EM.mode === 'playing' && window.__EM.state.project
 
 // ---------------------------------------------------------------- la sauvegarde
 console.log('\n▶ Sauvegarde');
+await ev(() => {
+  const r = window.__EM.state.contracts.reputation;
+  r[2] = 5; // un habitué (l'abandon plus haut avait ramené le premier client à zéro)
+  r[7] = 12;
+});
 const before = await ev(() => {
   const g = window.__EM.state;
   return { contracts: JSON.stringify(g.contracts.serialize()), project: JSON.stringify(g.project.serialize()), honored: g.stats.contracts, mode: g.structures.at(53, 9)?.mode };
@@ -295,6 +320,7 @@ check(after.mode === 'orders', 'la caisse est toujours réglée sur « Commandes
 const bc = JSON.parse(before.contracts);
 const ac = JSON.parse(after.contracts);
 check(ac.n === bc.n && JSON.stringify(ac.list.map((c) => c.id)) === JSON.stringify(bc.list.map((c) => c.id)), 'les commandes (propositions et en cours) sont les mêmes');
+check(JSON.stringify(ac.rep) === JSON.stringify(bc.rep) && ac.rep?.[2] === 5 && ac.rep?.[7] === 12 && ac.x === bc.x && ac.x >= 1, 'la confiance des clients et le rang de la dernière exclusive sont retrouvés');
 
 // ---------------------------------------------------------------- une partie d'avant les commandes et le chantier
 console.log('\n▶ Ancienne sauvegarde');

@@ -120,6 +120,31 @@ describe('commandes et chantier à deux', () => {
     expect(stateDigest(a)).toBe(stateDigest(b));
   });
 
+  it('la réputation des clients suit : mêmes points sur les deux appareils, y compris après resynchronisation', () => {
+    const a = fresh();
+    const b = fresh();
+    for (const g of [a, b]) g.contracts.reputation[4] = 3; // un client qui connaît déjà le joueur
+    play(a, 0, 60 * 220);
+    play(b, 0, 60 * 220);
+    expect(a.contracts.reputation).toEqual(b.contracts.reputation);
+    expect(a.contracts.reputation.some((p) => p > 0)).toBe(true);
+    expect(stateDigest(a)).toBe(stateDigest(b));
+    // Un point de plus d'un seul côté se voit tout de suite dans l'empreinte : la réputation est bien surveillée.
+    b.contracts.reputation[4] += 1;
+    expect(stateDigest(a)).not.toBe(stateDigest(b));
+    // L'invité qui reçoit la partie en cours de route reprend les mêmes points et les tire de la même façon.
+    const host = fresh();
+    host.contracts.reputation[4] = 3;
+    play(host, 0, 60 * 107);
+    const guest = deserialize(JSON.parse(JSON.stringify(serialize(host))));
+    guest.setLocal(1);
+    expect(guest.contracts.reputation).toEqual(host.contracts.reputation);
+    play(host, 60 * 107, 60 * 400);
+    play(guest, 60 * 107, 60 * 400);
+    expect(guest.contracts.reputation).toEqual(host.contracts.reputation);
+    expect(mine(guest)).toBe(mine(host));
+  });
+
   it('une partie reçue en cours de route (resynchronisation) se poursuit à l’identique', () => {
     const host = fresh();
     play(host, 0, 60 * 107); // des commandes acceptées et en cours, un chantier commencé

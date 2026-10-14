@@ -35,6 +35,8 @@ profondeur et roches plus dures, sauvegarde/chargement, première automatisation
   écran de fin avec les chiffres de la partie.
 - ✅ Manufacture : plaques (cuivre, fer, argent, or), acier et diamant taillé, à recette choisie ; ils suivent le cours de leur
   métal, les clients en demandent et les deux dernières phases du Grand Chevalement en réclament.
+- ✅ Clients récurrents : réputation par client (cinq niveaux : plus de retours, de prime et de temps), commandes exclusives du client le plus
+  fidèle à chaque nouveau rang, pénalités douces (un point par retard ou abandon, jamais sous zéro).
 - ✅ Rendement des lignes : débit réel de chaque machine et convoyeur (infobulle, panneau), vue « goulots » (touche G), prévisions
   « au rythme actuel » au Grand Chevalement et sur les commandes.
 - Concasseur (pierre → gravier), alliages (ex. bronze), composants (fils, engrenages…) ; recettes à plusieurs étages.
@@ -46,7 +48,7 @@ profondeur et roches plus dures, sauvegarde/chargement, première automatisation
 
 ## Après le Grand Chevalement (idées)
 - Un second chantier plus lointain (un ascenseur de puits, une ville au camp) qui reprend les commandes comme monnaie de progression.
-- Clients récurrents avec une réputation propre, commandes « exclusives » (une fois par rang) et pénalités douces de réputation.
+- Clients aux goûts propres (un client qui ne demande que certaines marchandises), commandes « cadeau » quand on est Partenaire, contrats qui se renouvellent.
 - Ouvriers « livreurs » qui portent leurs lingots du coffre au chantier ; objectifs quotidiens de commandes.
 
 ## Idées pour la suite du rendement

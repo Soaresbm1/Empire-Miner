@@ -740,6 +740,17 @@ kbd {
 .site-row.ok .ord-meter i, .ord-n.ok ~ .ord-meter i { background: linear-gradient(#b9f09a, #3f8c36); }
 .tag.hot { background: #2d4a24; color: var(--good); }
 .card.ord .stat b em { font-style: normal; color: var(--good); font-size: 13px; }
+/* Confiance des clients : une étiquette par niveau, la mention « exclusive », la liste « Vos clients ». */
+.ord-who { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 8px; min-width: 0; }
+.tag.trust.t1 { background: #3a2c25; color: #d8c8a8; }
+.tag.trust.t2 { background: #2d4a24; color: var(--good); }
+.tag.trust.t3 { background: #1f3a52; color: #8fc7ff; }
+.tag.trust.t4 { background: #5a4410; color: var(--gold); }
+.tag.excl { background: var(--gold); color: #1a1418; font-weight: 700; }
+.ord-clients { list-style: none; margin: 2px 0 4px; padding: 0; }
+.ord-clients li { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 8px; padding: 3px 0; font-size: 15px; border-bottom: 1px dashed rgba(91, 70, 54, 0.5); }
+.ord-pts, .ord-more { color: var(--muted); font-size: 12px; }
+.ord-more { border-bottom: 0 !important; }
 /* Ligne du HUD : la commande la plus pressée. */
 .ord-hud { color: var(--gold); font-size: 13px; white-space: nowrap; }
 .ord-hud.late { color: var(--bad); }

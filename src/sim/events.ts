@@ -42,9 +42,18 @@ type SimEventBody =
   | { t: 'delivered'; tx: number; ty: number; n: number; to: 'orders' | 'site' }
   /**
    * Commandes : une proposition arrive (« offer »), une commande est honorée (« done »), arrive à échéance (« late ») ou est
-   * abandonnée (« abandoned »). `paid` : l'argent versé ; `lines` : ce qui était demandé, [ressource, quantité].
+   * abandonnée (« abandoned »). `paid` : l'argent versé ; `lines` : ce qui était demandé, [ressource, quantité] ; `exclusive` : la
+   * commande est une exclusivité de rang ; `trust` : le client change de niveau de confiance (`level` : le nouveau, `up` : en hausse).
    */
-  | { t: 'contract'; kind: 'offer' | 'done' | 'late' | 'abandoned'; client: number; paid: number; lines: [string, number][] }
+  | {
+      t: 'contract';
+      kind: 'offer' | 'done' | 'late' | 'abandoned';
+      client: number;
+      paid: number;
+      lines: [string, number][];
+      exclusive?: boolean;
+      trust?: { level: number; up: boolean };
+    }
   /** Grand Chevalement : la phase `phase` (0 pour la première) vient d'être terminée ; `last` : c'était la dernière. */
   | { t: 'site'; phase: number; last: boolean };
 
