@@ -39,6 +39,7 @@ profondeur et roches plus dures, sauvegarde/chargement, première automatisation
   fidèle à chaque nouveau rang, pénalités douces (un point par retard ou abandon, jamais sous zéro).
 - ✅ Rendement des lignes : débit réel de chaque machine et convoyeur (infobulle, panneau), vue « goulots » (touche G), prévisions
   « au rythme actuel » au Grand Chevalement et sur les commandes.
+- ✅ Dépanneur (ouvrier) : examine les machines à l'arrêt, recharge ou vide ce qui peut l'être, signale le reste au camp (Machines à surveiller, infobulle de la vue goulots) ; il remplace le Foreur (qui posait des foreuses).
 - Concasseur (pierre → gravier), alliages (ex. bronze), composants (fils, engrenages…) ; recettes à plusieurs étages.
 
 ## v0.5 — Énergie et contraintes

@@ -38,7 +38,6 @@ export type SimAction =
   // ouvriers
   | { k: 'hire'; job: string }
   | { k: 'workerJob'; id: number; job: string }
-  | { k: 'workerUpgrade'; id: number }
   | { k: 'fire'; id: number }
   // sac et outils
   | { k: 'togglePickup'; res: string }
@@ -133,9 +132,6 @@ export function applyAction(g: GameState, a: SimAction): void {
       return;
     case 'workerJob':
       if (isJob(a.job)) g.setWorkerJob(Number(a.id), a.job as WorkerJob);
-      return;
-    case 'workerUpgrade':
-      g.upgradeWorker(Number(a.id));
       return;
     case 'fire':
       g.fireWorker(Number(a.id));

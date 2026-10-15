@@ -40,7 +40,7 @@ import { Speed, advance, isSpeed, keepsUp, nextSpeed, smoothRate, speedDanger } 
 import { speedBar } from '../ui/speedBar';
 import { flowLegend, flowTip } from '../ui/flow';
 import { esc, kg, money, resIcon } from '../ui/format';
-import { workerAt, workerTooltip } from '../ui/crew';
+import { repairTip, workerAt, workerTooltip } from '../ui/crew';
 import { applyAction, type SimAction } from '../sim/actions';
 import { TouchControls, isTouchDevice, saveTouchPref } from '../ui/touch';
 import { homeScreenHintDue, homeScreenHintShown, toggleFullscreen } from '../ui/fullscreen';
@@ -1125,9 +1125,6 @@ export class Game {
         this.act({ k: 'workerJob', id: Number(id), job });
         break;
       }
-      case 'workerUpgrade':
-        this.act({ k: 'workerUpgrade', id: Number(arg) });
-        break;
       case 'fireWorker':
         if (this.ui.confirmFire(Number(arg))) this.act({ k: 'fire', id: Number(arg) });
         break;
@@ -1479,7 +1476,10 @@ export class Game {
       }
       intent = { mx, my, mine, target, ride: inp.isDown('ShiftLeft', 'ShiftRight') };
       // En construction, la ligne d'état de la barre remplace l'infobulle.
-      if (mouseActive && !this.buildMode && !this.chestDrag) tooltip = this.describeTile(g, mtx, mty);
+      if (mouseActive && !this.buildMode && !this.chestDrag) {
+        const tip = this.describeTile(g, mtx, mty);
+        tooltip = tip ? tip + repairTip(g, mtx, mty) : tip;
+      }
     }
     const near = g.nearestInteractable();
     if (!this.ui.blocking && near) overlay.interact = near;
@@ -2295,7 +2295,7 @@ export class Game {
           break;
         case 'worker':
           // Un petit éclat à l'endroit du geste, et un tintement discret si l'ouvrier est près du joueur.
-          r.fx.emit('spark', e.x, e.y - 8, e.kind === 'fuel' ? '#e8662a' : e.kind === 'store' ? '#f2c230' : e.kind === 'place' ? '#8fb8ff' : '#d8f5c0', e.kind === 'place' ? 8 : 4, 22);
+          r.fx.emit('spark', e.x, e.y - 8, e.kind === 'fuel' ? '#e8662a' : e.kind === 'store' ? '#f2c230' : '#d8f5c0', 4, 22);
           if (Math.hypot(e.x - g.player.x, e.y - g.player.y) < 14 * TILE) this.sfx.worker(e.kind);
           break;
         case 'message':

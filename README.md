@@ -344,7 +344,7 @@ Le jeu à deux n'est pas concerné : l'invité n'a besoin d'aucun compte, et l'h
 - **Ouvriers** : des travailleurs qu'on **achète une seule fois** à l'Atelier (onglet Ouvriers, touche `5` ;
   300 $, 600 $, 1 000 $, 1 500 $, 2 200 $, 3 000 $, 4 000 $, 5 200 $ puis 6 500 $), sans salaire. **L'équipe s'agrandit
   avec vos pioches** : trois places avec la Pioche améliorée, six avec la Pioche en fer, neuf avec la Pioche pro en
-  acier — **neuf ouvriers au plus, trois par métier** (3 ramasseurs, 3 foreurs, 3 ravitailleurs ; un métier plein ne se
+  acier — **neuf ouvriers au plus, trois par métier** (3 ramasseurs, 3 dépanneurs, 3 ravitailleurs ; un métier plein ne se
   recrute plus et on ne peut plus y passer). Une ancienne équipe plus grande que ses places ou son quota est conservée.
   Chacun a un **métier**, qu'on change gratuitement à tout moment. Le **ramasseur** va chercher les minerais laissés par
   terre (restes de la foreuse de percement, éboulements, tas oubliés, jusqu'au fond de la mine par le puits) et les
@@ -354,20 +354,15 @@ Le jeu à deux n'est pas concerné : l'invité n'a besoin d'aucun compte, et l'h
   d'une foreuse de percement quand il atteint 5 (les fours et fonderies ne sont pas touchés) ; il respecte les réglages des
   coffres et, sans coffre qui accepte, laisse le minerai dans la machine et le signale. Le **ravitailleur** prend du charbon dans les coffres et recharge les foreuses, les fours et les foreuses
   de percement dont le réservoir est à moitié vide ou moins (une machine collée à un coffre se sert déjà seule). Le
-  **foreur** pose des **foreuses à charbon sur les gisements au sol** (exposés, déjà explorés, pas encore couverts par une
-  foreuse ni visés par un autre foreur, et sans boucher un passage) : il prend d'abord un **kit de foreuse de votre stock**,
-  à défaut il **l'achète lui-même** au prix de l'Atelier tant qu'il vous reste 200 $ ensuite (sinon il s'arrête et le
-  signale : « plus de foreuse en stock ni assez d'argent »). **Chaque foreur ne pose que 3 foreuses** (celles qu'il a posées
-  et qui sont encore debout : en retirer une lui en redonne une à poser ; celles que vous posez vous-même ne comptent pas, ni
-  celles d'avant cette règle) ; une fois ses 3 posées il continue de ravitailler les foreuses en charbon, et la fiche de
-  l'équipe affiche « foreuses posées : 3 / 3 ». Il a 4 **niveaux**, améliorés à l'Atelier (bouton sur sa
-  ligne) : le **niveau 1** (gratuit) équipe les petits minerais (charbon, cuivre), pose en 3 s ; le **niveau 2**
-  (400 $) ajoute le fer et pose en 2,2 s ; le **niveau 3** (900 $, pioche de niveau 3) ajoute l'argent et l'or ; le
-  **niveau 4** (2 200 $, pioche de niveau 4) ajoute le diamant ; chaque niveau marche aussi plus vite (×1,15, ×1,3, ×1,5).
-  Il ne pose pas sur la pierre. **Il met aussi du charbon dans les foreuses** : comme un ravitailleur, mais pour les
-  foreuses à charbon seulement (les vôtres comme les siennes, dès que leur réservoir est à moitié vide), il prend le charbon
-  dans un coffre et le porte à la foreuse ; il le fait **avant** de chercher un nouveau gisement, et signale « plus de
-  charbon dans les coffres » quand il n'y en a plus. Les foreuses posées se vident par un ramasseur. Ils
+  **dépanneur** va vers **une machine à l'arrêt** (foreuse à charbon, four, fonderie, atelier de fabrication), l'examine 1,5 s, puis fait ce qui est possible : **recharger en charbon** une machine à sec (il en prend dans un
+  coffre) ou **vider sa sortie dans un coffre** qui accepte le produit. Ce qu'il ne peut pas régler, il le **signale** : il
+  **rentre au camp et affiche la cause** dans les statistiques (Comptoir ou Atelier, « Machines à surveiller », section
+  « Constats du dépanneur » avec la machine, sa profondeur, la cause et un conseil) et dans l'infobulle de la machine
+  (vue goulots, `G`), puis repart vers une autre machine. Causes : plus de charbon et aucun coffre n'en a, sortie pleine
+  dont aucun coffre ne veut le produit, aucune sortie reliée, convoyeur plein plus loin, caisse d'expédition pleine, machine inaccessible. Une
+  machine signalée n'est pas revisitée avant 90 s ; le constat n'est affiché que tant qu'elle est à l'arrêt. Il ne supprime jamais une
+  foreuse et ne pose rien. (Le **foreur**, qui posait des foreuses sur les gisements, n'existe plus : dans une ancienne
+  sauvegarde, un foreur devient dépanneur.) Ils
   marchent de case en case par le plus court chemin, en évitant la roche, les machines, le grisou et l'eau profonde.
   **Sans limite de distance** : pour un tas, un coffre, du charbon, une machine ou leur poste, ils cherchent aussi loin
   qu'il faut (jusqu'au fond de la mine, avec une longue marche à la clé) ; seuls un passage coupé ou l'absence de cible
@@ -378,9 +373,9 @@ Le jeu à deux n'est pas concerné : l'invité n'a besoin d'aucun compte, et l'h
   terre). Un ouvrier bloqué est signalé au Tableau d'affichage et par un point d'exclamation au-dessus de lui, et
   **survoler l'ouvrier** à la souris donne la cause et quoi faire : « aucun coffre n'accepte ce minerai » (réglage des
   coffres), « les coffres qui acceptent ce minerai sont pleins », « aucun chemin jusqu'à un coffre » (roche, grisou, eau
-  ou machine en travers), « plus de charbon dans les coffres » ou « plus de foreuse en stock ni assez d'argent » ; ils apparaissent aussi sur la carte (points
-  vert, orange et bleu). Casque vert pour le ramasseur, orange pour le ravitailleur, bleu pour le foreur. Les ouvriers sont sauvegardés
-  (métier, niveau du foreur, position, charge) ; les anciennes sauvegardes n'en ont pas.
+  ou machine en travers), « plus de charbon dans les coffres » ; ils apparaissent aussi sur la carte (points
+  vert, orange et bleu). Casque vert pour le ramasseur, orange pour le ravitailleur, jaune pour le dépanneur. Les ouvriers sont sauvegardés
+  (métier, position, charge, constats des dépanneurs) ; les anciennes sauvegardes n'en ont pas.
 - **Cours du marché** : les prix de vente montent et descendent. Chaque minerai a un **cours**, multiplicateur de
   son prix de base (100 % = le prix de la fiche), qui dérive doucement toutes les 10 s autour de 100 % (en général
   de 80 à 120 %) ; un lingot suit le cours de son minerai, la pierre ne bouge pas. Toutes les 2,5 à 5 minutes, un

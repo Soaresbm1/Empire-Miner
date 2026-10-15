@@ -17,11 +17,10 @@
 - Caisse d'expédition (`structures/ShippingCrate.ts`) : accepte tout ; `mode` `market` (vend), `orders`, `site` (livre, vend le reste).
 
 ## Ouvriers (`src/sim/Workers.ts`, `src/data/workers.ts`)
-- Métiers : `picker` (Ramasseur), `refueler` (Ravitailleur), `driller` (Foreur). `WORKERS.max` (9), `WORKERS.perJob` (3), places
+- Métiers : `picker` (Ramasseur), `refueler` (Ravitailleur), `fixer` (Dépanneur : examine les machines à l'arrêt, recharge ou vide ce qui peut l'être, sinon rentre afficher la cause ; `Repair.ts`, `reports`). `WORKERS.max` (9), `WORKERS.perJob` (3), places
   ouvertes par la pioche (`WORKER_SLOTS`), prix croissant à l'embauche, pas de salaire.
 - Recherche de chemin `Pather` (largeur d'abord, cases `walkable`) ; drapeaux de blocage `WorkerFlag` (`nostore`, `full`,
-  `noroute`, `nocoal`, `nodrill`) expliqués par `ui/crew.ts`. Le foreur pose au plus `DRILLER.maxDrills` foreuses (`placedBy`).
-- Les règles de pose sont partagées avec le joueur : `GameState.siteProblem` + `build`.
+  `noroute`, `nocoal`, `lost`) expliqués par `ui/crew.ts` ; les constats du dépanneur (`WorkerSystem.reports`, sauvegardés) par `repairNotes`.
 
 ## Mesure des lignes (lecture seule, ni sauvegardé ni dans l'empreinte)
 - `src/sim/Flow.ts` : compteur par structure (anneau de 12 × 5 s), états en marche / bloqué / à sec relevés toutes les 0,05 s par

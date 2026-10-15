@@ -16,7 +16,7 @@ import { CAUSE_HAZARD, GEAR, HazardKind, getGear } from '../data/gear';
 import { GAS, HEALTH, HEAT, WATER } from '../data/hazards';
 import { RESOURCES, getResource, hasResource, resourceIndex } from '../data/resources';
 import { BAGS, JACKHAMMER, PICKAXES, ROPE, SCOOTER } from '../data/tools';
-import { DRILLER, DRILLER_LEVELS, WORKERS, drillerLevel, getJob, nextSlotStep, workerPrice, workerSlots, type WorkerJob } from '../data/workers';
+import { WORKERS, getJob, nextSlotStep, workerPrice, workerSlots, type WorkerJob } from '../data/workers';
 import { Drop, DropSystem } from './Drops';
 import { HazardSystem } from './Hazards';
 import { MARKER_KINDS, Marker, MarkerBook, MarkerKind } from './Markers';
@@ -551,6 +551,7 @@ export class GameState implements StructureContext {
       for (const d of this.drops.update(dt, this.world)) this.emit({ t: 'crumble', res: d.res, x: d.x, y: d.y });
       this.eachPlayer((i) => this.updatePickup(dt, i));
       this.structures.update(dt, this);
+      this.workers.pruneReports(this);
       this.wagons.update(dt, this);
       this.eachPlayer(() => {
         if (this.riding) this.followWagon(this.riding);
@@ -1425,53 +1426,6 @@ export class GameState implements StructureContext {
     this.workers.add(job, this);
     this.emit({ t: 'bought', name: `Ouvrier : ${getJob(job).name.toLowerCase()}` });
     return true;
-  }
-
-  /** Pourquoi ce foreur ne peut pas être amélioré maintenant (null : c'est possible). */
-  workerUpgradeBlocker(id: number): string | null {
-    const w = this.workers.get(id);
-    if (!w) return 'Ouvrier introuvable';
-    if (w.job !== 'driller') return 'Seul le foreur s’améliore';
-    if (w.level >= DRILLER_LEVELS.length) return 'Niveau maximal atteint';
-    const next = drillerLevel(w.level + 1);
-    if (!this.isNear('workshop')) return 'Il faut être à l’Atelier';
-    if (next.unlock && this.pickaxe.tier < next.unlock.pickaxeTier) return next.unlock.text;
-    if (this.money < next.price) return "Pas assez d'argent";
-    return null;
-  }
-
-  /** Améliore un foreur à l'Atelier : plus de minerais, plus vite (prix croissants). */
-  upgradeWorker(id: number): boolean {
-    if (this.workerUpgradeBlocker(id)) return false;
-    const w = this.workers.get(id)!;
-    const next = drillerLevel(w.level + 1);
-    if (!this.pay(next.price)) return false;
-    w.level = next.level;
-    this.emit({ t: 'bought', name: `Foreur niveau ${next.level}` });
-    return true;
-  }
-
-  /** Un foreur peut-il se procurer une foreuse : un kit en stock, ou assez d'argent pour l'acheter en gardant sa réserve ? */
-  get drillAvailable(): boolean {
-    const id = DRILLER.machine;
-    return this.inventory.kitCount(id) > 0 || (this.isUnlocked(id) && this.money - getMachine(id).price >= DRILLER.moneyReserve);
-  }
-
-  /**
-   * Un foreur pose une foreuse à charbon en (tx, ty) : un kit du stock, à défaut il l'achète au prix de l'Atelier (s'il vous
-   * reste la réserve ensuite). Renvoie la foreuse posée, ou null (emplacement refusé, ni kit ni argent).
-   */
-  placeDrillFor(tx: number, ty: number, dir: Dir): { drill: Drill; bought: boolean } | null {
-    const id = DRILLER.machine;
-    if (this.siteProblem(id, tx, ty)) return null;
-    let bought = false;
-    if (this.inventory.kitCount(id) <= 0) {
-      if (!this.drillAvailable || !this.pay(getMachine(id).price)) return null;
-      this.inventory.addKit(id);
-      bought = true;
-    }
-    const s = this.build(id, tx, ty, dir);
-    return s instanceof Drill ? { drill: s, bought } : null;
   }
 
   /** Change le métier d'un ouvrier (gratuit, de n'importe où), tant que ce métier n'a pas déjà son quota. */

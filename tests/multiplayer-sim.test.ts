@@ -243,7 +243,7 @@ function scenario(seed: number, localSlot: number, steps: number, onCheck?: (g: 
   g.world.setDeposit(48, Y, 1, 60);
   goTo(g, 'workshop');
   g.hireWorker('picker');
-  g.hireWorker('driller');
+  g.hireWorker('fixer');
   g.hireWorker('refueler');
   g.withSlot(1, () => {
     g.player.x = 47.5 * TILE;
