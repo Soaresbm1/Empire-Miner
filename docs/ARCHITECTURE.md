@@ -410,6 +410,14 @@ le réseau, et l'empreinte du jeu à deux ne les voit pas.
   `tests/forecast.test.ts` (production récente, calcul, textes du chantier et des commandes), `e2e/flow.mjs` (navigateur réel :
   pixels de la vue goulots lus sur le canvas).
 
+- **Alerte « machine à l'arrêt »** (`ui/alerts.ts`, présentation pure : aucune `SimAction`, rien de sauvegardé ni d'envoyé à
+  l'autre joueur ; `PROTOCOL` ne change pas). `StallWatch.update(g)` relève toutes les 0,5 s de jeu les machines réparables
+  (`isRepairable`) dont `flowState()` est `stuck` ; une machine n'est signalée qu'après `ALERT.delay` (20 s) d'arrêt continu, avec
+  la cause du dépanneur (`diagnose` + `REPAIR_TEXT`). `Game` en tire un message par nouvel arrêt (un seul s'ils sont plus de 2),
+  la pastille `#hud-alert` (`alertChip`, action `alertGo`) et les anneaux de `MineMap.setAlerts`. `alertGo` ouvre la carte et
+  appelle `MineMap.centerOnTile`, appliqué au dessin suivant (les limites de la carte ne sont connues qu'une fois dessinée).
+  Tests : `tests/alerts.test.ts`, `e2e/alerts.mjs`.
+
 ## Étendre le jeu
 
 - **Nouveau minerai** : ajouter une entrée dans `src/data/resources.ts` (valeur, poids, rareté, résistance,

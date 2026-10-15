@@ -283,6 +283,12 @@ export class MineMap {
     const fitCell = Math.min(canvas.width / fw, canvas.height / fh, 10 * dpr);
     const maxCell = Math.max(fitCell, MAP_MAX_CELL * dpr);
     this.limits = { fitCell, maxCell, width: canvas.width, height: canvas.height };
+    // Un cadrage demandé avant que la carte ait ses limites (ouverture depuis l'alerte du HUD) se fait maintenant.
+    if (this.focus) {
+      this.zoomCell = Math.min(maxCell, fitCell * 3);
+      this.center = this.focus;
+      this.focus = null;
+    }
     const cell = this.zoomCell === null ? fitCell : Math.min(maxCell, Math.max(fitCell, this.zoomCell));
     if (this.zoomCell !== null && cell <= fitCell * 1.001) this.resetView();
     const zoomed = this.zoomCell !== null;
@@ -388,6 +394,21 @@ export class MineMap {
     this.center = null;
   }
 
+  /** Machines à l'arrêt à entourer (alerte du HUD) ; posé par le jeu à chaque image. */
+  private alerts: readonly Structure[] = [];
+
+  setAlerts(list: readonly Structure[]): void {
+    this.alerts = list;
+  }
+
+  /** Cadrage demandé, appliqué au prochain dessin de la carte complète (ses limites ne sont connues qu'une fois dessinée). */
+  private focus: { x: number; y: number } | null = null;
+
+  /** Centre la carte complète sur une case, en zoomant d'abord un peu si tout était visible. */
+  centerOnTile(tx: number, ty: number): void {
+    this.focus = { x: tx + 0.5, y: ty + 0.5 };
+  }
+
   /** Centre la vue sur le joueur ; si tout était visible, zoome d'abord un peu. */
   centerOnPlayer(g: GameState): void {
     if (this.zoomCell === null) this.zoomCell = Math.min(this.limits.maxCell, this.limits.fitCell * 3);
@@ -469,6 +490,20 @@ export class MineMap {
       ctx.fillStyle = structureColor(s);
       const inset = s instanceof Building || s.isBelt || s.isTrack ? 0 : v.cell * 0.12;
       ctx.fillRect(px(s.x) + inset, py(s.y) + inset, Math.max(dot, s.w * v.cell - inset * 2), Math.max(dot, s.h * v.cell - inset * 2));
+    }
+    // Machines à l'arrêt : un anneau rouge qui pulse, assez grand pour se voir même sur la mini-carte.
+    if (this.alerts.length) {
+      const dpr = window.devicePixelRatio || 1;
+      const pulse = (time * 1.5) % 1;
+      ctx.strokeStyle = `rgba(255,80,70,${1 - pulse * 0.6})`;
+      ctx.lineWidth = Math.max(1.5, 1.5 * dpr);
+      for (const s of this.alerts) {
+        if (!inView(s.x, s.y, s.w, s.h)) continue;
+        const r = Math.min(Math.max(dot * 2.5, v.cell * 1.2) * (1 + pulse * 0.5), 14 * dpr);
+        ctx.beginPath();
+        ctx.arc(px(s.x + s.w / 2), py(s.y + s.h / 2), r, 0, Math.PI * 2);
+        ctx.stroke();
+      }
     }
     // Foreuse de percement sortie de sa base : un point au bout de son tunnel.
     // À fort zoom, les points (foreuse sortie, wagonnets, ouvriers, joueur) ne grossissent pas avec les tuiles.

@@ -431,7 +431,11 @@ Le jeu à deux n'est pas concerné : l'invité n'a besoin d'aucun compte, et l'h
   convoyeur qui porte plus de 85 % de sa charge est « à pleine charge ». **Vue goulots** (`G`, ou « Goulots » dans le menu ☰ du
   téléphone) : chaque machine et chaque convoyeur prend la couleur de ce qui a dominé sa dernière minute, avec son débit écrit
   au pied : **rouge** bloqué, **ambre** à sec ou à pleine charge, **vert** ça tourne, rien pour un convoyeur vide ; une légende
-  s'affiche en bas. Lecture : une file rouge qui se termine devant une machine verte, c'est elle le goulot. **Prévisions** : au
+  s'affiche en bas. Lecture : une file rouge qui se termine devant une machine verte, c'est elle le goulot. **Alerte « machine à
+  l'arrêt »** : une foreuse, un four ou une Manufacture arrêtés depuis 20 s déclenchent un message (« Four : plus de charbon »),
+  une pastille rouge « ⚠ 2 machines à l'arrêt » sous l'argent (44 px au doigt) et un anneau rouge sur la mini-carte et la carte ;
+  un appui sur la pastille ouvre la carte centrée sur la machine (appuis suivants : la suivante). Elle disparaît quand la machine
+  repart. **Prévisions** : au
   **Grand Chevalement**, un bloc dit « au rythme actuel, la phase est prête dans ~25 min » et **ce qui la retient** (lingots
   d'argent, salaires…), et chaque matériau porte sa durée ; sur le **Tableau d'affichage**, une commande acceptée dit si elle tient
   avant l'échéance (« ~7 min · dans les temps », « trop long ») et une proposition si vos machines suffiraient (« Réalisable ? oui,
@@ -494,6 +498,7 @@ node e2e/touch.mjs             # gestes tactiles réels (CDP) : stick, Miner, Ag
 node e2e/panels.mjs            # fenêtres au doigt sur un jeu qui tourne : défilement, toucher long, contenu exact, rien ne glisse de côté (après un build)
 node e2e/orders.mjs            # commandes et Grand Chevalement : vrais clics (accepter, livrer, abandonner, caisse réglée sur « Commandes », chantier phase par phase, écran de fin), réputation des clients et commande exclusive, la tour change à chaque étape, tout survit à un rechargement (après un build)
 node e2e/flow.mjs              # rendement des lignes : une ligne saturée mesurée en vrai (infobulles, panneau), vue goulots (touche G, légende, pixels teintés), prévisions du chantier et des commandes, rechargement (après un build)
+node e2e/alerts.mjs            # alerte « machine à l'arrêt » : four sans charbon, pastille du HUD, carte centrée sur la machine, disparition au retour du charbon, pastille de 44 px sans débordement en portrait (après un build)
 node e2e/crafter.mjs           # la Manufacture : achat à l'Atelier, pose, panneau (recette, charbon, dépôt, récupération), chaîne par convoyeurs, commande de plaques, sauvegarde, ancienne partie (après un build)
 node e2e/menus.mjs             # menus : « Commandes » (menu principal et pause) s'ouvre devant le menu, qui s'efface puis revient ; seul, le jeu reste figé depuis la pause (après un build)
 node e2e/cloud.mjs             # compte : deux appareils (deux profils de navigateur) et un faux Firebase local : création, reprise sur appareil neuf, parties qui divergent, réseau coupé, suppression (après un build)

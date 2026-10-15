@@ -656,6 +656,11 @@ kbd {
 .net .dot.bad { background: var(--bad); }
 .net b.code { letter-spacing: 2px; color: var(--gold); }
 .net small { display: block; color: var(--muted); font-size: 11px; }
+/* Alerte « machine à l'arrêt » : une pastille cliquable sous l'argent, qui mène sur la carte à la machine en cause. */
+.alerts:empty { display: none; }
+.alerts { margin-top: 5px; }
+.alerts .alert { display: block; width: 100%; min-height: 44px; padding: 4px 10px; text-align: left; font-size: 13px; color: var(--bad); border-color: var(--bad); animation: danger-blink 1.6s steps(2) infinite; }
+.alerts .alert small { display: block; color: var(--muted); font-size: 11px; }
 /* Bandeau au milieu en haut quand l'autre ne répond pas : le jeu attend. */
 #net-stall { position: absolute; top: 14%; left: 50%; transform: translateX(-50%); z-index: 5; max-width: min(92vw, 420px); text-align: center; padding: 8px 16px; font-size: 17px; color: var(--text); background: rgba(18, 14, 16, 0.86); box-shadow: 0 0 0 2px #120e10, inset 0 0 0 1px #6b5039, 0 4px 0 2px rgba(0, 0, 0, 0.35); text-shadow: 1px 1px 0 #000; pointer-events: none; }
 #net-stall.hidden { display: none; }

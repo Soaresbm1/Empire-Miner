@@ -41,6 +41,7 @@ import { speedBar } from '../ui/speedBar';
 import { flowLegend, flowTip } from '../ui/flow';
 import { esc, kg, money, resIcon } from '../ui/format';
 import { repairTip, workerAt, workerTooltip } from '../ui/crew';
+import { StallWatch, alertChip, stallToasts } from '../ui/alerts';
 import { applyAction, type SimAction } from '../sim/actions';
 import { TouchControls, isTouchDevice, saveTouchPref } from '../ui/touch';
 import { homeScreenHintDue, homeScreenHintShown, toggleFullscreen } from '../ui/fullscreen';
@@ -133,6 +134,8 @@ export class Game {
   private chestHover: Storage | null = null;
   /** Vue « goulots » (touche G) : machines et convoyeurs teints selon ce qui les bloque. Rien de tout cela n'est sauvegardé. */
   private flowView = false;
+  /** Machines à l'arrêt depuis un moment (pastille du HUD, anneaux de la carte). Lu dans l'état, jamais sauvegardé. */
+  private readonly stalls = new StallWatch();
   /** Vitesse de jeu (×1, ×2, ×4), pause du joueur (P) et vitesse réellement obtenue, lissée. Rien de tout cela n'est sauvegardé. */
   private speed: Speed = 1;
   private userPaused = false;
@@ -1265,6 +1268,15 @@ export class Game {
       case 'openMap':
         this.togglePanel('map');
         break;
+      case 'alertGo': {
+        // La carte s'ouvre (ou reste ouverte) centrée sur la machine à l'arrêt suivante.
+        const stall = this.stalls.nextToShow();
+        if (!stall) break;
+        if (this.ui.panel?.kind !== 'map') this.togglePanel('map');
+        this.map.centerOnTile(stall.s.x + Math.floor(stall.s.w / 2), stall.s.y + Math.floor(stall.s.h / 2));
+        this.ui.toast(stall.text, 'warn', 3000);
+        break;
+      }
       case 'markerKind':
         if (arg in MARKER_KINDS) g.markerKind = arg as MarkerKind;
         break;
@@ -1527,7 +1539,10 @@ export class Game {
     this.renderer.draw(overlay);
     this.ui.setTooltip(tooltip, inp.mouseX, inp.mouseY);
     this.warnOrders(g);
+    for (const text of stallToasts(this.stalls.update(g))) this.ui.toast(text, 'warn', 4200);
+    this.map.setAlerts(this.stalls.list.map((f) => f.s));
     this.ui.updateHud(g, {
+      alert: alertChip(this.stalls.list),
       prompt: this.promptText(g, near),
       build: this.buildBarHtml(g),
       hints: this.hintsHtml(),

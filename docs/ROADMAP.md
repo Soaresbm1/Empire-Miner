@@ -40,6 +40,7 @@ profondeur et roches plus dures, sauvegarde/chargement, première automatisation
 - ✅ Rendement des lignes : débit réel de chaque machine et convoyeur (infobulle, panneau), vue « goulots » (touche G), prévisions
   « au rythme actuel » au Grand Chevalement et sur les commandes.
 - ✅ Dépanneur (ouvrier) : examine les machines à l'arrêt, recharge ou vide ce qui peut l'être, signale le reste au camp (Machines à surveiller, infobulle de la vue goulots) ; il remplace le Foreur (qui posait des foreuses).
+- ✅ Alerte « machine à l'arrêt » : pastille du HUD, message et anneau sur la carte ; un appui centre la carte sur la machine.
 - Concasseur (pierre → gravier), alliages (ex. bronze), composants (fils, engrenages…) ; recettes à plusieurs étages.
 
 ## v0.5 — Énergie et contraintes
@@ -54,7 +55,7 @@ profondeur et roches plus dures, sauvegarde/chargement, première automatisation
 
 ## Idées pour la suite du rendement
 - Copier-coller une ligne de machines et de convoyeurs, avec un « annuler » pour la dernière pose.
-- Un débit par ligne entière (de la foreuse à la caisse), nommé et gardé dans la sauvegarde ; une alerte quand une ligne s'arrête.
+- Un débit par ligne entière (de la foreuse à la caisse), nommé et gardé dans la sauvegarde ; une alerte quand une ligne entière s'arrête (l'alerte actuelle est par machine).
 - Déduire de la prévision le charbon que brûlent les machines, et partager la production entre plusieurs besoins sur la même ressource.
 
 ## Plus tard
