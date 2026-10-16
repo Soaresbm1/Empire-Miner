@@ -656,6 +656,11 @@ kbd {
 .net .dot.bad { background: var(--bad); }
 .net b.code { letter-spacing: 2px; color: var(--gold); }
 .net small { display: block; color: var(--muted); font-size: 11px; }
+/* Alerte « machine à l'arrêt » : une pastille cliquable sous l'argent, qui mène sur la carte à la machine en cause. */
+.alerts:empty { display: none; }
+.alerts { margin-top: 5px; }
+.alerts .alert { display: block; width: 100%; min-height: 44px; padding: 4px 10px; text-align: left; font-size: 13px; color: var(--bad); border-color: var(--bad); animation: danger-blink 1.6s steps(2) infinite; }
+.alerts .alert small { display: block; color: var(--muted); font-size: 11px; }
 /* Bandeau au milieu en haut quand l'autre ne répond pas : le jeu attend. */
 #net-stall { position: absolute; top: 14%; left: 50%; transform: translateX(-50%); z-index: 5; max-width: min(92vw, 420px); text-align: center; padding: 8px 16px; font-size: 17px; color: var(--text); background: rgba(18, 14, 16, 0.86); box-shadow: 0 0 0 2px #120e10, inset 0 0 0 1px #6b5039, 0 4px 0 2px rgba(0, 0, 0, 0.35); text-shadow: 1px 1px 0 #000; pointer-events: none; }
 #net-stall.hidden { display: none; }
@@ -768,7 +773,7 @@ kbd {
 .eta.none { color: var(--bad); }
 .stat b.good { color: var(--good); } .stat b.warn { color: var(--warn); } .stat b.bad { color: var(--bad); }
 
-/* Panneau du chantier : frise des cinq phases, lignes d'avancement, écran de fin. */
+/* Panneau du chantier : frise des phases du chantier en cours, lignes d'avancement, écran de fin. */
 .site-head { display: flex; align-items: baseline; gap: 8px; margin-bottom: 8px; font-size: 18px; }
 .site-head b { color: var(--gold); }
 .site-pct { margin-left: auto; color: var(--muted); font-size: 14px; }
@@ -781,8 +786,8 @@ kbd {
 .site-steps li.now i { background: var(--gold); color: #1a1418; }
 .site-acts { display: inline-flex; flex-wrap: wrap; gap: 8px; }
 .site-perks { margin: 0; padding-left: 18px; font-size: 14px; }
-.site-when { list-style: none; margin: 0; padding: 0; font-size: 14px; }
-.site-when li { display: flex; justify-content: space-between; gap: 10px; padding: 3px 0; border-bottom: 1px dashed rgba(91, 70, 54, 0.5); }
+.site-when { list-style: none; margin: 0; padding: 0; font-size: 14px; columns: 2; column-gap: 22px; }
+.site-when li { break-inside: avoid; display: flex; justify-content: space-between; gap: 10px; padding: 3px 0; border-bottom: 1px dashed rgba(91, 70, 54, 0.5); }
 .site-when span { color: var(--muted); }
 .victory { text-align: center; margin: 4px 0 10px; }
 .victory-title { margin: 0 0 6px; font-size: clamp(22px, 5vw, 32px); letter-spacing: 1px; color: var(--gold); text-shadow: 3px 3px 0 #000, 0 5px 0 #7a4a10; }

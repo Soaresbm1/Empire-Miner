@@ -16,7 +16,7 @@ import { CAUSE_HAZARD, GEAR, HazardKind, getGear } from '../data/gear';
 import { GAS, HEALTH, HEAT, WATER } from '../data/hazards';
 import { RESOURCES, getResource, hasResource, resourceIndex } from '../data/resources';
 import { BAGS, JACKHAMMER, PICKAXES, ROPE, SCOOTER } from '../data/tools';
-import { DRILLER, DRILLER_LEVELS, WORKERS, drillerLevel, getJob, nextSlotStep, workerPrice, workerSlots, type WorkerJob } from '../data/workers';
+import { WORKERS, getJob, nextSlotStep, workerPrice, workerSlots, type WorkerJob } from '../data/workers';
 import { Drop, DropSystem } from './Drops';
 import { HazardSystem } from './Hazards';
 import { MARKER_KINDS, Marker, MarkerBook, MarkerKind } from './Markers';
@@ -27,11 +27,13 @@ import { Inventory, type KitHolder } from './Inventory';
 import { Contracts, type Contract, type Outcome } from './Contracts';
 import { Market } from './Market';
 import { Player } from './Player';
+import { CROWN_PHASE } from '../data/project';
 import { Project } from './Project';
 import { StructureManager } from './StructureManager';
 import { Building, BuildingType } from './structures/Building';
 import { Conveyor } from './structures/Conveyor';
 import type { Crafter } from './structures/Crafter';
+import type { Well } from './structures/Well';
 import { Rail, type RailStation, type RailSwitch, type SwitchSetting } from './structures/Rail';
 import { TunnelBorer } from './structures/Borer';
 import { Smelter } from './structures/Smelter';
@@ -186,7 +188,7 @@ export class GameState implements StructureContext {
   readonly market: Market;
   /** Commandes du Tableau d'affichage : des clients achètent une quantité précise, avec une prime, avant une échéance. */
   readonly contracts: Contracts;
-  /** Le Grand Chevalement : le grand chantier du camp, en cinq phases. */
+  /** Le Grand Chevalement : le grand chantier du camp, en cinq phases, suivi de l'Ascenseur de puits (quatre phases de plus). */
   readonly project = new Project();
   /** Ouvriers achetés à l'Atelier : ramasseurs et ravitailleurs. */
   readonly workers = new WorkerSystem();
@@ -551,6 +553,7 @@ export class GameState implements StructureContext {
       for (const d of this.drops.update(dt, this.world)) this.emit({ t: 'crumble', res: d.res, x: d.x, y: d.y });
       this.eachPlayer((i) => this.updatePickup(dt, i));
       this.structures.update(dt, this);
+      this.workers.pruneReports(this);
       this.wagons.update(dt, this);
       this.eachPlayer(() => {
         if (this.riding) this.followWagon(this.riding);
@@ -1353,7 +1356,7 @@ export class GameState implements StructureContext {
     while (this.project.ready(this.stats.contracts)) {
       const phase = this.project.phase;
       this.project.advance(this.time);
-      this.emit({ t: 'site', phase, last: this.project.done });
+      this.emit({ t: 'site', phase, last: this.project.phase === CROWN_PHASE || this.project.done });
     }
   }
 
@@ -1427,53 +1430,6 @@ export class GameState implements StructureContext {
     return true;
   }
 
-  /** Pourquoi ce foreur ne peut pas être amélioré maintenant (null : c'est possible). */
-  workerUpgradeBlocker(id: number): string | null {
-    const w = this.workers.get(id);
-    if (!w) return 'Ouvrier introuvable';
-    if (w.job !== 'driller') return 'Seul le foreur s’améliore';
-    if (w.level >= DRILLER_LEVELS.length) return 'Niveau maximal atteint';
-    const next = drillerLevel(w.level + 1);
-    if (!this.isNear('workshop')) return 'Il faut être à l’Atelier';
-    if (next.unlock && this.pickaxe.tier < next.unlock.pickaxeTier) return next.unlock.text;
-    if (this.money < next.price) return "Pas assez d'argent";
-    return null;
-  }
-
-  /** Améliore un foreur à l'Atelier : plus de minerais, plus vite (prix croissants). */
-  upgradeWorker(id: number): boolean {
-    if (this.workerUpgradeBlocker(id)) return false;
-    const w = this.workers.get(id)!;
-    const next = drillerLevel(w.level + 1);
-    if (!this.pay(next.price)) return false;
-    w.level = next.level;
-    this.emit({ t: 'bought', name: `Foreur niveau ${next.level}` });
-    return true;
-  }
-
-  /** Un foreur peut-il se procurer une foreuse : un kit en stock, ou assez d'argent pour l'acheter en gardant sa réserve ? */
-  get drillAvailable(): boolean {
-    const id = DRILLER.machine;
-    return this.inventory.kitCount(id) > 0 || (this.isUnlocked(id) && this.money - getMachine(id).price >= DRILLER.moneyReserve);
-  }
-
-  /**
-   * Un foreur pose une foreuse à charbon en (tx, ty) : un kit du stock, à défaut il l'achète au prix de l'Atelier (s'il vous
-   * reste la réserve ensuite). Renvoie la foreuse posée, ou null (emplacement refusé, ni kit ni argent).
-   */
-  placeDrillFor(tx: number, ty: number, dir: Dir): { drill: Drill; bought: boolean } | null {
-    const id = DRILLER.machine;
-    if (this.siteProblem(id, tx, ty)) return null;
-    let bought = false;
-    if (this.inventory.kitCount(id) <= 0) {
-      if (!this.drillAvailable || !this.pay(getMachine(id).price)) return null;
-      this.inventory.addKit(id);
-      bought = true;
-    }
-    const s = this.build(id, tx, ty, dir);
-    return s instanceof Drill ? { drill: s, bought } : null;
-  }
-
   /** Change le métier d'un ouvrier (gratuit, de n'importe où), tant que ce métier n'a pas déjà son quota. */
   setWorkerJob(id: number, job: WorkerJob): boolean {
     if (this.workerCount(job) >= WORKERS.perJob) return false;
@@ -1514,12 +1470,24 @@ export class GameState implements StructureContext {
 
   isUnlocked(machineId: string): boolean {
     const def = getMachine(machineId);
-    return !def.unlock || this.pickaxe.tier >= def.unlock.pickaxeTier;
+    return !def.unlock || (this.pickaxe.tier >= def.unlock.pickaxeTier && this.project.phase >= (def.unlock.projectPhase ?? 0));
+  }
+
+  /** Exemplaires d'une machine que le joueur possède : posés, et en kit (de tout niveau). */
+  ownedCount(machineId: string): number {
+    const placed = this.structures.list.filter((s) => s.type === machineId).length;
+    const kits = Object.entries(this.inventory.kits).reduce((n, [kit, k]) => n + (parseKit(kit).machine === machineId ? k : 0), 0);
+    return placed + kits;
   }
 
   buyKit(machineId: string, qty: number): boolean {
     const def = getMachine(machineId);
-    if (!this.isNear('workshop') || !this.isUnlocked(machineId) || !this.pay(def.price * qty)) return false;
+    if (!this.isNear('workshop') || !this.isUnlocked(machineId)) return false;
+    if (def.limit !== undefined && this.ownedCount(machineId) + qty > def.limit) {
+      this.emit({ t: 'message', text: `${def.name} : ${def.limit} au plus.`, kind: 'info' });
+      return false;
+    }
+    if (!this.pay(def.price * qty)) return false;
     this.inventory.addKit(machineId, qty);
     this.emit({ t: 'bought', name: qty > 1 ? `${def.name} ×${qty}` : def.name });
     return true;
@@ -1555,6 +1523,7 @@ export class GameState implements StructureContext {
       }
     if (def.needsDeposit && !this.world.depositAt(tx, ty)) return 'Doit être posée sur un gisement exposé';
     if (def.surfaceOnly && ty + def.h > SURFACE_ROWS) return 'À poser en surface, au camp';
+    if (def.limit !== undefined && this.structures.list.filter((s) => s.type === machineId).length >= def.limit) return `${def.name} : ${def.limit} au plus`;
     if (def.solid) {
       const x0 = tx * TILE;
       const y0 = ty * TILE;
@@ -1938,6 +1907,30 @@ export class GameState implements StructureContext {
     }
     const what = list.map(([res, n]) => `${n} ${getResource(res).name.toLowerCase()}`).join(', ');
     this.emit({ t: 'message', text: `${why} : ${what} vous ${list.length > 1 || list[0][1] > 1 ? 'sont rendus' : 'est rendu'}.`, kind: 'info' });
+  }
+
+  /** Charge le charbon du sac dans un puits. */
+  fuelWell(s: Well): number {
+    const fuel = s.def.fuel;
+    if (!fuel) return 0;
+    const k = s.addFuel(this.inventory.count(fuel.res));
+    this.inventory.remove(fuel.res, k);
+    return k;
+  }
+
+  /** Dépose dans un puits les mécanismes du sac (dans la limite de sa réserve). */
+  wellDeposit(s: Well): number {
+    const res = s.spec.mechanism;
+    const k = s.addMech(this.inventory.count(res));
+    this.inventory.remove(res, k);
+    return k;
+  }
+
+  /** Récupère dans le sac le minerai prêt d'un puits. */
+  wellCollect(s: Well): number {
+    const n = s.takeOutput((res) => this.inventory.add(res, 1) > 0);
+    if (s.output.length) this.emit({ t: 'invFull' });
+    return n;
   }
 
   /** Charge le charbon du sac dans une Manufacture. */

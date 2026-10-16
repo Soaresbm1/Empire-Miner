@@ -2,7 +2,7 @@
  * Ouvriers (données pures) : des travailleurs qu'on achète une fois à l'Atelier et qui font des corvées à la place
  * du joueur. Chacun a un métier, qu'on peut changer gratuitement.
  */
-export type WorkerJob = 'picker' | 'refueler' | 'driller';
+export type WorkerJob = 'picker' | 'refueler' | 'fixer';
 
 export interface WorkerJobDef {
   id: WorkerJob;
@@ -21,11 +21,11 @@ export const WORKER_JOBS: readonly WorkerJobDef[] = [
     color: '#6cc04a',
   },
   {
-    id: 'driller',
-    name: 'Foreur',
+    id: 'fixer',
+    name: 'Dépanneur',
     description:
-      "Pose des foreuses à charbon sur les gisements au sol, 3 au plus chacun : d'abord les petits minerais, puis de plus précieux à chaque amélioration. Prend les foreuses de votre stock, à défaut les achète lui-même, puis les ravitaille en charbon pris dans les coffres.",
-    color: '#4a8fe0',
+      "Va vers une machine à l'arrêt, regarde ce qui la bloque et le règle si c'est possible : il recharge une machine sans charbon, vide une sortie pleine dans un coffre. Sinon il rentre au camp et affiche la cause dans les statistiques (« Machines à surveiller »), puis repart vers une autre machine.",
+    color: '#e0b030',
   },
   {
     id: 'refueler',
@@ -44,7 +44,7 @@ export const isJob = (id: unknown): id is WorkerJob => WORKER_JOBS.some((j) => j
 export const WORKERS = {
   /** Ouvriers au plus. */
   max: 9,
-  /** Ouvriers d'un même métier au plus (3 ramasseurs, 3 foreurs, 3 ravitailleurs). */
+  /** Ouvriers d'un même métier au plus (3 ramasseurs, 3 dépanneurs, 3 ravitailleurs). */
   perJob: 3,
   /** Prix du premier, du deuxième… ouvrier (achat unique, pas de salaire). */
   prices: [300, 600, 1000, 1500, 2200, 3000, 4000, 5200, 6500],
@@ -100,43 +100,34 @@ export function workerName(id: number): string {
   return WORKERS.names[(Math.max(1, id) - 1) % WORKERS.names.length];
 }
 
-/** Un niveau du foreur : jusqu'à quel minerai il équipe, et à quelle vitesse il travaille. */
-export interface DrillerLevel {
-  level: number;
-  /** Prix de l'amélioration vers ce niveau (0 : niveau de base, compris dans l'embauche). */
-  price: number;
-  /** Niveau de minerai le plus élevé sur lequel il pose une foreuse (voir `ResourceDef.tier` : cuivre 1, fer 2, or 3, diamant 4). */
-  maxTier: number;
-  /** Temps de pause après chaque foreuse posée (s). */
-  placeTime: number;
-  /** Vitesse de marche, en multiple de celle des autres ouvriers. */
-  speed: number;
-  /** Condition supplémentaire (niveau de pioche). */
-  unlock?: { pickaxeTier: number; text: string };
-}
-
-/** Niveaux du foreur : de plus en plus de minerais, de plus en plus vite, de plus en plus cher. */
-export const DRILLER_LEVELS: readonly DrillerLevel[] = [
-  { level: 1, price: 0, maxTier: 1, placeTime: 3, speed: 1 },
-  { level: 2, price: 400, maxTier: 2, placeTime: 2.2, speed: 1.15 },
-  { level: 3, price: 900, maxTier: 3, placeTime: 1.6, speed: 1.3, unlock: { pickaxeTier: 3, text: 'Nécessite la Pioche en fer' } },
-  { level: 4, price: 2200, maxTier: 4, placeTime: 1.1, speed: 1.5, unlock: { pickaxeTier: 4, text: 'Nécessite la Pioche pro en acier' } },
-];
-
-export function drillerLevel(level: number): DrillerLevel {
-  return DRILLER_LEVELS[Math.max(1, Math.min(Math.floor(level) || 1, DRILLER_LEVELS.length)) - 1];
-}
-
-/** Réglages du foreur (hors niveaux). */
-export const DRILLER = {
-  /** Il n'achète une foreuse que s'il vous reste au moins cette somme ensuite ($). */
-  moneyReserve: 200,
-  /** Un gisement qui a moins que cela en réserve ne vaut pas une foreuse. */
-  minReserve: 10,
-  /** Foreuses qu'un foreur a posées et qui tiennent encore : au plus ce nombre chacun (retirer l'une libère sa place). */
-  maxDrills: 3,
-  /** Machine qu'il pose. */
-  machine: 'drill',
-  /** Distance (cases) jusqu'où il vérifie qu'une foreuse ne bouche pas un passage. */
-  passageRadius: 14,
+/** Réglages du dépanneur. */
+export const REPAIR = {
+  /** Temps passé à examiner une machine avant de se prononcer (s). */
+  inspectTime: 1.5,
+  /** Une machine signalée n'est pas revisitée avant ce délai (s). */
+  cooldown: 90,
+  /** Signalements gardés au plus (le moins récemment renouvelé part d'abord). */
+  maxReports: 40,
+  /** Gestes de réparation tentés sur une même machine avant d'abandonner et de la signaler. */
+  maxTries: 8,
 } as const;
+
+/** Ce qui peut bloquer une machine, vu par le dépanneur. */
+export type RepairCause = 'nofuel' | 'nocoal' | 'outfull' | 'nochest' | 'noexit' | 'beltfull' | 'cratefull' | 'unreachable' | 'nomech';
+
+export const REPAIR_CAUSES: readonly RepairCause[] = ['nofuel', 'nocoal', 'outfull', 'nochest', 'noexit', 'beltfull', 'cratefull', 'unreachable', 'nomech'];
+
+export const isRepairCause = (c: unknown): c is RepairCause => REPAIR_CAUSES.includes(c as RepairCause);
+
+/** Textes du jeu : la cause en quelques mots, et ce que le joueur peut faire. */
+export const REPAIR_TEXT: Record<RepairCause, { label: string; advice: string }> = {
+  nofuel: { label: 'plus de charbon', advice: 'Un dépanneur ou un ravitailleur peut la recharger : il y a du charbon en coffre.' },
+  nocoal: { label: 'plus de charbon, et aucun coffre n’en a', advice: 'Rangez du charbon dans un coffre du camp, ou posez une foreuse à charbon qui y mène.' },
+  outfull: { label: 'sortie pleine', advice: 'Un coffre peut recevoir ce qu’elle produit : un dépanneur ou un ramasseur peut la vider.' },
+  nochest: { label: 'sortie pleine, aucun coffre ne la reçoit', advice: 'Les coffres sont pleins ou réglés sur d’autres minerais : videz-les ou posez un coffre qui accepte ce produit.' },
+  noexit: { label: 'aucune sortie reliée', advice: 'Rien ne reçoit sa production : posez un convoyeur, un coffre ou une caisse devant sa flèche.' },
+  beltfull: { label: 'convoyeur plein plus loin', advice: 'La ligne est saturée en aval : un convoyeur plus rapide, une deuxième ligne ou une sortie libre (vue goulots, touche G).' },
+  cratefull: { label: 'caisse d’expédition pleine', advice: 'Videz la caisse (vente ou livraison) ou ajoutez-en une.' },
+  nomech: { label: 'plus de mécanisme', advice: 'Le puits use un mécanisme tous les 40 morceaux : déposez-en à la main, ou amenez-en par convoyeur (Manufacture, onglet Usine).' },
+  unreachable: { label: 'inaccessible pour le dépanneur', advice: 'Aucun chemin jusqu’à la machine ou au coffre (roche, grisou, eau profonde, machine en travers) : dégagez le passage.' },
+};

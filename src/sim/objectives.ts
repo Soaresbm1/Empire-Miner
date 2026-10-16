@@ -68,6 +68,11 @@ export const OBJECTIVES: Objective[] = [
   {
     id: 'crown',
     text: 'Achevez le Grand Chevalement (cinq phases) : réglez des caisses d’expédition sur « Chantier » pour livrer sans y retourner',
+    done: (g) => g.project.crowned,
+  },
+  {
+    id: 'shaft',
+    text: 'Achevez l’Ascenseur de puits (quatre phases de plus) : des mécanismes, de l’acier, des plaques d’or et d’argent, et beaucoup de commandes',
     done: (g) => g.project.done,
   },
 ];

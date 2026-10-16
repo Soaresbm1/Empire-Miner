@@ -14,7 +14,7 @@ src/
     structures/          Conveyor, Drill, TunnelBorer, Smelter, Crafter, Storage, ShippingCrate, Building (+ registre de fabrication)
     Market.ts            cours du marché (prix variables, événements) ; tirages par hachage, rien d'aléatoire à sauvegarder
     Contracts.ts         commandes des clients : propositions, acceptation, livraison, échéance, rang
-    Project.ts           le Grand Chevalement : cinq phases, livraisons, argent versé, avantages
+    Project.ts           les grands chantiers : Grand Chevalement (5 phases) puis Ascenseur de puits (4), livraisons, argent versé, avantages
     Wagons.ts            wagonnets (véhicules qui roulent sur la voie : rails et quais)
     visibility.ts        exploration (révélation des galeries)
     objectives.ts        objectifs calculés depuis l'état réel
@@ -199,27 +199,26 @@ puits. Il émet l'événement `worker` (éclat et son). **Machines qui gardent l
 le tampon atteint `WORKERS.machinePickup.drill`, stock de la base d'une foreuse de percement à `borerBase`) est ce qu'un
 ramasseur peut y prendre ; il vise le tas ou la machine la plus proche, `takeHeld` retire le minerai (`TunnelBorer.takeStored`)
 et le même `planStore` choisit le coffre (mêmes règles de filtre, mêmes causes de blocage ; ce qu'aucun coffre n'accepte reste
-dans la machine). Les fours et fonderies sont exclus. **Foreur** (`thinkDriller`) : il cherche, parmi les gisements exposés
-et explorés (`world.deposit`/`reserve`/`explored`), ceux dont le minerai est au plus du palier `DRILLER_LEVELS[level].maxTier`
-(la pierre est exclue), qui ne sont pas dans la portée d'une foreuse existante (`Drill.reach()`), pas réclamés par un autre
-foreur et où `GameState.siteProblem` autorise la pose ; `blocksPassage` écarte les cases dont l'occupation couperait un
-passage (cases libres voisines qui ne se rejoignent plus dans `DRILLER.passageRadius`). Chaque foreur ne garde que
-`DRILLER.maxDrills` (3) foreuses debout : `Drill.placedBy` (identifiant du foreur, 0 pour le joueur ; champ facultatif `by` de la
-sauvegarde) est posé par `doPlace`, `WorkerSystem.drillsOf` les compte, `thinkPlace` s'arrête au quota sans drapeau de blocage,
-et `remove` (congé) rend ses foreuses sans propriétaire pour qu'un identifiant libéré ne leur reste pas attaché. Avant de chercher un gisement
-(`thinkDriller`), il fait le travail d'un ravitailleur pour les foreuses seules (`thinkFuel` partagé avec `thinkRefueler` ;
-`needy` ne retient que les `Drill` pour un foreur) : coffre qui a du charbon (`take`), puis foreuse à moitié vide (`fuel`) ;
-sans charbon, `nocoal` reste affiché tant qu'il n'a rien à poser. Il marche jusqu'à une case voisine
-(tâche `place`) et `GameState.placeDrillFor` pose la foreuse : un kit du stock, à défaut un achat au prix de l'Atelier si
-`DRILLER.moneyReserve` reste (`drillAvailable`, sinon drapeau `nodrill`). `canPlace` est découpé en `siteProblem` + `build`
-pour que le joueur et les ouvriers partagent les mêmes règles. Niveaux : `Worker.level`, `GameState.upgradeWorker` /
-`workerUpgradeBlocker` (prix, pioche, Atelier), qui règlent aussi la durée de pose et la vitesse de marche. Achat à l'Atelier : `GameState.hireWorker` (prix croissant,
+dans la machine). Les fours et fonderies sont exclus. **Dépanneur** (`thinkFixer`, `src/sim/Repair.ts`) : il cherche les machines `Drill`, `Smelter` et `Crafter` (la foreuse de percement n'a pas de `flowState`) dont
+`flowState()` vaut `stuck`, que `diagnose` sait expliquer, qu'aucun autre dépanneur ne vise (`claimed`) et qui n'ont pas été
+signalées depuis `REPAIR.cooldown` (90 s, d'après `GameState.time`) ; il va à la plus proche (`Pather`, cases `around`). À l'arrivée
+(tâche `inspect`) il se fixe sur la machine (`Worker.focus`) et attend `REPAIR.inspectTime` ; au tour suivant `diagnose(g, machine, giveUp, cargo)`
+renvoie une cause (`RepairCause`) et si elle est réparable : **plus de charbon** (`nofuel`, du charbon en coffre ou sur lui) → `thinkFuel`
+(`needy` ne retient que la machine visée pour un dépanneur) ; **sortie pleine** (`outfull`, un coffre accepte le produit) → tâche `collect`
+(`doCollect` vide `stuckOutput` sans le seuil des ramasseurs, `takeOutput`) puis `planStore`. Après `REPAIR.maxTries` gestes sur la même
+machine, `giveUp` : il cesse de la vider et dit pourquoi elle se remplit. Sinon (`nocoal`, `noexit`, `beltfull`, `cratefull`, `nochest`) :
+`report` inscrit le constat dans `WorkerSystem.reports` (clé `x,y`, `shown: false` : il sert déjà de délai) et `thinkFixer` renvoie faux, donc
+`think` le ramène au camp ; à son arrivée (`publish`, tâche `home`) le constat passe `shown: true` et s'affiche (`ui/crew.ts` : `repairNotes`
+pour « Machines à surveiller » de `ui/stats.ts`, `repairTip` pour l'infobulle). `pruneReports` retire chaque pas les constats d'une machine
+disparue, ou qui n'est plus `stuck` une fois son délai écoulé : `GameState.update` l'appelle APRÈS `structures.update`, car `status` n'est pas sauvegardé (un four rechargé est `idle` jusqu'à son premier pas), et un dépanneur rechargé attend 0,5 s avant de réfléchir. Un constat enregistré s'affiche toujours au chargement (`note` n'est pas sauvegardé) ; l'interface ne l'affiche que si la machine est encore `stuck`. Textes et réglages : `data/workers.ts` (`REPAIR`, `REPAIR_TEXT`). Le métier `driller` (Foreur) n'existe plus :
+`WorkerSystem.load` convertit un ancien `driller` en `fixer`, ignore `level` ; `Drill.load` ignore l'ancien champ `by`. Sauvegarde :
+`SaveData.repairs?` (constats, facultatif, vérifié et borné à `REPAIR.maxReports`) ; tâche, chemin, `focus`, `tries` et `note` ne sont pas sauvegardés. Achat à l'Atelier : `GameState.hireWorker` (prix croissant,
 `isNear('workshop')`), `setWorkerJob`, `fireWorker`. **Taille de l'équipe** : `WORKERS.max` (9) et `WORKERS.perJob` (3 par
 métier) ; les places s'ouvrent avec la pioche (`WORKER_SLOTS` : 3, 6, 9 aux paliers 2, 3, 4 ; `workerSlots`,
 `nextSlotStep`). `GameState.workerHireBlocker(métier)` donne la raison d'un refus (équipe complète, palier de pioche,
 quota du métier ; l'argent et le lieu sont vérifiés à part) ; `setWorkerJob` refuse un métier déjà plein. `WorkerSystem.add`
 reste sans plafond : une sauvegarde plus ancienne (plus de places ou de quota que maintenant) est chargée entière, on
-ne peut juste plus y recruter. Sauvegarde : champ facultatif `workers` (métier, niveau,
+ne peut juste plus y recruter. Sauvegarde : champ facultatif `workers` (métier,
 position, charge ; le reste se recalcule). L'interface (`ui/crew.ts`) lit les ouvriers sans les modifier ; l'onglet est
 dans `ui/workshop.ts`, le rendu dans `Renderer.drawWorker` (sprites du mineur recolorés par `PlayerGear.crew`).
 
@@ -320,6 +319,13 @@ partie à deux). Les nombres sont des données : `data/contracts.ts` (marchandis
   est une exclusive du client le plus fidèle (au hasard par hachage parmi les ex æquo) et `exclusiveRank` avance ; elle ne revient pas si on
   la laisse passer. Sauvegarde : `rep` (absent si tous à zéro), `x` (absent à 0), `e: 1` par commande ; tout est validé au chargement, une
   ancienne sauvegarde repart à zéro. Ces champs sont dans l'empreinte de synchro (ils comptent pour la simulation).
+- **Deux chantiers, une seule liste** : `PHASES` (`data/project.ts`) compte neuf phases. `CROWN_PHASE` (5) sépare le Grand Chevalement
+  (titre d'Empereur) de l'Ascenseur de puits (titre de Souverain des profondeurs) ; `STAGES` et `stageOf(phase)` donnent le chantier
+  d'une phase pour les textes (« phase 2 sur 4 »). `Project.crowned` : le premier est fini ; `Project.done` : tout est fini.
+  Aucun champ de sauvegarde n'a été ajouté : `Project.load` borne la phase à `PHASES.length`, donc une partie sauvegardée à
+  `phase = 5` (autrefois « achevée ») rouvre sur la phase 6, sans rien perdre. L'événement `site` porte `last` à vrai pour le
+  couronnement et pour la fin de l'Ascenseur : `Game` y joue le feu d'artifice (`celebrate`). Le rang « Baron » (45 commandes) est
+  dans `CONTRACTS.ranks`. Tests : `tests/project2.test.ts`.
 - **`sim/Project.ts`** ne connaît que le chantier : `deliver`, `fund` (l'argent versé), `ready(commandesHonorées)`, `advance`.
   `GameState.checkProject()` (à chaque pas) termine les phases dont tout est réuni et émet `{ t: 'site' }`.
 - **Livrer** : à la main (actions `contractDeliver`, `siteDeliver`, `siteFund`, qui exigent d'être devant le Tableau ou le
@@ -348,7 +354,7 @@ partie à deux). Les nombres sont des données : `data/contracts.ts` (marchandis
 ## Manufacture et produits fabriqués
 
 La Manufacture (`sim/structures/Crafter.ts`) est le second étage de la chaîne : le four fait des lingots, elle en fait des
-**produits** (plaques, acier, diamant taillé). Elle est écrite sur le modèle du four (`Smelter`) : mêmes entrées par convoyeur
+**produits** (plaques, acier, diamant taillé, puis les composants fil, engrenage et mécanisme). Elle est écrite sur le modèle du four (`Smelter`) : mêmes entrées par convoyeur
 ou à la main, même charbon qui ne brûle que pendant le travail (donc un ravitailleur la recharge sans rien changer à
 `Workers`, qui reconnaît une machine à charbon à ses membres `addFuel`, `fuelUnits`, `fuelMax`), même sortie poussée devant la
 flèche (la fonction `frontTilesOf` de `Structure.ts` donne les cases de sortie des deux machines), même cadence réduite par la
@@ -359,6 +365,12 @@ chaleur. Ce qui change : une **recette choisie** par le joueur.
   `data/recipes.ts` (matières, quantité, durée), `CrafterSpec` de la machine (`data/machines.ts`).
 - **Marché** : un produit n'est pas une marchandise cotée (`COMMODITIES` ne change pas, donc le marché sauvegardé non plus) ; il
   suit le cours de son minerai (`FOLLOWS`), si bien qu'un événement sur le fer touche aussi la plaque de fer et l'acier.
+- **Recettes à plusieurs étages** : une matière de recette peut être le produit d'une autre (`gear` ← `iron_plate`, `mechanism` ←
+  `gear` + `steel` + `copper_wire`). Rien de spécial dans `Crafter` : `input` est un dictionnaire par ressource, chaque matière a sa
+  file (`inputMax`), `canMake` les exige toutes, et une Manufacture accepte le produit d'une autre devant sa flèche
+  (`Crafter.accept`). `Forecast.supply` retire déjà ce que les recettes consomment. Piège de conception : sur un convoyeur mélangé,
+  une matière dont la file est pleine bloque celles qui la suivent ; il faut une entrée par matière (côtés, contact).
+  Tests : `tests/components.test.ts`.
 - **Une recette par produit** : l'identifiant de la recette est celui du produit. `Crafter.canAccept` ne laisse entrer que les
   matières de la recette (sinon le convoyeur attend) ; `Crafter.setRecipe` renvoie les matières en attente que la nouvelle
   recette n'utilise pas, et `GameState.setCrafterRecipe` les rend au joueur (sac, puis à ses pieds).
@@ -410,6 +422,43 @@ le réseau, et l'empreinte du jeu à deux ne les voit pas.
   pleine ; rechargement et déterminisme des mesures), `tests/flow-ui.test.ts` (infobulles, panneaux, légende, aide),
   `tests/forecast.test.ts` (production récente, calcul, textes du chantier et des commandes), `e2e/flow.mjs` (navigateur réel :
   pixels de la vue goulots lus sur le canvas).
+
+- **Alerte « machine à l'arrêt »** (`ui/alerts.ts`, présentation pure : aucune `SimAction`, rien de sauvegardé ni d'envoyé à
+  l'autre joueur ; `PROTOCOL` ne change pas). `StallWatch.update(g)` relève toutes les 0,5 s de jeu les machines réparables
+  (`isRepairable`) dont `flowState()` est `stuck` ; une machine n'est signalée qu'après `ALERT.delay` (20 s) d'arrêt continu, avec
+  la cause du dépanneur (`diagnose` + `REPAIR_TEXT`). `Game` en tire un message par nouvel arrêt (un seul s'ils sont plus de 2),
+  la pastille `#hud-alert` (`alertChip`, action `alertGo`) et les anneaux de `MineMap.setAlerts`. `alertGo` ouvre la carte et
+  appelle `MineMap.centerOnTile`, appliqué au dessin suivant (les limites de la carte ne sont connues qu'une fois dessinée).
+  Tests : `tests/alerts.test.ts`, `e2e/alerts.mjs`.
+
+## Le puits (Ascenseur de puits)
+
+Le puits (`sim/structures/Well.ts`) est la machine du second chantier. Il est écrit sur le modèle de la Manufacture (charbon qui ne
+brûle que pendant le travail, sortie poussée devant la flèche par `frontTilesOf`, `fuelWanted`/`addFuel` qui le rendent rechargeable
+par un ravitailleur sans toucher à `Workers`), mais il ne consomme aucune matière de gisement.
+
+- **Données** : `WellSpec` de la machine (`data/machines.ts` : `interval`, `cycle`, `wearUnits`, `mechanism`, `mechMax`, `outputMax`).
+  Deux champs génériques de `MachineDef` ont été ajoutés : `unlock.projectPhase` (phases du chantier terminées, lu par
+  `GameState.isUnlocked` depuis `project.phase`) et `limit` (exemplaires au plus, posés ou en kit : `GameState.ownedCount`, refus dans
+  `buyKit` et `siteProblem`).
+- **Cycle et usure** : `cycle` est un tableau fixe rejoué en boucle (`Well.cycle` n'en garde que le reste modulo sa longueur), jamais
+  de tirage. `life` compte les morceaux que le mécanisme en place peut encore remonter ; à 0, le suivant en consomme un neuf de la
+  réserve `mech` (le puits neuf démarre donc avec un mécanisme). Sans mécanisme : état `nomech`, `flowState` `stuck`.
+- **Création de minerai** : un morceau remonté passe par `ctx.countExtracted` (journal de production, prévisions), comme une
+  foreuse, mais ne touche pas à `world.reserve`.
+- **Dépanneur** : `isRepairable` reconnaît le puits ; `diagnose` répond `nomech` (non réparable : le dépanneur le signale, cause
+  ajoutée à `RepairCause` et `REPAIR_TEXT`) et `nofuel`/`full` comme pour les autres. La pastille « machine à l'arrêt » en profite.
+- **Gestes** : `SimAction` `wellFuel`, `wellDeposit`, `wellCollect` (donc rejouées par les deux appareils) ; la rotation passe par `rotate`.
+- **Sauvegarde** : `Well.load` n'accepte que des valeurs saines (nombres bornés, sortie filtrée par `hasResource`) ; une partie
+  sans puits se charge comme avant, et `isUnlocked` ne lit que `project.phase`, déjà sauvegardé.
+- **Bande mixte** : plein de charbon et sans mécanisme, le puits ne brûle plus (`nomech` sort avant la combustion) et refuse le
+  charbon de tête ; un convoyeur ne dépasse jamais sa tête, le mécanisme derrière reste coincé. Pas corrigé dans la simulation
+  (équilibrage et protocole) : `wellPanel` avertit, `tests/well-belt-deadlock.test.ts` décrit le blocage actuel.
+- **Interface** : `wellPanel` (`ui/panels.ts`), dessin `drawWell` (chevalement, poulie qui tourne, benne), couleur de carte, icônes
+  d'état, ligne des statistiques, fiche du magasin (limite et verrou).
+- **Tests** : `tests/well.test.ts` (fiche, déblocage, limite, cycle exact, usure, sortie, panneau et avertissement, dépanneur, alerte, sauvegarde),
+  `tests/well-belt-deadlock.test.ts` (blocage d'une bande mixte),
+  `tests/coop-well.test.ts` (deux copies identiques, partie reçue en cours de route), `e2e/well.mjs`.
 
 ## Étendre le jeu
 

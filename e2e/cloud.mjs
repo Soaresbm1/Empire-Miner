@@ -11,9 +11,10 @@
 import { chromium } from 'playwright-core';
 import { preview } from 'vite';
 import { mkdirSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import { startFakeFirebase } from './support/fakeServer.mjs';
 
-const SHOTS = new URL('./screenshots/', import.meta.url).pathname;
+const SHOTS = fileURLToPath(new URL('./screenshots/', import.meta.url));
 mkdirSync(SHOTS, { recursive: true });
 
 let server = null;
@@ -187,7 +188,11 @@ await A_.evaluate(() => {
 await saveNow(A_);
 check(await untilNode(() => cloudMoney() === 777), 'la partie est envoyée sur le compte (777 $)');
 check(String(docOf().fields.data.stringValue).startsWith('z:'), 'elle est compressée');
-check(docOf().fields.device?.stringValue === 'Linux', 'avec le genre d’appareil');
+// Le genre d'appareil vient du navigateur (src/cloud/device.ts) : celui des essais est un ordinateur, Linux, Windows ou Mac selon
+// la machine qui les lance.
+const ua = await A_.evaluate(() => navigator.userAgent);
+const machine = /Windows/.test(ua) ? 'Windows' : /Macintosh|Mac OS X/.test(ua) ? 'Mac' : /CrOS/.test(ua) ? 'Chromebook' : 'Linux';
+check(docOf().fields.device?.stringValue === machine, `avec le genre d’appareil (${machine})`);
 await A_.click('.pause-menu [data-action="resume"]');
 
 // ---------------------------------------------------------------- B : appareil neuf, il reprend la partie

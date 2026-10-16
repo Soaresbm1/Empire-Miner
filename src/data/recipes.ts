@@ -1,7 +1,8 @@
 /**
  * Recettes de la Manufacture (données pures) : ce qu'elle fabrique, avec quoi, et en combien de temps.
  *
- * Chaque recette donne un produit de `data/resources.ts` (plaque, acier, diamant taillé). Le charbon n'est pas une matière
+ * Chaque recette donne un produit de `data/resources.ts` (plaque, acier, diamant taillé, fil, engrenage, mécanisme). Une matière peut être
+ * un produit d'une autre recette : c'est ce qui fait les chaînes à plusieurs Manufactures. Le charbon n'est pas une matière
  * de recette : la machine le brûle pendant qu'elle travaille, comme un four (voir `fuel` de la machine).
  *
  * Pour ajouter un produit : une ressource `product(...)` dans `resources.ts`, une recette ici, et si les clients doivent
@@ -27,6 +28,10 @@ export const RECIPES: readonly RecipeSpec[] = [
   { id: 'gold_plate', inputs: { gold_ingot: 1 }, yield: 1, time: 2 },
   { id: 'steel', inputs: { iron_ingot: 2 }, yield: 1, time: 4 },
   { id: 'cut_diamond', inputs: { diamond: 1 }, yield: 1, time: 5 },
+  // Composants : fabriqués à partir de produits, donc à plusieurs étages (plaque → engrenage ; engrenages + acier + fils → mécanisme).
+  { id: 'copper_wire', inputs: { copper_plate: 1 }, yield: 2, time: 3 },
+  { id: 'gear', inputs: { iron_plate: 1 }, yield: 1, time: 3 },
+  { id: 'mechanism', inputs: { gear: 2, steel: 1, copper_wire: 3 }, yield: 1, time: 8 },
 ];
 
 const byId = new Map(RECIPES.map((r) => [r.id, r]));

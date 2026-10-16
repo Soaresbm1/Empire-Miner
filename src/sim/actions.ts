@@ -16,6 +16,7 @@ import { Conveyor } from './structures/Conveyor';
 import { Drill } from './structures/Drill';
 import { TunnelBorer } from './structures/Borer';
 import { Crafter } from './structures/Crafter';
+import { Well } from './structures/Well';
 import { Smelter } from './structures/Smelter';
 import { Sorter } from './structures/Sorter';
 import { RailStation, RailSwitch, type SwitchSetting } from './structures/Rail';
@@ -38,7 +39,6 @@ export type SimAction =
   // ouvriers
   | { k: 'hire'; job: string }
   | { k: 'workerJob'; id: number; job: string }
-  | { k: 'workerUpgrade'; id: number }
   | { k: 'fire'; id: number }
   // sac et outils
   | { k: 'togglePickup'; res: string }
@@ -71,6 +71,9 @@ export type SimAction =
   | ({ k: 'smelterFuel' } & At)
   | ({ k: 'smelterDeposit' } & At)
   | ({ k: 'smelterCollect' } & At)
+  | ({ k: 'wellFuel' } & At)
+  | ({ k: 'wellDeposit' } & At)
+  | ({ k: 'wellCollect' } & At)
   | ({ k: 'crafterFuel' } & At)
   | ({ k: 'crafterDeposit' } & At)
   | ({ k: 'crafterCollect' } & At)
@@ -133,9 +136,6 @@ export function applyAction(g: GameState, a: SimAction): void {
       return;
     case 'workerJob':
       if (isJob(a.job)) g.setWorkerJob(Number(a.id), a.job as WorkerJob);
-      return;
-    case 'workerUpgrade':
-      g.upgradeWorker(Number(a.id));
       return;
     case 'fire':
       g.fireWorker(Number(a.id));
@@ -354,6 +354,28 @@ export function applyAction(g: GameState, a: SimAction): void {
       if (!(s instanceof Smelter)) return;
       const n = g.smelterCollect(s);
       if (n) msg(`${n} ${plural(n, 'lingot')} ${plural(n, 'récupéré')}.`);
+      return;
+    }
+    case 'wellFuel': {
+      const s = at(a);
+      if (!(s instanceof Well)) return;
+      const n = g.fuelWell(s);
+      if (n) msg(`${n} charbon${n > 1 ? 's' : ''} chargé${n > 1 ? 's' : ''} dans le puits.`);
+      return;
+    }
+    case 'wellDeposit': {
+      const s = at(a);
+      if (!(s instanceof Well)) return;
+      const n = g.wellDeposit(s);
+      if (n) msg(`${n} ${plural(n, 'mécanisme')} ${plural(n, 'déposé')} dans le puits.`);
+      else msg(s.mech >= s.spec.mechMax ? 'Le puits a déjà tous ses mécanismes.' : 'Aucun mécanisme dans votre sac (Manufacture : 2 engrenages, 1 acier, 3 fils).', 'info');
+      return;
+    }
+    case 'wellCollect': {
+      const s = at(a);
+      if (!(s instanceof Well)) return;
+      const n = g.wellCollect(s);
+      if (n) msg(`${n} ${plural(n, 'morceau', 'morceaux')} ${plural(n, 'récupéré')}.`);
       return;
     }
     case 'crafterFuel': {

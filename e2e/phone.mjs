@@ -16,8 +16,9 @@
 import { chromium } from 'playwright-core';
 import { preview } from 'vite';
 import { mkdirSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 
-const SHOTS = new URL('./screenshots/phone/', import.meta.url).pathname;
+const SHOTS = fileURLToPath(new URL('./screenshots/phone/', import.meta.url));
 mkdirSync(SHOTS, { recursive: true });
 const args = Object.fromEntries(process.argv.slice(2).map((a) => a.replace(/^--/, '').split('=')).map(([k, v]) => [k, v ?? true]));
 

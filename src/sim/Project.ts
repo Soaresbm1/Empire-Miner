@@ -1,13 +1,13 @@
 /**
- * Le Grand Chevalement : le grand chantier du camp, en cinq phases (voir `data/project.ts`).
+ * Les grands chantiers du camp : le Grand Chevalement (cinq phases), puis l'Ascenseur de puits (quatre de plus), voir `data/project.ts`.
  *
  * À chaque phase, il faut livrer des matériaux, verser de l'argent aux ouvriers et avoir honoré assez de commandes. La phase
- * se termine toute seule dès que tout est réuni : la tour grandit et la phase suivante commence. Quand la dernière est
- * terminée, le monument est achevé.
+ * se termine toute seule dès que tout est réuni : la tour grandit et la phase suivante commence. Quand la cinquième est terminée,
+ * le monument est couronné ; quand la dernière l'est, l'Ascenseur de puits est achevé.
  *
  * Ce module ne connaît que le chantier : l'argent, le sac et les événements passent par `GameState`.
  */
-import { PHASES, type PhaseNeed, type PhaseSpec } from '../data/project';
+import { CROWN_PHASE, PHASES, type PhaseNeed, type PhaseSpec } from '../data/project';
 import { hasResource } from '../data/resources';
 
 export interface ProjectSave {
@@ -35,7 +35,12 @@ export class Project {
   funded = 0;
   doneAt: number[] = [];
 
-  /** Le monument est-il achevé ? */
+  /** Le Grand Chevalement est-il couronné (ses cinq phases terminées) ? Le second chantier est alors ouvert. */
+  get crowned(): boolean {
+    return this.phase >= CROWN_PHASE;
+  }
+
+  /** Tous les chantiers sont-ils achevés ? */
   get done(): boolean {
     return this.phase >= PHASES.length;
   }

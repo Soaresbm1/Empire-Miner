@@ -2,7 +2,7 @@
  * Le Grand Chevalement à l'écran : le panneau du chantier (phase en cours, matériaux, salaires, commandes honorées) et, une fois
  * le monument achevé, l'écran de fin avec les chiffres de la partie. Rien ici ne modifie la partie.
  */
-import { PHASES, PROJECT_TITLE } from '../data/project';
+import { CROWN_PHASE, PHASES, PROJECT2_TITLE, PROJECT_TITLE, stageOf, type Stage } from '../data/project';
 import { getResource } from '../data/resources';
 import { projectForecast } from '../sim/Forecast';
 import type { GameState } from '../sim/GameState';
@@ -19,8 +19,10 @@ export function duration(seconds: number): string {
 /** Annonce faite quand une phase se termine. */
 export function siteNews(phase: number, last: boolean): string {
   const ph = PHASES[phase];
-  if (!ph) return 'Grand Chevalement : phase terminée !';
-  return last ? `Le Grand Chevalement est achevé ! ${PROJECT_TITLE} : la mine est à vous.` : `Grand Chevalement : « ${ph.name} » est terminée ! ${ph.perk.text}.`;
+  const st = stageOf(phase);
+  if (!ph) return `${st.name} : phase terminée !`;
+  if (last) return phase + 1 === CROWN_PHASE ? `Le Grand Chevalement est achevé ! ${PROJECT_TITLE} : un second chantier s'ouvre, l'Ascenseur de puits.` : `L'Ascenseur de puits est achevé ! ${PROJECT2_TITLE} : la mine est à vous, jusqu'au fond.`;
+  return `${st.name} : « ${ph.name} » est terminée ! ${ph.perk.text}.`;
 }
 
 /** Une ligne d'avancement : ce que c'est, où l'on en est, une barre. */
@@ -29,11 +31,12 @@ function row(label: string, n: number, of: number, extra = '', fmt: (v: number) 
   return `<li class="site-row ${n >= of ? 'ok' : ''}"><span class="ord-what">${label}</span><b class="ord-n ${n >= of ? 'ok' : ''}">${fmt(Math.min(n, of))} / ${fmt(of)}</b>${extra}<div class="ord-meter"><i style="width:${pct}%"></i></div></li>`;
 }
 
-/** Les cinq phases en frise : terminées, en cours, à venir. */
-function steps(g: GameState): string {
-  return `<ol class="site-steps">${PHASES.map((ph, i) => {
+/** Les phases d'un chantier en frise : terminées, en cours, à venir. */
+function steps(g: GameState, stage: Stage): string {
+  return `<ol class="site-steps">${PHASES.slice(stage.from, stage.to).map((ph, k) => {
+    const i = stage.from + k;
     const st = i < g.project.phase ? 'done' : i === g.project.phase ? 'now' : 'next';
-    return `<li class="${st}" title="${esc(`${ph.name} : ${ph.perk.text}`)}"><i>${st === 'done' ? '✓' : i + 1}</i><span>${esc(ph.name)}</span></li>`;
+    return `<li class="${st}" title="${esc(`${ph.name} : ${ph.perk.text}`)}"><i>${st === 'done' ? '✓' : k + 1}</i><span>${esc(ph.name)}</span></li>`;
   }).join('')}</ol>`;
 }
 
@@ -74,7 +77,7 @@ function phaseBlock(g: GameState): string {
   // Des produits de la Manufacture au programme : on dit d'où ils viennent.
   const made = spec.needs.filter((n) => getResource(n.res).product);
   const where = made.length
-    ? `<p class="hint">${made.length > 1 ? 'Ces produits se fabriquent' : 'Ce produit se fabrique'} à la <b>Manufacture</b> (Atelier, onglet Machines), à partir de lingots ou de diamants bruts : posez-en une sur votre ligne, puis réglez une caisse d'expédition sur « Chantier » à sa sortie.</p>`
+    ? `<p class="hint">${made.length > 1 ? 'Ces produits se fabriquent' : 'Ce produit se fabrique'} à la <b>Manufacture</b> (Atelier, onglet Machines), à partir de lingots, de plaques ou de diamants bruts (le mécanisme : engrenages, acier et fils, chacun fabriqué par une Manufacture) : posez-en une sur votre ligne, puis réglez une caisse d'expédition sur « Chantier » à sa sortie.</p>`
     : '';
   return `
     <p class="sub">${esc(spec.blurb)}</p>
@@ -95,7 +98,7 @@ function phaseBlock(g: GameState): string {
     <p class="hint">Plus besoin de revenir ici à chaque fois : posez une caisse d'expédition au camp, réglez-la sur <b>Chantier</b> (son panneau), et amenez-y vos lingots par convoyeur. Son transporteur livre au chantier ce que la phase attend, et vend le reste.</p>`;
 }
 
-/** Écran de fin : le monument est achevé. */
+/** Écran de fin : l'Ascenseur de puits est achevé. */
 function victory(g: GameState): string {
   const st = g.stats;
   const cells: [string, string][] = [
@@ -116,10 +119,9 @@ function victory(g: GameState): string {
   const when = PHASES.map((ph, i) => `<li><b>${esc(ph.name)}</b><span>après ${duration(g.project.doneAt[i] ?? 0)} de jeu</span></li>`).join('');
   return `
     <div class="victory">
-      <p class="victory-title">★ ${esc(PROJECT_TITLE)} ★</p>
-      <p class="sub">Le Grand Chevalement domine la mine : cinq phases, des tonnes de lingots, de l'acier, des plaques d'or et un diamant taillé au sommet. Vous pouvez continuer à jouer : les commandes et les caisses d'expédition continuent comme avant.</p>
+      <p class="victory-title">★ ${esc(PROJECT2_TITLE)} ★</p>
+      <p class="sub">Le Grand Chevalement domine la mine et l'Ascenseur de puits la perce jusqu'au fond : neuf phases, des mécanismes par centaines, des plaques d'or et des diamants taillés. Vous pouvez continuer à jouer : les commandes et les caisses d'expédition continuent comme avant.</p>
     </div>
-    ${steps(g)}
     <h4>Votre empire en chiffres</h4>
     <div class="stats-grid">${cells.map(([k, v]) => `<span>${k}</span><b>${v}</b>`).join('')}</div>
     <h4>Le chantier, phase par phase</h4>
@@ -127,12 +129,23 @@ function victory(g: GameState): string {
     <div class="panel-footer"><span class="muted">Merci d'avoir creusé jusque-là.</span>${btn('close', 'Continuer à jouer', { cls: 'primary' })}</div>`;
 }
 
-/** Corps du panneau du Grand Chevalement. */
+/** Au couronnement du Grand Chevalement : le titre gagné, et ce qui s'ouvre ensuite. Il reste en tête du panneau du second chantier. */
+function crownBanner(g: GameState): string {
+  return `
+    <div class="victory">
+      <p class="victory-title">★ ${esc(PROJECT_TITLE)} ★</p>
+      <p class="sub">Le Grand Chevalement domine la mine depuis ${duration(g.project.doneAt[CROWN_PHASE - 1] ?? 0)} de jeu. Un second chantier s'ouvre : l'Ascenseur de puits.</p>
+    </div>`;
+}
+
+/** Corps du panneau des grands chantiers : celui en cours, ou l'écran de fin quand tout est achevé. */
 export function sitePanel(g: GameState): string {
   if (g.project.done) return victory(g);
   const p = g.project;
+  const st = stageOf(p.phase);
   return `
-    <div class="site-head"><b>Phase ${p.phase + 1} sur ${PHASES.length}</b> — ${esc(p.spec!.name)}<span class="site-pct">${Math.round(p.progress() * 100)} %</span></div>
-    ${steps(g)}
+    ${p.crowned ? crownBanner(g) : ''}
+    <div class="site-head"><b>${esc(st.name)} : phase ${p.phase - st.from + 1} sur ${st.to - st.from}</b> — ${esc(p.spec!.name)}<span class="site-pct">${Math.round(p.progress() * 100)} %</span></div>
+    ${steps(g, st)}
     ${phaseBlock(g)}`;
 }

@@ -21,7 +21,7 @@ import { productionStats } from '../src/ui/stats';
 import { DEFAULT_VIEW, workshopPanel } from '../src/ui/workshop';
 import { teleport } from './helpers';
 
-const PRODUCTS = ['copper_plate', 'iron_plate', 'silver_plate', 'gold_plate', 'steel', 'cut_diamond'];
+const PRODUCTS = ['copper_plate', 'iron_plate', 'silver_plate', 'gold_plate', 'steel', 'cut_diamond', 'copper_wire', 'gear', 'mechanism'];
 const S = SURFACE_ROWS;
 
 function placeCrafter(g: GameState): Crafter {
@@ -35,7 +35,7 @@ function placeCrafter(g: GameState): Crafter {
 // ---------------------------------------------------------------- fiches
 
 describe('produits fabriqués : les fiches', () => {
-  it('six produits, après les lingots, qui ne se trouvent jamais dans la roche', () => {
+  it('neuf produits, après les lingots, qui ne se trouvent jamais dans la roche', () => {
     const products = RESOURCES.filter((r) => r.product);
     expect(products.map((r) => r.id)).toEqual(PRODUCTS);
     const lastIngot = Math.max(...RESOURCES.filter((r) => r.ingot).map((r) => resourceIndex(r.id)));

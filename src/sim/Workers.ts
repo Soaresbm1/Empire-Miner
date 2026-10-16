@@ -4,24 +4,27 @@
  * - Ramasseur : va chercher les minerais laissés au sol et les range dans le coffre le plus proche qui les accepte
  *   (chaque coffre peut être réglé sur certains minerais : il ne prend jamais un tas qu'aucun coffre n'accepte).
  * - Ravitailleur : prend du charbon dans les coffres et recharge les machines qui en manquent.
+ * - Dépanneur : va vers une machine à l'arrêt, regarde ce qui la bloque et le règle si c'est possible (charbon, sortie pleine) ;
+ *   sinon il rentre au camp, y affiche la cause (`reports`, lue par les statistiques), puis repart vers une autre machine.
  *
  * Un ouvrier se déplace de case en case (plus court chemin sur la grille, en évitant la roche, les machines, le
  * grisou et l'eau profonde) puis fait son geste : ramasser, déposer, prendre, recharger. Il n'a pas de santé : il
  * évite simplement les dangers. Quand il n'y a rien à faire, il attend près du camp.
  *
- * Seuls le métier, la position et la charge sont sauvegardés ; le reste se recalcule.
+ * Seuls le métier, la position, la charge et les signalements du dépanneur sont sauvegardés ; le reste se recalcule.
  */
 import { TILE } from '../core/constants';
 import { DX, DY, type Dir } from '../core/dir';
 import { GAS, WATER } from '../data/hazards';
-import { hasResource, getResource, RESOURCES } from '../data/resources';
-import { DRILLER, DRILLER_LEVELS, WORKERS, drillerLevel, isJob, type WorkerJob } from '../data/workers';
+import { hasResource, getResource } from '../data/resources';
+import { REPAIR, WORKERS, isJob, isRepairCause, type WorkerJob } from '../data/workers';
 import type { GameState } from './GameState';
 import { TunnelBorer } from './structures/Borer';
 import { Drill } from './structures/Drill';
 import { Storage } from './structures/Storage';
 import type { Structure } from './structures/Structure';
 import { hyp } from '../core/dmath';
+import { diagnose, isRepairable, stuckOutput, takeOutput, type RepairReport, type Repairable } from './Repair';
 
 /** Ce que l'ouvrier est en train de faire. */
 export type WorkerTask =
@@ -33,8 +36,8 @@ export type WorkerTask =
   | { kind: 'take'; x: number; y: number }
   /** Ravitailleur : marche vers une machine à recharger. */
   | { kind: 'fuel'; x: number; y: number }
-  /** Foreur : marche vers un gisement (case du gisement) où poser une foreuse. */
-  | { kind: 'place'; x: number; y: number }
+  /** Dépanneur : marche vers une machine à l'arrêt (case d'origine) pour l'examiner. */
+  | { kind: 'inspect'; x: number; y: number }
   /** Ramasseur : marche vers une machine qui garde du minerai (foreuse, base de foreuse de percement) pour la vider. */
   | { kind: 'collect'; x: number; y: number }
   | { kind: 'home' };
@@ -48,9 +51,7 @@ export type WorkerFlag =
   /** Ramasseur : un coffre convient, mais aucun chemin n'y mène (roche, grisou, eau profonde, machine en travers). */
   | 'noroute'
   | 'nocoal'
-  | 'lost'
-  /** Foreur : des gisements l'attendent, mais ni foreuse en stock ni argent pour en acheter une. */
-  | 'nodrill';
+  | 'lost';
 
 export interface Worker {
   id: number;
@@ -60,8 +61,6 @@ export interface Worker {
   y: number;
   facing: Dir;
   cargo: Record<string, number>;
-  /** Niveau (1 à 4) : celui du foreur décide des minerais qu'il équipe et de sa vitesse ; les autres métiers restent au niveau 1. */
-  level: number;
   task: WorkerTask | null;
   /** Cases restantes à parcourir (indices), la prochaine en premier. */
   path: number[];
@@ -71,13 +70,18 @@ export interface Worker {
   flag: WorkerFlag | null;
   moving: boolean;
   walkTime: number;
+  /** Dépanneur : la machine qu'il examine ou répare (case d'origine). */
+  focus: { x: number; y: number } | null;
+  /** Dépanneur : gestes de réparation déjà tentés sur la machine visée. */
+  tries: number;
+  /** Dépanneur : clé du signalement à afficher en arrivant au camp (null : rien à afficher). */
+  note: string | null;
 }
 
 export interface WorkerSave {
   id: number;
-  job: WorkerJob;
-  /** Niveau du foreur (facultatif : 1 par défaut, anciennes sauvegardes). */
-  level?: number;
+  /** Une ancienne sauvegarde peut contenir `driller` (métier supprimé) : il devient dépanneur au chargement. */
+  job: WorkerJob | 'driller';
   x: number;
   y: number;
   cargo: Record<string, number>;
@@ -213,44 +217,10 @@ function takeHeld(s: Structure, res: string, n: number): number {
   return 0;
 }
 
-/**
- * Une foreuse posée sur la case (x, y) boucherait-elle un passage ? Vrai quand les cases libres qui l'entourent ne se
- * rejoignent plus, dans un rayon de `DRILLER.passageRadius` cases, une fois la case occupée (un cul-de-sac ne gêne personne).
- */
-export function blocksPassage(g: GameState, x: number, y: number): boolean {
-  const w = g.world.w;
-  const free: number[] = [];
-  for (let k = 0; k < 4; k++) {
-    const nx = x + DX[k];
-    const ny = y + DY[k];
-    if (walkable(g, nx, ny)) free.push(ny * w + nx);
-  }
-  if (free.length <= 1) return false;
-  const here = y * w + x;
-  const seen = new Set<number>([here, free[0]]);
-  let frontier = [free[0]];
-  for (let step = 0; step < DRILLER.passageRadius && frontier.length; step++) {
-    const next: number[] = [];
-    for (const i of frontier) {
-      const cx = i % w;
-      const cy = (i - cx) / w;
-      for (let k = 0; k < 4; k++) {
-        const nx = cx + DX[k];
-        const ny = cy + DY[k];
-        const n = ny * w + nx;
-        if (seen.has(n) || !walkable(g, nx, ny)) continue;
-        seen.add(n);
-        next.push(n);
-      }
-    }
-    frontier = next;
-    if (free.every((f) => seen.has(f))) return false;
-  }
-  return !free.every((f) => seen.has(f));
-}
-
 export class WorkerSystem {
   list: Worker[] = [];
+  /** Constats des dépanneurs, par machine (clé `x,y`). Sauvegardés : ils décident du délai avant de revisiter une machine. */
+  reports = new Map<string, RepairReport>();
   private nextId = 1;
   private pather: Pather | null = null;
 
@@ -271,7 +241,6 @@ export class WorkerSystem {
       y: 0,
       facing: 1,
       cargo: {},
-      level: 1,
       task: null,
       path: [],
       wait: 0,
@@ -279,6 +248,9 @@ export class WorkerSystem {
       flag: null,
       moving: false,
       walkTime: 0,
+      focus: null,
+      tries: 0,
+      note: null,
     };
     this.list.push(w);
     const home = this.homeTile(g, this.list.length - 1);
@@ -292,8 +264,6 @@ export class WorkerSystem {
     const w = this.get(id);
     if (!w) return false;
     for (const [res, n] of Object.entries(w.cargo)) if (n > 0) g.drops.spawn(res, n, w.x, w.y - 2);
-    // Ses foreuses restent, mais n'ont plus de propriétaire (un identifiant libéré pourrait servir à un autre foreur).
-    for (const s of g.structures.list) if (s instanceof Drill && s.placedBy === id) s.placedBy = 0;
     this.list.splice(this.list.indexOf(w), 1);
     return true;
   }
@@ -306,6 +276,9 @@ export class WorkerSystem {
     w.path = [];
     w.flag = null;
     w.retry = 0;
+    w.focus = null;
+    w.tries = 0;
+    w.note = null;
     return true;
   }
 
@@ -313,6 +286,19 @@ export class WorkerSystem {
 
   update(dt: number, g: GameState): void {
     for (const w of this.list) this.updateOne(w, dt, g);
+  }
+
+  /**
+   * Un constat disparaît quand la machine n'existe plus, ou quand elle n'est plus à l'arrêt et que son délai (`REPAIR.cooldown`) est
+   * écoulé : une machine bloquée par intermittence (ligne saturée) ne fait donc pas oublier le délai. Appelé par `GameState.update`
+   * APRÈS la mise à jour des structures : leur état (`status`) n'est pas sauvegardé, il n'est juste qu'une fois qu'elles ont tourné.
+   */
+  pruneReports(g: GameState): void {
+    if (!this.reports.size) return;
+    for (const [key, r] of this.reports) {
+      const m = g.structures.at(r.x, r.y);
+      if (!m || m.x !== r.x || m.y !== r.y || (m.flowState() !== 'stuck' && g.time - r.t >= REPAIR.cooldown)) this.reports.delete(key);
+    }
   }
 
   private updateOne(w: Worker, dt: number, g: GameState): void {
@@ -351,8 +337,7 @@ export class WorkerSystem {
       const dx = cx - w.x;
       const dy = cy - w.y;
       const dist = hyp(dx, dy);
-      const pace = w.job === 'driller' ? drillerLevel(w.level).speed : 1;
-      const step = Math.min(dist, WORKERS.speed * pace * g.hazards.speedFactor(tx, ty) * dt);
+      const step = Math.min(dist, WORKERS.speed * g.hazards.speedFactor(tx, ty) * dt);
       if (dist > 1e-6) {
         w.x += (dx / dist) * step;
         w.y += (dy / dist) * step;
@@ -382,17 +367,21 @@ export class WorkerSystem {
       w.path = [];
       w.retry = WORKERS.idleWait;
     };
-    const ok = w.job === 'picker' ? this.thinkPicker(w, g) : w.job === 'driller' ? this.thinkDriller(w, g) : this.thinkRefueler(w, g);
+    const ok = w.job === 'picker' ? this.thinkPicker(w, g) : w.job === 'fixer' ? this.thinkFixer(w, g) : this.thinkRefueler(w, g);
     if (!ok) {
       // Rien à faire : retour au poste, sans bouger davantage s'il y est déjà.
       const home = this.homeTile(g, this.list.indexOf(w));
       const here = this.tileOf(w, g);
-      if (here === home) return idle();
+      if (here === home) {
+        this.publish(w);
+        return idle();
+      }
       const path = this.finder(g).find(g, here, (i) => i === home, WORKERS.reach);
       if (path) {
         w.task = { kind: 'home' };
         w.path = path;
       } else {
+        this.publish(w); // pas de chemin jusqu'au camp : le constat s'affiche quand même
         idle();
         w.retry = FAR_RETRY; // pas de chemin du tout : inutile de refaire une grande recherche chaque seconde
       }
@@ -509,92 +498,129 @@ export class WorkerSystem {
     return false;
   }
 
-  /**
-   * Foreur : d'abord du charbon pour les foreuses qui en réclament (comme un ravitailleur, mais pour elles seules), puis
-   * un gisement où poser une foreuse.
-   */
-  private thinkDriller(w: Worker, g: GameState): boolean {
-    // Le charbon d'abord : une foreuse posée sans combustible ne produit rien (celles du joueur comme les siennes).
-    if (this.thinkFuel(w, g)) return true;
-    const fuelFlag = w.flag;
-    if (this.thinkPlace(w, g)) return true;
-    // Rien à poser : un blocage de charbon reste visible tant qu'aucune autre cause (plus de foreuse) ne l'emporte.
-    if (w.flag === null) w.flag = fuelFlag;
-    return false;
+  // ---------------------------------------------------------------- dépanneur
+
+  /** Clé d'une machine dans `reports`. */
+  private keyOf(s: { x: number; y: number }): string {
+    return `${s.x},${s.y}`;
+  }
+
+  /** Le dépanneur est au camp : son constat s'affiche. */
+  private publish(w: Worker): void {
+    if (!w.note) return;
+    const r = this.reports.get(w.note);
+    if (r) r.shown = true;
+    w.note = null;
+  }
+
+  /** Enregistre le constat d'une machine et prépare le retour au camp pour l'afficher (la machine n'est pas revisitée avant `REPAIR.cooldown`). */
+  private report(w: Worker, g: GameState, m: Repairable, cause: RepairReport['cause']): void {
+    this.publish(w); // un constat qu'il rapportait encore ne doit pas rester invisible parce qu'il en fait un autre
+    const key = this.keyOf(m);
+    this.reports.delete(key); // renouvelé : il redevient le plus récent (c'est le plus ancien qui part quand la liste est pleine)
+    this.reports.set(key, { x: m.x, y: m.y, cause, t: g.time, shown: false });
+    while (this.reports.size > REPAIR.maxReports) this.reports.delete(this.reports.keys().next().value as string);
+    w.note = key;
+    w.focus = null;
+    w.tries = 0;
+  }
+
+  /** Marche jusqu'au contour de la machine pour y faire `task` ; faux s'il n'y a aucun chemin. */
+  private planAt(w: Worker, g: GameState, m: Structure, task: WorkerTask): boolean {
+    const goals = new Set(around(g, m));
+    const path = goals.size ? this.finder(g).find(g, this.tileOf(w, g), (i) => goals.has(i), WORKERS.reach) : null;
+    if (!path) return false;
+    w.task = task;
+    w.path = path;
+    w.flag = null;
+    return true;
   }
 
   /**
-   * Un gisement de son niveau (minerais jusqu'au `maxTier` de son niveau, pas la pierre) où poser une foreuse : exposé,
-   * pas déjà couvert par une foreuse, pas encore visé par un autre foreur, qui ne bouche aucun passage. Il va au plus
-   * proche. Sans foreuse (stock vide, pas assez d'argent), il le signale.
+   * Dépanneur : poursuit la réparation en cours (recharger, vider la sortie), finit de ranger ce qu'il porte, sinon choisit la
+   * machine à l'arrêt la plus proche qu'aucun autre dépanneur ne vise et qu'on n'a pas examinée récemment. Renvoie faux s'il n'y a
+   * rien à faire (il rentre au camp, où un constat éventuel s'affiche).
    */
-  private thinkPlace(w: Worker, g: GameState): boolean {
-    // Son quota est atteint : il ne pose plus rien (ce n'est pas un blocage), jusqu'à ce qu'une de ses foreuses disparaisse.
-    if (this.drillsOf(w, g) >= DRILLER.maxDrills) {
-      w.flag = null;
+  private thinkFixer(w: Worker, g: GameState): boolean {
+    let diag: ReturnType<typeof diagnose> = null;
+    let m: Repairable | null = null;
+    if (w.focus) {
+      const at = g.structures.at(w.focus.x, w.focus.y);
+      if (at && isRepairable(at) && at.x === w.focus.x && at.y === w.focus.y) {
+        m = at;
+        diag = diagnose(g, at, w.tries >= REPAIR.maxTries, w.cargo);
+      }
+      if (!diag) {
+        // Débloquée (réparée ou repartie toute seule), ou disparue : plus rien à faire dessus.
+        w.focus = null;
+        w.tries = 0;
+        m = null;
+      }
+    }
+    if (m && diag) {
+      if (!diag.fixable) {
+        this.report(w, g, m, diag.cause);
+        return false; // il rentre au camp, où le constat s'affichera
+      }
+      // Du charbon à porter : ce qu'il a pris pour elle ne retourne pas au coffre.
+      if (diag.cause === 'nofuel') {
+        w.tries++;
+        if (this.thinkFuel(w, g)) return true;
+        // Le diagnostic a vu du charbon (en coffre ou sur lui) : s'il n'y va pas, c'est que le chemin est coupé.
+        if (w.flag === 'nocoal' || w.flag === 'lost') this.report(w, g, m, 'unreachable');
+        else w.focus = null; // un ravitailleur s'en charge déjà : rien à signaler
+        return false;
+      }
+    }
+    if (cargoCount(w.cargo) > 0 && this.planStore(w, g)) return true;
+    if (m && diag) {
+      // Sortie pleine : il la vide (puis range ce qu'il a pris, au tour suivant).
+      w.tries++;
+      if (this.planAt(w, g, m, { kind: 'collect', x: m.x, y: m.y })) return true;
+      this.report(w, g, m, 'unreachable');
       return false;
     }
-    const world = g.world;
-    const width = world.w;
-    const lvl = drillerLevel(w.level);
-    const covered = new Set<number>();
-    for (const s of g.structures.list) if (s instanceof Drill) for (const t of s.reach()) covered.add(t.y * width + t.x);
-    const claimed = new Set(this.list.filter((o) => o !== w && o.task?.kind === 'place').map((o) => (o.task as { y: number; x: number }).y * width + (o.task as { x: number }).x));
-    // Case d'où l'ouvrier pose → case du gisement.
-    const goals = new Map<number, number>();
-    const dep = world.deposit;
-    for (let i = 0; i < dep.length; i++) {
-      if (!dep[i] || !world.explored[i] || world.reserve[i] < DRILLER.minReserve || covered.has(i) || claimed.has(i)) continue;
-      const res = RESOURCES[dep[i] - 1];
-      if (res.groundLife !== undefined || res.tier > lvl.maxTier) continue;
-      const x = i % width;
-      const y = (i - x) / width;
-      if (g.siteProblem(DRILLER.machine, x, y)) continue;
-      for (let k = 0; k < 4; k++) {
-        const nx = x + DX[k];
-        const ny = y + DY[k];
-        if (walkable(g, nx, ny)) goals.set(ny * width + nx, i);
-      }
+    // Une nouvelle machine à examiner.
+    const claimed = new Set<string>();
+    for (const o of this.list) {
+      if (o === w) continue;
+      if (o.task?.kind === 'inspect') claimed.add(this.keyOf(o.task));
+      if (o.focus) claimed.add(this.keyOf(o.focus));
+    }
+    const goals = new Map<number, Structure>();
+    for (const c of g.structures.list) {
+      if (!isRepairable(c) || claimed.has(this.keyOf(c))) continue;
+      const seen = this.reports.get(this.keyOf(c));
+      if (seen && g.time - seen.t < REPAIR.cooldown) continue;
+      if (!diagnose(g, c)) continue;
+      for (const k of around(g, c)) if (!goals.has(k)) goals.set(k, c);
     }
     if (!goals.size) {
-      w.flag = null; // rien à équiper à son niveau : ce n'est pas un blocage
-      return false;
-    }
-    if (!g.drillAvailable) {
-      w.flag = 'nodrill';
-      return false;
-    }
-    const here = this.tileOf(w, g);
-    for (let attempt = 0; attempt < 12 && goals.size; attempt++) {
-      const path = this.finder(g).find(g, here, (i) => goals.has(i), WORKERS.reach);
-      if (!path) break;
-      const standing = path.length ? path[path.length - 1] : here;
-      const site = goals.get(standing)!;
-      const sx = site % width;
-      const sy = (site - sx) / width;
-      if (blocksPassage(g, sx, sy)) {
-        for (const [k, v] of [...goals]) if (v === site) goals.delete(k);
-        continue;
-      }
-      w.task = { kind: 'place', x: sx, y: sy };
-      w.path = path;
       w.flag = null;
-      return true;
+      return false;
     }
+    const path = this.finder(g).find(g, this.tileOf(w, g), (k) => goals.has(k), WORKERS.reach);
+    if (!path) {
+      w.flag = 'lost';
+      return false;
+    }
+    const target = goals.get(path.length ? path[path.length - 1] : this.tileOf(w, g))!;
+    w.task = { kind: 'inspect', x: target.x, y: target.y };
+    w.path = path;
     w.flag = null;
-    return false;
+    return true;
   }
 
   /**
    * Machines qui réclament du charbon et dont le réservoir est à moitié vide ou moins. Le ravitailleur les sert toutes ;
-   * le foreur seulement les foreuses à charbon.
+   * le dépanneur seulement celle qu'il répare.
    */
   private needy(w: Worker, g: GameState): FuelMachine[] {
     const claimed = this.list.filter((o) => o !== w && o.task?.kind === 'fuel').map((o) => o.task as { x: number; y: number });
     return g.structures.list.filter(
       (s): s is FuelMachine =>
         isFuelMachine(s) &&
-        (w.job !== 'driller' || s instanceof Drill) &&
+        (w.job !== 'fixer' || (w.focus !== null && s.x === w.focus.x && s.y === w.focus.y)) &&
         s.fuelWanted() !== null &&
         s.fuelUnits <= s.fuelMax * WORKERS.fuelLow &&
         !claimed.some((c) => c.x === s.x && c.y === s.y),
@@ -665,11 +691,16 @@ export class WorkerSystem {
         return this.doTake(w, g, task.x, task.y);
       case 'fuel':
         return this.doFuel(w, g, task.x, task.y);
-      case 'place':
-        return this.doPlace(w, g, task.x, task.y);
+      case 'inspect':
+        // Il regarde la machine, puis décide (au prochain tour de réflexion, après la pause).
+        w.focus = { x: task.x, y: task.y };
+        w.tries = 0;
+        w.wait = REPAIR.inspectTime;
+        return;
       case 'collect':
         return this.doCollect(w, g, task.x, task.y);
       case 'home':
+        this.publish(w);
         w.retry = WORKERS.idleWait;
     }
   }
@@ -733,42 +764,19 @@ export class WorkerSystem {
     g.emit({ t: 'worker', kind: 'fuel', x: w.x, y: w.y, res });
   }
 
-  /** Foreuses posées par ce foreur et encore debout (celles d'avant cette règle ou posées par le joueur ne comptent pas). */
-  drillsOf(w: Worker, g: GameState): number {
-    let n = 0;
-    for (const s of g.structures.list) if (s instanceof Drill && s.placedBy === w.id) n++;
-    return n;
-  }
-
-  /** Foreur : pose la foreuse sur le gisement, face à un coffre voisin s'il y en a un, puis marque une pause. */
-  private doPlace(w: Worker, g: GameState, x: number, y: number): void {
-    if (this.drillsOf(w, g) >= DRILLER.maxDrills || blocksPassage(g, x, y)) return;
-    let dir: Dir = 1;
-    for (let k = 0; k < 4; k++)
-      if (g.structures.at(x + DX[k], y + DY[k]) instanceof Storage) {
-        dir = k as Dir;
-        break;
-      }
-    const res = g.world.depositAt(x, y) ?? 'coal';
-    const placed = g.placeDrillFor(x, y, dir);
-    if (!placed) return;
-    placed.drill.placedBy = w.id;
-    w.wait = drillerLevel(w.level).placeTime;
-    g.emit({ t: 'worker', kind: 'place', x: (x + 0.5) * TILE, y: (y + 0.5) * TILE, res });
-  }
-
   /** Ramasseur : prend dans la machine le minerai qu'un coffre accepte, jusqu'à sa charge maximale. */
   private doCollect(w: Worker, g: GameState, x: number, y: number): void {
     const s = g.structures.at(x, y);
     if (!s) return;
-    const held = heldOre(s);
+    // Le dépanneur vide tout ce que la machine retient ; le ramasseur seulement ce qui s'accumule (voir `heldOre`).
+    const held = w.job === 'fixer' ? stuckOutput(s) : heldOre(s);
     let moved = false;
     for (const res of Object.keys(held).sort((a, b) => held[b] - held[a])) {
       const r = getResource(res);
       if (r.groundLife !== undefined) continue;
       if (!g.structures.list.some((c) => c instanceof Storage && c.canAccept(res))) continue;
       const room = Math.floor((WORKERS.capacity - cargoWeight(w.cargo)) / r.weight + 1e-6);
-      const k = takeHeld(s, res, Math.min(held[res], room));
+      const k = w.job === 'fixer' ? takeOutput(s, res, Math.min(held[res], room)) : takeHeld(s, res, Math.min(held[res], room));
       if (k <= 0) continue;
       w.cargo[res] = (w.cargo[res] ?? 0) + k;
       moved = true;
@@ -780,7 +788,7 @@ export class WorkerSystem {
   // ---------------------------------------------------------------- sauvegarde
 
   serialize(): WorkerSave[] {
-    return this.list.map((w) => ({ id: w.id, job: w.job, level: w.level, x: Math.round(w.x * 100) / 100, y: Math.round(w.y * 100) / 100, cargo: { ...w.cargo } }));
+    return this.list.map((w) => ({ id: w.id, job: w.job, x: Math.round(w.x * 100) / 100, y: Math.round(w.y * 100) / 100, cargo: { ...w.cargo } }));
   }
 
   /** Recharge les ouvriers sauvegardés ; les valeurs aberrantes sont ignorées (au plus `WORKERS.max`). */
@@ -789,9 +797,11 @@ export class WorkerSystem {
     this.nextId = 1;
     if (!Array.isArray(data)) return;
     for (const s of data.slice(0, WORKERS.max)) {
-      if (!s || !isJob(s.job)) continue;
-      const w = this.add(s.job, g);
-      w.level = Math.max(1, Math.min(DRILLER_LEVELS.length, Math.floor(Number(s.level ?? 1)) || 1));
+      // Le foreur n'existe plus : un ouvrier sauvegardé comme tel devient dépanneur (il a été acheté, on ne le perd pas).
+      const job = s?.job === 'driller' ? 'fixer' : s?.job;
+      if (!s || !isJob(job)) continue;
+      const w = this.add(job, g);
+      if (job === 'fixer') w.retry = 0.5; // les machines ont d'abord un pas pour retrouver leur vrai état (`status` n'est pas sauvegardé)
       const x = Number(s.x);
       const y = Number(s.y);
       if (Number.isFinite(x) && Number.isFinite(y) && g.world.inBounds(Math.floor(x / TILE), Math.floor((y - 1) / TILE))) {
@@ -812,5 +822,24 @@ export class WorkerSystem {
       used.add(w.id);
     }
     this.nextId = this.list.reduce((m, w) => Math.max(m, w.id), 0) + 1;
+  }
+
+  /** Constats des dépanneurs à sauvegarder (les plus anciens d'abord). */
+  serializeReports(): RepairReport[] {
+    return [...this.reports.values()].map((r) => ({ x: r.x, y: r.y, cause: r.cause, t: Math.round(r.t * 100) / 100, shown: r.shown }));
+  }
+
+  /** Recharge les constats ; une valeur aberrante est ignorée (au plus `REPAIR.maxReports`). */
+  loadReports(data: unknown, g: GameState): void {
+    this.reports = new Map();
+    if (!Array.isArray(data)) return;
+    for (const r of data.slice(0, REPAIR.maxReports) as Partial<RepairReport>[]) {
+      const x = Math.floor(Number(r?.x));
+      const y = Math.floor(Number(r?.y));
+      const t = Number(r?.t);
+      if (!Number.isFinite(x) || !Number.isFinite(y) || !Number.isFinite(t) || !isRepairCause(r?.cause) || !g.world.inBounds(x, y)) continue;
+      // Le dépanneur ne se souvient plus de ce qu'il devait rapporter : un constat enregistré s'affiche.
+      this.reports.set(this.keyOf({ x, y }), { x, y, cause: r.cause, t, shown: true });
+    }
   }
 }

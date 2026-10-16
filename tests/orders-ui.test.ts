@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { CLIENTS } from '../src/data/contracts';
-import { PHASES } from '../src/data/project';
+import { CROWN_PHASE, PHASES } from '../src/data/project';
 import type { Contract } from '../src/sim/Contracts';
 import { GameState } from '../src/sim/GameState';
 import { ShippingCrate } from '../src/sim/structures/ShippingCrate';
@@ -177,6 +177,8 @@ describe('onglet Commandes', () => {
     expect(html).toContain('9 / 16 commandes honorées');
     expect(html).toContain('50 % plus grosses');
     g.stats.contracts = 40;
+    expect(ordersTab(g)).toContain('40 / 45 commandes honorées'); // Magnat : le Baron est au bout
+    g.stats.contracts = 45;
     expect(ordersTab(g)).toContain('rang maximal');
   });
 });
@@ -362,10 +364,10 @@ describe('panneau du chantier', () => {
   it('la phase en cours, la frise et les matériaux manquants', () => {
     const g = game();
     const html = sitePanel(g);
-    expect(html).toContain(`Phase 1 sur ${PHASES.length}`);
+    expect(html).toContain(`Grand Chevalement : phase 1 sur ${CROWN_PHASE}`);
     expect(html).toContain('Fondations');
     expect(html).toContain('0 %');
-    expect((html.match(/<li class="(done|now|next)"/g) ?? []).length).toBe(PHASES.length);
+    expect((html.match(/<li class="(done|now|next)"/g) ?? []).length).toBe(CROWN_PHASE); // la frise du chantier en cours seulement
     expect(html).toContain('<li class="now"');
     for (const n of PHASES[0].needs) expect(html).toContain(`0 / ${n.qty}`);
     expect(html).toContain(`0${NBSP}$ / ${money(PHASES[0].money)}`);
@@ -400,7 +402,7 @@ describe('panneau du chantier', () => {
     expect(html).toContain(PHASES[0].perk.text);
   });
 
-  it('le monument achevé : écran de fin avec les chiffres de la partie', () => {
+  it('les deux chantiers achevés : écran de fin avec les chiffres de la partie', () => {
     const g = game();
     g.stats.contracts = 99;
     g.stats.playTime = 3 * 3600 + 25 * 60;
@@ -412,7 +414,7 @@ describe('panneau du chantier', () => {
     }
     expect(g.project.done).toBe(true);
     const html = sitePanel(g);
-    expect(html).toContain('Empereur de la mine');
+    expect(html).toContain('Souverain des profondeurs');
     expect(html).toContain('3 h 25 min');
     expect(html).toContain(money(g.stats.earned));
     expect(html).toContain('Commandes honorées');

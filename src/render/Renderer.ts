@@ -19,6 +19,7 @@ import { Building } from '../sim/structures/Building';
 import { Conveyor } from '../sim/structures/Conveyor';
 import { TunnelBorer } from '../sim/structures/Borer';
 import { Crafter } from '../sim/structures/Crafter';
+import { Well } from '../sim/structures/Well';
 import { Smelter } from '../sim/structures/Smelter';
 import { Fan, Prop, Pump } from '../sim/structures/Safety';
 import { MARKER_KINDS, type Marker } from '../sim/Markers';
@@ -274,6 +275,8 @@ export class Renderer {
           const big = s.w > 1;
           for (const cx of big ? [s.x * TILE + 7, s.x * TILE + s.w * TILE - 8] : [s.x * TILE + 11])
             this.fx.emit('smoke', cx, s.y * TILE - (big ? 26 : 16), 'rgba(80,76,80,0.6)', 1, 6);
+        } else if (s instanceof Well && s.status === 'ok' && this.inView(s.x * TILE, s.y * TILE, 64)) {
+          this.fx.emit('smoke', s.x * TILE + s.w * TILE - 9, s.y * TILE - 30, 'rgba(90,92,100,0.5)', 1, 6);
         } else if (s instanceof Crafter && s.status === 'ok' && this.inView(s.x * TILE, s.y * TILE, 64)) {
           this.fx.emit('smoke', s.x * TILE + s.w * TILE - 7, s.y * TILE - 24, 'rgba(80,84,92,0.55)', 1, 6);
         } else if (s instanceof TunnelBorer && (s.status === 'digging' || s.status === 'moving' || s.status === 'returning')) {
@@ -856,6 +859,7 @@ export class Renderer {
     }
     else if (s instanceof Smelter) this.drawSmelter(s);
     else if (s instanceof Crafter) this.drawCrafter(s);
+    else if (s instanceof Well) this.drawWell(s);
     else if (s instanceof Prop) this.drawProp(s);
     else if (s instanceof Fan) this.drawFan(s);
     else if (s instanceof Pump) this.drawPump(s);
@@ -1339,6 +1343,79 @@ export class Renderer {
    * Manufacture (2×2) : un bâti d'acier bleuté avec une presse qui monte et descend quand elle travaille, une enclume où
    * pose la pièce en cours, une cheminée, une lampe d'état, et une plaque au-dessus qui montre ce qu'elle fabrique.
    */
+  /** Puits : margelle de pierre, chevalement de bois avec sa poulie qui tourne, lampe d'état et goulotte de sortie. */
+  private drawWell(s: Well): void {
+    const ctx = this.ctx;
+    const pen = this.pen;
+    const x = s.x * TILE;
+    const y = s.y * TILE;
+    const W = s.w * TILE;
+    const H = s.h * TILE;
+    const top = 26; // hauteur du chevalement au-dessus de sa case
+    const working = s.status === 'ok';
+    pen.shadow(x + 1, y + H - 3, W - 1);
+    // Margelle de pierre et gueule du puits.
+    pen.rect(x + 1, y + H - 17, W - 2, 16, INK);
+    pen.slab(x + 2, y + H - 16, W - 4, 14, '#6b6258', false);
+    pen.rect(x + 9, y + H - 13, W - 18, 9, INK);
+    pen.rect(x + 10, y + H - 12, W - 20, 7, working ? '#16202c' : '#0d0b10');
+    // Chevalement : deux montants de bois, une traverse, la poulie au sommet.
+    const post = '#7a5a3a';
+    for (const px of [x + 6, x + W - 9]) {
+      pen.rect(px - 1, y - top + 3, 5, H + top - 17, INK);
+      pen.rect(px, y - top + 4, 3, H + top - 19, post);
+      pen.rect(px, y - top + 4, 1, H + top - 19, '#a47c54');
+    }
+    pen.rect(x + 5, y - top + 12, W - 10, 3, INK);
+    pen.rect(x + 6, y - top + 12, W - 12, 2, '#5c4128');
+    // Poulie : une roue dont les rayons tournent quand le puits travaille.
+    const cx = x + W / 2;
+    const cy = y - top + 7;
+    ctx.fillStyle = '#120e10';
+    ctx.beginPath();
+    ctx.arc(cx, cy, 6, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = '#9aa3b0';
+    ctx.beginPath();
+    ctx.arc(cx, cy, 5, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = '#3a3f4a';
+    ctx.beginPath();
+    ctx.arc(cx, cy, 3.5, 0, Math.PI * 2);
+    ctx.fill();
+    const a = s.activeTime * 3;
+    ctx.strokeStyle = '#e2e7ee';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    for (let k = 0; k < 3; k++) {
+      ctx.moveTo(cx, cy);
+      ctx.lineTo(cx + Math.cos(a + (k * Math.PI * 2) / 3) * 4.5, cy + Math.sin(a + (k * Math.PI * 2) / 3) * 4.5);
+    }
+    ctx.stroke();
+    // Câble et benne : elle monte et descend dans la gueule quand le puits travaille.
+    const drop = working ? Math.round(5 + 4 * Math.sin(s.activeTime * 2)) : 9;
+    pen.rect(cx, cy + 5, 1, y + H - 14 - (cy + 5) + drop - 9, '#c9c2b8');
+    pen.slab(cx - 3, y + H - 17 + drop - 9, 7, 5, '#8a6a3c');
+    // Lampe d'état, en haut à gauche du chevalement.
+    const lamp = s.status === 'ok' ? '#6fe36a' : s.status === 'full' ? '#e0a020' : s.status === 'nomech' ? '#d0342c' : s.status === 'nofuel' ? '#d0342c' : '#3f5a3c';
+    pen.rect(x + 11, y - top + 5, 4, 4, INK);
+    pen.rect(x + 12, y - top + 6, 2, 2, lamp);
+    // Goulotte de sortie du côté de la flèche, avec le morceau qui attend.
+    ctx.save();
+    ctx.translate(x + W / 2, y + H / 2);
+    ctx.rotate((s.dir * Math.PI) / 2);
+    const edge = (s.dir % 2 === 0 ? W : H) / 2;
+    pen.rect(edge - 3, -5, 5, 10, INK);
+    pen.rect(edge - 2, -4, 3, 8, '#7d818b');
+    pen.rect(edge - 2, -4, 1, 8, '#b4b9c4');
+    ctx.restore();
+    if (s.output.length) {
+      const img = this.nuggets.get(s.output[0]);
+      if (img) ctx.drawImage(img, Math.round(x + W / 2 + DX[s.dir] * (W / 2 - 2) - img.width / 2), Math.round(y + H / 2 + DY[s.dir] * (H / 2 - 2) - img.height / 2));
+    }
+    this.drawArrow(x + W / 2 + DX[s.dir] * (W / 2 - 5), y + H / 2 + DY[s.dir] * (H / 2 - 5) - (s.dir % 2 ? 0 : 3), s.dir, '#ffffff');
+  }
+
   private drawCrafter(s: Crafter): void {
     const ctx = this.ctx;
     const pen = this.pen;
@@ -1859,7 +1936,11 @@ export class Renderer {
         icon = s.status === 'nofuel' ? 'nofuel' : s.status === 'full' ? 'full' : s.status === 'ok' && s.heat < 1 ? 'hot' : null;
         at = { x: s.x * TILE + (s.w - 1) * 8, y: s.y * TILE - (s.w > 1 ? 14 : 8) };
       }
-      else if (s instanceof Crafter) {
+      else if (s instanceof Well) {
+        // Puits sans charbon, sans mécanisme ou sortie saturée.
+        icon = s.status === 'nofuel' ? 'nofuel' : s.status === 'full' ? 'full' : s.status === 'nomech' ? 'stop' : null;
+        at = { x: s.x * TILE + (s.w - 1) * 8, y: s.y * TILE - 30 };
+      } else if (s instanceof Crafter) {
         // Manufacture sans charbon alors qu'elle a de quoi travailler, ou sortie saturée.
         icon = s.status === 'nofuel' ? 'nofuel' : s.status === 'full' ? 'full' : s.status === 'ok' && s.heat < 1 ? 'hot' : null;
         at = { x: s.x * TILE + (s.w - 1) * 8, y: s.y * TILE - 14 };
@@ -2192,6 +2273,7 @@ export class Renderer {
       else if (s instanceof Smelter) punch((s.x + s.w / 2) * TILE, (s.y + s.h - 0.3) * TILE, s.status === 'ok' ? 3 + s.w : 1.4, 0.85);
       // Manufacture : la lampe et le travail éclairent un peu autour d'elle.
       else if (s instanceof Crafter) punch((s.x + s.w / 2) * TILE, (s.y + s.h - 0.4) * TILE, s.status === 'ok' ? 3.4 : 1.6, 0.8);
+      else if (s instanceof Well) punch((s.x + s.w / 2) * TILE, (s.y + s.h - 0.5) * TILE, s.status === 'ok' ? 3.6 : 1.8, 0.8);
       // Phare de la foreuse de percement : éclaire le front de taille, où qu'elle soit ; la base a sa lampe.
       else if (s instanceof TunnelBorer) {
         const v = this.borerVehicleXY(s);
