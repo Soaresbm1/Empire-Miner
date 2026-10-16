@@ -688,8 +688,15 @@ export function wellPanel(g: GameState, s: Well): string {
   const mechBag = g.inventory.count(s.spec.mechanism);
   const next = getResource(s.nextRes());
   const cycle = s.spec.cycle.map((res, i) => `<span class="chip${i === s.cycle % s.spec.cycle.length ? ' on' : ''}" title="${getResource(res).name}">${resIcon(res)}</span>`).join('');
+  // Sans mécanisme le puits ne brûle plus : plein de charbon, il refuse le suivant, et une bande qui mêle charbon et mécanismes
+  // reste coincée sur le charbon de tête (le mécanisme derrière n'arrive jamais).
+  const jam =
+    s.status === 'nomech' && s.fuelUnits >= s.fuelMax
+      ? '<div class="status warn">⚠ Plein de charbon et sans mécanisme : une bande qui mêle les deux reste bloquée sur le charbon. Amenez les mécanismes par une bande à part (ou déposez-les), le charbon par une autre.</div>'
+      : '';
   return `
     <div class="status ${cls}">● ${label}</div>
+    ${jam}
     <div class="bar"><div style="width:${Math.round(s.progress * 100)}%"></div><span>Prochain morceau : ${next.name}</span></div>
     <div class="cards" style="margin-top:10px"><div class="card">
       ${stat('Morceaux prêts', `${s.output.length} / ${s.spec.outputMax}`)}

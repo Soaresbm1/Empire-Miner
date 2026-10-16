@@ -207,6 +207,18 @@ describe('puits : les gestes du joueur', () => {
     expect(wellPanel(g, w)).toContain('Remonte du minerai');
     expect(wellPanel(g, w)).toContain('Mécanismes en réserve');
   });
+
+  it('son panneau avertit d’une bande mixte quand il est plein de charbon et sans mécanisme', () => {
+    const { g, w } = setup({ coal: 1 });
+    expect(wellPanel(g, w)).not.toContain('bande qui mêle');
+    w.addFuel(w.fuelMax);
+    run(g, 1);
+    expect(w.status).toBe('nomech');
+    expect(wellPanel(g, w)).toContain('bande qui mêle');
+    w.addMech(1);
+    run(g, 6);
+    expect(wellPanel(g, w)).not.toContain('bande qui mêle');
+  });
 });
 
 describe('puits : le dépanneur et l’alerte', () => {

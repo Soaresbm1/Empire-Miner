@@ -304,7 +304,9 @@ Le jeu à deux n'est pas concerné : l'invité n'a besoin d'aucun compte, et l'h
   et le pousse devant sa flèche (convoyeur, coffre, caisse d'expédition) ou le range dans le sac (« Récupérer »). Elle **brûle du
   charbon** pendant qu'elle travaille (1 unité pour 10 s : un ravitailleur ou un coffre collé la recharge) et **use un mécanisme
   tous les 40 morceaux** (200 s : le réservoir de charbon plein suffit juste pour un mécanisme) ; sans mécanisme, elle s'arrête. Le
-  charbon et les mécanismes entrent par un convoyeur ou à la main, sur n'importe quel côté sauf la sortie. Le dépanneur la
+  charbon et les mécanismes entrent par un convoyeur ou à la main, sur n'importe quel côté sauf la sortie. **Une bande qui mêle les
+  deux peut se coincer** : plein de charbon et sans mécanisme, le puits ne brûle plus et refuse le charbon de tête, donc le
+  mécanisme derrière n'arrive jamais (le panneau l'avertit : une bande par ressource). Le dépanneur la
   connaît (« plus de mécanisme » est une cause qu'il signale, il recharge le charbon) et la pastille « machine à l'arrêt » aussi.
   Valeur brute remontée : environ 750 $/min aux prix de base, contre un mécanisme de 525 $ toutes les 3 min 20 s (environ 160 $/min).
 - **Dangers** en profondeur, avec une **barre de santé** (on récupère hors de danger ; à 0, on s'évanouit et on se

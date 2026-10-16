@@ -451,9 +451,13 @@ par un ravitailleur sans toucher à `Workers`), mais il ne consomme aucune mati�
 - **Gestes** : `SimAction` `wellFuel`, `wellDeposit`, `wellCollect` (donc rejouées par les deux appareils) ; la rotation passe par `rotate`.
 - **Sauvegarde** : `Well.load` n'accepte que des valeurs saines (nombres bornés, sortie filtrée par `hasResource`) ; une partie
   sans puits se charge comme avant, et `isUnlocked` ne lit que `project.phase`, déjà sauvegardé.
+- **Bande mixte** : plein de charbon et sans mécanisme, le puits ne brûle plus (`nomech` sort avant la combustion) et refuse le
+  charbon de tête ; un convoyeur ne dépasse jamais sa tête, le mécanisme derrière reste coincé. Pas corrigé dans la simulation
+  (équilibrage et protocole) : `wellPanel` avertit, `tests/well-belt-deadlock.test.ts` décrit le blocage actuel.
 - **Interface** : `wellPanel` (`ui/panels.ts`), dessin `drawWell` (chevalement, poulie qui tourne, benne), couleur de carte, icônes
   d'état, ligne des statistiques, fiche du magasin (limite et verrou).
-- **Tests** : `tests/well.test.ts` (fiche, déblocage, limite, cycle exact, usure, sortie, dépanneur, alerte, sauvegarde),
+- **Tests** : `tests/well.test.ts` (fiche, déblocage, limite, cycle exact, usure, sortie, panneau et avertissement, dépanneur, alerte, sauvegarde),
+  `tests/well-belt-deadlock.test.ts` (blocage d'une bande mixte),
   `tests/coop-well.test.ts` (deux copies identiques, partie reçue en cours de route), `e2e/well.mjs`.
 
 ## Étendre le jeu
