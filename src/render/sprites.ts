@@ -368,13 +368,17 @@ const PLATE = ['aaaaaa', 'abbbbc', 'abbbbc', 'cccccc'];
 const SPARKLE_PLATE = ['aawaaa', 'abbbbc', 'abbbbc', 'cccccc'];
 const BAR = ['aaaaaaa', '.bbbbb.', '.bbbbb.', 'ccccccc'];
 const GEM = ['.awaa.', 'abbbbc', '.bbbc.', '..cc..'];
+/** Composants : une bobine de fil, une roue dentée, un boîtier de mécanisme (un hublot clair au milieu). */
+const WIRE = ['.aaaa.', 'abbbbc', 'acccbc', 'abbbbc', '.cccc.'];
+const GEAR = ['.a.a.a.', 'abbbbbc', '.bc.cb.', 'abbbbbc', '.c.c.c.'];
+const MECH = ['aaaaaaa', 'abbbbbc', 'abawabc', 'abbbbbc', 'ccccccc'];
 
 export function buildNuggetSprites(): Map<string, HTMLCanvasElement> {
   const map = new Map<string, HTMLCanvasElement>();
   for (const r of RESOURCES) {
     const rare = r.rarity === 'rare' || r.rarity === 'très rare' || r.rarity === 'légendaire';
     const art =
-      r.shape === 'plate' ? (rare ? SPARKLE_PLATE : PLATE) : r.shape === 'bar' ? BAR : r.shape === 'gem' ? GEM : r.ingot ? (rare ? SPARKLE_INGOT : INGOT) : rare ? SPARKLE : NUGGET;
+      r.shape === 'plate' ? (rare ? SPARKLE_PLATE : PLATE) : r.shape === 'bar' ? BAR : r.shape === 'gem' ? GEM : r.shape === 'wire' ? WIRE : r.shape === 'gear' ? GEAR : r.shape === 'mech' ? MECH : r.ingot ? (rare ? SPARKLE_INGOT : INGOT) : rare ? SPARKLE : NUGGET;
     map.set(r.id, fromArt(art, { a: r.light, b: r.color, c: r.dark, w: '#ffffff' }, '#120e10'));
   }
   return map;

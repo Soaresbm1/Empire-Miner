@@ -40,6 +40,9 @@ export const GOODS: readonly GoodSpec[] = [
   { res: 'steel', qty: [4, 12], weight: 1.2, time: 900, step: 1 },
   { res: 'gold_plate', qty: [2, 5], weight: 0.8, time: 960, step: 1 },
   { res: 'cut_diamond', qty: [1, 2], weight: 0.5, time: 1000, step: 1 },
+  { res: 'copper_wire', qty: [12, 36], weight: 1, time: 840, step: 2 },
+  { res: 'gear', qty: [4, 12], weight: 1, time: 900, step: 1 },
+  { res: 'mechanism', qty: [1, 4], weight: 0.6, time: 1100, step: 1 },
 ];
 
 export const CONTRACTS = {

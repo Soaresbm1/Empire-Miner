@@ -284,8 +284,12 @@ Le jeu à deux n'est pas concerné : l'invité n'a besoin d'aucun compte, et l'h
 - **Manufacture** (900 $, pioche améliorée, 2×2 cases, onglet « Usine » de la barre de construction) : elle **transforme les
   lingots en produits**, plus chers que leurs matières. `E` dessus ouvre son panneau, où l'on **choisit la recette** :
   **plaque** de cuivre, de fer, d'argent ou d'or (1 lingot, 2 s, ×1,5 la valeur du lingot), **acier** (2 lingots de fer, 4 s,
-  170 $ l'unité) ou **diamant taillé** (1 diamant brut, 5 s, ×2). Le panneau ne propose que les recettes dont on connaît les
-  matières (un lingot fondu, un diamant trouvé). Les lingots entrent par un convoyeur ou se déposent du sac, sur n'importe quel côté
+  170 $ l'unité) ou **diamant taillé** (1 diamant brut, 5 s, ×2). Trois **composants** se fabriquent à partir d'autres produits,
+  donc à plusieurs Manufactures : **fil de cuivre** (1 plaque de cuivre → 2 fils, 3 s, 16 $), **engrenage** (1 plaque de fer, 3 s,
+  78 $) et **mécanisme** (2 engrenages + 1 acier + 3 fils, 8 s, 525 $, environ 1,4 fois ses matières). Une Manufacture peut pousser
+  son produit directement dans une autre posée devant sa flèche ; le mécanisme demande trois matières, à amener par trois côtés
+  ou par contact (sur un seul convoyeur mélangé, une matière en excès peut bloquer les autres : la vue goulots le montre).
+  Le panneau ne propose que les recettes dont on connaît les matières (un lingot fondu, un diamant trouvé, un produit déjà fabriqué). Les lingots entrent par un convoyeur ou se déposent du sac, sur n'importe quel côté
   sauf la sortie ; une matière hors recette est refusée (le convoyeur attend). Elle brûle du charbon comme un four (un
   ravitailleur peut la recharger) et ralentit dans la Fournaise ; les produits sont poussés devant la flèche (convoyeur,
   coffre, caisse d'expédition) ou récupérés dans le sac. **Changer de recette rend les matières qu'elle n'utilise pas**
@@ -407,7 +411,7 @@ Le jeu à deux n'est pas concerné : l'invité n'a besoin d'aucun compte, et l'h
   proposition** est versée ; si l'échéance passe ou si on abandonne (le second appui confirme), **le client paie ce qui est
   livré au prix de base, sans la prime** : rien n'est perdu, seule la prime l'est. Un client ne demande que **ce que vous avez
   déjà trouvé**, et les lingots seulement après le premier lingot fondu : ils donnent une vraie raison de bâtir une ligne de
-  fonte et de trier. Même chose pour les **produits de la Manufacture** (plaques, acier, diamant taillé), après le premier fabriqué. Le **marché** pèse sur le tirage (une marchandise en forte demande est demandée trois fois plus souvent,
+  fonte et de trier. Même chose pour les **produits de la Manufacture** (plaques, acier, diamant taillé, fil, engrenage, mécanisme), après le premier fabriqué. Le **marché** pèse sur le tirage (une marchandise en forte demande est demandée trois fois plus souvent,
   une marchandise bradée deux fois et demie moins). Le **rang** (Livreur, Fournisseur, Négociant, Grossiste, Magnat : 3, 8, 16,
   30 commandes honorées) grossit les commandes de 25 % par rang et ajoute 2 points de prime. Une pastille sur l'onglet
   signale les propositions qui attendent, une ligne du HUD donne la commande la plus pressée (sur ordinateur), une annonce

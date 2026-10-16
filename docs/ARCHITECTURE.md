@@ -347,7 +347,7 @@ partie à deux). Les nombres sont des données : `data/contracts.ts` (marchandis
 ## Manufacture et produits fabriqués
 
 La Manufacture (`sim/structures/Crafter.ts`) est le second étage de la chaîne : le four fait des lingots, elle en fait des
-**produits** (plaques, acier, diamant taillé). Elle est écrite sur le modèle du four (`Smelter`) : mêmes entrées par convoyeur
+**produits** (plaques, acier, diamant taillé, puis les composants fil, engrenage et mécanisme). Elle est écrite sur le modèle du four (`Smelter`) : mêmes entrées par convoyeur
 ou à la main, même charbon qui ne brûle que pendant le travail (donc un ravitailleur la recharge sans rien changer à
 `Workers`, qui reconnaît une machine à charbon à ses membres `addFuel`, `fuelUnits`, `fuelMax`), même sortie poussée devant la
 flèche (la fonction `frontTilesOf` de `Structure.ts` donne les cases de sortie des deux machines), même cadence réduite par la
@@ -358,6 +358,12 @@ chaleur. Ce qui change : une **recette choisie** par le joueur.
   `data/recipes.ts` (matières, quantité, durée), `CrafterSpec` de la machine (`data/machines.ts`).
 - **Marché** : un produit n'est pas une marchandise cotée (`COMMODITIES` ne change pas, donc le marché sauvegardé non plus) ; il
   suit le cours de son minerai (`FOLLOWS`), si bien qu'un événement sur le fer touche aussi la plaque de fer et l'acier.
+- **Recettes à plusieurs étages** : une matière de recette peut être le produit d'une autre (`gear` ← `iron_plate`, `mechanism` ←
+  `gear` + `steel` + `copper_wire`). Rien de spécial dans `Crafter` : `input` est un dictionnaire par ressource, chaque matière a sa
+  file (`inputMax`), `canMake` les exige toutes, et une Manufacture accepte le produit d'une autre devant sa flèche
+  (`Crafter.accept`). `Forecast.supply` retire déjà ce que les recettes consomment. Piège de conception : sur un convoyeur mélangé,
+  une matière dont la file est pleine bloque celles qui la suivent ; il faut une entrée par matière (côtés, contact).
+  Tests : `tests/components.test.ts`.
 - **Une recette par produit** : l'identifiant de la recette est celui du produit. `Crafter.canAccept` ne laisse entrer que les
   matières de la recette (sinon le convoyeur attend) ; `Crafter.setRecipe` renvoie les matières en attente que la nouvelle
   recette n'utilise pas, et `GameState.setCrafterRecipe` les rend au joueur (sac, puis à ses pieds).

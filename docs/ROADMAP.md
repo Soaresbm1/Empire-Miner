@@ -41,7 +41,7 @@ profondeur et roches plus dures, sauvegarde/chargement, première automatisation
   « au rythme actuel » au Grand Chevalement et sur les commandes.
 - ✅ Dépanneur (ouvrier) : examine les machines à l'arrêt, recharge ou vide ce qui peut l'être, signale le reste au camp (Machines à surveiller, infobulle de la vue goulots) ; il remplace le Foreur (qui posait des foreuses).
 - ✅ Alerte « machine à l'arrêt » : pastille du HUD, message et anneau sur la carte ; un appui centre la carte sur la machine.
-- Concasseur (pierre → gravier), alliages (ex. bronze), composants (fils, engrenages…) ; recettes à plusieurs étages.
+- Concasseur (pierre → gravier), alliages (ex. bronze), composants : ✅ fil de cuivre, engrenage et mécanisme (recettes à plusieurs étages) ; restent les fils d'autres métaux et les alliages liés au concasseur.
 
 ## v0.5 — Énergie et contraintes
 - Générateurs (charbon), réseau électrique, consommation des machines.

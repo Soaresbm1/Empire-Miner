@@ -669,7 +669,7 @@ export function crafterPanel(g: GameState, s: Crafter): string {
     <h4>Ce qu'elle fabrique</h4>
     ${known.length ? `<div class="buy">${choices}</div>` : '<div class="status warn">Aucune recette pour l\'instant : fondez un lingot dans un four, ou trouvez un diamant.</div>'}
     ${rows ? `<table class="table recipes"><thead><tr><th>Matières</th><th></th><th>Produit</th><th class="num">Valeur</th><th class="num">Durée</th></tr></thead><tbody>${rows}</tbody></table>` : ''}
-    <p class="hint">${hidden > 0 ? 'D\'autres recettes apparaissent quand vous aurez fondu un nouveau métal ou trouvé un diamant. ' : ''}Les matières de la recette entrent par n'importe quel côté sauf la sortie ${DIR_ARROWS[s.dir]} ; le charbon entre de partout (un coffre de charbon collé le recharge, un ravitailleur aussi). Une matière qui n'est pas dans la recette est refusée. Les produits sont poussés devant la flèche (convoyeur, coffre, caisse d'expédition). Changer de recette vous rend les matières qu'elle n'utilise pas.</p>`;
+    <p class="hint">${hidden > 0 ? 'D\'autres recettes apparaissent quand vous aurez fondu un nouveau métal, trouvé un diamant ou fabriqué leurs matières (plaque, acier, fil…). ' : ''}Les matières de la recette entrent par n'importe quel côté sauf la sortie ${DIR_ARROWS[s.dir]} ; le charbon entre de partout (un coffre de charbon collé le recharge, un ravitailleur aussi). Une matière qui n'est pas dans la recette est refusée. Les produits sont poussés devant la flèche (convoyeur, coffre, caisse d'expédition). Changer de recette vous rend les matières qu'elle n'utilise pas.</p>`;
 }
 
 // ------------------------------------------------------------------ carte
