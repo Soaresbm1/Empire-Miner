@@ -66,9 +66,13 @@ Fichiers très longs (`render/Renderer.ts`, `game/Game.ts`, `sim/GameState.ts`, 
 - Skills (`.claude/skills/`) : `feature-workflow` (déroulé d'une fonctionnalité), `save-integrity` (sauvegarde et jeu à deux),
   `regression-testing` (quels tests lancer), `sim-systems` (minage, production, automatisation : où et comment étendre),
   `balance-lab` (banc de simulation : invariants longs, économie des lignes, vitesse, progression de quatre profils de joueur).
-- Agents (`.claude/agents/`) : `qa-balance` (lance les tests et le banc, rend un rapport court), `sim-architect` (relecture d'un
-  changement de simulation avant commit), `game-designer` (analyse d'équilibrage et conception chiffrée, sans code).
-  L'implémentation reste dans la session principale ; pas d'agent quand une lecture suffit.
+- Agents (`.claude/agents/`, tous en lecture seule) : `qa-balance` (lance les tests et le banc, rend un rapport court), `sim-architect`
+  (relecture d'un changement de simulation avant commit), `game-designer` (équilibrage et économie, conception chiffrée, sans code),
+  `simulation-engineer` (diagnostic minage, gisements, four, Manufacture, recettes : reproduit et prouve), `automation-engineer`
+  (convoyeurs, flux, rendement des lignes : mesure le maillon limitant), `ui-ux-designer` (lisibilité, ergonomie, tactile des interfaces).
+  L'implémentation reste dans la session principale, qui joue le rôle de directeur de jeu : pas d'agent quand une lecture suffit,
+  deux agents en parallèle au plus, Opus réservé à `sim-architect` et `game-designer`. Sauvegardes et migrations : `sim-architect`
+  avec le skill `save-integrity` (pas d'agent séparé).
 - Hooks (`.claude/hooks/`, scripts Node) : garde-fous des commandes et fichiers sensibles, contrôle du déterminisme à l'écriture,
   typecheck et tests liés en fin de tâche.
 
