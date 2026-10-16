@@ -113,9 +113,9 @@ export const REPAIR = {
 } as const;
 
 /** Ce qui peut bloquer une machine, vu par le dépanneur. */
-export type RepairCause = 'nofuel' | 'nocoal' | 'outfull' | 'nochest' | 'noexit' | 'beltfull' | 'cratefull' | 'unreachable';
+export type RepairCause = 'nofuel' | 'nocoal' | 'outfull' | 'nochest' | 'noexit' | 'beltfull' | 'cratefull' | 'unreachable' | 'nomech';
 
-export const REPAIR_CAUSES: readonly RepairCause[] = ['nofuel', 'nocoal', 'outfull', 'nochest', 'noexit', 'beltfull', 'cratefull', 'unreachable'];
+export const REPAIR_CAUSES: readonly RepairCause[] = ['nofuel', 'nocoal', 'outfull', 'nochest', 'noexit', 'beltfull', 'cratefull', 'unreachable', 'nomech'];
 
 export const isRepairCause = (c: unknown): c is RepairCause => REPAIR_CAUSES.includes(c as RepairCause);
 
@@ -128,5 +128,6 @@ export const REPAIR_TEXT: Record<RepairCause, { label: string; advice: string }>
   noexit: { label: 'aucune sortie reliée', advice: 'Rien ne reçoit sa production : posez un convoyeur, un coffre ou une caisse devant sa flèche.' },
   beltfull: { label: 'convoyeur plein plus loin', advice: 'La ligne est saturée en aval : un convoyeur plus rapide, une deuxième ligne ou une sortie libre (vue goulots, touche G).' },
   cratefull: { label: 'caisse d’expédition pleine', advice: 'Videz la caisse (vente ou livraison) ou ajoutez-en une.' },
+  nomech: { label: 'plus de mécanisme', advice: 'Le puits use un mécanisme tous les 40 morceaux : déposez-en à la main, ou amenez-en par convoyeur (Manufacture, onglet Usine).' },
   unreachable: { label: 'inaccessible pour le dépanneur', advice: 'Aucun chemin jusqu’à la machine ou au coffre (roche, grisou, eau profonde, machine en travers) : dégagez le passage.' },
 };

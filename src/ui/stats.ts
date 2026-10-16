@@ -10,6 +10,7 @@ import type { TunnelBorer } from '../sim/structures/Borer';
 import type { Drill } from '../sim/structures/Drill';
 import type { ShippingCrate } from '../sim/structures/ShippingCrate';
 import type { Crafter } from '../sim/structures/Crafter';
+import type { Well } from '../sim/structures/Well';
 import type { Smelter } from '../sim/structures/Smelter';
 import type { Storage } from '../sim/structures/Storage';
 import { repairNotes, stuckWorkers } from './crew';
@@ -155,6 +156,15 @@ function machineWatch(g: GameState): string {
         else if (c.status === 'full') flag(c.def.name, 'sortie saturée', 'warn');
         else if (c.status === 'norecipe') flag(c.def.name, 'aucune recette choisie', 'warn');
         else flag(c.def.name, 'attend des matières', 'info');
+        break;
+      }
+      case 'well': {
+        const w = s as Well;
+        count++;
+        if (w.status === 'ok') running++;
+        else if (w.status === 'nofuel') flag(w.def.name, 'plus de charbon', 'bad');
+        else if (w.status === 'nomech') flag(w.def.name, 'plus de mécanisme', 'bad');
+        else flag(w.def.name, 'sortie saturée', 'warn');
         break;
       }
       case 'shipping': {

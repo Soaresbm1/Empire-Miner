@@ -8,6 +8,7 @@ import { BorerLevelSpec, MachineLevel, kitName } from '../data/machines';
 import { HEAT } from '../data/hazards';
 import { MARKER_KINDS, MARKER_ORDER, MAX_MARKERS } from '../sim/Markers';
 import { RECIPES, type RecipeSpec } from '../data/recipes';
+import type { Well, WellStatus } from '../sim/structures/Well';
 import { RESOURCES, getResource } from '../data/resources';
 import { WORKER_JOBS } from '../data/workers';
 import type { GameState } from '../sim/GameState';
@@ -670,6 +671,44 @@ export function crafterPanel(g: GameState, s: Crafter): string {
     ${known.length ? `<div class="buy">${choices}</div>` : '<div class="status warn">Aucune recette pour l\'instant : fondez un lingot dans un four, ou trouvez un diamant.</div>'}
     ${rows ? `<table class="table recipes"><thead><tr><th>Matières</th><th></th><th>Produit</th><th class="num">Valeur</th><th class="num">Durée</th></tr></thead><tbody>${rows}</tbody></table>` : ''}
     <p class="hint">${hidden > 0 ? 'D\'autres recettes apparaissent quand vous aurez fondu un nouveau métal, trouvé un diamant ou fabriqué leurs matières (plaque, acier, fil…). ' : ''}Les matières de la recette entrent par n'importe quel côté sauf la sortie ${DIR_ARROWS[s.dir]} ; le charbon entre de partout (un coffre de charbon collé le recharge, un ravitailleur aussi). Une matière qui n'est pas dans la recette est refusée. Les produits sont poussés devant la flèche (convoyeur, coffre, caisse d'expédition). Changer de recette vous rend les matières qu'elle n'utilise pas.</p>`;
+}
+
+/** État du puits : ce qu'il fait, et pourquoi il s'arrête. */
+const WELL_STATUS: Record<WellStatus, [string, string]> = {
+  ok: ['Remonte du minerai', 'good'],
+  nofuel: ["À l'arrêt : plus de charbon", 'bad'],
+  nomech: ["À l'arrêt : plus de mécanisme (déposez-en, ou amenez-en par convoyeur)", 'bad'],
+  full: ['Bloqué : la sortie est saturée (rien ne prend le minerai devant la flèche)', 'warn'],
+};
+
+export function wellPanel(g: GameState, s: Well): string {
+  const [label, cls] = WELL_STATUS[s.status];
+  const secs = s.fuelSeconds();
+  const coal = g.inventory.count('coal');
+  const mechBag = g.inventory.count(s.spec.mechanism);
+  const next = getResource(s.nextRes());
+  const cycle = s.spec.cycle.map((res, i) => `<span class="chip${i === s.cycle % s.spec.cycle.length ? ' on' : ''}" title="${getResource(res).name}">${resIcon(res)}</span>`).join('');
+  return `
+    <div class="status ${cls}">● ${label}</div>
+    <div class="bar"><div style="width:${Math.round(s.progress * 100)}%"></div><span>Prochain morceau : ${next.name}</span></div>
+    <div class="cards" style="margin-top:10px"><div class="card">
+      ${stat('Morceaux prêts', `${s.output.length} / ${s.spec.outputMax}`)}
+      <div class="chips">${chips(s.output)}</div>
+      ${stat('Cadence', `${num(s.maxPerMinute(), 0)} / min`)}
+      ${flowRows(s)}
+      ${stat('Remontés au total', String(s.made))}
+      ${stat('Cycle (10 morceaux)', `<span class="chips">${cycle}</span>`)}
+    </div><div class="card">
+      ${stat('Charbon', `${s.fuelUnits} / ${s.fuelMax}`)}
+      ${stat('Autonomie', `${Math.floor(secs / 60)} min ${Math.floor(secs % 60)} s de travail`)}
+      ${stat('Mécanismes en réserve', `${s.mech} / ${s.spec.mechMax}`)}
+      ${stat('Mécanisme en place', `${s.life} / ${s.spec.wearUnits} morceaux`)}
+      <div class="buy">${btn('wellFuel', `Charger le charbon du sac (${coal})`, { cls: 'primary', disabled: coal <= 0 || s.fuelUnits >= s.fuelMax })}</div>
+      <div class="buy">${btn('wellDeposit', `Déposer mes mécanismes (${mechBag})`, { disabled: mechBag <= 0 || s.mech >= s.spec.mechMax })}
+        ${btn('wellCollect', `Récupérer le minerai (${s.output.length})`, { disabled: !s.output.length })}</div>
+      <div class="buy">${btn('wellRotate', 'Tourner ↻')}</div>
+    </div></div>
+    <p class="hint">Le puits ne vide aucun gisement : toutes les ${num(s.spec.interval, 0)} s il remonte le morceau suivant du cycle, qu'il pousse devant la flèche ${DIR_ARROWS[s.dir]} (convoyeur, coffre, caisse d'expédition). Il brûle du charbon pendant qu'il travaille (un coffre de charbon collé le recharge, un ravitailleur aussi) et use <b>un mécanisme tous les ${s.spec.wearUnits} morceaux</b> : sans mécanisme, il s'arrête. Le charbon et les mécanismes entrent par n'importe quel côté sauf la sortie. Un mécanisme se fabrique à la Manufacture : 2 engrenages, 1 acier, 3 fils.</p>`;
 }
 
 // ------------------------------------------------------------------ carte

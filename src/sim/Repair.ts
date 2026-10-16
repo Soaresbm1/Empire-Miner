@@ -12,15 +12,16 @@ import type { RepairCause } from '../data/workers';
 import type { GameState } from './GameState';
 import { Crafter } from './structures/Crafter';
 import { Drill } from './structures/Drill';
+import { Well } from './structures/Well';
 import { ShippingCrate } from './structures/ShippingCrate';
 import { Smelter } from './structures/Smelter';
 import { Storage } from './structures/Storage';
 import type { Structure } from './structures/Structure';
 
 /** Machines qu'un dépanneur sait examiner. */
-export type Repairable = Drill | Smelter | Crafter;
+export type Repairable = Drill | Smelter | Crafter | Well;
 
-export const isRepairable = (s: Structure): s is Repairable => s instanceof Drill || s instanceof Smelter || s instanceof Crafter;
+export const isRepairable = (s: Structure): s is Repairable => s instanceof Drill || s instanceof Smelter || s instanceof Crafter || s instanceof Well;
 
 /** Ce qu'un dépanneur a constaté sur une machine. */
 export interface RepairReport {
@@ -44,13 +45,13 @@ export interface Diagnosis {
 export function stuckOutput(s: Structure): Record<string, number> {
   const out: Record<string, number> = {};
   if (s instanceof Drill) for (const r of s.buffer) out[r] = (out[r] ?? 0) + 1;
-  else if (s instanceof Smelter || s instanceof Crafter) for (const r of s.output) out[r] = (out[r] ?? 0) + 1;
+  else if (s instanceof Smelter || s instanceof Crafter || s instanceof Well) for (const r of s.output) out[r] = (out[r] ?? 0) + 1;
   return out;
 }
 
 /** Retire jusqu'à `n` unités de `res` de la sortie retenue ; renvoie combien ont été prises. */
 export function takeOutput(s: Structure, res: string, n: number): number {
-  const list = s instanceof Drill ? s.buffer : s instanceof Smelter || s instanceof Crafter ? s.output : null;
+  const list = s instanceof Drill ? s.buffer : s instanceof Smelter || s instanceof Crafter || s instanceof Well ? s.output : null;
   if (!list) return 0;
   let k = 0;
   for (let i = list.length - 1; i >= 0 && k < n; i--)
@@ -96,6 +97,7 @@ export function diagnose(g: GameState, s: Structure, giveUp = false, carried: Re
     const coal = (carried[res] ?? 0) > 0 || g.structures.list.some((c) => c instanceof Storage && (c.items[res] ?? 0) > 0);
     return { cause: coal ? 'nofuel' : 'nocoal', fixable: coal };
   }
+  if (s instanceof Well && s.status === 'nomech') return { cause: 'nomech', fixable: false };
   if (s.status === 'full') {
     const res = Object.keys(stuckOutput(s))[0];
     if (!res) return { cause: exitCause(g, s), fixable: false };

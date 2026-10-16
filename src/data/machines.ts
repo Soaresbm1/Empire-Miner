@@ -83,6 +83,22 @@ export interface CrafterSpec {
   outputMax: number;
 }
 
+/** Puits : remonte du minerai sans épuiser de gisement, par cycles fixes, et use des mécanismes. */
+export interface WellSpec {
+  /** Temps pour remonter un morceau (s). */
+  interval: number;
+  /** Cycle de minerai, dans l'ordre : le puits le rejoue sans fin (aucun tirage au hasard). */
+  cycle: string[];
+  /** Morceaux remontés par un mécanisme avant qu'il faille le remplacer. */
+  wearUnits: number;
+  /** Ressource qui sert de mécanisme. */
+  mechanism: string;
+  /** Mécanismes que la machine garde en réserve. */
+  mechMax: number;
+  /** Morceaux prêts à sortir (unités). */
+  outputMax: number;
+}
+
 /** Foreuse de percement : ce que change chaque niveau d'amélioration. */
 export interface BorerLevelSpec {
   /** Dégâts infligés par seconde à la case percée. */
@@ -142,8 +158,10 @@ export interface MachineDef {
   rotatable: boolean;
   stats: MachineStats;
   fuel?: FuelSpec;
-  /** Condition de déblocage (texte + test sur le niveau de pioche). */
-  unlock?: { pickaxeTier: number; text: string };
+  /** Condition de déblocage (texte + test sur le niveau de pioche, et sur le nombre de phases terminées du chantier). */
+  unlock?: { pickaxeTier: number; text: string; projectPhase?: number };
+  /** Nombre d'exemplaires au plus (posés ou en stock). */
+  limit?: number;
   /** Doit être posée sur un gisement exposé. */
   needsDeposit?: boolean;
   /** Ne peut être posée qu'en surface (au camp). */
@@ -174,6 +192,8 @@ export interface MachineDef {
   smelter?: SmelterSpec;
   /** Manufacture : fabrique des produits à partir de lingots (recettes dans `data/recipes.ts`). */
   crafter?: CrafterSpec;
+  /** Puits : minerai remonté par cycles fixes, au prix de charbon et de mécanismes. */
+  well?: WellSpec;
 }
 
 export const MACHINES: MachineDef[] = [
@@ -478,6 +498,25 @@ export const MACHINES: MachineDef[] = [
     fuel: { res: 'coal', secondsPerUnit: 20, maxUnits: 12 },
     unlock: { pickaxeTier: 2, text: 'Nécessite la Pioche améliorée' },
     crafter: { inputMax: 12, outputMax: 12 },
+  },
+  {
+    id: 'well',
+    name: 'Puits',
+    summary: 'Remonte du fer, de l’argent, de l’or et du diamant sans épuiser de gisement. Charbon et mécanismes.',
+    category: 'extraction',
+    description:
+      'Le puits foncé par l’Ascenseur : 3×3 cases, au camp seulement, deux au plus. Toutes les 5 s il remonte un morceau, selon un cycle fixe de dix (4 fer, 3 argent, 2 or, 1 diamant), et le pousse devant sa flèche (convoyeur, coffre, caisse d’expédition). Il brûle du charbon pendant qu’il travaille et use un mécanisme tous les 40 morceaux : sans mécanisme, il s’arrête. Le charbon et les mécanismes entrent par un convoyeur ou à la main, sur n’importe quel côté sauf la sortie.',
+    price: 60000,
+    w: 3,
+    h: 3,
+    solid: true,
+    rotatable: true,
+    surfaceOnly: true,
+    limit: 2,
+    stats: { speed: 0.2, power: 0, capacity: 10, efficiency: 1, level: 1 },
+    fuel: { res: 'coal', secondsPerUnit: 10, maxUnits: 20 },
+    unlock: { pickaxeTier: 0, projectPhase: 7, text: 'Se débloque à la fin de la phase « Machine d’extraction » de l’Ascenseur de puits' },
+    well: { interval: 5, cycle: ['iron', 'silver', 'iron', 'gold', 'iron', 'silver', 'iron', 'diamond', 'silver', 'gold'], wearUnits: 40, mechanism: 'mechanism', mechMax: 4, outputMax: 10 },
   },
   {
     id: 'prop',

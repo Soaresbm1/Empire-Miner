@@ -431,6 +431,31 @@ le réseau, et l'empreinte du jeu à deux ne les voit pas.
   appelle `MineMap.centerOnTile`, appliqué au dessin suivant (les limites de la carte ne sont connues qu'une fois dessinée).
   Tests : `tests/alerts.test.ts`, `e2e/alerts.mjs`.
 
+## Le puits (Ascenseur de puits)
+
+Le puits (`sim/structures/Well.ts`) est la machine du second chantier. Il est écrit sur le modèle de la Manufacture (charbon qui ne
+brûle que pendant le travail, sortie poussée devant la flèche par `frontTilesOf`, `fuelWanted`/`addFuel` qui le rendent rechargeable
+par un ravitailleur sans toucher à `Workers`), mais il ne consomme aucune matière de gisement.
+
+- **Données** : `WellSpec` de la machine (`data/machines.ts` : `interval`, `cycle`, `wearUnits`, `mechanism`, `mechMax`, `outputMax`).
+  Deux champs génériques de `MachineDef` ont été ajoutés : `unlock.projectPhase` (phases du chantier terminées, lu par
+  `GameState.isUnlocked` depuis `project.phase`) et `limit` (exemplaires au plus, posés ou en kit : `GameState.ownedCount`, refus dans
+  `buyKit` et `siteProblem`).
+- **Cycle et usure** : `cycle` est un tableau fixe rejoué en boucle (`Well.cycle` n'en garde que le reste modulo sa longueur), jamais
+  de tirage. `life` compte les morceaux que le mécanisme en place peut encore remonter ; à 0, le suivant en consomme un neuf de la
+  réserve `mech` (le puits neuf démarre donc avec un mécanisme). Sans mécanisme : état `nomech`, `flowState` `stuck`.
+- **Création de minerai** : un morceau remonté passe par `ctx.countExtracted` (journal de production, prévisions), comme une
+  foreuse, mais ne touche pas à `world.reserve`.
+- **Dépanneur** : `isRepairable` reconnaît le puits ; `diagnose` répond `nomech` (non réparable : le dépanneur le signale, cause
+  ajoutée à `RepairCause` et `REPAIR_TEXT`) et `nofuel`/`full` comme pour les autres. La pastille « machine à l'arrêt » en profite.
+- **Gestes** : `SimAction` `wellFuel`, `wellDeposit`, `wellCollect` (donc rejouées par les deux appareils) ; la rotation passe par `rotate`.
+- **Sauvegarde** : `Well.load` n'accepte que des valeurs saines (nombres bornés, sortie filtrée par `hasResource`) ; une partie
+  sans puits se charge comme avant, et `isUnlocked` ne lit que `project.phase`, déjà sauvegardé.
+- **Interface** : `wellPanel` (`ui/panels.ts`), dessin `drawWell` (chevalement, poulie qui tourne, benne), couleur de carte, icônes
+  d'état, ligne des statistiques, fiche du magasin (limite et verrou).
+- **Tests** : `tests/well.test.ts` (fiche, déblocage, limite, cycle exact, usure, sortie, dépanneur, alerte, sauvegarde),
+  `tests/coop-well.test.ts` (deux copies identiques, partie reçue en cours de route), `e2e/well.mjs`.
+
 ## Étendre le jeu
 
 - **Nouveau minerai** : ajouter une entrée dans `src/data/resources.ts` (valeur, poids, rareté, résistance,

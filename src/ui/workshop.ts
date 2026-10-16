@@ -357,6 +357,14 @@ function machineSpecs(m: MachineDef): [string, string][] {
       ['Lingot', '2,5 × le prix du minerai'],
       ...(m.w > 1 ? [['Taille', `${m.w}×${m.h} cases`] as [string, string]] : []),
     ];
+  if (m.well && m.fuel)
+    return [
+      ['Remonte', 'fer, argent, or, diamant (cycle de 10)'],
+      ['Cadence', `1 morceau / ${m.well.interval} s`],
+      ['Charbon', `1 unité / ${m.fuel.secondsPerUnit} s de travail`],
+      ['Mécanisme', `1 tous les ${m.well.wearUnits} morceaux`],
+      ['Taille', `${m.w}×${m.h} cases, au camp, ${m.limit} au plus`],
+    ];
   if (m.crafter && m.fuel)
     return [
       ['Fabrique', 'plaques, acier, diamant taillé'],
@@ -417,7 +425,8 @@ function machineRow(g: GameState, m: MachineDef, icon: (id: string) => string, o
       <div class="specs">${specs}${more ? btn('shopMore', open ? 'Moins ▴' : 'Détails ▾', { arg: m.id, cls: 'small link' }) : ''}</div>
     </div>
     <div class="shop-side">
-      <div class="buy-row">${qtys.map((q) => btn('buyKit', label(q), { arg: `${m.id}:${q}`, cls: 'primary', disabled: g.money < m.price * q })).join('')}</div>
+      <div class="buy-row">${qtys.map((q) => btn('buyKit', label(q), { arg: `${m.id}:${q}`, cls: 'primary', disabled: g.money < m.price * q || (m.limit !== undefined && g.ownedCount(m.id) + q > m.limit) })).join('')}</div>
+      ${m.limit !== undefined && g.ownedCount(m.id) >= m.limit ? `<small class="miss">${m.limit} au plus : limite atteinte</small>` : ''}
       ${g.money < cheapest ? `<small class="miss">Il manque ${money(cheapest - g.money)}</small>` : ''}
     </div>
   </div>`;
@@ -425,7 +434,7 @@ function machineRow(g: GameState, m: MachineDef, icon: (id: string) => string, o
 
 /** Filtres du magasin de machines : une rangée de catégories et le réglage « achetables ». */
 function shopFilters(g: GameState, view: ShopView): string {
-  const can = (m: MachineDef) => g.isUnlocked(m.id) && g.money >= m.price * quantities(m)[0];
+  const can = (m: MachineDef) => g.isUnlocked(m.id) && g.money >= m.price * quantities(m)[0] && !(m.limit !== undefined && g.ownedCount(m.id) >= m.limit);
   const inGroup = (grp: (typeof MACHINE_GROUPS)[number]) => MACHINES.filter((m) => grp.categories.includes(m.category));
   const shown = (m: MachineDef) => !view.only || can(m);
   const total = MACHINES.filter(shown).length;
@@ -437,7 +446,7 @@ function shopFilters(g: GameState, view: ShopView): string {
 }
 
 function machinesTab(g: GameState, icon: (id: string) => string, view: ShopView): string {
-  const can = (m: MachineDef) => g.isUnlocked(m.id) && g.money >= m.price * quantities(m)[0];
+  const can = (m: MachineDef) => g.isUnlocked(m.id) && g.money >= m.price * quantities(m)[0] && !(m.limit !== undefined && g.ownedCount(m.id) >= m.limit);
   const inGroup = (grp: (typeof MACHINE_GROUPS)[number]) => MACHINES.filter((m) => grp.categories.includes(m.category));
   const shown = (m: MachineDef) => !view.only || can(m);
   const groups = MACHINE_GROUPS.filter((grp) => view.cat === 'all' || view.cat === grp.id)

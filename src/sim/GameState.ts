@@ -33,6 +33,7 @@ import { StructureManager } from './StructureManager';
 import { Building, BuildingType } from './structures/Building';
 import { Conveyor } from './structures/Conveyor';
 import type { Crafter } from './structures/Crafter';
+import type { Well } from './structures/Well';
 import { Rail, type RailStation, type RailSwitch, type SwitchSetting } from './structures/Rail';
 import { TunnelBorer } from './structures/Borer';
 import { Smelter } from './structures/Smelter';
@@ -1469,12 +1470,24 @@ export class GameState implements StructureContext {
 
   isUnlocked(machineId: string): boolean {
     const def = getMachine(machineId);
-    return !def.unlock || this.pickaxe.tier >= def.unlock.pickaxeTier;
+    return !def.unlock || (this.pickaxe.tier >= def.unlock.pickaxeTier && this.project.phase >= (def.unlock.projectPhase ?? 0));
+  }
+
+  /** Exemplaires d'une machine que le joueur possède : posés, et en kit (de tout niveau). */
+  ownedCount(machineId: string): number {
+    const placed = this.structures.list.filter((s) => s.type === machineId).length;
+    const kits = Object.entries(this.inventory.kits).reduce((n, [kit, k]) => n + (parseKit(kit).machine === machineId ? k : 0), 0);
+    return placed + kits;
   }
 
   buyKit(machineId: string, qty: number): boolean {
     const def = getMachine(machineId);
-    if (!this.isNear('workshop') || !this.isUnlocked(machineId) || !this.pay(def.price * qty)) return false;
+    if (!this.isNear('workshop') || !this.isUnlocked(machineId)) return false;
+    if (def.limit !== undefined && this.ownedCount(machineId) + qty > def.limit) {
+      this.emit({ t: 'message', text: `${def.name} : ${def.limit} au plus.`, kind: 'info' });
+      return false;
+    }
+    if (!this.pay(def.price * qty)) return false;
     this.inventory.addKit(machineId, qty);
     this.emit({ t: 'bought', name: qty > 1 ? `${def.name} ×${qty}` : def.name });
     return true;
@@ -1510,6 +1523,7 @@ export class GameState implements StructureContext {
       }
     if (def.needsDeposit && !this.world.depositAt(tx, ty)) return 'Doit être posée sur un gisement exposé';
     if (def.surfaceOnly && ty + def.h > SURFACE_ROWS) return 'À poser en surface, au camp';
+    if (def.limit !== undefined && this.structures.list.filter((s) => s.type === machineId).length >= def.limit) return `${def.name} : ${def.limit} au plus`;
     if (def.solid) {
       const x0 = tx * TILE;
       const y0 = ty * TILE;
@@ -1893,6 +1907,30 @@ export class GameState implements StructureContext {
     }
     const what = list.map(([res, n]) => `${n} ${getResource(res).name.toLowerCase()}`).join(', ');
     this.emit({ t: 'message', text: `${why} : ${what} vous ${list.length > 1 || list[0][1] > 1 ? 'sont rendus' : 'est rendu'}.`, kind: 'info' });
+  }
+
+  /** Charge le charbon du sac dans un puits. */
+  fuelWell(s: Well): number {
+    const fuel = s.def.fuel;
+    if (!fuel) return 0;
+    const k = s.addFuel(this.inventory.count(fuel.res));
+    this.inventory.remove(fuel.res, k);
+    return k;
+  }
+
+  /** Dépose dans un puits les mécanismes du sac (dans la limite de sa réserve). */
+  wellDeposit(s: Well): number {
+    const res = s.spec.mechanism;
+    const k = s.addMech(this.inventory.count(res));
+    this.inventory.remove(res, k);
+    return k;
+  }
+
+  /** Récupère dans le sac le minerai prêt d'un puits. */
+  wellCollect(s: Well): number {
+    const n = s.takeOutput((res) => this.inventory.add(res, 1) > 0);
+    if (s.output.length) this.emit({ t: 'invFull' });
+    return n;
   }
 
   /** Charge le charbon du sac dans une Manufacture. */

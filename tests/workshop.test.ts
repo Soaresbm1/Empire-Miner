@@ -243,7 +243,7 @@ describe('atelier : onglet Machines', () => {
     const html = workshopPanel(g, 'machines');
     expect(html).toContain('<b>3</b> en stock');
     expect(html).toContain('data-arg="conveyor:10"');
-    expect(buys(html)).toBeGreaterThan(MACHINES.length / 2);
+    expect(buys(html)).toBeGreaterThan(MACHINES.filter((m) => g.isUnlocked(m.id)).length / 2); // les machines verrouillées (puits…) n'ont pas de bouton
   });
 });
 

@@ -298,6 +298,15 @@ Le jeu à deux n'est pas concerné : l'invité n'a besoin d'aucun compte, et l'h
   produits), les **clients en demandent** une fois le premier fabriqué, et les **deux dernières phases du Grand Chevalement**
   en réclament. Les statistiques de production comptent les produits dans la colonne « Fabriqué ». Objectif : fabriquer un
   produit. Les recettes sont des données (`src/data/recipes.ts`).
+- **Puits** (60 000 $, **2 au plus**, 3×3 cases, au camp seulement, onglet « Extraction ») : la machine de l'**Ascenseur de puits**.
+  Elle se débloque à la fin de sa septième phase (« Machine d'extraction ») ; le magasin dit ce qui manque. Toutes les 5 s, elle
+  **remonte un morceau** selon un cycle fixe de dix (4 fer, 3 argent, 2 or, 1 diamant, sans hasard) **sans épuiser aucun gisement**,
+  et le pousse devant sa flèche (convoyeur, coffre, caisse d'expédition) ou le range dans le sac (« Récupérer »). Elle **brûle du
+  charbon** pendant qu'elle travaille (1 unité pour 10 s : un ravitailleur ou un coffre collé la recharge) et **use un mécanisme
+  tous les 40 morceaux** (200 s : le réservoir de charbon plein suffit juste pour un mécanisme) ; sans mécanisme, elle s'arrête. Le
+  charbon et les mécanismes entrent par un convoyeur ou à la main, sur n'importe quel côté sauf la sortie. Le dépanneur la
+  connaît (« plus de mécanisme » est une cause qu'il signale, il recharge le charbon) et la pastille « machine à l'arrêt » aussi.
+  Valeur brute remontée : environ 750 $/min aux prix de base, contre un mécanisme de 525 $ toutes les 3 min 20 s (environ 160 $/min).
 - **Dangers** en profondeur, avec une **barre de santé** (on récupère hors de danger ; à 0, on s'évanouit et on se
   réveille au camp, le sac reste là où on est tombé) :
   - **éboulements** (dès 60 m, rares) : une salle creusée à la main **très** grande (plus de 16 cases creusées dans le
@@ -510,6 +519,7 @@ node e2e/panels.mjs            # fenêtres au doigt sur un jeu qui tourne : déf
 node e2e/orders.mjs            # commandes et Grand Chevalement : vrais clics (accepter, livrer, abandonner, caisse réglée sur « Commandes », chantier phase par phase, écran de fin), réputation des clients et commande exclusive, la tour change à chaque étape, tout survit à un rechargement (après un build)
 node e2e/flow.mjs              # rendement des lignes : une ligne saturée mesurée en vrai (infobulles, panneau), vue goulots (touche G, légende, pixels teintés), prévisions du chantier et des commandes, rechargement (après un build)
 node e2e/alerts.mjs            # alerte « machine à l'arrêt » : four sans charbon, pastille du HUD, carte centrée sur la machine, disparition au retour du charbon, pastille de 44 px sans débordement en portrait (après un build)
+node e2e/well.mjs              # le puits : verrouillé puis acheté à l'Atelier, posé au camp, panneau (charbon, mécanismes : vrais clics), minerai dans un coffre, pastille « machine à l'arrêt » (après un build)
 node e2e/crafter.mjs           # la Manufacture : achat à l'Atelier, pose, panneau (recette, charbon, dépôt, récupération), chaîne par convoyeurs, commande de plaques, sauvegarde, ancienne partie (après un build)
 node e2e/menus.mjs             # menus : « Commandes » (menu principal et pause) s'ouvre devant le menu, qui s'efface puis revient ; seul, le jeu reste figé depuis la pause (après un build)
 node e2e/cloud.mjs             # compte : deux appareils (deux profils de navigateur) et un faux Firebase local : création, reprise sur appareil neuf, parties qui divergent, réseau coupé, suppression (après un build)

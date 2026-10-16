@@ -129,7 +129,7 @@ export const PHASES: readonly PhaseSpec[] = [
     ],
     money: 250000,
     contracts: 27,
-    perk: { text: 'Les clients paient 5 points de plus de prime', premium: 0.05 },
+    perk: { text: 'Le puits peut être posé au camp (Atelier), et les clients paient 5 points de plus de prime', premium: 0.05 },
   },
   {
     id: 'lining',

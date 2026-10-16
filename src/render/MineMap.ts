@@ -28,6 +28,7 @@ export const MAP_COLORS = {
   borer: '#ff5a3c',
   furnace: '#d2452b',
   crafter: '#5f8fd6',
+  well: '#8fdcff',
   safety: '#caa05a',
   water: '#2f6fc0',
   gas: '#9ab84a',
@@ -137,6 +138,7 @@ function structureColor(s: Structure): string {
   if (s.type === 'borer') return MAP_COLORS.borer;
   if (s.type === 'furnace' || s.type === 'foundry') return MAP_COLORS.furnace;
   if (s.type === 'crafter') return MAP_COLORS.crafter;
+  if (s.type === 'well') return MAP_COLORS.well;
   if (s.type === 'prop' || s.type === 'fan' || s.type === 'pump') return MAP_COLORS.safety;
   if (s.isTrack) return MAP_COLORS.track;
   if (s.isBelt) return MAP_COLORS.belt;
