@@ -27,6 +27,7 @@ import { Inventory, type KitHolder } from './Inventory';
 import { Contracts, type Contract, type Outcome } from './Contracts';
 import { Market } from './Market';
 import { Player } from './Player';
+import { CROWN_PHASE } from '../data/project';
 import { Project } from './Project';
 import { StructureManager } from './StructureManager';
 import { Building, BuildingType } from './structures/Building';
@@ -186,7 +187,7 @@ export class GameState implements StructureContext {
   readonly market: Market;
   /** Commandes du Tableau d'affichage : des clients achètent une quantité précise, avec une prime, avant une échéance. */
   readonly contracts: Contracts;
-  /** Le Grand Chevalement : le grand chantier du camp, en cinq phases. */
+  /** Le Grand Chevalement : le grand chantier du camp, en cinq phases, suivi de l'Ascenseur de puits (quatre phases de plus). */
   readonly project = new Project();
   /** Ouvriers achetés à l'Atelier : ramasseurs et ravitailleurs. */
   readonly workers = new WorkerSystem();
@@ -1354,7 +1355,7 @@ export class GameState implements StructureContext {
     while (this.project.ready(this.stats.contracts)) {
       const phase = this.project.phase;
       this.project.advance(this.time);
-      this.emit({ t: 'site', phase, last: this.project.done });
+      this.emit({ t: 'site', phase, last: this.project.phase === CROWN_PHASE || this.project.done });
     }
   }
 

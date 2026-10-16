@@ -412,8 +412,8 @@ Le jeu à deux n'est pas concerné : l'invité n'a besoin d'aucun compte, et l'h
   livré au prix de base, sans la prime** : rien n'est perdu, seule la prime l'est. Un client ne demande que **ce que vous avez
   déjà trouvé**, et les lingots seulement après le premier lingot fondu : ils donnent une vraie raison de bâtir une ligne de
   fonte et de trier. Même chose pour les **produits de la Manufacture** (plaques, acier, diamant taillé, fil, engrenage, mécanisme), après le premier fabriqué. Le **marché** pèse sur le tirage (une marchandise en forte demande est demandée trois fois plus souvent,
-  une marchandise bradée deux fois et demie moins). Le **rang** (Livreur, Fournisseur, Négociant, Grossiste, Magnat : 3, 8, 16,
-  30 commandes honorées) grossit les commandes de 25 % par rang et ajoute 2 points de prime. Une pastille sur l'onglet
+  une marchandise bradée deux fois et demie moins). Le **rang** (Livreur, Fournisseur, Négociant, Grossiste, Magnat, Baron : 3, 8, 16,
+  30, 45 commandes honorées) grossit les commandes de 25 % par rang et ajoute 2 points de prime. Une pastille sur l'onglet
   signale les propositions qui attendent, une ligne du HUD donne la commande la plus pressée (sur ordinateur), une annonce
   prévient d'une nouvelle proposition (au plus toutes les quatre minutes) et une autre à **une minute de l'échéance**. Les
   propositions sortent d'un tirage (graine, numéro) : les deux joueurs d'une partie à deux voient les mêmes, et tout est
@@ -457,11 +457,18 @@ Le jeu à deux n'est pas concerné : l'invité n'a besoin d'aucun compte, et l'h
   dès que tout est réuni. On livre **à la main** (« Livrer mon sac », « Verser ») ou avec des **caisses d'expédition réglées sur
   « Chantier »** que des convoyeurs alimentent : on bâtit une ligne de fonte, on y branche une caisse, et la tour monte sans
   y retourner. Chaque phase accorde un **avantage** aux commandes (une commande de plus en parallèle, une proposition de plus
-  au Tableau, 10 points de prime de plus, puis encore une commande et 10 points, enfin 5 points). La dernière phase **achève le
-  monument** : un feu d'artifice, le titre d'**Empereur de la mine** et un **écran de fin** avec les chiffres de la partie
-  (temps de jeu, argent gagné, blocs minés, lingots fondus, commandes honorées…) et le temps de chaque phase ; on peut
-  continuer à jouer. Toutes les quantités sont réunies dans `src/data/project.ts` et `src/data/contracts.ts`. Les quatre
-  derniers objectifs du parcours guidé en parlent (19 en tout, dont « fabriquer un produit »). Le chantier est un bâtiment du camp comme les autres : une
+  au Tableau, 10 points de prime de plus, puis encore une commande et 10 points, enfin 5 points). La cinquième phase **couronne le
+  monument** : un feu d'artifice et le titre d'**Empereur de la mine**, puis **un second chantier s'ouvre sur le même panneau,
+  l'Ascenseur de puits**. Quatre phases de plus : **Fonçage** (20 mécanismes, 150 acier, 150 000 $, 20 commandes), **Machine
+  d'extraction** (60 mécanismes, 200 acier, 400 fils, 250 000 $, 27 commandes), **Cuvelage** (80 mécanismes, 150 plaques d'or,
+  150 plaques d'argent, 400 000 $, 35 commandes) et **Mise en service** (120 mécanismes, 200 plaques d'or, 30 diamants taillés,
+  600 000 $, 45 commandes). Il se bâtit surtout avec des produits de la Manufacture (le mécanisme demande une chaîne de trois
+  étages) et ses avantages s'ajoutent à ceux du premier : une commande de plus, 5 points de prime, une proposition de plus et
+  10 points, enfin 5 points. La quatrième phase achève tout : le titre de **Souverain des profondeurs** et un **écran de fin** avec
+  les chiffres de la partie (temps de jeu, argent gagné, blocs minés, lingots fondus, commandes honorées…) et le temps de chaque
+  phase ; on peut continuer à jouer. Une partie sauvegardée au couronnement (autrefois « achevée ») rouvre sur le Fonçage, sans
+  rien perdre. Toutes les quantités sont réunies dans `src/data/project.ts` et `src/data/contracts.ts`. Les cinq
+  derniers objectifs du parcours guidé en parlent (20 en tout, dont « fabriquer un produit » et « achever l'Ascenseur de puits »). Le chantier est un bâtiment du camp comme les autres : une
   ancienne sauvegarde le trouve à sa place (une machine qu'elle y aurait posée revient au stock, avec son contenu, et un
   joueur resté debout à cet endroit est remis à l'entrée de la mine), avec un chantier à zéro.
 - **Mini-carte** en haut à droite (la mine autour du joueur) et **carte complète** avec `M` : galeries, roche,
@@ -479,7 +486,7 @@ Le jeu à deux n'est pas concerné : l'invité n'a besoin d'aucun compte, et l'h
   « Repère 3 ». Les repères apparaissent sur la carte, la mini-carte et dans la mine (fanion et nom). Un repère
   « suivi » s'affiche sous la mini-carte avec sa distance, et une flèche au bord de l'écran montre sa direction.
 - Sauvegarde automatique (chaque minute), manuelle, export/import de fichier.
-- Sons synthétisés, éclairage de la mine, particules, 19 objectifs guidant le parcours (des premières minutes
+- Sons synthétisés, éclairage de la mine, particules, 20 objectifs guidant le parcours (des premières minutes
   jusqu'au Grand Chevalement).
 - **Graphismes en pixel art**, tous dessinés en code (aucune image externe). La lumière vient toujours d'en haut à
   gauche : le mineur (casque à lampe, sac à dos, marche à 4 images, clignement des yeux), les machines ombrées et

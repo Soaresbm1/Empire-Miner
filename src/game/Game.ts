@@ -26,7 +26,7 @@ import { Sorter } from '../sim/structures/Sorter';
 import { BOARD_TABS, marketNews } from '../ui/market';
 import { clientName, contractNews } from '../ui/orders';
 import { siteNews } from '../ui/site';
-import { PHASES } from '../data/project';
+import { stageOf } from '../data/project';
 import { WORKSHOP_TABS } from '../ui/workshop';
 import { Rail, RailStation, RailSwitch } from '../sim/structures/Rail';
 import { Splitter } from '../sim/structures/Splitter';
@@ -1625,7 +1625,8 @@ export class Game {
     const e = this.touch ? '<b class="act-tag">Agir</b>' : `<kbd>${this.input.label('KeyE')}</kbd>`;
     if (near instanceof Building && near.type === 'site' && this.state) {
       const p = this.state.project;
-      return `${e} Grand Chevalement — ${p.done ? 'achevé, voir les chiffres de la partie' : `phase ${p.phase + 1} sur ${PHASES.length} : ${p.spec!.name}`}`;
+      const st = stageOf(p.phase);
+      return `${e} ${st.name} — ${p.done ? 'achevé, voir les chiffres de la partie' : `phase ${p.phase - st.from + 1} sur ${st.to - st.from} : ${p.spec!.name}`}`;
     }
     if (near instanceof Building) return `${e} ${BUILDING_INFO[near.type].name} — ${BUILDING_INFO[near.type].prompt}`;
     if (near instanceof Storage) return `${e} Ouvrir le coffre`;
@@ -2166,7 +2167,7 @@ export class Game {
     if (s instanceof ShippingCrate)
       return `<b>Caisse d'expédition</b>${s.mode === 'market' ? '' : ` — <span class="good">livre ${s.mode === 'orders' ? 'aux commandes' : 'au chantier'}</span>`}<br>${kg(s.weight())} / ${kg(s.capacity)} · ${money(s.pendingValue())} en attente<br>Passage dans ${Math.ceil(s.timer)} s${flowTip(s)}`;
     if (s instanceof Building && s.type === 'site')
-      return `<b>${s.name}</b><br>${g.project.done ? 'Achevé' : `Phase ${g.project.phase + 1} sur ${PHASES.length} : ${g.project.spec!.name} (${Math.round(g.project.progress() * 100)} %)`}`;
+      return `<b>${s.name}</b><br>${g.project.done ? 'Achevé' : `${stageOf(g.project.phase).name} : phase ${g.project.phase - stageOf(g.project.phase).from + 1} sur ${stageOf(g.project.phase).to - stageOf(g.project.phase).from} : ${g.project.spec!.name} (${Math.round(g.project.progress() * 100)} %)`}`;
     if (s instanceof Building) return `<b>${s.name}</b>`;
     const id = w.get(tx, ty);
     const b = getBlock(id);
@@ -2357,7 +2358,7 @@ export class Game {
     g.events.length = 0;
   }
 
-  /** Le Grand Chevalement est achevé : feu d'artifice autour du joueur, puis l'écran de fin (sauf pendant un menu). Renvoie vrai s'il s'est ouvert. */
+  /** Un chantier est achevé (couronnement du Grand Chevalement, ou fin de l'Ascenseur de puits) : feu d'artifice autour du joueur, puis l'écran de fin (sauf pendant un menu). Renvoie vrai s'il s'est ouvert. */
   private celebrate(g: GameState): boolean {
     const r = this.renderer;
     const colors = ['#f2c230', '#ff6b5b', '#6fb3ff', '#7fd07a', '#d38cff', '#ffffff'];

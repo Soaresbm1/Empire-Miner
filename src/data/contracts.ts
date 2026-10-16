@@ -78,6 +78,7 @@ export const CONTRACTS = {
     { at: 8, name: 'Négociant' },
     { at: 16, name: 'Grossiste' },
     { at: 30, name: 'Magnat' },
+    { at: 45, name: 'Baron' },
   ],
   /** Par rang : les commandes grossissent (+25 % par rang) et la prime monte (+2 points par rang). */
   rankQty: 0.25,

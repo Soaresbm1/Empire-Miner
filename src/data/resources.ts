@@ -273,14 +273,14 @@ export const RESOURCES: ResourceDef[] = [
   // Chacun vaut plus que ce qu'il faut pour le fabriquer, et suit le cours du métal dont il est fait.
   product('copper_plate', 'Plaque de cuivre', 'Plaque', 27, 2.5, 'commun', 'copper', 'plate', '#e0894a', '#ffc590', '#8a4520', ['Vente (1,5 fois le lingot)', 'Commandes des clients', 'Matière du fil de cuivre']),
   product('iron_plate', 'Plaque de fer', 'Plaque', 60, 3, 'peu commun', 'iron', 'plate', '#aab3c0', '#eef2f7', '#5a6270', ['Vente (1,5 fois le lingot)', 'Commandes des clients', "Matière de l'engrenage"]),
-  product('silver_plate', "Plaque d'argent", 'Plaque', 140, 2, 'rare', 'silver', 'plate', '#e8edf5', '#ffffff', '#8f9aab', ['Vente (1,5 fois le lingot)', 'Commandes des clients']),
+  product('silver_plate', "Plaque d'argent", 'Plaque', 140, 2, 'rare', 'silver', 'plate', '#e8edf5', '#ffffff', '#8f9aab', ['Vente (1,5 fois le lingot)', 'Commandes des clients', "Cuvelage de l'Ascenseur de puits"]),
   product('gold_plate', "Plaque d'or", 'Plaque', 360, 3.5, 'très rare', 'gold', 'plate', '#f7cc3a', '#fff6b8', '#a8740a', ['Vente (1,5 fois le lingot)', 'Commandes des clients', 'Grand Chevalement']),
   product('steel', 'Acier', 'Acier', 170, 5, 'peu commun', 'iron', 'bar', '#7f93ad', '#d3e0f0', '#3d4b60', ['Vente (plus de 2 fois les lingots de fer)', 'Commandes des clients', 'Grand Chevalement', 'Matière du mécanisme']),
   product('cut_diamond', 'Diamant taillé', 'Diamant taillé', 520, 0.4, 'légendaire', 'diamond', 'gem', '#9aeaf5', '#ffffff', '#2f8aa0', ['Vente (2 fois le diamant brut)', 'Commandes des clients', 'Grand Chevalement']),
   // Composants : fabriqués à partir d'autres produits (plaque, acier), donc à plusieurs étages de Manufacture. Ils s'ajoutent à la fin.
-  product('copper_wire', 'Fil de cuivre', 'Fil', 16, 0.4, 'commun', 'copper', 'wire', '#e0894a', '#ffc590', '#8a4520', ['Vente', 'Commandes des clients', 'Matière du mécanisme']),
+  product('copper_wire', 'Fil de cuivre', 'Fil', 16, 0.4, 'commun', 'copper', 'wire', '#e0894a', '#ffc590', '#8a4520', ['Vente', 'Commandes des clients', 'Matière du mécanisme', 'Ascenseur de puits']),
   product('gear', 'Engrenage', 'Engrenage', 78, 2, 'peu commun', 'iron', 'gear', '#aab3c0', '#eef2f7', '#5a6270', ['Vente', 'Commandes des clients', 'Matière du mécanisme']),
-  product('mechanism', 'Mécanisme', 'Mécanisme', 525, 3, 'rare', 'iron', 'mech', '#8fa4bd', '#dce8f6', '#3d4b60', ['Vente (environ 1,4 fois ses matières)', 'Commandes des clients']),
+  product('mechanism', 'Mécanisme', 'Mécanisme', 525, 3, 'rare', 'iron', 'mech', '#8fa4bd', '#dce8f6', '#3d4b60', ['Vente (environ 1,4 fois ses matières)', 'Commandes des clients', 'Ascenseur de puits']),
 ];
 
 const byId = new Map(RESOURCES.map((r) => [r.id, r]));

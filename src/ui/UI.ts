@@ -27,6 +27,7 @@ import { QUALITY_LABEL, type Quality } from '../render/quality';
 import { WORKSHOP_TABS, isWorkshopTab } from './workshop';
 import { hudMarket, BOARD_TABS, isBoardTab } from './market';
 import { hudOrders } from './orders';
+import { PHASES, stageOf } from '../data/project';
 import { sitePanel } from './site';
 import { boardPanel, borerPanel, counterPanel, crafterPanel, smelterPanel, drillPanel, helpPanel, installPanel, inventoryPanel, mapPanel, shippingPanel, sorterPanel, stationPanel, storagePanel, switchPanel, workshopPanel } from './panels';
 import { displayMode } from './fullscreen';
@@ -609,7 +610,7 @@ export class UI {
         body = boardPanel(g, tab, this.abandoning);
         break;
       case 'site':
-        title = 'Grand Chevalement';
+        title = stageOf(Math.min(g.project.phase, PHASES.length - 1)).name;
         body = sitePanel(g);
         break;
       case 'workshop':

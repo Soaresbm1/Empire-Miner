@@ -14,7 +14,7 @@ src/
     structures/          Conveyor, Drill, TunnelBorer, Smelter, Crafter, Storage, ShippingCrate, Building (+ registre de fabrication)
     Market.ts            cours du marché (prix variables, événements) ; tirages par hachage, rien d'aléatoire à sauvegarder
     Contracts.ts         commandes des clients : propositions, acceptation, livraison, échéance, rang
-    Project.ts           le Grand Chevalement : cinq phases, livraisons, argent versé, avantages
+    Project.ts           les grands chantiers : Grand Chevalement (5 phases) puis Ascenseur de puits (4), livraisons, argent versé, avantages
     Wagons.ts            wagonnets (véhicules qui roulent sur la voie : rails et quais)
     visibility.ts        exploration (révélation des galeries)
     objectives.ts        objectifs calculés depuis l'état réel
@@ -319,6 +319,13 @@ partie à deux). Les nombres sont des données : `data/contracts.ts` (marchandis
   est une exclusive du client le plus fidèle (au hasard par hachage parmi les ex æquo) et `exclusiveRank` avance ; elle ne revient pas si on
   la laisse passer. Sauvegarde : `rep` (absent si tous à zéro), `x` (absent à 0), `e: 1` par commande ; tout est validé au chargement, une
   ancienne sauvegarde repart à zéro. Ces champs sont dans l'empreinte de synchro (ils comptent pour la simulation).
+- **Deux chantiers, une seule liste** : `PHASES` (`data/project.ts`) compte neuf phases. `CROWN_PHASE` (5) sépare le Grand Chevalement
+  (titre d'Empereur) de l'Ascenseur de puits (titre de Souverain des profondeurs) ; `STAGES` et `stageOf(phase)` donnent le chantier
+  d'une phase pour les textes (« phase 2 sur 4 »). `Project.crowned` : le premier est fini ; `Project.done` : tout est fini.
+  Aucun champ de sauvegarde n'a été ajouté : `Project.load` borne la phase à `PHASES.length`, donc une partie sauvegardée à
+  `phase = 5` (autrefois « achevée ») rouvre sur la phase 6, sans rien perdre. L'événement `site` porte `last` à vrai pour le
+  couronnement et pour la fin de l'Ascenseur : `Game` y joue le feu d'artifice (`celebrate`). Le rang « Baron » (45 commandes) est
+  dans `CONTRACTS.ranks`. Tests : `tests/project2.test.ts`.
 - **`sim/Project.ts`** ne connaît que le chantier : `deliver`, `fund` (l'argent versé), `ready(commandesHonorées)`, `advance`.
   `GameState.checkProject()` (à chaque pas) termine les phases dont tout est réuni et émet `{ t: 'site' }`.
 - **Livrer** : à la main (actions `contractDeliver`, `siteDeliver`, `siteFund`, qui exigent d'être devant le Tableau ou le

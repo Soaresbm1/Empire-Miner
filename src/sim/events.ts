@@ -54,7 +54,7 @@ type SimEventBody =
       exclusive?: boolean;
       trust?: { level: number; up: boolean };
     }
-  /** Grand Chevalement : la phase `phase` (0 pour la première) vient d'être terminée ; `last` : c'était la dernière. */
+  /** Grand chantier : la phase `phase` (0 pour la première) vient d'être terminée ; `last` : elle achève un chantier (le couronnement du Grand Chevalement, ou la fin de l'Ascenseur de puits). */
   | { t: 'site'; phase: number; last: boolean };
 
 /** Un événement ; à deux joueurs, `slot` dit lequel l'a causé (voir `GameState.emit`). */

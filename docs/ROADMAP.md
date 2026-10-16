@@ -49,7 +49,7 @@ profondeur et roches plus dures, sauvegarde/chargement, première automatisation
 - Chaleur en profondeur, coups de grisou qui explosent près d'une flamme, détecteur de poches.
 
 ## Après le Grand Chevalement (idées)
-- Un second chantier plus lointain (un ascenseur de puits, une ville au camp) qui reprend les commandes comme monnaie de progression.
+- ✅ Un second chantier plus lointain, l'Ascenseur de puits (quatre phases après le couronnement, mécanismes et commandes comme monnaie de progression) ; reste la structure « puits » (une source renouvelable de minerai, débloquée en cours de chantier) et, plus loin, une ville au camp.
 - Clients aux goûts propres (un client qui ne demande que certaines marchandises), commandes « cadeau » quand on est Partenaire, contrats qui se renouvellent.
 - Ouvriers « livreurs » qui portent leurs lingots du coffre au chantier ; objectifs quotidiens de commandes.
 

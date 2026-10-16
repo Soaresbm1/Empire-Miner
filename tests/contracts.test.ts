@@ -87,8 +87,10 @@ describe('commandes : rang', () => {
     expect(rankOf(0)).toMatchObject({ index: 0, name: 'Livreur', next: 3 });
     expect(rankOf(2).index).toBe(0);
     expect(rankOf(3)).toMatchObject({ index: 1, name: 'Fournisseur', next: 8 });
-    expect(rankOf(30)).toMatchObject({ index: 4, name: 'Magnat', next: null });
-    expect(rankOf(999).index).toBe(4);
+    expect(rankOf(30)).toMatchObject({ index: 4, name: 'Magnat', next: 45 });
+    expect(rankOf(44).index).toBe(4);
+    expect(rankOf(45)).toMatchObject({ index: 5, name: 'Baron', next: null });
+    expect(rankOf(999).index).toBe(5);
   });
 });
 
