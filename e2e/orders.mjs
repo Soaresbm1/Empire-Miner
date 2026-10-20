@@ -3,7 +3,7 @@
  *   - le Tableau d'affichage : onglet « Commandes » (touche 2), pastille sur l'onglet, accepter, livrer, abandonner (avec
  *     confirmation), la ligne du HUD ;
  *   - la caisse d'expédition : le bouton « Commandes » règle la caisse, qui livre à son prochain passage ;
- *   - le chantier : verser, livrer, la tour qui change à chaque phase, l'écran de fin à la dernière ;
+ *   - le chantier : verser, livrer, la tour qui change à chaque phase, le couronnement à la cinquième (le second chantier s'ouvre), l'écran de fin à la neuvième ;
  *   - la sauvegarde : tout est retrouvé après un rechargement de la page.
  *
  *   npm run build && node e2e/orders.mjs
@@ -13,8 +13,9 @@
 import { chromium } from 'playwright-core';
 import { preview } from 'vite';
 import { mkdirSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 
-const SHOTS = new URL('./screenshots/', import.meta.url).pathname;
+const SHOTS = fileURLToPath(new URL('./screenshots/', import.meta.url));
 mkdirSync(SHOTS, { recursive: true });
 
 let server = null;
@@ -69,7 +70,9 @@ const goTo = (type) =>
 
 await page.goto(`${url.replace(/\/$/, '')}/?debug`);
 await page.waitForSelector('#menu-root [data-action="new"]');
-await page.click('#menu-root [data-action="new"]');
+// Graine fixe, comme e2e/panels, phone et touch : l'arrivée des clients dépend du tirage (première proposition après 20 à 40 s,
+// puis toutes les 45 à 90 s), et une graine au hasard ne laissait parfois qu'une proposition au bout de deux minutes.
+await ev(() => window.__EM.newGame(7));
 await until(() => window.__EM.mode === 'playing');
 await sleep(400);
 
@@ -117,8 +120,9 @@ const offer = await ev(() => {
 await page.click(`#panel-root [data-action="contractAccept"][data-arg="${offer.id}"]`);
 check(await until((id) => window.__EM.state.contracts.get(id)?.accepted === true, offer.id), 'un clic sur « Accepter » accepte la commande');
 check(await until(() => !!document.querySelector('#panel-root .card.st-active')), 'elle passe dans « Vos commandes »');
-check(await ev(() => !!document.querySelector('.ord-hud')), 'la ligne du HUD annonce la commande en cours');
-check(await ev(() => /\d+\/\d+/.test(document.querySelector('.ord-hud')?.textContent ?? '')), 'avec son avancement et son décompte');
+// Le HUD se redessine à son rythme, pas à chaque action : on l'attend, comme les vérifications du Tableau ci-dessus.
+check(await until(() => !!document.querySelector('.ord-hud')), 'la ligne du HUD annonce la commande en cours');
+check(await until(() => /\d+\/\d+/.test(document.querySelector('.ord-hud')?.textContent ?? '')), 'avec son avancement et son décompte');
 
 // La livrer du sac : le sac contient largement de quoi (charbon 80, cuivre 30).
 await ev((o) => {
@@ -267,30 +271,42 @@ await ev(() => {
   window.__EM.renderer.zoom = 3;
 });
 
-// L'écran de fin : la dernière phase l'ouvre toute seule.
+// Le couronnement : la cinquième phase ouvre toute seule le panneau, avec le titre, et le second chantier commence.
+const finishPhases = (target) =>
+  ev((target) => {
+    const g = window.__EM.state;
+    for (let i = 0; i < 6 && g.project.phase < target; i++) {
+      for (const n of g.project.missing()) g.project.deliver(n.res, n.qty);
+      g.project.fund(g.project.moneyLeft());
+      g.update(0.1, { mx: 0, my: 0, mine: false, target: null });
+    }
+  }, target);
 await ev(() => {
   const g = window.__EM.state;
   g.stats.contracts = 99;
   g.stats.playTime = 7385;
-  goTo();
-  function goTo() {
-    const b = g.structures.list.find((s) => s.type === 'board');
-    g.player.x = (b.x + 1) * 16;
-    g.player.y = (b.y + b.h + 0.5) * 16;
-  }
-  for (let i = 0; i < 6 && !g.project.done; i++) {
-    for (const n of g.project.missing()) g.project.deliver(n.res, n.qty);
-    g.project.fund(g.project.moneyLeft());
-    g.update(0.1, { mx: 0, my: 0, mine: false, target: null });
-  }
+  const b = g.structures.list.find((s) => s.type === 'board');
+  g.player.x = (b.x + 1) * 16;
+  g.player.y = (b.y + b.h + 0.5) * 16;
 });
-check(await until(() => /Empereur de la mine/.test(document.querySelector('#panel-root .victory-title')?.textContent ?? '')), 'achever le monument ouvre l’écran de fin tout seul, devant le jeu');
+await finishPhases(5);
+check(await until(() => /Empereur de la mine/.test(document.querySelector('#panel-root .victory-title')?.textContent ?? '')), 'couronner le monument ouvre le panneau tout seul, devant le jeu, avec le titre d’Empereur');
+check(await ev(() => /Ascenseur de puits : phase 1 sur 4/.test(document.querySelector('#panel-root')?.textContent ?? '')), 'le second chantier est ouvert : l’Ascenseur de puits, phase 1 sur 4');
+check((await ev(() => document.querySelectorAll('#panel-root .site-steps li').length)) === 4, 'sa frise montre les quatre phases');
+check(await ev(() => !window.__EM.state.project.done && window.__EM.state.project.crowned), 'le monument est couronné mais pas achevé');
+await page.screenshot({ path: `${SHOTS}orders-05-couronnement.png` });
+await page.click('#panel-root [data-action="close"]');
+check(await until(() => !document.querySelector('#panel-root .panel')), 'le panneau se ferme');
+
+// L'écran de fin : la neuvième phase l'ouvre toute seule.
+await finishPhases(9);
+check(await until(() => /Souverain des profondeurs/.test(document.querySelector('#panel-root .victory-title')?.textContent ?? '')), 'achever l’Ascenseur de puits ouvre l’écran de fin tout seul, devant le jeu');
 check(await ev(() => /2 h 03 min/.test(document.querySelector('#panel-root')?.textContent ?? '')), 'il donne les chiffres de la partie (temps de jeu)');
 check(await front('#panel-root [data-action="close"].btn'), '« Continuer à jouer » est devant, cliquable');
 await page.screenshot({ path: `${SHOTS}orders-05-victoire.png` });
 await page.click('#panel-root [data-action="close"].btn');
 check(await until(() => !document.querySelector('#panel-root .panel')), '« Continuer à jouer » ferme l’écran de fin');
-check(await ev(() => window.__EM.mode === 'playing' && window.__EM.state.project.done), 'la partie continue, le monument reste achevé');
+check(await ev(() => window.__EM.mode === 'playing' && window.__EM.state.project.done), 'la partie continue, les deux chantiers restent achevés');
 
 // ---------------------------------------------------------------- la sauvegarde
 console.log('\n▶ Sauvegarde');
@@ -314,7 +330,7 @@ const after = await ev(() => {
   const g = window.__EM.state;
   return { contracts: JSON.stringify(g.contracts.serialize()), project: JSON.stringify(g.project.serialize()), honored: g.stats.contracts, mode: g.structures.at(53, 9)?.mode };
 });
-check(after.project === before.project && JSON.parse(after.project).phase === 5, 'après rechargement, le chantier est achevé');
+check(after.project === before.project && JSON.parse(after.project).phase === 9, 'après rechargement, les deux chantiers sont achevés');
 check(after.honored === before.honored, 'et le compteur de commandes honorées est le même');
 check(after.mode === 'orders', 'la caisse est toujours réglée sur « Commandes »');
 const bc = JSON.parse(before.contracts);

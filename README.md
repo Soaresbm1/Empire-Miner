@@ -284,8 +284,12 @@ Le jeu à deux n'est pas concerné : l'invité n'a besoin d'aucun compte, et l'h
 - **Manufacture** (900 $, pioche améliorée, 2×2 cases, onglet « Usine » de la barre de construction) : elle **transforme les
   lingots en produits**, plus chers que leurs matières. `E` dessus ouvre son panneau, où l'on **choisit la recette** :
   **plaque** de cuivre, de fer, d'argent ou d'or (1 lingot, 2 s, ×1,5 la valeur du lingot), **acier** (2 lingots de fer, 4 s,
-  170 $ l'unité) ou **diamant taillé** (1 diamant brut, 5 s, ×2). Le panneau ne propose que les recettes dont on connaît les
-  matières (un lingot fondu, un diamant trouvé). Les lingots entrent par un convoyeur ou se déposent du sac, sur n'importe quel côté
+  170 $ l'unité) ou **diamant taillé** (1 diamant brut, 5 s, ×2). Trois **composants** se fabriquent à partir d'autres produits,
+  donc à plusieurs Manufactures : **fil de cuivre** (1 plaque de cuivre → 2 fils, 3 s, 16 $), **engrenage** (1 plaque de fer, 3 s,
+  78 $) et **mécanisme** (2 engrenages + 1 acier + 3 fils, 8 s, 525 $, environ 1,4 fois ses matières). Une Manufacture peut pousser
+  son produit directement dans une autre posée devant sa flèche ; le mécanisme demande trois matières, à amener par trois côtés
+  ou par contact (sur un seul convoyeur mélangé, une matière en excès peut bloquer les autres : la vue goulots le montre).
+  Le panneau ne propose que les recettes dont on connaît les matières (un lingot fondu, un diamant trouvé, un produit déjà fabriqué). Les lingots entrent par un convoyeur ou se déposent du sac, sur n'importe quel côté
   sauf la sortie ; une matière hors recette est refusée (le convoyeur attend). Elle brûle du charbon comme un four (un
   ravitailleur peut la recharger) et ralentit dans la Fournaise ; les produits sont poussés devant la flèche (convoyeur,
   coffre, caisse d'expédition) ou récupérés dans le sac. **Changer de recette rend les matières qu'elle n'utilise pas**
@@ -294,6 +298,17 @@ Le jeu à deux n'est pas concerné : l'invité n'a besoin d'aucun compte, et l'h
   produits), les **clients en demandent** une fois le premier fabriqué, et les **deux dernières phases du Grand Chevalement**
   en réclament. Les statistiques de production comptent les produits dans la colonne « Fabriqué ». Objectif : fabriquer un
   produit. Les recettes sont des données (`src/data/recipes.ts`).
+- **Puits** (60 000 $, **2 au plus**, 3×3 cases, au camp seulement, onglet « Extraction ») : la machine de l'**Ascenseur de puits**.
+  Elle se débloque à la fin de sa septième phase (« Machine d'extraction ») ; le magasin dit ce qui manque. Toutes les 5 s, elle
+  **remonte un morceau** selon un cycle fixe de dix (4 fer, 3 argent, 2 or, 1 diamant, sans hasard) **sans épuiser aucun gisement**,
+  et le pousse devant sa flèche (convoyeur, coffre, caisse d'expédition) ou le range dans le sac (« Récupérer »). Elle **brûle du
+  charbon** pendant qu'elle travaille (1 unité pour 10 s : un ravitailleur ou un coffre collé la recharge) et **use un mécanisme
+  tous les 40 morceaux** (200 s : le réservoir de charbon plein suffit juste pour un mécanisme) ; sans mécanisme, elle s'arrête. Le
+  charbon et les mécanismes entrent par un convoyeur ou à la main, sur n'importe quel côté sauf la sortie. **Une bande qui mêle les
+  deux peut se coincer** : plein de charbon et sans mécanisme, le puits ne brûle plus et refuse le charbon de tête, donc le
+  mécanisme derrière n'arrive jamais (le panneau l'avertit : une bande par ressource). Le dépanneur la
+  connaît (« plus de mécanisme » est une cause qu'il signale, il recharge le charbon) et la pastille « machine à l'arrêt » aussi.
+  Valeur brute remontée : environ 750 $/min aux prix de base, contre un mécanisme de 525 $ toutes les 3 min 20 s (environ 160 $/min).
 - **Dangers** en profondeur, avec une **barre de santé** (on récupère hors de danger ; à 0, on s'évanouit et on se
   réveille au camp, le sac reste là où on est tombé) :
   - **éboulements** (dès 60 m, rares) : une salle creusée à la main **très** grande (plus de 16 cases creusées dans le
@@ -344,7 +359,7 @@ Le jeu à deux n'est pas concerné : l'invité n'a besoin d'aucun compte, et l'h
 - **Ouvriers** : des travailleurs qu'on **achète une seule fois** à l'Atelier (onglet Ouvriers, touche `5` ;
   300 $, 600 $, 1 000 $, 1 500 $, 2 200 $, 3 000 $, 4 000 $, 5 200 $ puis 6 500 $), sans salaire. **L'équipe s'agrandit
   avec vos pioches** : trois places avec la Pioche améliorée, six avec la Pioche en fer, neuf avec la Pioche pro en
-  acier — **neuf ouvriers au plus, trois par métier** (3 ramasseurs, 3 foreurs, 3 ravitailleurs ; un métier plein ne se
+  acier — **neuf ouvriers au plus, trois par métier** (3 ramasseurs, 3 dépanneurs, 3 ravitailleurs ; un métier plein ne se
   recrute plus et on ne peut plus y passer). Une ancienne équipe plus grande que ses places ou son quota est conservée.
   Chacun a un **métier**, qu'on change gratuitement à tout moment. Le **ramasseur** va chercher les minerais laissés par
   terre (restes de la foreuse de percement, éboulements, tas oubliés, jusqu'au fond de la mine par le puits) et les
@@ -354,20 +369,15 @@ Le jeu à deux n'est pas concerné : l'invité n'a besoin d'aucun compte, et l'h
   d'une foreuse de percement quand il atteint 5 (les fours et fonderies ne sont pas touchés) ; il respecte les réglages des
   coffres et, sans coffre qui accepte, laisse le minerai dans la machine et le signale. Le **ravitailleur** prend du charbon dans les coffres et recharge les foreuses, les fours et les foreuses
   de percement dont le réservoir est à moitié vide ou moins (une machine collée à un coffre se sert déjà seule). Le
-  **foreur** pose des **foreuses à charbon sur les gisements au sol** (exposés, déjà explorés, pas encore couverts par une
-  foreuse ni visés par un autre foreur, et sans boucher un passage) : il prend d'abord un **kit de foreuse de votre stock**,
-  à défaut il **l'achète lui-même** au prix de l'Atelier tant qu'il vous reste 200 $ ensuite (sinon il s'arrête et le
-  signale : « plus de foreuse en stock ni assez d'argent »). **Chaque foreur ne pose que 3 foreuses** (celles qu'il a posées
-  et qui sont encore debout : en retirer une lui en redonne une à poser ; celles que vous posez vous-même ne comptent pas, ni
-  celles d'avant cette règle) ; une fois ses 3 posées il continue de ravitailler les foreuses en charbon, et la fiche de
-  l'équipe affiche « foreuses posées : 3 / 3 ». Il a 4 **niveaux**, améliorés à l'Atelier (bouton sur sa
-  ligne) : le **niveau 1** (gratuit) équipe les petits minerais (charbon, cuivre), pose en 3 s ; le **niveau 2**
-  (400 $) ajoute le fer et pose en 2,2 s ; le **niveau 3** (900 $, pioche de niveau 3) ajoute l'argent et l'or ; le
-  **niveau 4** (2 200 $, pioche de niveau 4) ajoute le diamant ; chaque niveau marche aussi plus vite (×1,15, ×1,3, ×1,5).
-  Il ne pose pas sur la pierre. **Il met aussi du charbon dans les foreuses** : comme un ravitailleur, mais pour les
-  foreuses à charbon seulement (les vôtres comme les siennes, dès que leur réservoir est à moitié vide), il prend le charbon
-  dans un coffre et le porte à la foreuse ; il le fait **avant** de chercher un nouveau gisement, et signale « plus de
-  charbon dans les coffres » quand il n'y en a plus. Les foreuses posées se vident par un ramasseur. Ils
+  **dépanneur** va vers **une machine à l'arrêt** (foreuse à charbon, four, fonderie, atelier de fabrication), l'examine 1,5 s, puis fait ce qui est possible : **recharger en charbon** une machine à sec (il en prend dans un
+  coffre) ou **vider sa sortie dans un coffre** qui accepte le produit. Ce qu'il ne peut pas régler, il le **signale** : il
+  **rentre au camp et affiche la cause** dans les statistiques (Comptoir ou Atelier, « Machines à surveiller », section
+  « Constats du dépanneur » avec la machine, sa profondeur, la cause et un conseil) et dans l'infobulle de la machine
+  (vue goulots, `G`), puis repart vers une autre machine. Causes : plus de charbon et aucun coffre n'en a, sortie pleine
+  dont aucun coffre ne veut le produit, aucune sortie reliée, convoyeur plein plus loin, caisse d'expédition pleine, machine inaccessible. Une
+  machine signalée n'est pas revisitée avant 90 s ; le constat n'est affiché que tant qu'elle est à l'arrêt. Il ne supprime jamais une
+  foreuse et ne pose rien. (Le **foreur**, qui posait des foreuses sur les gisements, n'existe plus : dans une ancienne
+  sauvegarde, un foreur devient dépanneur.) Ils
   marchent de case en case par le plus court chemin, en évitant la roche, les machines, le grisou et l'eau profonde.
   **Sans limite de distance** : pour un tas, un coffre, du charbon, une machine ou leur poste, ils cherchent aussi loin
   qu'il faut (jusqu'au fond de la mine, avec une longue marche à la clé) ; seuls un passage coupé ou l'absence de cible
@@ -378,9 +388,9 @@ Le jeu à deux n'est pas concerné : l'invité n'a besoin d'aucun compte, et l'h
   terre). Un ouvrier bloqué est signalé au Tableau d'affichage et par un point d'exclamation au-dessus de lui, et
   **survoler l'ouvrier** à la souris donne la cause et quoi faire : « aucun coffre n'accepte ce minerai » (réglage des
   coffres), « les coffres qui acceptent ce minerai sont pleins », « aucun chemin jusqu'à un coffre » (roche, grisou, eau
-  ou machine en travers), « plus de charbon dans les coffres » ou « plus de foreuse en stock ni assez d'argent » ; ils apparaissent aussi sur la carte (points
-  vert, orange et bleu). Casque vert pour le ramasseur, orange pour le ravitailleur, bleu pour le foreur. Les ouvriers sont sauvegardés
-  (métier, niveau du foreur, position, charge) ; les anciennes sauvegardes n'en ont pas.
+  ou machine en travers), « plus de charbon dans les coffres » ; ils apparaissent aussi sur la carte (points
+  vert, orange et bleu). Casque vert pour le ramasseur, orange pour le ravitailleur, jaune pour le dépanneur. Les ouvriers sont sauvegardés
+  (métier, position, charge, constats des dépanneurs) ; les anciennes sauvegardes n'en ont pas.
 - **Cours du marché** : les prix de vente montent et descendent. Chaque minerai a un **cours**, multiplicateur de
   son prix de base (100 % = le prix de la fiche), qui dérive doucement toutes les 10 s autour de 100 % (en général
   de 80 à 120 %) ; un lingot suit le cours de son minerai, la pierre ne bouge pas. Toutes les 2,5 à 5 minutes, un
@@ -412,9 +422,9 @@ Le jeu à deux n'est pas concerné : l'invité n'a besoin d'aucun compte, et l'h
   proposition** est versée ; si l'échéance passe ou si on abandonne (le second appui confirme), **le client paie ce qui est
   livré au prix de base, sans la prime** : rien n'est perdu, seule la prime l'est. Un client ne demande que **ce que vous avez
   déjà trouvé**, et les lingots seulement après le premier lingot fondu : ils donnent une vraie raison de bâtir une ligne de
-  fonte et de trier. Même chose pour les **produits de la Manufacture** (plaques, acier, diamant taillé), après le premier fabriqué. Le **marché** pèse sur le tirage (une marchandise en forte demande est demandée trois fois plus souvent,
-  une marchandise bradée deux fois et demie moins). Le **rang** (Livreur, Fournisseur, Négociant, Grossiste, Magnat : 3, 8, 16,
-  30 commandes honorées) grossit les commandes de 25 % par rang et ajoute 2 points de prime. Une pastille sur l'onglet
+  fonte et de trier. Même chose pour les **produits de la Manufacture** (plaques, acier, diamant taillé, fil, engrenage, mécanisme), après le premier fabriqué. Le **marché** pèse sur le tirage (une marchandise en forte demande est demandée trois fois plus souvent,
+  une marchandise bradée deux fois et demie moins). Le **rang** (Livreur, Fournisseur, Négociant, Grossiste, Magnat, Baron : 3, 8, 16,
+  30, 45 commandes honorées) grossit les commandes de 25 % par rang et ajoute 2 points de prime. Une pastille sur l'onglet
   signale les propositions qui attendent, une ligne du HUD donne la commande la plus pressée (sur ordinateur), une annonce
   prévient d'une nouvelle proposition (au plus toutes les quatre minutes) et une autre à **une minute de l'échéance**. Les
   propositions sortent d'un tirage (graine, numéro) : les deux joueurs d'une partie à deux voient les mêmes, et tout est
@@ -436,7 +446,11 @@ Le jeu à deux n'est pas concerné : l'invité n'a besoin d'aucun compte, et l'h
   convoyeur qui porte plus de 85 % de sa charge est « à pleine charge ». **Vue goulots** (`G`, ou « Goulots » dans le menu ☰ du
   téléphone) : chaque machine et chaque convoyeur prend la couleur de ce qui a dominé sa dernière minute, avec son débit écrit
   au pied : **rouge** bloqué, **ambre** à sec ou à pleine charge, **vert** ça tourne, rien pour un convoyeur vide ; une légende
-  s'affiche en bas. Lecture : une file rouge qui se termine devant une machine verte, c'est elle le goulot. **Prévisions** : au
+  s'affiche en bas. Lecture : une file rouge qui se termine devant une machine verte, c'est elle le goulot. **Alerte « machine à
+  l'arrêt »** : une foreuse, un four ou une Manufacture arrêtés depuis 20 s déclenchent un message (« Four : plus de charbon »),
+  une pastille rouge « ⚠ 2 machines à l'arrêt » sous l'argent (44 px au doigt) et un anneau rouge sur la mini-carte et la carte ;
+  un appui sur la pastille ouvre la carte centrée sur la machine (appuis suivants : la suivante). Elle disparaît quand la machine
+  repart. **Prévisions** : au
   **Grand Chevalement**, un bloc dit « au rythme actuel, la phase est prête dans ~25 min » et **ce qui la retient** (lingots
   d'argent, salaires…), et chaque matériau porte sa durée ; sur le **Tableau d'affichage**, une commande acceptée dit si elle tient
   avant l'échéance (« ~7 min · dans les temps », « trop long ») et une proposition si vos machines suffiraient (« Réalisable ? oui,
@@ -454,11 +468,18 @@ Le jeu à deux n'est pas concerné : l'invité n'a besoin d'aucun compte, et l'h
   dès que tout est réuni. On livre **à la main** (« Livrer mon sac », « Verser ») ou avec des **caisses d'expédition réglées sur
   « Chantier »** que des convoyeurs alimentent : on bâtit une ligne de fonte, on y branche une caisse, et la tour monte sans
   y retourner. Chaque phase accorde un **avantage** aux commandes (une commande de plus en parallèle, une proposition de plus
-  au Tableau, 10 points de prime de plus, puis encore une commande et 10 points, enfin 5 points). La dernière phase **achève le
-  monument** : un feu d'artifice, le titre d'**Empereur de la mine** et un **écran de fin** avec les chiffres de la partie
-  (temps de jeu, argent gagné, blocs minés, lingots fondus, commandes honorées…) et le temps de chaque phase ; on peut
-  continuer à jouer. Toutes les quantités sont réunies dans `src/data/project.ts` et `src/data/contracts.ts`. Les quatre
-  derniers objectifs du parcours guidé en parlent (19 en tout, dont « fabriquer un produit »). Le chantier est un bâtiment du camp comme les autres : une
+  au Tableau, 10 points de prime de plus, puis encore une commande et 10 points, enfin 5 points). La cinquième phase **couronne le
+  monument** : un feu d'artifice et le titre d'**Empereur de la mine**, puis **un second chantier s'ouvre sur le même panneau,
+  l'Ascenseur de puits**. Quatre phases de plus : **Fonçage** (20 mécanismes, 150 acier, 150 000 $, 20 commandes), **Machine
+  d'extraction** (60 mécanismes, 200 acier, 400 fils, 250 000 $, 27 commandes), **Cuvelage** (80 mécanismes, 150 plaques d'or,
+  150 plaques d'argent, 400 000 $, 35 commandes) et **Mise en service** (120 mécanismes, 200 plaques d'or, 30 diamants taillés,
+  600 000 $, 45 commandes). Il se bâtit surtout avec des produits de la Manufacture (le mécanisme demande une chaîne de trois
+  étages) et ses avantages s'ajoutent à ceux du premier : une commande de plus, 5 points de prime, une proposition de plus et
+  10 points, enfin 5 points. La quatrième phase achève tout : le titre de **Souverain des profondeurs** et un **écran de fin** avec
+  les chiffres de la partie (temps de jeu, argent gagné, blocs minés, lingots fondus, commandes honorées…) et le temps de chaque
+  phase ; on peut continuer à jouer. Une partie sauvegardée au couronnement (autrefois « achevée ») rouvre sur le Fonçage, sans
+  rien perdre. Toutes les quantités sont réunies dans `src/data/project.ts` et `src/data/contracts.ts`. Les cinq
+  derniers objectifs du parcours guidé en parlent (20 en tout, dont « fabriquer un produit » et « achever l'Ascenseur de puits »). Le chantier est un bâtiment du camp comme les autres : une
   ancienne sauvegarde le trouve à sa place (une machine qu'elle y aurait posée revient au stock, avec son contenu, et un
   joueur resté debout à cet endroit est remis à l'entrée de la mine), avec un chantier à zéro.
 - **Mini-carte** en haut à droite (la mine autour du joueur) et **carte complète** avec `M` : galeries, roche,
@@ -476,7 +497,7 @@ Le jeu à deux n'est pas concerné : l'invité n'a besoin d'aucun compte, et l'h
   « Repère 3 ». Les repères apparaissent sur la carte, la mini-carte et dans la mine (fanion et nom). Un repère
   « suivi » s'affiche sous la mini-carte avec sa distance, et une flèche au bord de l'écran montre sa direction.
 - Sauvegarde automatique (chaque minute), manuelle, export/import de fichier.
-- Sons synthétisés, éclairage de la mine, particules, 19 objectifs guidant le parcours (des premières minutes
+- Sons synthétisés, éclairage de la mine, particules, 20 objectifs guidant le parcours (des premières minutes
   jusqu'au Grand Chevalement).
 - **Graphismes en pixel art**, tous dessinés en code (aucune image externe). La lumière vient toujours d'en haut à
   gauche : le mineur (casque à lampe, sac à dos, marche à 4 images, clignement des yeux), les machines ombrées et
@@ -499,6 +520,8 @@ node e2e/touch.mjs             # gestes tactiles réels (CDP) : stick, Miner, Ag
 node e2e/panels.mjs            # fenêtres au doigt sur un jeu qui tourne : défilement, toucher long, contenu exact, rien ne glisse de côté (après un build)
 node e2e/orders.mjs            # commandes et Grand Chevalement : vrais clics (accepter, livrer, abandonner, caisse réglée sur « Commandes », chantier phase par phase, écran de fin), réputation des clients et commande exclusive, la tour change à chaque étape, tout survit à un rechargement (après un build)
 node e2e/flow.mjs              # rendement des lignes : une ligne saturée mesurée en vrai (infobulles, panneau), vue goulots (touche G, légende, pixels teintés), prévisions du chantier et des commandes, rechargement (après un build)
+node e2e/alerts.mjs            # alerte « machine à l'arrêt » : four sans charbon, pastille du HUD, carte centrée sur la machine, disparition au retour du charbon, pastille de 44 px sans débordement en portrait (après un build)
+node e2e/well.mjs              # le puits : verrouillé puis acheté à l'Atelier, posé au camp, panneau (charbon, mécanismes : vrais clics), minerai dans un coffre, pastille « machine à l'arrêt » (après un build)
 node e2e/crafter.mjs           # la Manufacture : achat à l'Atelier, pose, panneau (recette, charbon, dépôt, récupération), chaîne par convoyeurs, commande de plaques, sauvegarde, ancienne partie (après un build)
 node e2e/menus.mjs             # menus : « Commandes » (menu principal et pause) s'ouvre devant le menu, qui s'efface puis revient ; seul, le jeu reste figé depuis la pause (après un build)
 node e2e/cloud.mjs             # compte : deux appareils (deux profils de navigateur) et un faux Firebase local : création, reprise sur appareil neuf, parties qui divergent, réseau coupé, suppression (après un build)

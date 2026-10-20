@@ -16,6 +16,7 @@ import { Building, BUILDING_INFO } from '../sim/structures/Building';
 import { Conveyor } from '../sim/structures/Conveyor';
 import { TunnelBorer } from '../sim/structures/Borer';
 import { Crafter } from '../sim/structures/Crafter';
+import { Well } from '../sim/structures/Well';
 import { Smelter } from '../sim/structures/Smelter';
 import { MARKER_KINDS, MarkerKind } from '../sim/Markers';
 import { Fan, Prop, Pump } from '../sim/structures/Safety';
@@ -26,7 +27,7 @@ import { Sorter } from '../sim/structures/Sorter';
 import { BOARD_TABS, marketNews } from '../ui/market';
 import { clientName, contractNews } from '../ui/orders';
 import { siteNews } from '../ui/site';
-import { PHASES } from '../data/project';
+import { stageOf } from '../data/project';
 import { WORKSHOP_TABS } from '../ui/workshop';
 import { Rail, RailStation, RailSwitch } from '../sim/structures/Rail';
 import { Splitter } from '../sim/structures/Splitter';
@@ -40,7 +41,8 @@ import { Speed, advance, isSpeed, keepsUp, nextSpeed, smoothRate, speedDanger } 
 import { speedBar } from '../ui/speedBar';
 import { flowLegend, flowTip } from '../ui/flow';
 import { esc, kg, money, resIcon } from '../ui/format';
-import { workerAt, workerTooltip } from '../ui/crew';
+import { repairTip, workerAt, workerTooltip } from '../ui/crew';
+import { StallWatch, alertChip, stallToasts } from '../ui/alerts';
 import { applyAction, type SimAction } from '../sim/actions';
 import { TouchControls, isTouchDevice, saveTouchPref } from '../ui/touch';
 import { homeScreenHintDue, homeScreenHintShown, toggleFullscreen } from '../ui/fullscreen';
@@ -133,6 +135,8 @@ export class Game {
   private chestHover: Storage | null = null;
   /** Vue « goulots » (touche G) : machines et convoyeurs teints selon ce qui les bloque. Rien de tout cela n'est sauvegardé. */
   private flowView = false;
+  /** Machines à l'arrêt depuis un moment (pastille du HUD, anneaux de la carte). Lu dans l'état, jamais sauvegardé. */
+  private readonly stalls = new StallWatch();
   /** Vitesse de jeu (×1, ×2, ×4), pause du joueur (P) et vitesse réellement obtenue, lissée. Rien de tout cela n'est sauvegardé. */
   private speed: Speed = 1;
   private userPaused = false;
@@ -1125,9 +1129,6 @@ export class Game {
         this.act({ k: 'workerJob', id: Number(id), job });
         break;
       }
-      case 'workerUpgrade':
-        this.act({ k: 'workerUpgrade', id: Number(arg) });
-        break;
       case 'fireWorker':
         if (this.ui.confirmFire(Number(arg))) this.act({ k: 'fire', id: Number(arg) });
         break;
@@ -1220,6 +1221,7 @@ export class Game {
         break;
       case 'drillRotate':
       case 'smelterRotate':
+      case 'wellRotate':
       case 'crafterRotate':
       case 'borerRotate':
       case 'switchRotate':
@@ -1246,6 +1248,15 @@ export class Game {
       case 'smelterCollect':
         if (at) this.act({ k: 'smelterCollect', ...at });
         break;
+      case 'wellFuel':
+        if (at) this.act({ k: 'wellFuel', ...at });
+        break;
+      case 'wellDeposit':
+        if (at) this.act({ k: 'wellDeposit', ...at });
+        break;
+      case 'wellCollect':
+        if (at) this.act({ k: 'wellCollect', ...at });
+        break;
       case 'crafterFuel':
         if (at) this.act({ k: 'crafterFuel', ...at });
         break;
@@ -1268,6 +1279,15 @@ export class Game {
       case 'openMap':
         this.togglePanel('map');
         break;
+      case 'alertGo': {
+        // La carte s'ouvre (ou reste ouverte) centrée sur la machine à l'arrêt suivante.
+        const stall = this.stalls.nextToShow();
+        if (!stall) break;
+        if (this.ui.panel?.kind !== 'map') this.togglePanel('map');
+        this.map.centerOnTile(stall.s.x + Math.floor(stall.s.w / 2), stall.s.y + Math.floor(stall.s.h / 2));
+        this.ui.toast(stall.text, 'warn', 3000);
+        break;
+      }
       case 'markerKind':
         if (arg in MARKER_KINDS) g.markerKind = arg as MarkerKind;
         break;
@@ -1479,7 +1499,10 @@ export class Game {
       }
       intent = { mx, my, mine, target, ride: inp.isDown('ShiftLeft', 'ShiftRight') };
       // En construction, la ligne d'état de la barre remplace l'infobulle.
-      if (mouseActive && !this.buildMode && !this.chestDrag) tooltip = this.describeTile(g, mtx, mty);
+      if (mouseActive && !this.buildMode && !this.chestDrag) {
+        const tip = this.describeTile(g, mtx, mty);
+        tooltip = tip ? tip + repairTip(g, mtx, mty) : tip;
+      }
     }
     const near = g.nearestInteractable();
     if (!this.ui.blocking && near) overlay.interact = near;
@@ -1527,7 +1550,10 @@ export class Game {
     this.renderer.draw(overlay);
     this.ui.setTooltip(tooltip, inp.mouseX, inp.mouseY);
     this.warnOrders(g);
+    for (const text of stallToasts(this.stalls.update(g))) this.ui.toast(text, 'warn', 4200);
+    this.map.setAlerts(this.stalls.list.map((f) => f.s));
     this.ui.updateHud(g, {
+      alert: alertChip(this.stalls.list),
       prompt: this.promptText(g, near),
       build: this.buildBarHtml(g),
       hints: this.hintsHtml(),
@@ -1589,6 +1615,7 @@ export class Game {
     else if (s instanceof TunnelBorer) this.ui.openPanel('borer', s);
     else if (s instanceof Smelter) this.ui.openPanel('furnace', s);
     else if (s instanceof Crafter) this.ui.openPanel('crafter', s);
+    else if (s instanceof Well) this.ui.openPanel('well', s);
     else if (s instanceof Sorter) this.ui.openPanel('sorter', s);
     else if (s instanceof RailStation) this.ui.openPanel('station', s);
     else if (s instanceof RailSwitch) this.ui.openPanel('switch', s);
@@ -1610,7 +1637,8 @@ export class Game {
     const e = this.touch ? '<b class="act-tag">Agir</b>' : `<kbd>${this.input.label('KeyE')}</kbd>`;
     if (near instanceof Building && near.type === 'site' && this.state) {
       const p = this.state.project;
-      return `${e} Grand Chevalement — ${p.done ? 'achevé, voir les chiffres de la partie' : `phase ${p.phase + 1} sur ${PHASES.length} : ${p.spec!.name}`}`;
+      const st = stageOf(p.phase);
+      return `${e} ${st.name} — ${p.done ? 'achevé, voir les chiffres de la partie' : `phase ${p.phase - st.from + 1} sur ${st.to - st.from} : ${p.spec!.name}`}`;
     }
     if (near instanceof Building) return `${e} ${BUILDING_INFO[near.type].name} — ${BUILDING_INFO[near.type].prompt}`;
     if (near instanceof Storage) return `${e} Ouvrir le coffre`;
@@ -1618,6 +1646,7 @@ export class Game {
     if (near instanceof Drill) return `${e} Foreuse niv. ${near.level} — charbon, production, amélioration`;
     if (near instanceof TunnelBorer) return `${e} Foreuse de percement niv. ${near.level} — charbon, départ, améliorations`;
     if (near instanceof Smelter) return `${e} ${near.def.name} — charbon, minerai, lingots`;
+    if (near instanceof Well) return `${e} ${near.def.name} — charbon, mécanismes, minerai`;
     if (near instanceof Crafter) return `${e} ${near.def.name} — ${near.recipe ? `fabrique : ${getResource(near.recipe).name}` : 'choisir ce qu’elle fabrique'}`;
     if (near instanceof Sorter) return `${e} Trieur — choisir le minerai trié`;
     if (near instanceof RailStation) return `${e} ${near.def.name}`;
@@ -2139,6 +2168,10 @@ export class Game {
       const st = { ok: 'fond le minerai', idle: 'attend du minerai', nofuel: 'sans charbon', full: 'sortie saturée' }[s.status];
       return `<b>${s.def.name}</b> ${['→', '↓', '←', '↑'][s.dir]} — ${st}<br>Minerai : ${s.input.length} · lingots prêts : ${s.output.length} · charbon : ${s.fuelUnits}${this.heatLine(g, s.x, s.y)}${flowTip(s)}`;
     }
+    if (s instanceof Well) {
+      const st = { ok: 'remonte du minerai', nofuel: 'sans charbon', nomech: 'sans mécanisme', full: 'sortie saturée' }[s.status];
+      return `<b>${s.def.name}</b> ${['→', '↓', '←', '↑'][s.dir]} — ${st}<br>Prochain : ${getResource(s.nextRes()).name} · prêts : ${s.output.length} · charbon : ${s.fuelUnits} · mécanismes : ${s.mech} (${s.unitsLeft()} morceaux)${flowTip(s)}`;
+    }
     if (s instanceof Crafter) {
       const st = { ok: 'fabrique', idle: 'attend des matières', nofuel: 'sans charbon', full: 'sortie saturée', norecipe: 'aucune recette choisie' }[s.status];
       const what = s.recipe ? ` : ${getResource(s.recipe).name}` : '';
@@ -2151,7 +2184,7 @@ export class Game {
     if (s instanceof ShippingCrate)
       return `<b>Caisse d'expédition</b>${s.mode === 'market' ? '' : ` — <span class="good">livre ${s.mode === 'orders' ? 'aux commandes' : 'au chantier'}</span>`}<br>${kg(s.weight())} / ${kg(s.capacity)} · ${money(s.pendingValue())} en attente<br>Passage dans ${Math.ceil(s.timer)} s${flowTip(s)}`;
     if (s instanceof Building && s.type === 'site')
-      return `<b>${s.name}</b><br>${g.project.done ? 'Achevé' : `Phase ${g.project.phase + 1} sur ${PHASES.length} : ${g.project.spec!.name} (${Math.round(g.project.progress() * 100)} %)`}`;
+      return `<b>${s.name}</b><br>${g.project.done ? 'Achevé' : `${stageOf(g.project.phase).name} : phase ${g.project.phase - stageOf(g.project.phase).from + 1} sur ${stageOf(g.project.phase).to - stageOf(g.project.phase).from} : ${g.project.spec!.name} (${Math.round(g.project.progress() * 100)} %)`}`;
     if (s instanceof Building) return `<b>${s.name}</b>`;
     const id = w.get(tx, ty);
     const b = getBlock(id);
@@ -2295,7 +2328,7 @@ export class Game {
           break;
         case 'worker':
           // Un petit éclat à l'endroit du geste, et un tintement discret si l'ouvrier est près du joueur.
-          r.fx.emit('spark', e.x, e.y - 8, e.kind === 'fuel' ? '#e8662a' : e.kind === 'store' ? '#f2c230' : e.kind === 'place' ? '#8fb8ff' : '#d8f5c0', e.kind === 'place' ? 8 : 4, 22);
+          r.fx.emit('spark', e.x, e.y - 8, e.kind === 'fuel' ? '#e8662a' : e.kind === 'store' ? '#f2c230' : '#d8f5c0', 4, 22);
           if (Math.hypot(e.x - g.player.x, e.y - g.player.y) < 14 * TILE) this.sfx.worker(e.kind);
           break;
         case 'message':
@@ -2342,7 +2375,7 @@ export class Game {
     g.events.length = 0;
   }
 
-  /** Le Grand Chevalement est achevé : feu d'artifice autour du joueur, puis l'écran de fin (sauf pendant un menu). Renvoie vrai s'il s'est ouvert. */
+  /** Un chantier est achevé (couronnement du Grand Chevalement, ou fin de l'Ascenseur de puits) : feu d'artifice autour du joueur, puis l'écran de fin (sauf pendant un menu). Renvoie vrai s'il s'est ouvert. */
   private celebrate(g: GameState): boolean {
     const r = this.renderer;
     const colors = ['#f2c230', '#ff6b5b', '#6fb3ff', '#7fd07a', '#d38cff', '#ffffff'];

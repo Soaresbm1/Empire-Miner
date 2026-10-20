@@ -23,6 +23,7 @@ import type { MarkerSave } from '../sim/Markers';
 import type { MarketSave } from '../sim/Market';
 import type { ProjectSave } from '../sim/Project';
 import type { WorkerSave } from '../sim/Workers';
+import type { RepairReport } from '../sim/Repair';
 import type { SlotSave } from '../sim/Production';
 
 export const SAVE_VERSION = 1;
@@ -84,6 +85,8 @@ export interface SaveData extends PersonalSave {
   market?: MarketSave;
   /** Ouvriers : métier, position et charge (absents des anciennes sauvegardes : aucun ouvrier). */
   workers?: WorkerSave[];
+  /** Constats des dépanneurs (machine, cause, instant, affiché) : absents des anciennes sauvegardes, aucun constat. */
+  repairs?: RepairReport[];
   /** Commandes du Tableau d'affichage (absentes des anciennes sauvegardes : aucune commande, les clients arrivent d'ici peu). */
   contracts?: ContractsSave;
   /** Grand Chevalement : phase en cours, livraisons, argent versé (absent des anciennes sauvegardes : chantier à zéro). */
@@ -179,6 +182,7 @@ export function serialize(g: GameState, opts: SerializeOptions = {}): SaveData {
     contracts: g.contracts.serialize(),
     project: g.project.serialize(),
     workers: g.workers.serialize(),
+    ...(g.workers.reports.size ? { repairs: g.workers.serializeReports() } : {}),
     ...(others.length ? { players: others.map((i) => ({ id: g.guestIds[i] ?? '', ...g.withSlot(i, () => personalOf(g)) })) } : {}),
     ...(Object.keys(g.guestStash).length ? { guests: g.guestStash as Record<string, PersonalSave> } : {}),
     hazards: {
@@ -252,6 +256,7 @@ export function deserialize(data: SaveData): GameState {
   }
   // Les ouvriers viennent après le monde et les machines : leur case d'attente en dépend.
   g.workers.load(data.workers, g);
+  g.workers.loadReports(data.repairs, g);
   // Jeu à deux : les autres joueurs présents et les invités partis.
   g.guestStash = { ...(data.guests ?? {}) };
   for (const p of data.players ?? []) {

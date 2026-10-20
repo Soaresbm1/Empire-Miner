@@ -95,7 +95,7 @@ describe('ouvriers : achat', () => {
     // Un quatrième ramasseur par changement de métier : refusé ; l'inverse est permis.
     expect(g.setWorkerJob(refueler.id, 'picker')).toBe(false);
     expect(refueler.job).toBe('refueler');
-    expect(g.setWorkerJob(first.id, 'driller')).toBe(true);
+    expect(g.setWorkerJob(first.id, 'fixer')).toBe(true);
     expect(g.workerCount('picker')).toBe(2);
     expect(g.setWorkerJob(refueler.id, 'picker')).toBe(true);
   });

@@ -10,8 +10,9 @@
 import { chromium } from 'playwright-core';
 import { preview } from 'vite';
 import { mkdirSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 
-const SHOTS = new URL('./screenshots/', import.meta.url).pathname;
+const SHOTS = fileURLToPath(new URL('./screenshots/', import.meta.url));
 mkdirSync(SHOTS, { recursive: true });
 const S = 12; // SURFACE_ROWS
 
@@ -1657,8 +1658,8 @@ try {
     await shot('36-worker-blocked-tooltip');
   }
 
-  // Foreur : on le recrute et on l'améliore à l'Atelier, puis il pose une foreuse sur un gisement au sol (kit du stock), un
-  // ravitailleur la recharge et un ramasseur vide ce qu'elle garde dans le coffre. Partie neuve, pour ne rien devoir à ce qui précède.
+  // Dépanneur : on le recrute à l'Atelier ; il recharge une foreuse à l'arrêt (charbon en coffre), puis, sans charbon, il rentre au camp
+  // et affiche la cause. Partie neuve, pour ne rien devoir à ce qui précède.
   {
     await ev(() => localStorage.clear());
     await page.reload();
@@ -1668,7 +1669,7 @@ try {
     // L'autosave de la partie précédente peut avoir été réécrite au rechargement : « Nouvelle partie » demande alors confirmation.
     if (await page.$('[data-action="new"]')) await page.click('[data-action="new"]');
     await page.waitForTimeout(800);
-    check((await ev(() => window.__EM.mode)) === 'playing', 'une partie neuve démarre pour le foreur');
+    check((await ev(() => window.__EM.mode)) === 'playing', 'une partie neuve démarre pour le dépanneur');
     await ev(() => {
       const g = window.__EM.state;
       g.stats.discovered = ['coal', 'copper', 'iron'];
@@ -1684,73 +1685,67 @@ try {
     await page.waitForTimeout(450);
     await page.keyboard.press('Digit5');
     await page.waitForTimeout(350);
-    check((await page.$$('[data-action="hireWorker"]')).length === 3, "trois fiches de recrutement : ramasseur, foreur, ravitailleur");
-    await page.click('[data-action="hireWorker"][data-arg="driller"]');
+    check((await page.$$('[data-action="hireWorker"]')).length === 3, 'trois fiches de recrutement : ramasseur, dépanneur, ravitailleur');
+    check(!(await page.$('[data-action="workerUpgrade"]')) && !/Foreur/.test((await page.textContent('.panel-workshop')) ?? ''), 'plus de foreur ni d’amélioration de métier');
+    await page.click('[data-action="hireWorker"][data-arg="fixer"]');
     await page.waitForTimeout(350);
-    const lvl1 = (await ev(() => document.querySelector('.panel-workshop')?.textContent ?? '')) ?? '';
-    check(/Niveau 1 \/ 4/.test(lvl1) && /charbon/.test(lvl1) && !/diamant/.test(lvl1), 'le foreur recruté est de niveau 1 (petits minerais seulement)');
-    await shot('37-driller-crew');
-    await page.click('[data-action="workerUpgrade"]');
-    await page.waitForTimeout(350);
-    check((await ev(() => window.__EM.state.workers.list[0].level)) === 2, "l'amélioration au clic fait passer le foreur au niveau 2");
-    check(/Niveau 2 \/ 4/.test((await ev(() => document.querySelector('.panel-workshop')?.textContent ?? '')) ?? ''), 'la fiche affiche le niveau 2');
+    const crew = (await ev(() => document.querySelector('.panel-workshop')?.textContent ?? '')) ?? '';
+    check(/Dépanneur/.test(crew) && /Aucune machine à l’arrêt à examiner/.test(crew), 'le dépanneur recruté est listé, sans rien à examiner');
+    await shot('37-fixer-crew');
     await page.keyboard.press('Escape');
     await page.waitForTimeout(250);
-    // Un gisement de cuivre (exposé, dans la salle du fond), un kit de foreuse, un coffre avec du charbon, un ramasseur et un ravitailleur.
+    // Une foreuse sur un gisement de cuivre, sans charbon, et un coffre qui en contient : elle est à l'arrêt, il peut la recharger.
     await ev(() => {
       const g = window.__EM.state;
       const Y = 12 + 14;
-      g.world.set(50, Y, 0);
-      g.world.setDeposit(50, Y, 2, 60); // 2 : cuivre
-      g.world.explored[g.world.idx(50, Y)] = 1;
-      g.inventory.addKit('drill', 1);
+      for (const x of [50, 52]) {
+        g.world.set(x, Y, 0);
+        g.world.setDeposit(x, Y, 1, 60); // cuivre
+        g.world.explored[g.world.idx(x, Y)] = 1;
+      }
+      g.inventory.addKit('drill', 2);
       g.inventory.addKit('storage', 1);
       g.player.x = 47.5 * 16;
       g.player.y = (Y + 0.5) * 16;
       const chest = g.place('storage', 46, Y, 0);
       chest.put('coal', 30);
-      g.workers.add('picker', g);
+      g.place('drill', 50, Y, 0);
       window.__EM.renderer.snapCamera();
     });
     await page.keyboard.press('KeyX');
     await page.keyboard.press('KeyX');
-    let placed = false;
-    try {
-      await page.waitForFunction(() => window.__EM.state.structures.list.some((s) => s.type === 'drill'), undefined, { timeout: 30000, polling: 250 });
-      placed = true;
-    } catch {
-      /* mesuré plus bas */
-    }
-    check(placed, 'le foreur a posé une foreuse à charbon sur le gisement de cuivre');
-    check((await ev(() => window.__EM.state.inventory.kitCount('drill'))) === 0, 'il a utilisé le kit de foreuse du stock');
-    // Sans ravitailleur : c'est le foreur qui prend du charbon dans le coffre et le met dans sa foreuse.
     let fueled = false;
     try {
-      await page.waitForFunction(() => (window.__EM.state.structures.list.find((s) => s.type === 'drill')?.fuelUnits ?? 0) > 0, undefined, { timeout: 30000, polling: 250 });
+      await page.waitForFunction(() => (window.__EM.state.structures.list.find((s) => s.type === 'drill')?.fuelUnits ?? 0) > 0, undefined, { timeout: 60000, polling: 250 });
       fueled = true;
     } catch {
       /* mesuré plus bas */
     }
-    check(fueled, 'le foreur met lui-même du charbon dans la foreuse qu’il vient de poser (sans ravitailleur)');
+    check(fueled, 'le dépanneur est allé recharger en charbon la foreuse à l’arrêt');
     check((await ev(() => window.__EM.state.storages()[0].items.coal ?? 0)) < 30, 'ce charbon vient du coffre');
-    await ev(() => { const g = window.__EM.state; g.workers.add('refueler', g); });
-    await shot('38-driller-placed');
-    let emptied = false;
+    await shot('38-fixer-repaired');
+    // Plus de charbon nulle part, une deuxième foreuse à l'arrêt : il ne peut rien y faire, il rentre au camp et affiche la cause.
+    await ev(() => {
+      const g = window.__EM.state;
+      g.storages()[0].items = {};
+      for (const s of g.structures.list) if (s.type === 'drill') { s.fuelUnits = 0; s.burn = 0; }
+      g.place('drill', 52, 12 + 14, 0);
+    });
+    let reported = false;
     try {
       await page.waitForFunction(
-        () => {
-          const g = window.__EM.state;
-          const chest = g.storages()[0];
-          return (chest.items.copper ?? 0) > 0;
-        },
+        () => [...window.__EM.state.workers.reports.values()].some((r) => r.shown && r.cause === 'nocoal'),
         undefined,
         { timeout: 90000, polling: 500 },
       );
-      emptied = true;
+      reported = true;
     } catch {
       /* mesuré plus bas */
     }
-    check(emptied, 'le ramasseur range la production de la foreuse dans le coffre');
+    check(reported, 'sans charbon en coffre : constat « plus de charbon, et aucun coffre n’en a » affiché après son retour au camp');
+    const w0 = await ev(() => { const g = window.__EM.state; const w = g.workers.list[0]; return { note: w.note, task: w.task?.kind ?? null }; });
+    check(w0.note === null, `le constat est affiché : le dépanneur n'a plus rien à rapporter (tâche : ${w0.task})`);
+    await shot('38b-fixer-report');
     await page.keyboard.press('KeyX');
   }
 
@@ -1774,6 +1769,9 @@ try {
       await page.click(`[data-action="hireWorker"][data-arg="${job}"]`);
       await page.waitForTimeout(250);
     };
+    // Le bloc d'avant ne recrute que le dépanneur : on complète l'équipe, un de chaque métier.
+    await hire('picker');
+    await hire('refueler');
     check((await count()) === 3, `trois ouvriers : un de chaque métier (${await count()})`);
     check(!(await page.$('[data-action="hireWorker"]')), "équipe pleine avec la pioche améliorée : plus de bouton de recrutement");
     const panel3 = (await page.textContent('.panel-workshop')) ?? '';
@@ -1793,10 +1791,10 @@ try {
     // Pioche pro en acier : neuf places, trois de chaque.
     await ev(() => { window.__EM.state.pickaxeLevel = 3; });
     await page.waitForTimeout(500);
-    await hire('driller');
-    await hire('driller');
+    await hire('fixer');
+    await hire('fixer');
     await hire('refueler');
-    const jobs = await ev(() => ['picker', 'driller', 'refueler'].map((j) => window.__EM.state.workerCount(j)));
+    const jobs = await ev(() => ['picker', 'fixer', 'refueler'].map((j) => window.__EM.state.workerCount(j)));
     check((await count()) === 9 && jobs.every((n) => n === 3), `neuf ouvriers, trois de chaque métier (${jobs.join('/')})`);
     check(!(await page.$('[data-action="hireWorker"]')) && /équipe complète/.test((await page.textContent('.panel-workshop')) ?? ''), 'équipe complète : plus aucun recrutement possible');
     await shot('40-crew-nine');

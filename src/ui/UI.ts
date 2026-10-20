@@ -9,6 +9,7 @@ import type { GameState } from '../sim/GameState';
 import { OBJECTIVES, currentObjective } from '../sim/objectives';
 import type { TunnelBorer } from '../sim/structures/Borer';
 import type { Crafter } from '../sim/structures/Crafter';
+import type { Well } from '../sim/structures/Well';
 import type { Smelter } from '../sim/structures/Smelter';
 import { GEAR, HAZARD_LABEL } from '../data/gear';
 import { GAS, HEALTH, WATER } from '../data/hazards';
@@ -27,8 +28,9 @@ import { QUALITY_LABEL, type Quality } from '../render/quality';
 import { WORKSHOP_TABS, isWorkshopTab } from './workshop';
 import { hudMarket, BOARD_TABS, isBoardTab } from './market';
 import { hudOrders } from './orders';
+import { PHASES, stageOf } from '../data/project';
 import { sitePanel } from './site';
-import { boardPanel, borerPanel, counterPanel, crafterPanel, smelterPanel, drillPanel, helpPanel, installPanel, inventoryPanel, mapPanel, shippingPanel, sorterPanel, stationPanel, storagePanel, switchPanel, workshopPanel } from './panels';
+import { boardPanel, borerPanel, counterPanel, crafterPanel, wellPanel, smelterPanel, drillPanel, helpPanel, installPanel, inventoryPanel, mapPanel, shippingPanel, sorterPanel, stationPanel, storagePanel, switchPanel, workshopPanel } from './panels';
 import { displayMode } from './fullscreen';
 import { morph } from './morph';
 import { pinchStep } from './touch';
@@ -40,7 +42,7 @@ const ARROWS8 = ['→', '↘', '↓', '↙', '←', '↖', '↑', '↗'];
 /** Un doigt qui bouge de plus que cela (px CSS) entre l'appui et le relâchement ne fait pas un appui sur un bouton. */
 const TAP_SLOP = 10;
 
-export type PanelKind = 'counter' | 'workshop' | 'board' | 'site' | 'inventory' | 'storage' | 'drill' | 'borer' | 'furnace' | 'crafter' | 'shipping' | 'sorter' | 'station' | 'switch' | 'map' | 'help' | 'install';
+export type PanelKind = 'counter' | 'workshop' | 'board' | 'site' | 'inventory' | 'storage' | 'drill' | 'borer' | 'furnace' | 'crafter' | 'well' | 'shipping' | 'sorter' | 'station' | 'switch' | 'map' | 'help' | 'install';
 
 export interface UIHost {
   onAction(action: string, arg: string): void;
@@ -312,12 +314,13 @@ export class UI {
     else col.insertBefore(obj, col.firstChild);
   }
 
-  updateHud(g: GameState, extra: { prompt: string; build: string; hints: string; income: string; speed: string; flow: string }): void {
+  updateHud(g: GameState, extra: { prompt: string; build: string; hints: string; income: string; speed: string; flow: string; alert: string }): void {
     const depth = depthAt(g.player.tileY);
     const surface = g.player.tileY < 12;
     this.set('hud-money', `<span class="coin"></span>${money(g.money)}`);
     this.set('hud-income', extra.income);
     this.set('hud-speed', extra.speed);
+    this.set('hud-alert', extra.alert);
     this.set('hud-market', hudMarket(g) + hudOrders(g));
     // Fournaise : température, qui ralentit les machines et épuise le mineur (sauf près d'un ventilateur).
     const temp = surface ? null : g.hazards.temperature(g.player.tileY);
@@ -608,7 +611,7 @@ export class UI {
         body = boardPanel(g, tab, this.abandoning);
         break;
       case 'site':
-        title = 'Grand Chevalement';
+        title = stageOf(Math.min(g.project.phase, PHASES.length - 1)).name;
         body = sitePanel(g);
         break;
       case 'workshop':
@@ -638,6 +641,10 @@ export class UI {
       case 'crafter':
         title = (target as Crafter).def.name;
         body = crafterPanel(g, target as Crafter);
+        break;
+      case 'well':
+        title = (target as Well).def.name;
+        body = wellPanel(g, target as Well);
         break;
       case 'shipping':
         title = getMachine('shipping').name;

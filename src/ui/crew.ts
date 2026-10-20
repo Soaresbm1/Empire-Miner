@@ -2,9 +2,10 @@
  * Ouvriers à l'écran : ce que fait chacun (onglet « Ouvriers » de l'Atelier) et ceux qui sont bloqués (Tableau
  * d'affichage). Rien ici ne modifie la partie.
  */
-import { TILE } from '../core/constants';
-import { RESOURCES, getResource } from '../data/resources';
-import { DRILLER, DRILLER_LEVELS, WORKERS, drillerLevel, getJob, workerName } from '../data/workers';
+import { TILE, depthAt } from '../core/constants';
+import { getMachine } from '../data/machines';
+import { getResource } from '../data/resources';
+import { REPAIR_TEXT, WORKERS, getJob, workerName } from '../data/workers';
 import type { GameState } from '../sim/GameState';
 import { cargoCount, cargoWeight, type Worker, type WorkerFlag } from '../sim/Workers';
 import { kg, resIcon } from './format';
@@ -21,8 +22,7 @@ const FLAG_TEXT: Record<WorkerFlag, string> = {
   full: 'Les coffres qui acceptent ce minerai sont pleins : videz-en un ou posez-en un autre.',
   noroute: "Aucun chemin jusqu'à un coffre (roche, grisou, eau profonde ou machine en travers) : dégagez le passage.",
   nocoal: 'Plus de charbon dans les coffres : déposez-en dans un coffre.',
-  lost: 'La machine à recharger est inaccessible.',
-  nodrill: "Des gisements l'attendent, mais plus de foreuse en stock ni assez d'argent pour en acheter : achetez des foreuses à l'Atelier.",
+  lost: 'La machine à recharger ou à examiner est inaccessible.',
 };
 
 /** Les blocages en quelques mots, pour la liste « machines à surveiller » du Tableau d'affichage (précédés du métier). */
@@ -32,7 +32,6 @@ const FLAG_BOARD: Record<WorkerFlag, string> = {
   noroute: 'aucun chemin vers un coffre',
   nocoal: 'plus de charbon dans les coffres',
   lost: 'machine inaccessible',
-  nodrill: 'plus de foreuse en stock ni assez d’argent',
 };
 
 /** Ce que fait l'ouvrier, en une phrase. */
@@ -40,9 +39,11 @@ export function workerStatus(g: GameState, w: Worker): WorkerStatus {
   const t = w.task;
   if (!t) {
     if (w.flag) return { text: FLAG_TEXT[w.flag], tone: 'warn' };
-    if (w.job === 'driller' && g.workers.drillsOf(w, g) >= DRILLER.maxDrills)
-      return { text: `A posé ses ${DRILLER.maxDrills} foreuses : retirez-en une pour qu'il en pose une autre. Il ravitaille toujours les foreuses en charbon.`, tone: 'idle' };
-    if (w.job === 'driller') return { text: `Cherche un gisement à équiper (${oresOf(w.level) || 'aucun'}) ou une foreuse sans charbon`, tone: 'idle' };
+    if (w.job === 'fixer') {
+      if (w.note) return { text: 'Rentre au camp afficher son constat', tone: 'ok' };
+      if (w.focus) return { text: 'Examine une machine à l’arrêt', tone: 'ok' };
+      return { text: 'Aucune machine à l’arrêt à examiner', tone: 'idle' };
+    }
     return { text: w.job === 'picker' ? 'Attend des minerais par terre ou à prendre dans les machines' : 'Toutes les machines ont du charbon', tone: 'idle' };
   }
   switch (t.kind) {
@@ -53,35 +54,46 @@ export function workerStatus(g: GameState, w: Worker): WorkerStatus {
     case 'store':
       return { text: 'Rapporte sa charge au coffre', tone: 'ok' };
     case 'take':
-      return { text: 'Va chercher du charbon', tone: 'ok' };
+      return { text: w.job === 'fixer' ? 'Va chercher du charbon pour la machine à l’arrêt' : 'Va chercher du charbon', tone: 'ok' };
     case 'fuel':
-      return { text: g.structures.at(t.x, t.y)?.type === 'drill' ? 'Ravitaille une foreuse en charbon' : 'Ravitaille une machine', tone: 'ok' };
-    case 'place': {
-      const res = g.world.depositAt(t.x, t.y);
-      return { text: res ? `Va poser une foreuse sur un gisement de ${getResource(res).name.toLowerCase()}` : 'Va poser une foreuse', tone: 'ok' };
+      return { text: w.job === 'fixer' ? 'Recharge en charbon la machine à l’arrêt' : g.structures.at(t.x, t.y)?.type === 'drill' ? 'Ravitaille une foreuse en charbon' : 'Ravitaille une machine', tone: 'ok' };
+    case 'inspect': {
+      const s = g.structures.at(t.x, t.y);
+      return { text: s ? `Va examiner : ${getMachine(s.type).name.toLowerCase()} à l’arrêt` : 'Va examiner une machine à l’arrêt', tone: 'ok' };
     }
     case 'collect': {
       const s = g.structures.at(t.x, t.y);
+      if (w.job === 'fixer') return { text: 'Vide la sortie d’une machine bloquée', tone: 'ok' };
       return { text: s?.type === 'borer' ? 'Va vider la base d’une foreuse de percement' : 'Va vider une foreuse', tone: 'ok' };
     }
     case 'home':
-      return { text: 'Retourne à son poste', tone: 'idle' };
+      return { text: w.note ? 'Rentre au camp afficher son constat' : 'Retourne à son poste', tone: w.note ? 'ok' : 'idle' };
   }
 }
 
-/** Minerais qu'un foreur équipe à ce niveau, en minuscules : « charbon, cuivre » (la pierre, sans valeur, est laissée). */
-export function oresOf(level: number): string {
-  const max = drillerLevel(level).maxTier;
-  return RESOURCES.filter((r) => r.deposit && r.groundLife === undefined && r.tier <= max)
-    .map((r) => r.name.toLowerCase())
-    .join(', ');
+/** Un constat de dépanneur à afficher dans la liste « machines à surveiller » : la machine, où elle est, la cause et le conseil. */
+export function repairNotes(g: GameState): { text: string; advice: string; tone: 'bad' | 'warn' }[] {
+  const out: { text: string; advice: string; tone: 'bad' | 'warn'; t: number }[] = [];
+  for (const r of g.workers.reports.values()) {
+    const s = g.structures.at(r.x, r.y);
+    if (!r.shown || !s || s.flowState() !== 'stuck') continue; // un constat gardé pour son délai ne s'affiche pas si la machine tourne
+    const depth = Math.floor(depthAt(r.y));
+    const dx = r.x - g.layout.spawn.x;
+    const where = `${depth > 0 ? `à ${depth} m` : 'en surface'}, ${dx === 0 ? 'à l’aplomb du camp' : `${Math.abs(dx)} case${Math.abs(dx) > 1 ? 's' : ''} ${dx < 0 ? 'à gauche' : 'à droite'} du camp`}`;
+    const c = REPAIR_TEXT[r.cause];
+    out.push({ text: `${getMachine(s.type).name} (${where}) : ${c.label}`, advice: c.advice, tone: r.cause === 'nofuel' || r.cause === 'outfull' ? 'warn' : 'bad', t: r.t });
+  }
+  return out.sort((a, b) => b.t - a.t).map(({ text, advice, tone }) => ({ text, advice, tone }));
 }
 
-/** Ce que sait faire un foreur à ce niveau, en une ligne (fiche de l'équipe) ; `placed` : ses foreuses encore debout. */
-export function drillerFacts(level: number, placed?: number): string {
-  const l = drillerLevel(level);
-  const quota = placed === undefined ? '' : ` · foreuses posées : ${placed} / ${DRILLER.maxDrills}`;
-  return `Niveau ${l.level} / ${DRILLER_LEVELS.length} · équipe : ${oresOf(level)} · pose en ${l.placeTime.toLocaleString('fr-FR')} s · marche ×${l.speed.toLocaleString('fr-FR')}${quota}`;
+/** Ligne ajoutée à l'infobulle d'une machine que le dépanneur a signalée (commence par un saut de ligne), ou ''. */
+export function repairTip(g: GameState, tx: number, ty: number): string {
+  const s = g.structures.at(tx, ty);
+  if (!s) return '';
+  const r = g.workers.reports.get(`${s.x},${s.y}`);
+  if (!r || !r.shown || s.flowState() !== 'stuck') return '';
+  const c = REPAIR_TEXT[r.cause];
+  return `<br><span class="warn">Dépanneur : ${c.label}</span><br><span class="muted">${c.advice}</span>`;
 }
 
 /** Ce que l'ouvrier porte, en icônes : « 3 cuivre, 1 charbon · 7,5 kg / 15 kg » (vide s'il ne porte rien). */

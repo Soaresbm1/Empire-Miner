@@ -10,9 +10,10 @@ import type { TunnelBorer } from '../sim/structures/Borer';
 import type { Drill } from '../sim/structures/Drill';
 import type { ShippingCrate } from '../sim/structures/ShippingCrate';
 import type { Crafter } from '../sim/structures/Crafter';
+import type { Well } from '../sim/structures/Well';
 import type { Smelter } from '../sim/structures/Smelter';
 import type { Storage } from '../sim/structures/Storage';
-import { stuckWorkers } from './crew';
+import { repairNotes, stuckWorkers } from './crew';
 import { esc, money, num, resIcon } from './format';
 
 /** Au-dessus de ce seuil (unités / min), une ligne du tableau s'affiche. */
@@ -157,6 +158,15 @@ function machineWatch(g: GameState): string {
         else flag(c.def.name, 'attend des matières', 'info');
         break;
       }
+      case 'well': {
+        const w = s as Well;
+        count++;
+        if (w.status === 'ok') running++;
+        else if (w.status === 'nofuel') flag(w.def.name, 'plus de charbon', 'bad');
+        else if (w.status === 'nomech') flag(w.def.name, 'plus de mécanisme', 'bad');
+        else flag(w.def.name, 'sortie saturée', 'warn');
+        break;
+      }
       case 'shipping': {
         const c = s as ShippingCrate;
         if (c.weight() >= c.capacity - 1e-6) flag("Caisse d'expédition", 'pleine', 'warn');
@@ -176,12 +186,16 @@ function machineWatch(g: GameState): string {
   const crew = g.workers.count ? g.workers.list.filter((w) => w.task && w.task.kind !== 'home').length : 0;
   const crewHint = g.workers.count ? `<p class="hint"><b>${crew}</b> ouvrier${crew > 1 ? 's' : ''} au travail sur <b>${g.workers.count}</b>.</p>` : '';
   const head = `${count ? `<p class="hint"><b>${running}</b> machine${running > 1 ? 's' : ''} en marche sur <b>${count}</b>.</p>` : ''}${crewHint}`;
-  if (!list.length)
+  const notes = repairNotes(g);
+  if (!list.length && !notes.length)
     return count
       ? `${head}<div class="status good">● Tout tourne : aucune machine à l'arrêt.</div>`
       : '<p class="empty">Aucune machine posée. Achetez une foreuse à l\'Atelier, puis posez-la sur un gisement.</p>';
   const rows = list.map((w) => `<li class="${w.tone}"><b>${w.n} ×</b> ${w.text}</li>`).join('');
-  return `${head}<ul class="watch">${rows}</ul>`;
+  const fixer = notes.length
+    ? `<p class="hint"><b>Constats du dépanneur</b> : ce qu'il n'a pas pu régler.</p><ul class="watch" data-testid="repair-notes">${notes.map((n) => `<li class="${n.tone}">${esc(n.text)}<br><small>${esc(n.advice)}</small></li>`).join('')}</ul>`
+    : '';
+  return `${head}${rows ? `<ul class="watch">${rows}</ul>` : ''}${fixer}`;
 }
 
 /** Corps du panneau (sans onglets). */

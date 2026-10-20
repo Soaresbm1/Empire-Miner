@@ -10,9 +10,9 @@ import { BOOTS_WATER, GEAR, GearDef, HAZARD_LABEL } from '../data/gear';
 import { CAVE_IN, GAS, HEALTH, HEAT, WATER } from '../data/hazards';
 import { MACHINES, MACHINE_GROUPS, MachineDef, conveyorThroughput, parseKit } from '../data/machines';
 import { BAGS, JACKHAMMER, PICKAXES, ROPE, SCOOTER } from '../data/tools';
-import { DRILLER, DRILLER_LEVELS, WORKERS, WORKER_JOBS, drillerLevel, getJob, workerName } from '../data/workers';
+import { WORKERS, WORKER_JOBS, getJob, workerName } from '../data/workers';
 import { PLAYER_SPEED, type GameState } from '../sim/GameState';
-import { cargoLine, drillerFacts, oresOf, workerStatus } from './crew';
+import { cargoLine, workerStatus } from './crew';
 import { esc, kg, money, num } from './format';
 import { icon as themeIcon } from './theme';
 import { btn, stat } from './widgets';
@@ -357,6 +357,14 @@ function machineSpecs(m: MachineDef): [string, string][] {
       ['Lingot', '2,5 × le prix du minerai'],
       ...(m.w > 1 ? [['Taille', `${m.w}×${m.h} cases`] as [string, string]] : []),
     ];
+  if (m.well && m.fuel)
+    return [
+      ['Remonte', 'fer, argent, or, diamant (cycle de 10)'],
+      ['Cadence', `1 morceau / ${m.well.interval} s`],
+      ['Charbon', `1 unité / ${m.fuel.secondsPerUnit} s de travail`],
+      ['Mécanisme', `1 tous les ${m.well.wearUnits} morceaux`],
+      ['Taille', `${m.w}×${m.h} cases, au camp, ${m.limit} au plus`],
+    ];
   if (m.crafter && m.fuel)
     return [
       ['Fabrique', 'plaques, acier, diamant taillé'],
@@ -417,7 +425,8 @@ function machineRow(g: GameState, m: MachineDef, icon: (id: string) => string, o
       <div class="specs">${specs}${more ? btn('shopMore', open ? 'Moins ▴' : 'Détails ▾', { arg: m.id, cls: 'small link' }) : ''}</div>
     </div>
     <div class="shop-side">
-      <div class="buy-row">${qtys.map((q) => btn('buyKit', label(q), { arg: `${m.id}:${q}`, cls: 'primary', disabled: g.money < m.price * q })).join('')}</div>
+      <div class="buy-row">${qtys.map((q) => btn('buyKit', label(q), { arg: `${m.id}:${q}`, cls: 'primary', disabled: g.money < m.price * q || (m.limit !== undefined && g.ownedCount(m.id) + q > m.limit) })).join('')}</div>
+      ${m.limit !== undefined && g.ownedCount(m.id) >= m.limit ? `<small class="miss">${m.limit} au plus : limite atteinte</small>` : ''}
       ${g.money < cheapest ? `<small class="miss">Il manque ${money(cheapest - g.money)}</small>` : ''}
     </div>
   </div>`;
@@ -425,7 +434,7 @@ function machineRow(g: GameState, m: MachineDef, icon: (id: string) => string, o
 
 /** Filtres du magasin de machines : une rangée de catégories et le réglage « achetables ». */
 function shopFilters(g: GameState, view: ShopView): string {
-  const can = (m: MachineDef) => g.isUnlocked(m.id) && g.money >= m.price * quantities(m)[0];
+  const can = (m: MachineDef) => g.isUnlocked(m.id) && g.money >= m.price * quantities(m)[0] && !(m.limit !== undefined && g.ownedCount(m.id) >= m.limit);
   const inGroup = (grp: (typeof MACHINE_GROUPS)[number]) => MACHINES.filter((m) => grp.categories.includes(m.category));
   const shown = (m: MachineDef) => !view.only || can(m);
   const total = MACHINES.filter(shown).length;
@@ -437,7 +446,7 @@ function shopFilters(g: GameState, view: ShopView): string {
 }
 
 function machinesTab(g: GameState, icon: (id: string) => string, view: ShopView): string {
-  const can = (m: MachineDef) => g.isUnlocked(m.id) && g.money >= m.price * quantities(m)[0];
+  const can = (m: MachineDef) => g.isUnlocked(m.id) && g.money >= m.price * quantities(m)[0] && !(m.limit !== undefined && g.ownedCount(m.id) >= m.limit);
   const inGroup = (grp: (typeof MACHINE_GROUPS)[number]) => MACHINES.filter((m) => grp.categories.includes(m.category));
   const shown = (m: MachineDef) => !view.only || can(m);
   const groups = MACHINE_GROUPS.filter((grp) => view.cat === 'all' || view.cat === grp.id)
@@ -452,19 +461,6 @@ function machinesTab(g: GameState, icon: (id: string) => string, view: ShopView)
 }
 
 // ------------------------------------------------------------------ ouvriers
-
-/** Amélioration d'un foreur : le bouton (prix, ce que ça apporte) et, s'il est grisé, pourquoi. */
-function drillerUpgrade(g: GameState, id: number): string {
-  const w = g.workers.get(id);
-  if (!w) return '';
-  if (w.level >= DRILLER_LEVELS.length) return ' <span class="tag">niveau maximal</span>';
-  const next = drillerLevel(w.level + 1);
-  const why = g.workerUpgradeBlocker(id);
-  const gain = `Niveau ${next.level} : ${oresOf(next.level)}, pose en ${next.placeTime.toLocaleString('fr-FR')} s, marche ×${next.speed.toLocaleString('fr-FR')}`;
-  return ` ${btn('workerUpgrade', `Améliorer — ${money(next.price)}`, { arg: String(id), cls: 'small primary', disabled: why !== null, title: gain })}${
-    why ? `<small class="lock"> ${why}</small>` : ''
-  }`;
-}
 
 /** Onglet Ouvriers : recruter (achat unique), puis l'équipe au travail, avec son métier et ce qu'elle fait. */
 function crewTab(g: GameState, view: ShopView): string {
@@ -500,10 +496,9 @@ function crewTab(g: GameState, view: ShopView): string {
           });
         })
         .join('');
-      const level = w.job === 'driller' ? `<div class="crew-level">${drillerFacts(w.level, g.workers.drillsOf(w, g))}${drillerUpgrade(g, w.id)}</div>` : '';
       return `<div class="crew-row">
         <div class="crew-ico">${ico(`worker:${w.job}`, 'crew-img')}</div>
-        <div class="crew-main"><div><b>${workerName(w.id)}</b> <span class="tag" style="color:${job.color}">${job.name}</span> ${cargoLine(w)}</div><span class="crew-state ${st.tone}">${st.text}</span>${level}</div>
+        <div class="crew-main"><div><b>${workerName(w.id)}</b> <span class="tag" style="color:${job.color}">${job.name}</span> ${cargoLine(w)}</div><span class="crew-state ${st.tone}">${st.text}</span></div>
         <div class="crew-act">${switches}${btn('fireWorker', armed ? 'Confirmer ?' : 'Congédier', {
           arg: String(w.id),
           cls: `small${armed ? ' danger' : ''}`,
@@ -518,7 +513,7 @@ function crewTab(g: GameState, view: ShopView): string {
   return `<p class="sub">Un ouvrier s'achète une seule fois, sans salaire ; le suivant coûte plus cher. On change son métier quand on veut, gratuitement. L'équipe s'agrandit avec vos pioches : trois places de plus à chaque palier, jusqu'à ${WORKERS.max} ouvriers, ${WORKERS.perJob} par métier.</p>
     <div class="cards">${hire}</div>
     <h4>Votre équipe : ${g.workers.count} sur ${open}${open < WORKERS.max ? ` places ouvertes (${WORKERS.max} au plus)` : ''}</h4>${team}
-    <p class="hint">Le ramasseur range dans un coffre (à défaut, dans une caisse d'expédition qui vend) : posez-en un au camp. Il vide aussi les foreuses à charbon et la base d'une foreuse de percement quand elles se remplissent. Le ravitailleur prend le charbon des coffres : gardez-y du charbon. Le foreur pose des foreuses sur les gisements au sol, ${DRILLER.maxDrills} au plus chacun (une foreuse de votre stock, à défaut il l'achète en vous laissant ${money(DRILLER.moneyReserve)}) et y met du charbon des coffres ; améliorez-le pour des minerais plus précieux. Ils évitent le grisou et l'eau profonde.</p>`;
+    <p class="hint">Le ramasseur range dans un coffre (à défaut, dans une caisse d'expédition qui vend) : posez-en un au camp. Il vide aussi les foreuses à charbon et la base d'une foreuse de percement quand elles se remplissent. Le ravitailleur prend le charbon des coffres : gardez-y du charbon. Le dépanneur va vers une machine à l'arrêt : il la recharge ou vide sa sortie dans un coffre si c'est possible ; sinon il rentre au camp et affiche la cause dans les statistiques (« Machines à surveiller »), puis repart vers une autre machine. Ils évitent le grisou et l'eau profonde.</p>`;
 }
 
 // ------------------------------------------------------------------ panneau

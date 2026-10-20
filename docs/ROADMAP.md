@@ -39,7 +39,9 @@ profondeur et roches plus dures, sauvegarde/chargement, première automatisation
   fidèle à chaque nouveau rang, pénalités douces (un point par retard ou abandon, jamais sous zéro).
 - ✅ Rendement des lignes : débit réel de chaque machine et convoyeur (infobulle, panneau), vue « goulots » (touche G), prévisions
   « au rythme actuel » au Grand Chevalement et sur les commandes.
-- Concasseur (pierre → gravier), alliages (ex. bronze), composants (fils, engrenages…) ; recettes à plusieurs étages.
+- ✅ Dépanneur (ouvrier) : examine les machines à l'arrêt, recharge ou vide ce qui peut l'être, signale le reste au camp (Machines à surveiller, infobulle de la vue goulots) ; il remplace le Foreur (qui posait des foreuses).
+- ✅ Alerte « machine à l'arrêt » : pastille du HUD, message et anneau sur la carte ; un appui centre la carte sur la machine.
+- Concasseur (pierre → gravier), alliages (ex. bronze), composants : ✅ fil de cuivre, engrenage et mécanisme (recettes à plusieurs étages) ; restent les fils d'autres métaux et les alliages liés au concasseur.
 
 ## v0.5 — Énergie et contraintes
 - Générateurs (charbon), réseau électrique, consommation des machines.
@@ -47,13 +49,13 @@ profondeur et roches plus dures, sauvegarde/chargement, première automatisation
 - Chaleur en profondeur, coups de grisou qui explosent près d'une flamme, détecteur de poches.
 
 ## Après le Grand Chevalement (idées)
-- Un second chantier plus lointain (un ascenseur de puits, une ville au camp) qui reprend les commandes comme monnaie de progression.
+- ✅ Un second chantier plus lointain, l'Ascenseur de puits (quatre phases après le couronnement, mécanismes et commandes comme monnaie de progression) ; le **puits** (source renouvelable de minerai, débloquée à la phase 7, charbon et mécanismes) est fait ; plus loin, une ville au camp.
 - Clients aux goûts propres (un client qui ne demande que certaines marchandises), commandes « cadeau » quand on est Partenaire, contrats qui se renouvellent.
 - Ouvriers « livreurs » qui portent leurs lingots du coffre au chantier ; objectifs quotidiens de commandes.
 
 ## Idées pour la suite du rendement
 - Copier-coller une ligne de machines et de convoyeurs, avec un « annuler » pour la dernière pose.
-- Un débit par ligne entière (de la foreuse à la caisse), nommé et gardé dans la sauvegarde ; une alerte quand une ligne s'arrête.
+- Un débit par ligne entière (de la foreuse à la caisse), nommé et gardé dans la sauvegarde ; une alerte quand une ligne entière s'arrête (l'alerte actuelle est par machine).
 - Déduire de la prévision le charbon que brûlent les machines, et partager la production entre plusieurs besoins sur la même ressource.
 
 ## Plus tard

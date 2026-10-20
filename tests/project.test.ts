@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { SURFACE_ROWS, TILE } from '../src/core/constants';
-import { PHASES } from '../src/data/project';
+import { CROWN_PHASE, PHASES } from '../src/data/project';
 import { hasResource } from '../src/data/resources';
 import { deserialize, serialize } from '../src/save/save';
 import { applyAction } from '../src/sim/actions';
@@ -35,8 +35,9 @@ function crateAt(g: GameState, x = 52, y = 9): ShippingCrate {
 // ---------------------------------------------------------------- données
 
 describe('Grand Chevalement : les phases', () => {
-  it('cinq phases, de plus en plus lourdes, avec des matériaux qui existent', () => {
-    expect(PHASES).toHaveLength(5);
+  it('neuf phases (cinq, puis quatre), de plus en plus lourdes, avec des matériaux qui existent', () => {
+    expect(PHASES).toHaveLength(9);
+    expect(CROWN_PHASE).toBe(5);
     let money = 0;
     let contracts = -1;
     for (const ph of PHASES) {
@@ -54,7 +55,7 @@ describe('Grand Chevalement : les phases', () => {
       money = ph.money;
       contracts = ph.contracts;
     }
-    expect(new Set(PHASES.map((p) => p.id)).size).toBe(5);
+    expect(new Set(PHASES.map((p) => p.id)).size).toBe(9);
   });
 });
 
@@ -339,20 +340,28 @@ describe('Grand Chevalement : les phases s’enchaînent', () => {
     expect(g.project.phase).toBe(2);
   });
 
-  it('les cinq phases achèvent le monument, une seule fois', () => {
+  it('les cinq premières phases couronnent le monument, les quatre suivantes achèvent le second chantier, chacune une seule fois', () => {
     const g = veteran();
     g.events.length = 0;
-    for (let i = 0; i < PHASES.length; i++) {
+    for (let i = 0; i < CROWN_PHASE; i++) {
+      supply(g.project);
+      run(g, 0.1);
+    }
+    expect(g.project.crowned).toBe(true);
+    expect(g.project.done).toBe(false); // l'Ascenseur de puits reste à faire
+    expect(g.project.spec!.id).toBe(PHASES[CROWN_PHASE].id);
+    for (let i = CROWN_PHASE; i < PHASES.length; i++) {
       supply(g.project);
       run(g, 0.1);
     }
     expect(g.project.done).toBe(true);
     expect(g.project.doneAt).toHaveLength(PHASES.length);
     const sites = g.events.filter((e) => e.t === 'site');
-    expect(sites.map((e) => (e as { phase: number }).phase)).toEqual([0, 1, 2, 3, 4]);
-    expect(sites.map((e) => (e as { last: boolean }).last)).toEqual([false, false, false, false, true]);
+    expect(sites.map((e) => (e as { phase: number }).phase)).toEqual([0, 1, 2, 3, 4, 5, 6, 7, 8]);
+    // `last` : le couronnement (phase 4) et la fin de l'Ascenseur (phase 8).
+    expect(sites.map((e) => (e as { last: boolean }).last)).toEqual([false, false, false, false, true, false, false, false, true]);
     run(g, 5);
-    expect(g.events.filter((e) => e.t === 'site')).toHaveLength(5);
+    expect(g.events.filter((e) => e.t === 'site')).toHaveLength(PHASES.length);
   });
 
   it('les phases accordent leurs avantages aux commandes', () => {
@@ -367,9 +376,9 @@ describe('Grand Chevalement : les phases s’enchaînent', () => {
     expect(g.contracts.capacity).toBe(offers + 1);
   });
 
-  it('les objectifs suivent : commande, première phase, premier produit fabriqué, monument achevé', () => {
+  it('les objectifs suivent : commande, première phase, premier produit fabriqué, couronnement, puits', () => {
     const ids = OBJECTIVES.map((o) => o.id);
-    expect(ids.slice(-4)).toEqual(['contract', 'site', 'craft', 'crown']);
+    expect(ids.slice(-5)).toEqual(['contract', 'site', 'craft', 'crown', 'shaft']);
     expect(ids.indexOf('contract')).toBe(ids.indexOf('diamond') + 1); // elles viennent après la dernière du parcours guidé
     const g = new GameState(7);
     const need = (id: string) => OBJECTIVES.find((o) => o.id === id)!;
@@ -385,12 +394,18 @@ describe('Grand Chevalement : les phases s’enchaînent', () => {
     expect(need('craft').done(g)).toBe(true);
     expect(need('crown').done(g)).toBe(false);
     g.stats.contracts = 99; // assez de commandes honorées pour franchir les autres phases
-    for (let i = 1; i < PHASES.length; i++) {
+    for (let i = 1; i < CROWN_PHASE; i++) {
       supply(g.project);
       run(g, 0.1);
     }
     expect(need('crown').done(g)).toBe(true);
+    expect(need('shaft').done(g)).toBe(false);
     expect(currentObjective(g).objective?.id).not.toBe('crown');
+    for (let i = CROWN_PHASE; i < PHASES.length; i++) {
+      supply(g.project);
+      run(g, 0.1);
+    }
+    expect(need('shaft').done(g)).toBe(true);
   });
 });
 

@@ -37,7 +37,7 @@ type SimEventBody =
   /** Événement du marché : forte demande (`up`, le cours monte) ou surproduction (le cours chute) sur un minerai. */
   | { t: 'market'; res: string; up: boolean; pct: number }
   /** Un ouvrier ramasse (« pick »), dépose (« store ») ou recharge une machine (« fuel »). */
-  | { t: 'worker'; kind: 'pick' | 'store' | 'fuel' | 'place'; x: number; y: number; res: string }
+  | { t: 'worker'; kind: 'pick' | 'store' | 'fuel'; x: number; y: number; res: string }
   /** Une caisse d'expédition vient de livrer `n` objets aux commandes (« orders ») ou au chantier (« site »). */
   | { t: 'delivered'; tx: number; ty: number; n: number; to: 'orders' | 'site' }
   /**
@@ -54,7 +54,7 @@ type SimEventBody =
       exclusive?: boolean;
       trust?: { level: number; up: boolean };
     }
-  /** Grand Chevalement : la phase `phase` (0 pour la première) vient d'être terminée ; `last` : c'était la dernière. */
+  /** Grand chantier : la phase `phase` (0 pour la première) vient d'être terminée ; `last` : elle achève un chantier (le couronnement du Grand Chevalement, ou la fin de l'Ascenseur de puits). */
   | { t: 'site'; phase: number; last: boolean };
 
 /** Un événement ; à deux joueurs, `slot` dit lequel l'a causé (voir `GameState.emit`). */

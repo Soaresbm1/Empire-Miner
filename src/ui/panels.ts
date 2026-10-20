@@ -8,6 +8,7 @@ import { BorerLevelSpec, MachineLevel, kitName } from '../data/machines';
 import { HEAT } from '../data/hazards';
 import { MARKER_KINDS, MARKER_ORDER, MAX_MARKERS } from '../sim/Markers';
 import { RECIPES, type RecipeSpec } from '../data/recipes';
+import type { Well, WellStatus } from '../sim/structures/Well';
 import { RESOURCES, getResource } from '../data/resources';
 import { WORKER_JOBS } from '../data/workers';
 import type { GameState } from '../sim/GameState';
@@ -669,7 +670,52 @@ export function crafterPanel(g: GameState, s: Crafter): string {
     <h4>Ce qu'elle fabrique</h4>
     ${known.length ? `<div class="buy">${choices}</div>` : '<div class="status warn">Aucune recette pour l\'instant : fondez un lingot dans un four, ou trouvez un diamant.</div>'}
     ${rows ? `<table class="table recipes"><thead><tr><th>Matières</th><th></th><th>Produit</th><th class="num">Valeur</th><th class="num">Durée</th></tr></thead><tbody>${rows}</tbody></table>` : ''}
-    <p class="hint">${hidden > 0 ? 'D\'autres recettes apparaissent quand vous aurez fondu un nouveau métal ou trouvé un diamant. ' : ''}Les matières de la recette entrent par n'importe quel côté sauf la sortie ${DIR_ARROWS[s.dir]} ; le charbon entre de partout (un coffre de charbon collé le recharge, un ravitailleur aussi). Une matière qui n'est pas dans la recette est refusée. Les produits sont poussés devant la flèche (convoyeur, coffre, caisse d'expédition). Changer de recette vous rend les matières qu'elle n'utilise pas.</p>`;
+    <p class="hint">${hidden > 0 ? 'D\'autres recettes apparaissent quand vous aurez fondu un nouveau métal, trouvé un diamant ou fabriqué leurs matières (plaque, acier, fil…). ' : ''}Les matières de la recette entrent par n'importe quel côté sauf la sortie ${DIR_ARROWS[s.dir]} ; le charbon entre de partout (un coffre de charbon collé le recharge, un ravitailleur aussi). Une matière qui n'est pas dans la recette est refusée. Les produits sont poussés devant la flèche (convoyeur, coffre, caisse d'expédition). Changer de recette vous rend les matières qu'elle n'utilise pas.</p>`;
+}
+
+/** État du puits : ce qu'il fait, et pourquoi il s'arrête. */
+const WELL_STATUS: Record<WellStatus, [string, string]> = {
+  ok: ['Remonte du minerai', 'good'],
+  nofuel: ["À l'arrêt : plus de charbon", 'bad'],
+  nomech: ["À l'arrêt : plus de mécanisme (déposez-en, ou amenez-en par convoyeur)", 'bad'],
+  full: ['Bloqué : la sortie est saturée (rien ne prend le minerai devant la flèche)', 'warn'],
+};
+
+export function wellPanel(g: GameState, s: Well): string {
+  const [label, cls] = WELL_STATUS[s.status];
+  const secs = s.fuelSeconds();
+  const coal = g.inventory.count('coal');
+  const mechBag = g.inventory.count(s.spec.mechanism);
+  const next = getResource(s.nextRes());
+  const cycle = s.spec.cycle.map((res, i) => `<span class="chip${i === s.cycle % s.spec.cycle.length ? ' on' : ''}" title="${getResource(res).name}">${resIcon(res)}</span>`).join('');
+  // Sans mécanisme le puits ne brûle plus : plein de charbon, il refuse le suivant, et une bande qui mêle charbon et mécanismes
+  // reste coincée sur le charbon de tête (le mécanisme derrière n'arrive jamais).
+  const jam =
+    s.status === 'nomech' && s.fuelUnits >= s.fuelMax
+      ? '<div class="status warn">⚠ Plein de charbon et sans mécanisme : une bande qui mêle les deux reste bloquée sur le charbon. Amenez les mécanismes par une bande à part (ou déposez-les), le charbon par une autre.</div>'
+      : '';
+  return `
+    <div class="status ${cls}">● ${label}</div>
+    ${jam}
+    <div class="bar"><div style="width:${Math.round(s.progress * 100)}%"></div><span>Prochain morceau : ${next.name}</span></div>
+    <div class="cards" style="margin-top:10px"><div class="card">
+      ${stat('Morceaux prêts', `${s.output.length} / ${s.spec.outputMax}`)}
+      <div class="chips">${chips(s.output)}</div>
+      ${stat('Cadence', `${num(s.maxPerMinute(), 0)} / min`)}
+      ${flowRows(s)}
+      ${stat('Remontés au total', String(s.made))}
+      ${stat('Cycle (10 morceaux)', `<span class="chips">${cycle}</span>`)}
+    </div><div class="card">
+      ${stat('Charbon', `${s.fuelUnits} / ${s.fuelMax}`)}
+      ${stat('Autonomie', `${Math.floor(secs / 60)} min ${Math.floor(secs % 60)} s de travail`)}
+      ${stat('Mécanismes en réserve', `${s.mech} / ${s.spec.mechMax}`)}
+      ${stat('Mécanisme en place', `${s.life} / ${s.spec.wearUnits} morceaux`)}
+      <div class="buy">${btn('wellFuel', `Charger le charbon du sac (${coal})`, { cls: 'primary', disabled: coal <= 0 || s.fuelUnits >= s.fuelMax })}</div>
+      <div class="buy">${btn('wellDeposit', `Déposer mes mécanismes (${mechBag})`, { disabled: mechBag <= 0 || s.mech >= s.spec.mechMax })}
+        ${btn('wellCollect', `Récupérer le minerai (${s.output.length})`, { disabled: !s.output.length })}</div>
+      <div class="buy">${btn('wellRotate', 'Tourner ↻')}</div>
+    </div></div>
+    <p class="hint">Le puits ne vide aucun gisement : toutes les ${num(s.spec.interval, 0)} s il remonte le morceau suivant du cycle, qu'il pousse devant la flèche ${DIR_ARROWS[s.dir]} (convoyeur, coffre, caisse d'expédition). Il brûle du charbon pendant qu'il travaille (un coffre de charbon collé le recharge, un ravitailleur aussi) et use <b>un mécanisme tous les ${s.spec.wearUnits} morceaux</b> : sans mécanisme, il s'arrête. Le charbon et les mécanismes entrent par n'importe quel côté sauf la sortie. Un mécanisme se fabrique à la Manufacture : 2 engrenages, 1 acier, 3 fils.</p>`;
 }
 
 // ------------------------------------------------------------------ carte
@@ -794,7 +840,7 @@ export function helpPanel(keys: { move: string; label: (c: string) => string; to
     <div><h4>Fournaise (sous 450 m)</h4><p>Roche volcanique, plus d'or et, sous 500 m, des diamants (Pioche pro en acier). La chaleur ralentit foreuses et fours et <b>épuise le mineur</b> : un <b>ventilateur</b> à ${HEAT.fanRadius} cases rafraîchit les machines et vous laisse souffler ; la combinaison ignifugée absorbe l'essentiel</p></div>
     <div><h4>Tableau d'affichage</h4><p>${k('KeyE')} devant le tableau, entre le comptoir et l'atelier. Trois onglets (<kbd>1</kbd> à <kbd>3</kbd> ou <kbd>←</kbd> <kbd>→</kbd>) : le marché, les commandes, et la production (ventes, minerai et lingots par minute, gains des 10 dernières minutes, machines à l'arrêt)</p></div>
     <div><h4>Commandes</h4><p>Des clients achètent une quantité précise de minerai ou de lingots, plus cher que le marché. Acceptez une proposition au Tableau (onglet <b>Commandes</b>), puis livrez avant l'échéance : à la main (« Livrer mon sac »), ou avec une <b>caisse d'expédition réglée sur « Commandes »</b>. En retard, le client paie seulement ce qui est livré, au prix de base. Chaque commande honorée fait monter votre rang</p></div>
-    <div><h4>Grand Chevalement</h4><p>${k('KeyE')} devant le grand chantier, à droite de l'atelier : cinq phases, chacune demande des matériaux, de l'argent pour les ouvriers et des commandes honorées. Livrez à la main, ou réglez une <b>caisse d'expédition sur « Chantier »</b> et amenez-y vos lingots par convoyeur. Chaque phase terminée fait grandir la tour et accorde un avantage</p></div>
+    <div><h4>Grand Chevalement</h4><p>${k('KeyE')} devant le grand chantier, à droite de l'atelier : le Grand Chevalement (cinq phases), puis l'Ascenseur de puits (quatre de plus). Chaque phase demande des matériaux, de l'argent pour les ouvriers et des commandes honorées. Livrez à la main, ou réglez une <b>caisse d'expédition sur « Chantier »</b> et amenez-y vos lingots par convoyeur. Chaque phase terminée fait grandir la tour et accorde un avantage</p></div>
     <div><h4>Four et fonderie</h4><p>Minerai (convoyeur ou ${k('KeyE')} : déposer) + charbon → lingots vendus 2,5 fois plus cher, poussés devant la flèche</p></div>
     <div><h4>Manufacture</h4><p>Machine 2×2 de l'Atelier (onglet Machines, Pioche améliorée). ${k('KeyE')} dessus pour choisir sa recette : <b>plaque</b> de cuivre, de fer, d'argent ou d'or (1 lingot), <b>acier</b> (2 lingots de fer), <b>diamant taillé</b> (1 diamant). Les lingots arrivent par convoyeur ou à la main, elle brûle du charbon comme un four et pousse ses produits devant la flèche. Ils se vendent plus cher que leurs matières, suivent le cours du métal, et les clients comme les dernières phases du Grand Chevalement en réclament</p></div>
     <div><h4>Améliorer une foreuse</h4><p>${k('KeyE')} sur la foreuse : niveau 2 = cases gauche et droite, niveau 3 = aussi derrière</p></div>
