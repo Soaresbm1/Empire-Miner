@@ -458,7 +458,8 @@ par un ravitailleur sans toucher à `Workers`), mais il ne consomme aucune mati�
   d'état, ligne des statistiques, fiche du magasin (limite et verrou).
 - **Tests** : `tests/well.test.ts` (fiche, déblocage, limite, cycle exact, usure, sortie, panneau et avertissement, dépanneur, alerte, sauvegarde),
   `tests/well-belt-deadlock.test.ts` (blocage d'une bande mixte),
-  `tests/coop-well.test.ts` (deux copies identiques, partie reçue en cours de route), `e2e/well.mjs`.
+  `tests/coop-well.test.ts` (deux copies identiques, partie reçue en cours de route, limite de deux kits partagée entre les joueurs et
+  non rouverte par le départ d'un invité), `e2e/well.mjs`.
 
 ## Étendre le jeu
 

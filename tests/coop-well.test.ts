@@ -9,8 +9,10 @@ import { stateDigest } from '../src/net/digest';
 import { deserialize, serialize } from '../src/save/save';
 import { applyAction, type SimAction } from '../src/sim/actions';
 import { GameState, type PlayerIntent } from '../src/sim/GameState';
+import { dropGuest } from '../src/net/guests';
 import type { Storage } from '../src/sim/structures/Storage';
 import type { Well } from '../src/sim/structures/Well';
+import { goTo } from './helpers';
 
 const IDLE: PlayerIntent = { mx: 0, my: 0, mine: false, target: null };
 
@@ -108,5 +110,27 @@ describe('puits à deux', () => {
     expect(stateDigest(guest)).toBe(stateDigest(host));
     expect(well(guest).serialize()).toEqual(well(host).serialize());
     expect(well(host).made).toBeGreaterThan(well(host).spec.cycle.length);
+  });
+});
+
+describe('puits à deux : la limite de deux', () => {
+  it('les kits forment un seul stock : ce que l’un a acheté compte pour l’autre, et rien n’est payé en trop', () => {
+    const g = new GameState(9);
+    g.addPlayer();
+    g.project.phase = 7;
+    g.money = 1_000_000;
+    goTo(g, 'workshop');
+    g.withSlot(1, () => goTo(g, 'workshop'));
+    expect(g.buyKit('well', 2)).toBe(true);
+    const after = g.money;
+    // Le second joueur ne peut rien acheter de plus : le stock est commun.
+    expect(g.withSlot(1, () => g.buyKit('well', 1))).toBe(false);
+    expect(g.withSlot(1, () => g.ownedCount('well'))).toBe(2);
+    expect(g.money).toBe(after);
+    // Un invité qui part puis revient ne rouvre pas la limite.
+    g.guestIds[1] = 'amie';
+    dropGuest(g, 1);
+    expect(g.buyKit('well', 1)).toBe(false);
+    expect(g.ownedCount('well')).toBe(2);
   });
 });

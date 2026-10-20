@@ -1769,6 +1769,9 @@ try {
       await page.click(`[data-action="hireWorker"][data-arg="${job}"]`);
       await page.waitForTimeout(250);
     };
+    // Le bloc d'avant ne recrute que le dépanneur : on complète l'équipe, un de chaque métier.
+    await hire('picker');
+    await hire('refueler');
     check((await count()) === 3, `trois ouvriers : un de chaque métier (${await count()})`);
     check(!(await page.$('[data-action="hireWorker"]')), "équipe pleine avec la pioche améliorée : plus de bouton de recrutement");
     const panel3 = (await page.textContent('.panel-workshop')) ?? '';
