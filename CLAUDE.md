@@ -82,5 +82,5 @@ Fichiers très longs (`render/Renderer.ts`, `game/Game.ts`, `sim/GameState.ts`, 
   `vite-plugin-singlefile`, `source-map-js`). La correction complète impose une version cassante de `vite-plugin-singlefile`.
 - Les scripts `e2e/` ont un `CHROME_PATH` par défaut pour Linux ; sous Windows, il vient de `.claude/settings.local.json`.
 - e2e sous Windows (essais du 14/10/2026) : `menus`, `flow`, `crafter`, `coop`, `playthrough`, `touch`, `cloud` et `orders`
-  réussissent. Reste `e2e/phone.mjs` : 4 problèmes sur 3 553 vérifications (deux boutons du menu pause à deux hors zone sûre sur
-  iPhone-Safari ; boutons « Oui » du sac à 28×38 en portrait), peut-être liés aux polices de Windows (à comparer sous Linux).
+  réussissent. `e2e/phone.mjs` (3 553 vérifications) réussit aussi depuis le 19/10/2026 : pause à deux en quatre colonnes
+  jusqu'à 340 px de haut, boutons « Oui » du sac à 36 px de large au moins (`src/ui/touch.css`).

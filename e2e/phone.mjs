@@ -183,6 +183,7 @@ function checkMenu(dev, scene, m) {
   const tag = `${dev.id} · ${scene}`;
   check(!!m, `${tag} : le menu est affiché`);
   if (!m) return;
+  if (args.dump) for (const b of m.btns) console.log(`      ${b.name.padEnd(26)} x ${b.l.toFixed(0)}…${b.r.toFixed(0)}  y ${b.t.toFixed(0)}…${b.b.toFixed(0)}  (${b.w.toFixed(0)}×${b.h.toFixed(0)})`);
   check(m.scroll <= 1, `${tag} : le menu tient sans défilement${m.scroll > 1 ? ` (dépasse de ${Math.round(m.scroll)} px)` : ''}`);
   check(m.scrollX <= 1, `${tag} : le menu ne déborde pas sur le côté${m.scrollX > 1 ? ` (dépasse de ${Math.round(m.scrollX)} px)` : ''}`);
   const out = m.btns.filter((b) => b.t < st - 0.6 || b.b > m.h - sb + 0.6 || b.l < sl - 0.6 || b.r > m.w - sr + 0.6);
