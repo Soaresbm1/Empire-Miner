@@ -6,16 +6,17 @@
  */
 export const CAVE_IN = {
   /** Profondeur à partir de laquelle un plafond creusé à la main peut s'effondrer (m). */
-  minDepth: 60,
+  minDepth: 80,
   /** Rayon (cases) de la zone examinée autour de la case creusée. */
   radius: 2,
   /**
    * Au-delà de ce nombre de cases creusées à la main dans la zone (un carré de 5 × 5, soit 25 cases), le plafond craque : il faut
    * une très grande salle. Tunnels, escaliers et salles ordinaires tiennent : au marteau-piqueur (3 cases de large) un tunnel
    * n'en compte que 9, un escalier 11, une salle de 8 × 8 creusée rangée par rangée 13 ; une galerie de 6 cases de large 17.
-   * (À 10, un escalier au marteau-piqueur ou une salle de 4 × 4 faisaient déjà craquer le plafond.)
+   * (À 10, un escalier au marteau-piqueur ou une salle de 4 × 4 faisaient déjà craquer le plafond ; à 16, une salle de 5 × 4 près des
+   * 25 cases. À 20, il faut presque remplir le carré de 5 × 5.)
    */
-  maxDug: 16,
+  maxDug: 20,
   /** Un étai consolide les cases à cette distance (en cases, carré). */
   propRadius: 3,
   /** Délai entre le craquement et l'effondrement (s) : le temps de poser un étai ou de fuir. */
@@ -30,11 +31,11 @@ export const GAS = {
   /** Profondeur des premières poches de grisou (m). */
   minDepth: 120,
   /**
-   * Poches pour 1000 cases de la tranche de profondeur. Elles sont rares : environ une pour 870 cases de roche creusées (une
-   * poche s'ouvre d'un coup, voir `HazardSystem.onBroken`). À 2,4, et une libération par case de la poche, c'était une toutes les
-   * 160 cases environ.
+   * Poches pour 1000 cases de la tranche de profondeur. Elles sont très rares : environ une pour 1 700 cases de roche creusées
+   * (une poche s'ouvre d'un coup, voir `HazardSystem.onBroken`). À 1, c'était une pour 870 ; à 2,4, et une libération par case de
+   * la poche, une toutes les 160 cases environ.
    */
-  perThousand: 1,
+  perThousand: 0.5,
   /** Taille d'une poche (cases de roche). */
   size: [2, 4] as [number, number],
   /** Cases de galerie envahies quand une poche est percée. */
@@ -52,8 +53,8 @@ export const GAS = {
 export const WATER = {
   /** Profondeur des premières poches d'eau (m). */
   minDepth: 70,
-  /** Poches pour 1000 cases de la tranche (comme le grisou : environ une pour 860 cases de roche creusées ; avant, une pour 150). */
-  perThousand: 1,
+  /** Poches pour 1000 cases de la tranche (comme le grisou : environ une pour 1 700 cases de roche creusées ; avant, une pour 860, puis 150). */
+  perThousand: 0.5,
   size: [2, 4] as [number, number],
   /** Cases de galerie inondées quand une poche est percée. */
   spread: 30,

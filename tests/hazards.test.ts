@@ -321,10 +321,11 @@ describe('dangers : les éboulements sont rares', () => {
     expect(total / RUNS).toBeLessThan(0.3);
   });
 
-  it('mais une galerie de six cases de large, creusée en deux passes, fait encore craquer le plafond', () => {
+  it('mais une salle de 5 × 5 creusée presque en entier fait encore craquer le plafond', () => {
     expect(
       creaks((g) => {
-        for (const [y0, y1] of [[Y + 2, Y + 4], [Y + 5, Y + 7]]) for (let x = X + 2; x <= X + 11; x++) for (let y = y0; y <= y1; y++) g.breakTile(x, y);
+        digAround(g, X + 4, Y + 5, 24); // les 24 cases autour du centre…
+        g.breakTile(X + 4, Y + 5); // …puis le centre : 25 cases creusées, bien plus que `CAVE_IN.maxDug`
       }),
     ).toBeGreaterThan(0);
   });
