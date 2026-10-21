@@ -661,7 +661,7 @@ export class WorkerSystem {
   private destinations(g: GameState): { s: Structure; wants: (res: string) => number }[] {
     const out: { s: Structure; wants: (res: string) => number }[] = [];
     const site = g.structures.list.find((s) => s.type === 'site');
-    if (site && !g.project.done) out.push({ s: site, wants: (res) => g.project.need(res) });
+    if (site && !g.worksDone) out.push({ s: site, wants: (res) => g.work.need(res) });
     const board = g.structures.list.find((s) => s.type === 'board');
     if (board) out.push({ s: board, wants: (res) => g.contracts.wanted(res) });
     return out;
@@ -675,7 +675,7 @@ export class WorkerSystem {
     const wanted = new Map<string, number>();
     if (g.structures.list.some((s) => s.type === 'board'))
       for (const c of g.contracts.active()) for (const l of c.lines) if (l.done < l.qty) wanted.set(l.res, (wanted.get(l.res) ?? 0) + l.qty - l.done);
-    if (g.structures.list.some((s) => s.type === 'site') && !g.project.done) for (const n of g.project.missing()) wanted.set(n.res, (wanted.get(n.res) ?? 0) + n.qty);
+    if (g.structures.list.some((s) => s.type === 'site') && !g.worksDone) for (const n of g.work.missing()) wanted.set(n.res, (wanted.get(n.res) ?? 0) + n.qty);
     const out: { res: string; qty: number }[] = [];
     for (const [res, qty] of wanted) {
       let carried = 0;
@@ -857,7 +857,7 @@ export class WorkerSystem {
     let moved = false;
     for (const [res, n] of Object.entries(w.cargo)) {
       if (n <= 0) continue;
-      const k = s.type === 'site' ? g.project.deliver(res, n) : s.type === 'board' ? g.contracts.deliver(res, n) : 0;
+      const k = s.type === 'site' ? g.work.deliver(res, n) : s.type === 'board' ? g.contracts.deliver(res, n) : 0;
       if (k <= 0) continue;
       w.cargo[res] = n - k;
       if (w.cargo[res] <= 0) delete w.cargo[res];
@@ -922,7 +922,7 @@ export class WorkerSystem {
     this.list = [];
     this.nextId = 1;
     if (!Array.isArray(data)) return;
-    for (const s of data.slice(0, WORKERS.max)) {
+    for (const s of data.slice(0, Math.min(WORKERS.hardMax, g.maxWorkers))) {
       if (!s || !isJob(s.job)) continue;
       const w = this.add(s.job, g);
       w.level = Math.max(1, Math.min(DRILLER_LEVELS.length, Math.floor(Number(s.level ?? 1)) || 1));

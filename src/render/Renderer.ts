@@ -867,8 +867,10 @@ export class Renderer {
   /** Le chantier du Grand Chevalement : la tour grandit à chaque phase terminée, et une jauge dit où en est la phase en cours. */
   private drawSite(b: Building): void {
     const ctx = this.ctx;
-    const project = this.state?.project;
-    const stage = Math.min(this.siteStages.length - 1, project?.phase ?? 0);
+    const g = this.state;
+    // Acte I : la tour grandit (états 0 à 5) ; acte II : le Grand Ascenseur s'y ajoute (6 à 10).
+    const project = g ? g.work : undefined;
+    const stage = Math.min(this.siteStages.length - 1, g ? (g.project.done ? 5 + g.project2.phase : g.project.phase) : 0);
     const img = this.siteStages[stage];
     const x = b.x * TILE;
     const bottom = (b.y + b.h) * TILE;
@@ -887,6 +889,7 @@ export class Renderer {
       ctx.fillRect(x + 13, bottom - 8, Math.round(38 * project.progress()), 1);
     }
     if (stage >= 3 && Math.random() < 0.05) this.fx.emit('smoke', x + 57, y + 65, 'rgba(120,120,130,0.5)', 1, 4);
+    if (stage >= 8 && Math.random() < 0.05) this.fx.emit('smoke', x + 61, y + 68, 'rgba(120,120,130,0.5)', 1, 4);
     if (stage >= 5 && Math.random() < 0.1) this.fx.emit('spark', x + 29 + Math.random() * 8, y + 5 + Math.random() * 4, '#c8f6ff', 1, 16);
   }
 

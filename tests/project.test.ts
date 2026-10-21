@@ -70,7 +70,7 @@ describe('Grand Chevalement : le chantier', () => {
     expect(p.moneyLeft()).toBe(PHASES[0].money);
     expect(p.progress()).toBe(0);
     expect(p.supplied()).toBe(false);
-    expect(p.perks()).toEqual({ slots: 0, offers: 0, premium: 0 });
+    expect(p.perks()).toEqual({ slots: 0, offers: 0, premium: 0, crew: 0 });
   });
 
   it('accepte les livraisons, mais pas plus que la phase en demande', () => {
@@ -130,7 +130,7 @@ describe('Grand Chevalement : le chantier', () => {
     expect(p.doneAt).toEqual([123]);
     expect(p.delivered).toEqual({});
     expect(p.funded).toBe(0);
-    expect(p.perks()).toEqual({ slots: PHASES[0].perk.slots ?? 0, offers: PHASES[0].perk.offers ?? 0, premium: PHASES[0].perk.premium ?? 0 });
+    expect(p.perks()).toEqual({ slots: PHASES[0].perk.slots ?? 0, offers: PHASES[0].perk.offers ?? 0, premium: PHASES[0].perk.premium ?? 0, crew: 0 });
     for (let i = 1; i < PHASES.length; i++) p.advance(200 + i);
     expect(p.done).toBe(true);
     expect(p.spec).toBeNull();
@@ -138,7 +138,7 @@ describe('Grand Chevalement : le chantier', () => {
     expect(p.ready(999)).toBe(false);
     expect(p.supplied()).toBe(false);
     const total = PHASES.reduce((s, ph) => ({ slots: s.slots + (ph.perk.slots ?? 0), offers: s.offers + (ph.perk.offers ?? 0), premium: s.premium + (ph.perk.premium ?? 0) }), { slots: 0, offers: 0, premium: 0 });
-    expect(p.perks()).toEqual(total);
+    expect(p.perks()).toEqual({ ...total, crew: 0 });
     expect(p.deliver('coal', 5)).toBe(0);
     expect(p.fund(5)).toBe(0);
     expect(p.missing()).toEqual([]);
@@ -292,7 +292,7 @@ describe('Grand Chevalement : les phases s’enchaînent', () => {
     run(g, 0.1);
     expect(g.project.phase).toBe(1);
     expect(g.project.doneAt[0]).toBeGreaterThan(0);
-    expect(g.events.filter((e) => e.t === 'site')).toEqual([{ t: 'site', phase: 0, last: false }]);
+    expect(g.events.filter((e) => e.t === 'site')).toEqual([{ t: 'site', phase: 0, last: false, act: 1 }]);
   });
 
   it('rien ne se termine tant qu’il manque quelque chose', () => {
@@ -369,7 +369,7 @@ describe('Grand Chevalement : les phases s’enchaînent', () => {
 
   it('les objectifs suivent : commande, première phase, premier produit fabriqué, monument achevé', () => {
     const ids = OBJECTIVES.map((o) => o.id);
-    expect(ids.slice(-4)).toEqual(['contract', 'site', 'craft', 'crown']);
+    expect(ids.slice(-5)).toEqual(['contract', 'site', 'craft', 'crown', 'lift']);
     expect(ids.indexOf('contract')).toBe(ids.indexOf('diamond') + 1); // elles viennent après la dernière du parcours guidé
     const g = new GameState(7);
     const need = (id: string) => OBJECTIVES.find((o) => o.id === id)!;

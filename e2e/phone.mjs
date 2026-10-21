@@ -549,6 +549,12 @@ for (const dev of DEVICES) {
         ([kind, finder]) => {
           const E = window.__EM;
           const g = E.state;
+          // Le Grand Ascenseur achevé aussi : l'écran de fin de l'acte II.
+          if (prep === 'end') {
+            g.project.phase = 5;
+            g.project2.phase = 5;
+            g.project2.doneAt = [1, 2, 3, 4, 5];
+          }
           const target = finder ? g.structures.list.find((s) => s.type === finder) ?? null : null;
           // Le jeu referme un panneau quand on s'éloigne de la machine : on se place à côté.
           if (target) {
@@ -657,7 +663,9 @@ for (const dev of DEVICES) {
       ['sorter', 'sorter', 'trieur'],
       ['station', 'rail_load', 'gare'],
       ['switch', 'rail_switch', 'aiguillage'],
-      ['site', 'site', 'chantier-fin', null, 'victory'],
+      ['site', 'site', 'chantier-acte2', null, 'victory'],
+      ['site', 'site', 'chantier-fin-acte1', 'victory'],
+      ['site', 'site', 'chantier-fin', null, 'end'],
       ['install', null, 'ecran-accueil'],
     ];
     for (const [i, [kind, finder, label, tab, prep]] of PANELS.entries()) {

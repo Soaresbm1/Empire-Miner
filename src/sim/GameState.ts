@@ -27,7 +27,8 @@ import { Inventory, type KitHolder } from './Inventory';
 import { Contracts, type Contract, type Outcome } from './Contracts';
 import { Market } from './Market';
 import { Player } from './Player';
-import { Project } from './Project';
+import { PHASES_II } from '../data/project';
+import { Project, type Perks } from './Project';
 import { StructureManager } from './StructureManager';
 import { Building, BuildingType } from './structures/Building';
 import { Conveyor } from './structures/Conveyor';
@@ -186,8 +187,10 @@ export class GameState implements StructureContext {
   readonly market: Market;
   /** Commandes du Tableau d'affichage : des clients achètent une quantité précise, avec une prime, avant une échéance. */
   readonly contracts: Contracts;
-  /** Le Grand Chevalement : le grand chantier du camp, en cinq phases. */
+  /** Le Grand Chevalement : le grand chantier du camp, en cinq phases (Acte I). */
   readonly project = new Project();
+  /** Le Grand Ascenseur (Acte II) : il s'ouvre quand le Grand Chevalement est achevé, sur le même chantier. */
+  readonly project2 = new Project(PHASES_II);
   /** Ouvriers achetés à l'Atelier : ramasseurs et ravitailleurs. */
   readonly workers = new WorkerSystem();
   /** Type de repère choisi dans le panneau de la carte (pour le prochain repère posé). */
@@ -276,7 +279,7 @@ export class GameState implements StructureContext {
       seed,
       {
         known: (res) => this.stats.discovered.includes(res) || (this.stats.collected[res] ?? 0) > 0,
-        perks: () => this.project.perks(),
+        perks: () => this.perks(),
         completed: () => this.stats.contracts,
         settle: (c, outcome, paid, trust) => this.settleContract(c, outcome, paid, trust),
         offered: (c) =>
@@ -499,7 +502,7 @@ export class GameState implements StructureContext {
   deliver(mode: 'orders' | 'site', items: Record<string, number>, _from: Structure): Record<string, number> {
     const rest: Record<string, number> = {};
     for (const [res, n] of Object.entries(items)) {
-      const used = mode === 'orders' ? this.contracts.deliver(res, n) : this.project.deliver(res, n);
+      const used = mode === 'orders' ? this.contracts.deliver(res, n) : this.work.deliver(res, n);
       if (n - used > 0) rest[res] = n - used;
     }
     return rest;
@@ -1323,8 +1326,8 @@ export class GameState implements StructureContext {
   deliverToSite(): number {
     if (!this.isNear('site')) return 0;
     let n = 0;
-    for (const need of this.project.missing()) {
-      const k = this.project.deliver(need.res, this.inventory.count(need.res));
+    for (const need of this.work.missing()) {
+      const k = this.work.deliver(need.res, this.inventory.count(need.res));
       if (k > 0) n += this.inventory.remove(need.res, k);
     }
     return n;
@@ -1333,7 +1336,7 @@ export class GameState implements StructureContext {
   /** Verse aux ouvriers du chantier tout l'argent que l'on peut, dans la limite de ce que la phase en cours réclame. Renvoie la somme versée. */
   fundSite(): number {
     if (!this.isNear('site')) return 0;
-    const k = this.project.fund(Math.min(this.money, this.project.moneyLeft()));
+    const k = this.work.fund(Math.min(this.money, this.work.moneyLeft()));
     if (k > 0) {
       this.money -= k;
       this.stats.spent += k;
@@ -1350,11 +1353,31 @@ export class GameState implements StructureContext {
 
   /** Termine les phases du chantier dont tout est réuni (matériaux, argent, commandes honorées). */
   private checkProject(): void {
-    while (this.project.ready(this.stats.contracts)) {
-      const phase = this.project.phase;
-      this.project.advance(this.time);
-      this.emit({ t: 'site', phase, last: this.project.done });
+    for (;;) {
+      const act = this.project.done ? 2 : 1;
+      const p = this.work;
+      if (p.done || !p.ready(this.stats.contracts, this.contracts.faithfulCount())) return;
+      const phase = p.phase;
+      p.advance(this.time);
+      this.emit({ t: 'site', phase, last: p.done, act });
     }
+  }
+
+  /** Le chantier en cours : le Grand Chevalement, puis le Grand Ascenseur une fois celui-là achevé (le dernier, achevé, reste en place). */
+  get work(): Project {
+    return this.project.done ? this.project2 : this.project;
+  }
+
+  /** Tous les chantiers sont-ils achevés ? */
+  get worksDone(): boolean {
+    return this.project.done && this.project2.done;
+  }
+
+  /** Avantages cumulés des deux chantiers. */
+  perks(): Perks {
+    const a = this.project.perks();
+    const b = this.project2.perks();
+    return { slots: a.slots + b.slots, offers: a.offers + b.offers, premium: a.premium + b.premium, crew: a.crew + b.crew };
   }
 
   buyNextPickaxe(): boolean {
@@ -1388,7 +1411,12 @@ export class GameState implements StructureContext {
 
   /** Prix du prochain ouvrier (null : l'équipe est complète). */
   get nextWorkerPrice(): number | null {
-    return workerPrice(this.workers.count);
+    return workerPrice(this.workers.count, this.maxWorkers);
+  }
+
+  /** Ouvriers au plus : 9, et jusqu'à 12 avec le Grand Ascenseur. */
+  get maxWorkers(): number {
+    return WORKERS.max + this.perks().crew;
   }
 
   /** Les ouvriers se débloquent avec la pioche améliorée. */
@@ -1398,7 +1426,7 @@ export class GameState implements StructureContext {
 
   /** Places ouvertes dans l'équipe : trois de plus à chaque pioche (jusqu'à `WORKERS.max`). */
   get workerSlots(): number {
-    return workerSlots(this.pickaxe.tier);
+    return Math.min(this.maxWorkers, workerSlots(this.pickaxe.tier) + this.perks().crew);
   }
 
   /** Combien d'ouvriers font ce métier. */
@@ -1408,11 +1436,11 @@ export class GameState implements StructureContext {
 
   /** Pourquoi on ne peut pas recruter ce métier maintenant, hors argent et lieu (null : c'est possible). */
   workerHireBlocker(job: WorkerJob): string | null {
-    if (this.nextWorkerPrice === null) return 'Équipe complète';
+    if (this.nextWorkerPrice === null) return this.project2.done ? 'Équipe complète' : 'Équipe complète : le Grand Ascenseur ouvre des places';
     if (!this.workersUnlocked) return WORKERS.unlock.text;
     if (this.workers.count >= this.workerSlots) {
       const next = nextSlotStep(this.workers.count);
-      return next ? `${next.text} pour agrandir l'équipe` : 'Équipe complète';
+      return next ? `${next.text} pour agrandir l'équipe` : 'Équipe complète : le Grand Ascenseur ouvre des places';
     }
     if (this.workerCount(job) >= WORKERS.perJob) return `${WORKERS.perJob} ${getJob(job).name.toLowerCase()}s au plus`;
     return null;

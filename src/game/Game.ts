@@ -25,8 +25,7 @@ import { ShippingCrate } from '../sim/structures/ShippingCrate';
 import { Sorter } from '../sim/structures/Sorter';
 import { BOARD_TABS, marketNews } from '../ui/market';
 import { clientName, contractNews } from '../ui/orders';
-import { siteNews } from '../ui/site';
-import { PHASES } from '../data/project';
+import { siteNews, workName } from '../ui/site';
 import { WORKSHOP_TABS } from '../ui/workshop';
 import { Rail, RailStation, RailSwitch } from '../sim/structures/Rail';
 import { Splitter } from '../sim/structures/Splitter';
@@ -1609,8 +1608,9 @@ export class Game {
     // Au doigt, le bouton « Agir » remplace la touche E.
     const e = this.touch ? '<b class="act-tag">Agir</b>' : `<kbd>${this.input.label('KeyE')}</kbd>`;
     if (near instanceof Building && near.type === 'site' && this.state) {
-      const p = this.state.project;
-      return `${e} Grand Chevalement — ${p.done ? 'achevé, voir les chiffres de la partie' : `phase ${p.phase + 1} sur ${PHASES.length} : ${p.spec!.name}`}`;
+      const g = this.state;
+      const p = g.work;
+      return `${e} ${workName(g.project.done ? 2 : 1)} — ${g.worksDone ? 'achevé, voir les chiffres de la partie' : `phase ${p.phase + 1} sur ${p.specs.length} : ${p.spec!.name}`}`;
     }
     if (near instanceof Building) return `${e} ${BUILDING_INFO[near.type].name} — ${BUILDING_INFO[near.type].prompt}`;
     if (near instanceof Storage) return `${e} Ouvrir le coffre`;
@@ -2151,7 +2151,7 @@ export class Game {
     if (s instanceof ShippingCrate)
       return `<b>Caisse d'expédition</b>${s.mode === 'market' ? '' : ` — <span class="good">livre ${s.mode === 'orders' ? 'aux commandes' : 'au chantier'}</span>`}<br>${kg(s.weight())} / ${kg(s.capacity)} · ${money(s.pendingValue())} en attente<br>Passage dans ${Math.ceil(s.timer)} s${flowTip(s)}`;
     if (s instanceof Building && s.type === 'site')
-      return `<b>${s.name}</b><br>${g.project.done ? 'Achevé' : `Phase ${g.project.phase + 1} sur ${PHASES.length} : ${g.project.spec!.name} (${Math.round(g.project.progress() * 100)} %)`}`;
+      return `<b>${workName(g.project.done ? 2 : 1)}</b><br>${g.worksDone ? 'Achevé' : `${g.project.done ? 'Acte II · ' : ''}Phase ${g.work.phase + 1} sur ${g.work.specs.length} : ${g.work.spec!.name} (${Math.round(g.work.progress() * 100)} %)`}`;
     if (s instanceof Building) return `<b>${s.name}</b>`;
     const id = w.get(tx, ty);
     const b = getBlock(id);
@@ -2291,7 +2291,7 @@ export class Game {
         case 'site':
           this.sfx.discover();
           // Le monument achevé a son écran de fin ; le message ne sert que si on ne peut pas l'ouvrir (un menu est à l'écran).
-          if (!(e.last && this.celebrate(g))) this.ui.toast(siteNews(e.phase, e.last), 'good', e.last ? 7000 : 4600);
+          if (!(e.last && this.celebrate(g))) this.ui.toast(siteNews(e.phase, e.last, e.act), 'good', e.last ? 7000 : 4600);
           break;
         case 'worker':
           // Un petit éclat à l'endroit du geste, et un tintement discret si l'ouvrier est près du joueur.
@@ -2349,7 +2349,7 @@ export class Game {
     colors.forEach((c, i) => r.fx.emit('spark', g.player.x + (i - 2.5) * 22, g.player.y - 30 - (i % 2) * 14, c, 24, 90));
     if (this.mode !== 'playing' || this.ui.menu) return false;
     this.setBuildMode(false);
-    this.ui.openPanel('site');
+    this.ui.openPanel('site', null, 'victory');
     return true;
   }
 

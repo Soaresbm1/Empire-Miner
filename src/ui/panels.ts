@@ -170,13 +170,13 @@ export function storagePanel(g: GameState, s: Storage): string {
 const SHIP_MODE_INFO: Record<ShipMode, { label: string; blurb: string }> = {
   market: { label: 'Marché', blurb: 'Tout est vendu au cours du moment, comme au comptoir.' },
   orders: { label: 'Commandes', blurb: "Le transporteur apporte au Tableau d'affichage ce que vos commandes acceptées attendent. Le reste est vendu au cours du moment." },
-  site: { label: 'Chantier', blurb: 'Le transporteur apporte au Grand Chevalement ce que la phase en cours attend. Le reste est vendu au cours du moment.' },
+  site: { label: 'Chantier', blurb: 'Le transporteur apporte au chantier (Grand Chevalement, puis Grand Ascenseur) ce que la phase en cours attend. Le reste est vendu au cours du moment.' },
 };
 
 /** Ce que le prochain passage livrera de `res` (sur `n` unités en caisse) : le reste sera vendu. */
 export function shipDelivery(g: GameState, mode: ShipMode, res: string, n: number): number {
   if (mode === 'orders') return Math.min(n, g.contracts.wanted(res));
-  if (mode === 'site') return Math.min(n, g.project.need(res));
+  if (mode === 'site') return Math.min(n, g.work.need(res));
   return 0;
 }
 

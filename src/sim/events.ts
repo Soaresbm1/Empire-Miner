@@ -55,7 +55,7 @@ type SimEventBody =
       trust?: { level: number; up: boolean };
     }
   /** Grand Chevalement : la phase `phase` (0 pour la première) vient d'être terminée ; `last` : c'était la dernière. */
-  | { t: 'site'; phase: number; last: boolean };
+  | { t: 'site'; phase: number; last: boolean; act: 1 | 2 };
 
 /** Un événement ; à deux joueurs, `slot` dit lequel l'a causé (voir `GameState.emit`). */
 export type SimEvent = SimEventBody & { slot?: number };

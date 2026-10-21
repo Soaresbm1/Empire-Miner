@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { CLIENTS } from '../src/data/contracts';
-import { PHASES } from '../src/data/project';
+import { PHASES, PHASES_II } from '../src/data/project';
 import type { Contract } from '../src/sim/Contracts';
 import { GameState } from '../src/sim/GameState';
 import { ShippingCrate } from '../src/sim/structures/ShippingCrate';
@@ -411,15 +411,22 @@ describe('panneau du chantier', () => {
       g.update(0.1, { mx: 0, my: 0, mine: false, target: null });
     }
     expect(g.project.done).toBe(true);
-    const html = sitePanel(g);
+    // L'acte I achevé : l'écran de fin de l'acte (onglet « victory »), puis le chantier se poursuit avec le Grand Ascenseur.
+    const html = sitePanel(g, 'victory');
     expect(html).toContain('Empereur de la mine');
+    expect(html).toContain('Ouvrir le Grand Ascenseur');
     expect(html).toContain('3 h 25 min');
     expect(html).toContain(money(g.stats.earned));
     expect(html).toContain('Commandes honorées');
     expect(html).toContain('>99<');
     for (const ph of PHASES) expect(html).toContain(ph.name);
-    expect(html).toContain('data-action="close"');
-    expect(html).toContain('Continuer à jouer');
     expect(html).not.toContain('data-action="siteDeliver"');
+    // Tout achevé (acte II compris) : l'écran de fin du Grand Ascenseur.
+    g.project2.phase = PHASES_II.length;
+    const end = sitePanel(g);
+    expect(end).toContain('Roi des profondeurs');
+    expect(end).toContain('data-action="close"');
+    expect(end).toContain('Continuer à jouer');
+    for (const ph of PHASES_II) expect(end).toContain(ph.name);
   });
 });

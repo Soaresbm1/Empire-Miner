@@ -55,12 +55,14 @@ export const capacityOf = (job: WorkerJob): number => (job === 'courier' ? COURI
 export const isJob = (id: unknown): id is WorkerJob => WORKER_JOBS.some((j) => j.id === id);
 
 export const WORKERS = {
-  /** Ouvriers au plus. */
+  /** Ouvriers au plus (douze avec le Grand Ascenseur, voir `GameState.maxWorkers`). */
   max: 9,
+  /** Ouvriers qu'une sauvegarde peut contenir au plus. */
+  hardMax: 12,
   /** Ouvriers d'un même métier au plus (3 ramasseurs, 3 foreurs, 3 ravitailleurs, 3 livreurs). */
   perJob: 3,
   /** Prix du premier, du deuxième… ouvrier (achat unique, pas de salaire). */
-  prices: [300, 600, 1000, 1500, 2200, 3000, 4000, 5200, 6500],
+  prices: [300, 600, 1000, 1500, 2200, 3000, 4000, 5200, 6500, 8000, 10000, 12500],
   /** Vitesse de marche (pixels par seconde ; le joueur va à 72). */
   speed: 54,
   /** Ce qu'un ouvrier porte (kg). */
@@ -105,8 +107,8 @@ export function nextSlotStep(count: number): (typeof WORKER_SLOTS)[number] | nul
 }
 
 /** Prix du prochain ouvrier quand on en a `count` (null : l'équipe est complète). */
-export function workerPrice(count: number): number | null {
-  return count >= WORKERS.max ? null : WORKERS.prices[Math.min(count, WORKERS.prices.length - 1)];
+export function workerPrice(count: number, max: number = WORKERS.max): number | null {
+  return count >= max ? null : WORKERS.prices[Math.min(count, WORKERS.prices.length - 1)];
 }
 
 export function workerName(id: number): string {
