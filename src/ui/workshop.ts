@@ -10,7 +10,7 @@ import { BOOTS_WATER, GEAR, GearDef, HAZARD_LABEL } from '../data/gear';
 import { CAVE_IN, GAS, HEALTH, HEAT, WATER } from '../data/hazards';
 import { MACHINES, MACHINE_GROUPS, MachineDef, conveyorThroughput, parseKit } from '../data/machines';
 import { BAGS, JACKHAMMER, PICKAXES, ROPE, SCOOTER } from '../data/tools';
-import { DRILLER, DRILLER_LEVELS, WORKERS, WORKER_JOBS, drillerLevel, getJob, workerName } from '../data/workers';
+import { DRILLER, DRILLER_LEVELS, WORKERS, WORKER_JOBS, capacityOf, drillerLevel, getJob, workerName } from '../data/workers';
 import { PLAYER_SPEED, type GameState } from '../sim/GameState';
 import { cargoLine, drillerFacts, oresOf, workerStatus } from './crew';
 import { esc, kg, money, num } from './format';
@@ -478,7 +478,7 @@ function crewTab(g: GameState, view: ShopView): string {
       title: job.name,
       tag: price === null ? 'équipe complète' : n >= WORKERS.perJob ? 'au complet' : undefined,
       desc: job.description,
-      rows: `${stat('Dans l\'équipe', `${n} sur ${WORKERS.perJob}`)}${stat('Charge', kg(WORKERS.capacity))}${stat('Vitesse', speed)}${stat('Prix du prochain', price === null ? '—' : money(price))}`,
+      rows: `${stat('Dans l\'équipe', `${n} sur ${WORKERS.perJob}`)}${stat('Charge', kg(capacityOf(job.id)))}${stat('Vitesse', speed)}${stat('Prix du prochain', price === null ? '—' : money(price))}`,
       state: price === null ? 'owned' : why ? 'locked' : 'buy',
       buy: why || price === null ? undefined : buyBlock(g, price, 'hireWorker', job.id, 'Recruter'),
       lock: price === null ? undefined : (why ?? undefined),
@@ -518,7 +518,7 @@ function crewTab(g: GameState, view: ShopView): string {
   return `<p class="sub">Un ouvrier s'achète une seule fois, sans salaire ; le suivant coûte plus cher. On change son métier quand on veut, gratuitement. L'équipe s'agrandit avec vos pioches : trois places de plus à chaque palier, jusqu'à ${WORKERS.max} ouvriers, ${WORKERS.perJob} par métier.</p>
     <div class="cards">${hire}</div>
     <h4>Votre équipe : ${g.workers.count} sur ${open}${open < WORKERS.max ? ` places ouvertes (${WORKERS.max} au plus)` : ''}</h4>${team}
-    <p class="hint">Le ramasseur range dans un coffre (à défaut, dans une caisse d'expédition qui vend) : posez-en un au camp. Il vide aussi les foreuses à charbon et la base d'une foreuse de percement quand elles se remplissent. Le ravitailleur prend le charbon des coffres : gardez-y du charbon. Le foreur pose des foreuses sur les gisements au sol, ${DRILLER.maxDrills} au plus chacun (une foreuse de votre stock, à défaut il l'achète en vous laissant ${money(DRILLER.moneyReserve)}) et y met du charbon des coffres ; améliorez-le pour des minerais plus précieux. Ils évitent le grisou et l'eau profonde.</p>`;
+    <p class="hint">Le ramasseur range dans un coffre (à défaut, dans une caisse d'expédition qui vend) : posez-en un au camp. Il vide aussi les foreuses à charbon et la base d'une foreuse de percement quand elles se remplissent. Le ravitailleur prend le charbon des coffres : gardez-y du charbon. Le livreur apporte lui-même au chantier du Grand Chevalement et au Tableau d'affichage ce qu'ils attendent et que vos coffres contiennent (une commande acceptée, un matériau de la phase) : gardez-y des lingots et des plaques. Le foreur pose des foreuses sur les gisements au sol, ${DRILLER.maxDrills} au plus chacun (une foreuse de votre stock, à défaut il l'achète en vous laissant ${money(DRILLER.moneyReserve)}) et y met du charbon des coffres ; améliorez-le pour des minerais plus précieux. Ils évitent le grisou et l'eau profonde.</p>`;
 }
 
 // ------------------------------------------------------------------ panneau

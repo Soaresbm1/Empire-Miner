@@ -2,7 +2,7 @@
  * Ouvriers (données pures) : des travailleurs qu'on achète une fois à l'Atelier et qui font des corvées à la place
  * du joueur. Chacun a un métier, qu'on peut changer gratuitement.
  */
-export type WorkerJob = 'picker' | 'refueler' | 'driller';
+export type WorkerJob = 'picker' | 'refueler' | 'driller' | 'courier';
 
 export interface WorkerJobDef {
   id: WorkerJob;
@@ -33,18 +33,31 @@ export const WORKER_JOBS: readonly WorkerJobDef[] = [
     description: 'Prend du charbon dans les coffres et recharge les foreuses, les fours et les foreuses de percement qui en manquent.',
     color: '#e8662a',
   },
+  {
+    id: 'courier',
+    name: 'Livreur',
+    description:
+      'Prend dans les coffres ce que le Grand Chevalement et vos commandes acceptées attendent (minerais, lingots, plaques…) et le porte lui-même au chantier ou au Tableau d’affichage. Il emporte 30 kg à chaque tournée.',
+    color: '#a35ad8',
+  },
 ];
 
 export function getJob(id: WorkerJob): WorkerJobDef {
   return WORKER_JOBS.find((j) => j.id === id) ?? WORKER_JOBS[0];
 }
 
+/** Ce qu'un livreur porte (kg) : un chariot, le double des autres ouvriers. */
+export const COURIER_CAPACITY = 30;
+
+/** Charge maximale d'un ouvrier selon son métier (kg). */
+export const capacityOf = (job: WorkerJob): number => (job === 'courier' ? COURIER_CAPACITY : WORKERS.capacity);
+
 export const isJob = (id: unknown): id is WorkerJob => WORKER_JOBS.some((j) => j.id === id);
 
 export const WORKERS = {
   /** Ouvriers au plus. */
   max: 9,
-  /** Ouvriers d'un même métier au plus (3 ramasseurs, 3 foreurs, 3 ravitailleurs). */
+  /** Ouvriers d'un même métier au plus (3 ramasseurs, 3 foreurs, 3 ravitailleurs, 3 livreurs). */
   perJob: 3,
   /** Prix du premier, du deuxième… ouvrier (achat unique, pas de salaire). */
   prices: [300, 600, 1000, 1500, 2200, 3000, 4000, 5200, 6500],

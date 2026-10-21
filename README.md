@@ -344,7 +344,7 @@ Le jeu à deux n'est pas concerné : l'invité n'a besoin d'aucun compte, et l'h
 - **Ouvriers** : des travailleurs qu'on **achète une seule fois** à l'Atelier (onglet Ouvriers, touche `5` ;
   300 $, 600 $, 1 000 $, 1 500 $, 2 200 $, 3 000 $, 4 000 $, 5 200 $ puis 6 500 $), sans salaire. **L'équipe s'agrandit
   avec vos pioches** : trois places avec la Pioche améliorée, six avec la Pioche en fer, neuf avec la Pioche pro en
-  acier — **neuf ouvriers au plus, trois par métier** (3 ramasseurs, 3 foreurs, 3 ravitailleurs ; un métier plein ne se
+  acier — **neuf ouvriers au plus, trois par métier** (3 ramasseurs, 3 foreurs, 3 ravitailleurs, 3 livreurs ; un métier plein ne se
   recrute plus et on ne peut plus y passer). Une ancienne équipe plus grande que ses places ou son quota est conservée.
   Chacun a un **métier**, qu'on change gratuitement à tout moment. Le **ramasseur** va chercher les minerais laissés par
   terre (restes de la foreuse de percement, éboulements, tas oubliés, jusqu'au fond de la mine par le puits) et les
@@ -352,7 +352,16 @@ Le jeu à deux n'est pas concerné : l'invité n'a besoin d'aucun compte, et l'h
   qu'aucun coffre n'accepte, et ne range jamais dans une caisse d'expédition) ; il porte 15 kg et laisse la pierre. Il
   **vide aussi les machines qui gardent leur minerai** : une foreuse à charbon qui en retient 3 ou plus, le stock de la base
   d'une foreuse de percement quand il atteint 5 (les fours et fonderies ne sont pas touchés) ; il respecte les réglages des
-  coffres et, sans coffre qui accepte, laisse le minerai dans la machine et le signale. Le **ravitailleur** prend du charbon dans les coffres et recharge les foreuses, les fours et les foreuses
+  coffres et, sans coffre qui accepte, laisse le minerai dans la machine et le signale. Le **livreur** apporte lui-même au
+  **chantier du Grand Chevalement** et au **Tableau d'affichage** ce qu'ils attendent : il regarde les matériaux qui manquent à
+  la phase en cours et les marchandises des **commandes acceptées** (la plus pressée d'abord, puis le chantier), va les prendre
+  dans le coffre le plus proche qui en contient (minerais, lingots, plaques, acier…), les porte et les livre exactement comme
+  vous le feriez (la commande est honorée et payée, la phase avance toute seule quand tout est réuni). Il emporte **30 kg** par
+  tournée, le double des autres ouvriers, ne prend jamais plus que ce qui est encore attendu (moins ce que les autres livreurs
+  portent déjà), ignore les simples propositions et ne touche à rien d'autre dans vos coffres. Si une commande disparaît en
+  route, il remet sa charge dans un coffre. Il ne verse pas les salaires du chantier (c'est à vous). Quand le chantier ou une
+  commande attend quelque chose qu'aucun coffre ne contient, il le signale (« rien de ce qui est attendu dans les coffres ») ;
+  un coffre qu'il ne peut pas atteindre aussi. Le **ravitailleur** prend du charbon dans les coffres et recharge les foreuses, les fours et les foreuses
   de percement dont le réservoir est à moitié vide ou moins (une machine collée à un coffre se sert déjà seule). Le
   **foreur** pose des **foreuses à charbon sur les gisements au sol** (exposés, déjà explorés, pas encore couverts par une
   foreuse ni visés par un autre foreur, et sans boucher un passage) : il prend d'abord un **kit de foreuse de votre stock**,
@@ -378,8 +387,8 @@ Le jeu à deux n'est pas concerné : l'invité n'a besoin d'aucun compte, et l'h
   terre). Un ouvrier bloqué est signalé au Tableau d'affichage et par un point d'exclamation au-dessus de lui, et
   **survoler l'ouvrier** à la souris donne la cause et quoi faire : « aucun coffre n'accepte ce minerai » (réglage des
   coffres), « les coffres qui acceptent ce minerai sont pleins », « aucun chemin jusqu'à un coffre » (roche, grisou, eau
-  ou machine en travers), « plus de charbon dans les coffres » ou « plus de foreuse en stock ni assez d'argent » ; ils apparaissent aussi sur la carte (points
-  vert, orange et bleu). Casque vert pour le ramasseur, orange pour le ravitailleur, bleu pour le foreur. Les ouvriers sont sauvegardés
+  ou machine en travers), « plus de charbon dans les coffres », « plus de foreuse en stock ni assez d'argent » ou « rien de ce qui est attendu dans les coffres » (livreur) ; ils apparaissent aussi sur la carte (points
+  vert, orange, bleu et violet). Casque vert pour le ramasseur, orange pour le ravitailleur, bleu pour le foreur, violet pour le livreur. Les ouvriers sont sauvegardés
   (métier, niveau du foreur, position, charge) ; les anciennes sauvegardes n'en ont pas.
 - **Cours du marché** : les prix de vente montent et descendent. Chaque minerai a un **cours**, multiplicateur de
   son prix de base (100 % = le prix de la fiche), qui dérive doucement toutes les 10 s autour de 100 % (en général
@@ -499,6 +508,7 @@ node e2e/touch.mjs             # gestes tactiles réels (CDP) : stick, Miner, Ag
 node e2e/panels.mjs            # fenêtres au doigt sur un jeu qui tourne : défilement, toucher long, contenu exact, rien ne glisse de côté (après un build)
 node e2e/orders.mjs            # commandes et Grand Chevalement : vrais clics (accepter, livrer, abandonner, caisse réglée sur « Commandes », chantier phase par phase, écran de fin), réputation des clients et commande exclusive, la tour change à chaque étape, tout survit à un rechargement (après un build)
 node e2e/flow.mjs              # rendement des lignes : une ligne saturée mesurée en vrai (infobulles, panneau), vue goulots (touche G, légende, pixels teintés), prévisions du chantier et des commandes, rechargement (après un build)
+node e2e/courier.mjs           # le livreur : recrutement au clic, tournée réelle (coffre → commande honorée et chantier), rechargement (après un build)
 node e2e/crafter.mjs           # la Manufacture : achat à l'Atelier, pose, panneau (recette, charbon, dépôt, récupération), chaîne par convoyeurs, commande de plaques, sauvegarde, ancienne partie (après un build)
 node e2e/menus.mjs             # menus : « Commandes » (menu principal et pause) s'ouvre devant le menu, qui s'efface puis revient ; seul, le jeu reste figé depuis la pause (après un build)
 node e2e/cloud.mjs             # compte : deux appareils (deux profils de navigateur) et un faux Firebase local : création, reprise sur appareil neuf, parties qui divergent, réseau coupé, suppression (après un build)

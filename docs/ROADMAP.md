@@ -37,6 +37,7 @@ profondeur et roches plus dures, sauvegarde/chargement, première automatisation
   métal, les clients en demandent et les deux dernières phases du Grand Chevalement en réclament.
 - ✅ Clients récurrents : réputation par client (cinq niveaux : plus de retours, de prime et de temps), commandes exclusives du client le plus
   fidèle à chaque nouveau rang, pénalités douces (un point par retard ou abandon, jamais sous zéro).
+- ✅ Livreur : un quatrième métier d'ouvrier qui porte lui-même les marchandises des coffres au chantier et aux commandes acceptées.
 - ✅ Rendement des lignes : débit réel de chaque machine et convoyeur (infobulle, panneau), vue « goulots » (touche G), prévisions
   « au rythme actuel » au Grand Chevalement et sur les commandes.
 - Concasseur (pierre → gravier), alliages (ex. bronze), composants (fils, engrenages…) ; recettes à plusieurs étages.
@@ -49,7 +50,7 @@ profondeur et roches plus dures, sauvegarde/chargement, première automatisation
 ## Après le Grand Chevalement (idées)
 - Un second chantier plus lointain (un ascenseur de puits, une ville au camp) qui reprend les commandes comme monnaie de progression.
 - Clients aux goûts propres (un client qui ne demande que certaines marchandises), commandes « cadeau » quand on est Partenaire, contrats qui se renouvellent.
-- Ouvriers « livreurs » qui portent leurs lingots du coffre au chantier ; objectifs quotidiens de commandes.
+- Objectifs quotidiens de commandes ; un livreur qui sait aussi vider les caisses d'expédition et les machines de fonte.
 
 ## Idées pour la suite du rendement
 - Copier-coller une ligne de machines et de convoyeurs, avec un « annuler » pour la dernière pose.

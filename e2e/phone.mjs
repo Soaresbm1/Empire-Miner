@@ -615,6 +615,9 @@ for (const dev of DEVICES) {
       // Des clients qui connaissent le joueur : étiquettes de confiance sur les cartes, liste « Vos clients » (sept, donc condensée).
       for (const [i, c] of g.contracts.list.entries()) g.contracts.reputation[c.client] = 1 + ((i * 3) % 11);
       for (let i = 0; i < 7; i++) if (!g.contracts.reputation[i]) g.contracts.reputation[i] = 1 + i;
+      // Une équipe pour l'onglet Ouvriers : un ramasseur et un livreur qui porte une charge.
+      g.workers.add('picker', g);
+      g.workers.add('courier', g).cargo = { gold: 6 };
       g.project.phase = 1;
       for (const n of g.project.missing().slice(0, 1)) g.project.deliver(n.res, Math.floor(n.qty / 2));
       g.project.fund(1000);

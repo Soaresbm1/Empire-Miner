@@ -195,7 +195,15 @@ réclamé par un autre (les tas de pierre, ceux que le joueur vient de jeter et 
 ignorés), puis un coffre qui peut recevoir sa charge (jamais une caisse d'expédition) ; le ravitailleur repère les machines à combustible (`fuelWanted`,
 `fuelUnits`, `addFuel`) à moitié vides, prend du charbon dans un coffre et les recharge. Un passage qui se ferme en
 route annule la tâche et relance la réflexion ; sans rien à faire, l'ouvrier retourne à sa case d'attente près du
-puits. Il émet l'événement `worker` (éclat et son). **Machines qui gardent leur minerai** : `heldOre` (foreuse à charbon dont
+puits. Il émet l'événement `worker` (éclat et son). **Livreur** (`thinkCourier`, `courier` dans `data/workers.ts`, charge `capacityOf` = 30 kg
+contre 15) : il livre d'abord sa charge (`deliver`) à la première destination qui l'attend (`destinations` : le bâtiment `site` tant que
+`Project.need(res) > 0`, le bâtiment `board` tant que `Contracts.wanted(res) > 0`, c'est-à-dire seulement les commandes acceptées), au
+plus proche ; une charge que plus personne n'attend retourne au coffre (`planStore`). À vide, `demand` liste ce qui est attendu (les
+commandes dans l'ordre de leur échéance, puis les matériaux de la phase), en retirant ce que les autres livreurs portent déjà, et il va au
+plus proche coffre qui en contient (`fetch`) ; `doFetch` recalcule la demande à l'arrivée et ne prend que ce qui reste attendu, dans la limite de
+sa charge. `doDeliver` appelle `Project.deliver` / `Contracts.deliver` (les mêmes qu'un joueur au chantier ou au Tableau). Drapeaux : `nogoods`
+(attendu mais aucun coffre n'en a) et `lost` (un coffre l'a, aucun chemin). Rien de neuf n'est sauvegardé : le métier et la charge existaient
+déjà (la charge est validée contre `capacityOf(métier)`). Tests : `tests/courier.test.ts`, `e2e/courier.mjs`. **Machines qui gardent leur minerai** : `heldOre` (foreuse à charbon dont
 le tampon atteint `WORKERS.machinePickup.drill`, stock de la base d'une foreuse de percement à `borerBase`) est ce qu'un
 ramasseur peut y prendre ; il vise le tas ou la machine la plus proche, `takeHeld` retire le minerai (`TunnelBorer.takeStored`)
 et le même `planStore` choisit le coffre (mêmes règles de filtre, mêmes causes de blocage ; ce qu'aucun coffre n'accepte reste

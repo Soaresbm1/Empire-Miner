@@ -6,6 +6,7 @@ import { Drill } from '../src/sim/structures/Drill';
 import { Storage } from '../src/sim/structures/Storage';
 import { cargoLine, stuckWorkers, workerAt, workerStatus, workerTooltip } from '../src/ui/crew';
 import { helpPanel, storagePanel } from '../src/ui/panels';
+import { kg } from '../src/ui/format';
 import { productionStats } from '../src/ui/stats';
 import { WORKSHOP_TABS, offers, tabBadges, workshopAdvice, workshopPanel, DEFAULT_VIEW } from '../src/ui/workshop';
 import { goTo, run } from './helpers';
@@ -17,6 +18,47 @@ function rich(): GameState {
   return g;
 }
 
+describe('livreur : interface', () => {
+  it('sa fiche de recrutement annonce sa charge de 30 kg, double de celle des autres', () => {
+    const html = workshopPanel(rich(), 'crew');
+    const card = html.slice(html.indexOf('Livreur'));
+    expect(card).toContain(kg(30));
+    expect(html).toContain(kg(15));
+    expect(html).toContain('porte lui-même');
+  });
+
+  it('dans l’équipe : son métier, sa charge sur 30 kg, ce qu’il fait', () => {
+    const g = rich();
+    const w = g.workers.add('courier', g);
+    w.cargo = { gold: 8 };
+    const html = workshopPanel(g, 'crew');
+    expect(html).toContain('Livreur');
+    expect(html).toContain('Passer ramasseur');
+    expect(cargoLine(w)).toContain(`sur ${kg(30)}`);
+    expect(workerStatus(g, w).tone).toBe('idle');
+  });
+
+  it('les trois autres métiers peuvent passer livreur, et le contraire', () => {
+    const g = rich();
+    const p = g.workers.add('picker', g);
+    expect(workshopPanel(g, 'crew')).toContain(`data-arg="${p.id}:courier"`);
+    g.workers.setJob(p.id, 'courier');
+    expect(workshopPanel(g, 'crew')).toContain(`data-arg="${p.id}:picker"`);
+  });
+
+  it('le Tableau d’affichage signale un livreur à qui il manque quelque chose', () => {
+    const g = rich();
+    const w = g.workers.add('courier', g);
+    w.flag = 'nogoods';
+    expect(stuckWorkers(g)).toEqual([{ text: 'Livreur : rien de ce qui est attendu dans les coffres', n: 1 }]);
+    expect(workerTooltip(g, w)).toContain('coffre');
+  });
+
+  it('la légende du Tableau d’affichage donne sa couleur', () => {
+    expect(WORKER_JOBS.map((j) => j.id)).toEqual(['picker', 'driller', 'refueler', 'courier']);
+  });
+});
+
 describe('ouvriers : onglet de l’Atelier', () => {
   it('l’onglet Ouvriers est le cinquième, avec sa touche', () => {
     expect(WORKSHOP_TABS.map(([id]) => id)).toEqual(['tools', 'transport', 'gear', 'machines', 'crew']);
@@ -26,7 +68,7 @@ describe('ouvriers : onglet de l’Atelier', () => {
     expect(html).toContain('touche 5');
   });
 
-  it('trois fiches de recrutement, avec le prix du prochain et un bouton d’achat', () => {
+  it('quatre fiches de recrutement, avec le prix du prochain et un bouton d’achat', () => {
     const g = rich();
     const html = workshopPanel(g, 'crew');
     expect(html).toContain('Ramasseur');
@@ -35,10 +77,12 @@ describe('ouvriers : onglet de l’Atelier', () => {
     expect(html).toContain('data-action="hireWorker" data-arg="picker"');
     expect(html).toContain('data-action="hireWorker" data-arg="refueler"');
     expect(html).toContain('data-action="hireWorker" data-arg="driller"');
+    expect(html).toContain('Livreur');
+    expect(html).toContain('data-action="hireWorker" data-arg="courier"');
     expect(html).toContain('Recruter');
     expect(html).toContain('300');
     expect(html).toContain('Votre équipe : 0 sur 3 places ouvertes (9 au plus)');
-    expect(html).toContain('0 sur 3'); // ramasseurs, foreurs, ravitailleurs : trois au plus chacun
+    expect(html).toContain('0 sur 3'); // ramasseurs, foreurs, ravitailleurs, livreurs : trois au plus chacun
     expect(html).toContain('Personne ne travaille');
   });
 
