@@ -769,6 +769,9 @@ kbd {
 .stat b.good { color: var(--good); } .stat b.warn { color: var(--warn); } .stat b.bad { color: var(--bad); }
 
 /* Panneau du chantier : frise des cinq phases, lignes d'avancement, écran de fin. */
+.site-act { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; margin-bottom: 8px; padding: 6px 10px; background: rgba(163, 90, 216, 0.16); box-shadow: 0 0 0 2px #120e10, inset 0 0 0 1px #6b3f8c; }
+.site-act b { color: #d3a5f5; }
+.site-act span { color: var(--muted); font-size: 14px; flex: 1; min-width: 160px; }
 .site-head { display: flex; align-items: baseline; gap: 8px; margin-bottom: 8px; font-size: 18px; }
 .site-head b { color: var(--gold); }
 .site-pct { margin-left: auto; color: var(--muted); font-size: 14px; }

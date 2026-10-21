@@ -70,6 +70,11 @@ export const OBJECTIVES: Objective[] = [
     text: 'Achevez le Grand Chevalement (cinq phases) : réglez des caisses d’expédition sur « Chantier » pour livrer sans y retourner',
     done: (g) => g.project.done,
   },
+  {
+    id: 'lift',
+    text: 'Acte II : le chantier se poursuit avec le Grand Ascenseur. Il réclame acier, plaques d’or et diamants taillés, beaucoup d’argent, des commandes honorées et des clients fidèles (réputation) : il agrandit l’équipe jusqu’à 12 ouvriers',
+    done: (g) => g.project2.done,
+  },
 ];
 
 export function currentObjective(g: GameState): { objective: Objective | null; index: number } {

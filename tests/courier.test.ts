@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { TILE } from '../src/core/constants';
 import { COURIER_CAPACITY, WORKERS, capacityOf, getJob } from '../src/data/workers';
-import { PHASES } from '../src/data/project';
+import { PHASES, PHASES_II } from '../src/data/project';
 import { getResource } from '../src/data/resources';
 import { deserialize, serialize } from '../src/save/save';
 import { stateDigest } from '../src/net/digest';
@@ -273,7 +273,8 @@ describe('livreur : blocages', () => {
   it('rien dans les coffres de ce qui est attendu : « nogoods », puis il repart dès que le joueur dépose ce qu’il faut', () => {
     const g = game();
     const c = chest(g);
-    g.project.phase = PHASES.length; // le chantier n'attend rien : seule la commande compte
+    g.project.phase = PHASES.length; // les chantiers n'attendent rien : seule la commande compte
+    g.project2.phase = PHASES_II.length;
     const o = order(g, [['gold', 4]]);
     const w = g.workers.add('courier', g);
     run(g, 6);
@@ -290,6 +291,7 @@ describe('livreur : blocages', () => {
   it('un coffre qui a ce qu’on attend mais qu’on ne peut pas approcher : « lost », pas « nogoods »', () => {
     const g = game();
     g.project.phase = PHASES.length;
+    g.project2.phase = PHASES_II.length;
     const buried = chest(g, 46, 40); // en pleine roche, aucune case libre autour
     expect(g.world.isSolid(46, 40)).toBe(true);
     buried.put('gold', 6);
@@ -303,7 +305,8 @@ describe('livreur : blocages', () => {
 
   it('au repos quand il n’y a rien à livrer : pas de blocage', () => {
     const g = new GameState(4);
-    g.project.phase = PHASES.length; // monument achevé, aucune commande : rien n'est attendu
+    g.project.phase = PHASES.length; // monuments achevés, aucune commande : rien n'est attendu
+    g.project2.phase = PHASES_II.length;
     const w = g.workers.add('courier', g);
     run(g, 5);
     expect(w.flag).toBeNull();
@@ -314,6 +317,7 @@ describe('livreur : blocages', () => {
   it('le monument achevé : plus de chantier à livrer', () => {
     const g = game();
     g.project.phase = PHASES.length;
+    g.project2.phase = PHASES_II.length;
     const c = chest(g);
     c.put('coal', 20);
     const w = g.workers.add('courier', g);

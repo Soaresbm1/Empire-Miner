@@ -26,23 +26,28 @@ export interface Perks {
   slots: number;
   offers: number;
   premium: number;
+  /** Places d'ouvriers en plus. */
+  crew: number;
 }
 
 export class Project {
-  /** Phase en cours : le nombre de phases terminées (`PHASES.length` : le monument est achevé). */
+  /** Phase en cours : le nombre de phases terminées (`specs.length` : le chantier est achevé). */
   phase = 0;
   delivered: Record<string, number> = {};
   funded = 0;
   doneAt: number[] = [];
 
-  /** Le monument est-il achevé ? */
+  /** `specs` : les phases de ce chantier (le Grand Chevalement par défaut ; l'Acte II, le Grand Ascenseur, en a d'autres). */
+  constructor(readonly specs: readonly PhaseSpec[] = PHASES) {}
+
+  /** Le chantier est-il achevé ? */
   get done(): boolean {
-    return this.phase >= PHASES.length;
+    return this.phase >= this.specs.length;
   }
 
-  /** La phase en cours, ou null quand le monument est achevé. */
+  /** La phase en cours, ou null quand le chantier est achevé. */
   get spec(): PhaseSpec | null {
-    return PHASES[this.phase] ?? null;
+    return this.specs[this.phase] ?? null;
   }
 
   /** Ce qui manque encore de `res` à la phase en cours. */
@@ -78,9 +83,9 @@ export class Project {
     return !!this.spec && this.missing().length === 0 && this.moneyLeft() === 0;
   }
 
-  /** La phase peut-elle se terminer, avec `contracts` commandes honorées ? */
-  ready(contracts: number): boolean {
-    return this.supplied() && contracts >= this.spec!.contracts;
+  /** La phase peut-elle se terminer, avec `contracts` commandes honorées et `faithful` clients fidèles ? */
+  ready(contracts: number, faithful = Infinity): boolean {
+    return this.supplied() && contracts >= this.spec!.contracts && faithful >= (this.spec!.faithful ?? 0);
   }
 
   /** Livre jusqu'à `n` unités de `res` à la phase en cours. Renvoie la quantité acceptée. */
@@ -111,9 +116,10 @@ export class Project {
 
   /** Avantages accordés par les phases terminées. */
   perks(): Perks {
-    const p: Perks = { slots: 0, offers: 0, premium: 0 };
-    for (let i = 0; i < Math.min(this.phase, PHASES.length); i++) {
-      const perk = PHASES[i].perk;
+    const p: Perks = { slots: 0, offers: 0, premium: 0, crew: 0 };
+    for (let i = 0; i < Math.min(this.phase, this.specs.length); i++) {
+      const perk = this.specs[i].perk;
+      p.crew += perk.crew ?? 0;
       p.slots += perk.slots ?? 0;
       p.offers += perk.offers ?? 0;
       p.premium += perk.premium ?? 0;
@@ -140,7 +146,7 @@ export class Project {
     const refund: Record<string, number> = {};
     if (!data || typeof data !== 'object') return refund;
     const phase = Number(data.phase);
-    this.phase = Number.isInteger(phase) ? Math.min(PHASES.length, Math.max(0, phase)) : 0;
+    this.phase = Number.isInteger(phase) ? Math.min(this.specs.length, Math.max(0, phase)) : 0;
     this.doneAt = (Array.isArray(data.doneAt) ? data.doneAt : [])
       .slice(0, this.phase)
       .map(Number)

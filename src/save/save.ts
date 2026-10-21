@@ -88,6 +88,8 @@ export interface SaveData extends PersonalSave {
   contracts?: ContractsSave;
   /** Grand Chevalement : phase en cours, livraisons, argent versé (absent des anciennes sauvegardes : chantier à zéro). */
   project?: ProjectSave;
+  /** Acte II (le Grand Ascenseur) ; absent dans les parties d'avant. */
+  project2?: ProjectSave;
   /** Jeu à deux : les joueurs présents autres que le premier (identifiant d'invité compris), et les invités partis. */
   players?: (PersonalSave & { id: string })[];
   guests?: Record<string, PersonalSave>;
@@ -178,6 +180,7 @@ export function serialize(g: GameState, opts: SerializeOptions = {}): SaveData {
     market: g.market.serialize(),
     contracts: g.contracts.serialize(),
     project: g.project.serialize(),
+    project2: g.project2.serialize(),
     workers: g.workers.serialize(),
     ...(others.length ? { players: others.map((i) => ({ id: g.guestIds[i] ?? '', ...g.withSlot(i, () => personalOf(g)) })) } : {}),
     ...(Object.keys(g.guestStash).length ? { guests: g.guestStash as Record<string, PersonalSave> } : {}),
@@ -223,6 +226,7 @@ export function deserialize(data: SaveData): GameState {
   g.market.load(data.market, data.time);
   g.contracts.load(data.contracts, data.time);
   const refund = g.project.load(data.project);
+  for (const [res, n] of Object.entries(g.project2.load(data.project2))) refund[res] = (refund[res] ?? 0) + n;
   g.money = data.money;
   loadPersonal(g, data);
   g.inventory.kits = { ...data.kits };

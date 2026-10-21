@@ -18,6 +18,7 @@
  */
 import { hash2 } from '../core/rng';
 import { CLIENTS, CONTRACTS, GOODS, REPUTATION, rankOf, trustOf, type GoodSpec, type Trust } from '../data/contracts';
+import { FAITHFUL_LEVEL } from '../data/project';
 import { getResource } from '../data/resources';
 import { commodityOf, type Market } from './Market';
 
@@ -155,6 +156,11 @@ export class Contracts {
   /** Niveau de confiance d'un client. */
   trust(client: number): Trust {
     return trustOf(this.reputation[client] ?? 0);
+  }
+
+  /** Combien de clients vous font confiance au niveau « Fidèle » ou mieux (le Grand Ascenseur en demande). */
+  faithfulCount(): number {
+    return this.reputation.filter((p) => trustOf(p).index >= FAITHFUL_LEVEL).length;
   }
 
   /** Les clients qui connaissent le joueur (au moins un point), le plus fidèle d'abord. */

@@ -37,6 +37,7 @@ profondeur et roches plus dures, sauvegarde/chargement, première automatisation
   métal, les clients en demandent et les deux dernières phases du Grand Chevalement en réclament.
 - ✅ Clients récurrents : réputation par client (cinq niveaux : plus de retours, de prime et de temps), commandes exclusives du client le plus
   fidèle à chaque nouveau rang, pénalités douces (un point par retard ou abandon, jamais sous zéro).
+- ✅ Acte II du chantier, le Grand Ascenseur : cinq phases de produits de la Manufacture, d'argent, de commandes et de clients fidèles ; l'équipe passe à 12 ouvriers.
 - ✅ Livreur : un quatrième métier d'ouvrier qui porte lui-même les marchandises des coffres au chantier et aux commandes acceptées.
 - ✅ Rendement des lignes : débit réel de chaque machine et convoyeur (infobulle, panneau), vue « goulots » (touche G), prévisions
   « au rythme actuel » au Grand Chevalement et sur les commandes.
@@ -47,8 +48,8 @@ profondeur et roches plus dures, sauvegarde/chargement, première automatisation
 - ✅ Dangers : éboulements (étais), grisou (ventilateurs), eau (pompes), santé du joueur.
 - Chaleur en profondeur, coups de grisou qui explosent près d'une flamme, détecteur de poches.
 
-## Après le Grand Chevalement (idées)
-- Un second chantier plus lointain (un ascenseur de puits, une ville au camp) qui reprend les commandes comme monnaie de progression.
+## Après le Grand Ascenseur (idées)
+- Un troisième chantier (une ville au camp, une gare souterraine) qui demande des clients « Partenaire » et des quantités encore plus grandes.
 - Clients aux goûts propres (un client qui ne demande que certaines marchandises), commandes « cadeau » quand on est Partenaire, contrats qui se renouvellent.
 - Objectifs quotidiens de commandes ; un livreur qui sait aussi vider les caisses d'expédition et les machines de fonte.
 

@@ -41,7 +41,7 @@ describe('ouvriers : achat', () => {
     expect(paid).toBe(WORKERS.prices.slice(0, WORKERS.max).reduce((a, b) => a + b, 0));
     expect(WORKERS.prices.every((p, i) => i === 0 || p > WORKERS.prices[i - 1])).toBe(true);
     expect(g.nextWorkerPrice).toBeNull();
-    expect(g.workerHireBlocker('picker')).toBe('Équipe complète');
+    expect(g.workerHireBlocker('picker')).toBe('Équipe complète : le Grand Ascenseur ouvre des places');
     expect(g.hireWorker('picker')).toBe(false);
     // Achat unique : plus rien n'est débité ensuite.
     const money = g.money;

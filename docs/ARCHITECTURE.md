@@ -329,14 +329,21 @@ partie à deux). Les nombres sont des données : `data/contracts.ts` (marchandis
   est une exclusive du client le plus fidèle (au hasard par hachage parmi les ex æquo) et `exclusiveRank` avance ; elle ne revient pas si on
   la laisse passer. Sauvegarde : `rep` (absent si tous à zéro), `x` (absent à 0), `e: 1` par commande ; tout est validé au chargement, une
   ancienne sauvegarde repart à zéro. Ces champs sont dans l'empreinte de synchro (ils comptent pour la simulation).
-- **`sim/Project.ts`** ne connaît que le chantier : `deliver`, `fund` (l'argent versé), `ready(commandesHonorées)`, `advance`.
+- **`sim/Project.ts`** ne connaît que le chantier : `deliver`, `fund` (l'argent versé), `ready(commandesHonorées, clientsFidèles?)`, `advance`.
+  Il prend en paramètre la liste de ses phases : `GameState.project` (acte I, `PHASES`) et `GameState.project2` (**acte II, le Grand
+  Ascenseur**, `PHASES_II`) sont deux instances. `GameState.work` est le chantier **en cours** (`project`, puis `project2` une fois
+  l'acte I achevé) : c'est lui que lisent les livraisons du joueur (`deliverToSite`, `fundSite`), les caisses d'expédition (`deliver`),
+  les livreurs (`Workers.destinations`/`demand`), le rendu et le panneau ; `worksDone` dit que tout est achevé. Une phase peut exiger
+  des clients fidèles (`PhaseSpec.faithful`, compté par `Contracts.faithfulCount()` : clients au niveau `FAITHFUL_LEVEL`) ; l'acte II
+  seul en demande. `GameState.perks()` additionne les avantages des deux chantiers, dont `crew` (places d'ouvriers : `maxWorkers` =
+  9 + `crew`, `workerSlots` y ajoute les pioches). L'événement `site` porte `act` (1 ou 2) ; `last` marque la fin de l'acte.
   `GameState.checkProject()` (à chaque pas) termine les phases dont tout est réuni et émet `{ t: 'site' }`.
 - **Livrer** : à la main (actions `contractDeliver`, `siteDeliver`, `siteFund`, qui exigent d'être devant le Tableau ou le
   chantier, comme `sell` exige le comptoir), ou par une **caisse d'expédition** (`ShippingCrate.mode` : `market`, `orders`,
   `site`). La caisse accepte tout, comme avant (`canAccept` ne change pas : un convoyeur ne se bouche jamais pour une raison
   nouvelle) ; à chaque passage, `StructureContext.deliver(mode, objets, caisse)` donne les objets aux commandes ou au chantier et
   renvoie le reste, que la caisse **vend** au cours du moment. Le mode n'est écrit dans la sauvegarde que s'il n'est pas `market`.
-- **Sauvegarde** : `contracts` et `project` (champs facultatifs de `SaveData`, validés au chargement comme `market` : une valeur
+- **Sauvegarde** : `contracts`, `project` et `project2` (champs facultatifs de `SaveData` ; `project2` absent = acte II à zéro, validés au chargement comme `market` : une valeur
   aberrante est ignorée, une ancienne sauvegarde repart de zéro) et deux compteurs dans `Stats` (`contracts`, `contractMoney`). La
   carte régénère le chantier avec les autres bâtiments du camp ; `deserialize` écarte (`GameState.evict`) toute machine d'une
   ancienne sauvegarde qui tomberait dessus (son kit revient au stock, son contenu tombe devant l'entrée) et remet à l'entrée de

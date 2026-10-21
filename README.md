@@ -467,9 +467,21 @@ Le jeu à deux n'est pas concerné : l'invité n'a besoin d'aucun compte, et l'h
   monument** : un feu d'artifice, le titre d'**Empereur de la mine** et un **écran de fin** avec les chiffres de la partie
   (temps de jeu, argent gagné, blocs minés, lingots fondus, commandes honorées…) et le temps de chaque phase ; on peut
   continuer à jouer. Toutes les quantités sont réunies dans `src/data/project.ts` et `src/data/contracts.ts`. Les quatre
-  derniers objectifs du parcours guidé en parlent (19 en tout, dont « fabriquer un produit »). Le chantier est un bâtiment du camp comme les autres : une
+  derniers objectifs du parcours guidé en parlent (20 en tout, dont « fabriquer un produit » et l'acte II). Le chantier est un bâtiment du camp comme les autres : une
   ancienne sauvegarde le trouve à sa place (une machine qu'elle y aurait posée revient au stock, avec son contenu, et un
   joueur resté debout à cet endroit est remis à l'entrée de la mine), avec un chantier à zéro.
+- **Acte II : le Grand Ascenseur** : le chantier ne s'arrête pas au Couronnement. Dès que le Grand Chevalement est achevé (fin de
+  l'**acte I**, avec son écran de fin et le bouton « Ouvrir le Grand Ascenseur »), le **même chantier** repart pour cinq nouvelles
+  phases : **Cage d'acier, Contrepoids, Machinerie, Salle dorée, Inauguration**. Elles réclament **uniquement des produits de la
+  Manufacture** en quantité (acier, plaques de fer, d'argent, de cuivre et d'or, jusqu'à 20 diamants taillés), **de 30 000 $ à
+  200 000 $** de salaires, **18 à 52 commandes honorées** et, surtout, des **clients fidèles** : de 1 à 4 clients au niveau
+  « Fidèle » (6 points de confiance) ou mieux, ce qui donne enfin un but à la **réputation des clients**. Le panneau montre la
+  ligne « Clients fidèles » à côté des matériaux et dit ce que les ouvriers attendent. La tour **change à chaque phase** (cabine à
+  guides, contrepoids, volant doré, pavillon d'accueil, guirlandes d'inauguration). Les **avantages** : **trois places d'ouvriers de
+  plus** (l'équipe passe de 9 à **12**, soit trois par métier avec le livreur ; les prix des 10ᵉ à 12ᵉ ouvriers sont de 8 000 $,
+  10 000 $ et 12 500 $), une commande de plus en parallèle, une proposition de plus et un peu de prime. L'inauguration vous fait
+  **Roi des profondeurs**. Les caisses d'expédition réglées sur « Chantier » et les **livreurs** alimentent automatiquement le chantier
+  en cours. Une partie dont le monument était déjà achevé reçoit l'acte II à zéro ; une partie en plein acte I n'est pas touchée.
 - **Mini-carte** en haut à droite (la mine autour du joueur) et **carte complète** avec `M` : galeries, roche,
   filons et gisements repérés, machines, rails, wagonnets, position du joueur et zones de profondeur (100 m,
   300 m, 450 m). Seul ce que le joueur a déjà vu y apparaît.
@@ -509,6 +521,7 @@ node e2e/panels.mjs            # fenêtres au doigt sur un jeu qui tourne : déf
 node e2e/orders.mjs            # commandes et Grand Chevalement : vrais clics (accepter, livrer, abandonner, caisse réglée sur « Commandes », chantier phase par phase, écran de fin), réputation des clients et commande exclusive, la tour change à chaque étape, tout survit à un rechargement (après un build)
 node e2e/flow.mjs              # rendement des lignes : une ligne saturée mesurée en vrai (infobulles, panneau), vue goulots (touche G, légende, pixels teintés), prévisions du chantier et des commandes, rechargement (après un build)
 node e2e/courier.mjs           # le livreur : recrutement au clic, tournée réelle (coffre → commande honorée et chantier), rechargement (après un build)
+node e2e/lift.mjs              # l'acte II : la tour à chaque phase (images), le panneau, une phase qui avance seule (clients fidèles compris), l'équipe de douze, l'écran de fin, rechargement (après un build)
 node e2e/crafter.mjs           # la Manufacture : achat à l'Atelier, pose, panneau (recette, charbon, dépôt, récupération), chaîne par convoyeurs, commande de plaques, sauvegarde, ancienne partie (après un build)
 node e2e/menus.mjs             # menus : « Commandes » (menu principal et pause) s'ouvre devant le menu, qui s'efface puis revient ; seul, le jeu reste figé depuis la pause (après un build)
 node e2e/cloud.mjs             # compte : deux appareils (deux profils de navigateur) et un faux Firebase local : création, reprise sur appareil neuf, parties qui divergent, réseau coupé, suppression (après un build)

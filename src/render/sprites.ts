@@ -682,12 +682,15 @@ function ring(ctx: CanvasRenderingContext2D, cx: number, cy: number, r: number, 
     }
 }
 
-/** Les six états du chantier : terrain (0), fondations (1), charpente (2), treuil (3), poulies dorées (4), couronnement (5). */
+/**
+ * Les états du chantier : terrain (0), fondations (1), charpente (2), treuil (3), poulies dorées (4), couronnement (5), puis le
+ * Grand Ascenseur (acte II) : cage d'acier (6), contrepoids (7), machinerie (8), salle dorée (9), inauguration (10).
+ */
 export function buildSiteSprites(): HTMLCanvasElement[] {
   const stages: HTMLCanvasElement[] = [];
   const steel = ramp('#5d6577');
   const gold = ramp('#f2c230');
-  for (let stage = 0; stage <= 5; stage++) {
+  for (let stage = 0; stage <= 10; stage++) {
     const [c, ctx] = canvas(SITE_W, SITE_H);
     const pen = new Pen(ctx);
     const gilded = stage >= 4;
@@ -830,7 +833,7 @@ export function buildSiteSprites(): HTMLCanvasElement[] {
       for (const y of [101, 107]) for (let x = 6; x < SITE_W - 6; x += 18) pen.px(x, y, gold.base);
     }
 
-    if (stage === 5) {
+    if (stage >= 5) {
       // Couronnement : un diamant taillé sur le sommet, et deux fanions.
       const diamond = fromArt(
         ['...WW...', '..WCCW..', '.WCCCCW.', 'WCCWWCCW', '.dCCCCd.', '..dCCd..', '...dd...'],
@@ -842,6 +845,65 @@ export function buildSiteSprites(): HTMLCanvasElement[] {
         for (let i = 0; i < 5; i++) pen.rect(x + (dir > 0 ? 1 : -i), 21 + i, dir > 0 ? 5 - i : i + 1, 1, '#c0392b');
         pen.px(x, 19, gold.hi);
       }
+    }
+    if (stage >= 6) {
+      // Cage d'acier : deux rails de guidage le long du câble, et une cabine plus grande, à cadre d'acier et fenêtre éclairée.
+      for (const x of [29, 35]) {
+        pen.rect(x, 38, 1, 62, steel.light);
+        pen.rect(x + 1, 38, 1, 62, steel.dark);
+      }
+      pen.rect(26, 84, 13, 17, INK);
+      pen.rect(27, 85, 11, 15, steel.base);
+      pen.rect(27, 85, 11, 1, steel.light);
+      pen.rect(29, 88, 7, 6, INK);
+      pen.rect(30, 89, 5, 4, '#f0b850');
+      pen.rect(32, 89, 1, 4, '#5a3a22');
+      pen.rect(27, 96, 11, 1, steel.dark);
+      for (const x of [28, 36]) pen.rivet(x, 98, '#8a8e99');
+    }
+    if (stage >= 7) {
+      // Contrepoids : un empilement de plaques de fer et d'argent suspendu à gauche, avec son câble.
+      beam(ctx, 25, 34, 19, 52, 1, '#2a2024');
+      pen.rect(14, 52, 11, 22, INK);
+      for (let i = 0; i < 4; i++) {
+        pen.rect(15, 53 + i * 5, 9, 4, i % 2 ? '#b4b9c4' : steel.base);
+        pen.rect(15, 53 + i * 5, 9, 1, i % 2 ? '#ffffff' : steel.light);
+      }
+      pen.rect(18, 50, 3, 3, '#3f4049');
+    }
+    if (stage >= 8) {
+      // Machinerie : un grand volant doré contre la salle des machines, et une seconde cheminée.
+      ring(ctx, 51, 100, 5, 2, { hi: gold.hi, base: gold.base, dark: gold.dark });
+      pen.rect(50, 99, 3, 3, INK);
+      pen.px(51, 100, gold.hi);
+      pen.slab(59, 70, 4, 12, '#6a5a54');
+      pen.rect(58, 69, 6, 2, '#3f3230');
+    }
+    if (stage >= 9) {
+      // Salle dorée : le pavillon d'accueil du fond, toit d'or, vitres éclairées.
+      pen.slab(2, 88, 17, 22, '#d8c9a4');
+      pen.rect(1, 85, 19, 4, INK);
+      pen.rect(2, 83, 17, 4, gold.base);
+      pen.rect(2, 83, 17, 1, gold.hi);
+      for (const x of [4, 12]) {
+        pen.rect(x, 92, 4, 7, INK);
+        pen.rect(x + 1, 93, 2, 5, '#fff3b0');
+      }
+      pen.rect(7, 101, 5, 9, INK);
+      pen.rect(8, 102, 3, 8, '#7a5231');
+      pen.px(10, 106, gold.hi);
+    }
+    if (stage >= 10) {
+      // Inauguration : guirlande de lampions aux jambes, ruban rouge en travers de l'entrée, rayons autour du diamant.
+      for (const mirrorIt of [false, true])
+        for (let y = SITE_TOP + 6; y < SITE_BASE; y += 9) {
+          const x = Math.round(mirrorIt ? SITE_W - 1 - legX(y) - 3 : legX(y) + 3);
+          pen.px(x, y, y % 18 === 4 ? '#ff6b5b' : '#6fb3ff');
+        }
+      pen.rect(21, 106, 22, 2, '#c0392b');
+      pen.rect(21, 106, 22, 1, '#ff6b5b');
+      pen.rect(30, 104, 4, 5, '#ff6b5b');
+      for (const [dx, dy] of [[-9, -2], [9, -2], [-7, -7], [7, -7], [0, -9]]) beam(ctx, 27 + (dx > 0 ? 9 : 0) + (dx === 0 ? 4 : 0), 6, 27 + dx + (dx > 0 ? 9 : 0) + (dx === 0 ? 4 : 0), 6 + dy, 1, 'rgba(200,246,255,0.6)');
     }
     stages.push(c);
   }
