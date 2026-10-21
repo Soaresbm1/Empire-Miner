@@ -631,7 +631,7 @@ kbd {
 .crew-level .lock { color: var(--warn); }
 .crew-cargo { display: inline-flex; gap: 4px; vertical-align: middle; margin-left: 6px; }
 .crew-act { flex: none; display: flex; flex-direction: column; gap: 4px; align-items: stretch; }
-@media (max-width: 640px) { .crew-row { flex-wrap: wrap; } .crew-act { flex-direction: row; width: 100%; } }
+@media (max-width: 640px) { .crew-row { flex-wrap: wrap; } .crew-act { flex-direction: row; flex-wrap: wrap; width: 100%; } }
 
 /* Zones sûres de l'écran (encoche, barre d'accueil de l'iPhone) : utilisées par touch.css. */
 :root { --sl: env(safe-area-inset-left, 0px); --sr: env(safe-area-inset-right, 0px); --st: env(safe-area-inset-top, 0px); --sb: env(safe-area-inset-bottom, 0px); }
