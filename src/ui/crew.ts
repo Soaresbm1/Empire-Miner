@@ -4,7 +4,7 @@
  */
 import { TILE } from '../core/constants';
 import { RESOURCES, getResource } from '../data/resources';
-import { DRILLER, DRILLER_LEVELS, WORKERS, drillerLevel, getJob, workerName } from '../data/workers';
+import { DRILLER, DRILLER_LEVELS, capacityOf, drillerLevel, getJob, workerName } from '../data/workers';
 import type { GameState } from '../sim/GameState';
 import { cargoCount, cargoWeight, type Worker, type WorkerFlag } from '../sim/Workers';
 import { kg, resIcon } from './format';
@@ -23,6 +23,7 @@ const FLAG_TEXT: Record<WorkerFlag, string> = {
   nocoal: 'Plus de charbon dans les coffres : déposez-en dans un coffre.',
   lost: 'La machine à recharger est inaccessible.',
   nodrill: "Des gisements l'attendent, mais plus de foreuse en stock ni assez d'argent pour en acheter : achetez des foreuses à l'Atelier.",
+  nogoods: "Le chantier ou une commande attend quelque chose qu'aucun coffre ne contient : déposez-le dans un coffre (ou produisez-le).",
 };
 
 /** Les blocages en quelques mots, pour la liste « machines à surveiller » du Tableau d'affichage (précédés du métier). */
@@ -33,6 +34,7 @@ const FLAG_BOARD: Record<WorkerFlag, string> = {
   nocoal: 'plus de charbon dans les coffres',
   lost: 'machine inaccessible',
   nodrill: 'plus de foreuse en stock ni assez d’argent',
+  nogoods: 'rien de ce qui est attendu dans les coffres',
 };
 
 /** Ce que fait l'ouvrier, en une phrase. */
@@ -43,6 +45,7 @@ export function workerStatus(g: GameState, w: Worker): WorkerStatus {
     if (w.job === 'driller' && g.workers.drillsOf(w, g) >= DRILLER.maxDrills)
       return { text: `A posé ses ${DRILLER.maxDrills} foreuses : retirez-en une pour qu'il en pose une autre. Il ravitaille toujours les foreuses en charbon.`, tone: 'idle' };
     if (w.job === 'driller') return { text: `Cherche un gisement à équiper (${oresOf(w.level) || 'aucun'}) ou une foreuse sans charbon`, tone: 'idle' };
+    if (w.job === 'courier') return { text: 'Rien à livrer : le chantier et vos commandes n’attendent rien (ou tout est livré)', tone: 'idle' };
     return { text: w.job === 'picker' ? 'Attend des minerais par terre ou à prendre dans les machines' : 'Toutes les machines ont du charbon', tone: 'idle' };
   }
   switch (t.kind) {
@@ -63,6 +66,12 @@ export function workerStatus(g: GameState, w: Worker): WorkerStatus {
     case 'collect': {
       const s = g.structures.at(t.x, t.y);
       return { text: s?.type === 'borer' ? 'Va vider la base d’une foreuse de percement' : 'Va vider une foreuse', tone: 'ok' };
+    }
+    case 'fetch':
+      return { text: 'Va chercher dans un coffre ce qui est attendu', tone: 'ok' };
+    case 'deliver': {
+      const s = g.structures.at(t.x, t.y);
+      return { text: s?.type === 'site' ? 'Livre le chantier du Grand Chevalement' : 'Livre une commande au Tableau d’affichage', tone: 'ok' };
     }
     case 'home':
       return { text: 'Retourne à son poste', tone: 'idle' };
@@ -91,7 +100,7 @@ export function cargoLine(w: Worker): string {
     .filter(([, n]) => n > 0)
     .map(([res, n]) => `<span class="chip">${resIcon(res)}${n}</span>`)
     .join('');
-  return `<span class="crew-cargo" title="Charge : ${kg(cargoWeight(w.cargo))} sur ${kg(WORKERS.capacity)}">${items}</span>`;
+  return `<span class="crew-cargo" title="Charge : ${kg(cargoWeight(w.cargo))} sur ${kg(capacityOf(w.job))}">${items}</span>`;
 }
 
 /** Ouvriers bloqués, regroupés par cause, pour la liste « machines à surveiller » du Tableau d'affichage. */

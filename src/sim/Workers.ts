@@ -15,7 +15,7 @@ import { TILE } from '../core/constants';
 import { DX, DY, type Dir } from '../core/dir';
 import { GAS, WATER } from '../data/hazards';
 import { hasResource, getResource, RESOURCES } from '../data/resources';
-import { DRILLER, DRILLER_LEVELS, WORKERS, drillerLevel, isJob, type WorkerJob } from '../data/workers';
+import { DRILLER, DRILLER_LEVELS, WORKERS, capacityOf, drillerLevel, isJob, type WorkerJob } from '../data/workers';
 import type { GameState } from './GameState';
 import { TunnelBorer } from './structures/Borer';
 import { Drill } from './structures/Drill';
@@ -37,6 +37,10 @@ export type WorkerTask =
   | { kind: 'place'; x: number; y: number }
   /** Ramasseur : marche vers une machine qui garde du minerai (foreuse, base de foreuse de percement) pour la vider. */
   | { kind: 'collect'; x: number; y: number }
+  /** Livreur : marche vers un coffre qui contient ce que le chantier ou les commandes attendent. */
+  | { kind: 'fetch'; x: number; y: number }
+  /** Livreur : marche vers le chantier ou le Tableau d'affichage pour y livrer sa charge (case d'origine du bâtiment). */
+  | { kind: 'deliver'; x: number; y: number }
   | { kind: 'home' };
 
 /** Pourquoi un ouvrier ne peut pas avancer (pour l'interface). */
@@ -50,7 +54,9 @@ export type WorkerFlag =
   | 'nocoal'
   | 'lost'
   /** Foreur : des gisements l'attendent, mais ni foreuse en stock ni argent pour en acheter une. */
-  | 'nodrill';
+  | 'nodrill'
+  /** Livreur : le chantier ou une commande attend quelque chose, mais aucun coffre n'en contient. */
+  | 'nogoods';
 
 export interface Worker {
   id: number;
@@ -382,7 +388,8 @@ export class WorkerSystem {
       w.path = [];
       w.retry = WORKERS.idleWait;
     };
-    const ok = w.job === 'picker' ? this.thinkPicker(w, g) : w.job === 'driller' ? this.thinkDriller(w, g) : this.thinkRefueler(w, g);
+    const ok =
+      w.job === 'picker' ? this.thinkPicker(w, g) : w.job === 'driller' ? this.thinkDriller(w, g) : w.job === 'courier' ? this.thinkCourier(w, g) : this.thinkRefueler(w, g);
     if (!ok) {
       // Rien à faire : retour au poste, sans bouger davantage s'il y est déjà.
       const home = this.homeTile(g, this.list.indexOf(w));
@@ -410,7 +417,7 @@ export class WorkerSystem {
   /** Ramasseur : un tas à prendre, sinon sa charge à ranger. Renvoie faux s'il n'y a rien à faire. */
   private thinkPicker(w: Worker, g: GameState): boolean {
     const width = g.world.w;
-    const free = WORKERS.capacity - cargoWeight(w.cargo);
+    const free = capacityOf(w.job) - cargoWeight(w.cargo);
     const claimed = new Set(this.list.filter((o) => o !== w && o.task?.kind === 'pick').map((o) => (o.task as { drop: number }).drop));
     // Un tas que plus aucun coffre n'accepte (réglage des coffres, coffres pleins) reste où il est.
     const chests = g.structures.list.filter((s): s is Storage => s instanceof Storage);
@@ -648,6 +655,96 @@ export class WorkerSystem {
     return true;
   }
 
+  // ---------------------------------------------------------------- livreur
+
+  /** Le chantier (Grand Chevalement) et le Tableau d'affichage, là où un livreur apporte sa charge. */
+  private destinations(g: GameState): { s: Structure; wants: (res: string) => number }[] {
+    const out: { s: Structure; wants: (res: string) => number }[] = [];
+    const site = g.structures.list.find((s) => s.type === 'site');
+    if (site && !g.project.done) out.push({ s: site, wants: (res) => g.project.need(res) });
+    const board = g.structures.list.find((s) => s.type === 'board');
+    if (board) out.push({ s: board, wants: (res) => g.contracts.wanted(res) });
+    return out;
+  }
+
+  /**
+   * Ce que le chantier et les commandes acceptées attendent encore, la commande la plus pressée d'abord, puis le chantier,
+   * moins ce que les autres livreurs portent déjà (deux livreurs ne vont pas chercher la même chose).
+   */
+  private demand(w: Worker, g: GameState): { res: string; qty: number }[] {
+    const wanted = new Map<string, number>();
+    if (g.structures.list.some((s) => s.type === 'board'))
+      for (const c of g.contracts.active()) for (const l of c.lines) if (l.done < l.qty) wanted.set(l.res, (wanted.get(l.res) ?? 0) + l.qty - l.done);
+    if (g.structures.list.some((s) => s.type === 'site') && !g.project.done) for (const n of g.project.missing()) wanted.set(n.res, (wanted.get(n.res) ?? 0) + n.qty);
+    const out: { res: string; qty: number }[] = [];
+    for (const [res, qty] of wanted) {
+      let carried = 0;
+      for (const o of this.list) if (o !== w && o.job === 'courier') carried += o.cargo[res] ?? 0;
+      if (qty - carried > 0) out.push({ res, qty: qty - carried });
+    }
+    return out;
+  }
+
+  /**
+   * Livreur : d'abord sa charge à apporter là où on l'attend (chantier, Tableau d'affichage) ; sinon, ce qu'on attend et qu'un
+   * coffre contient ; une charge que plus personne n'attend retourne au coffre. Renvoie faux s'il n'y a rien à faire ; `flag`
+   * dit alors si c'est faute de marchandise dans les coffres (`nogoods`) ou de chemin (`lost`).
+   */
+  private thinkCourier(w: Worker, g: GameState): boolean {
+    const here = this.tileOf(w, g);
+    if (cargoCount(w.cargo) > 0) {
+      const goals = new Map<number, Structure>();
+      for (const d of this.destinations(g)) {
+        if (!Object.keys(w.cargo).some((res) => (w.cargo[res] ?? 0) > 0 && d.wants(res) > 0)) continue;
+        for (const i of around(g, d.s)) if (!goals.has(i)) goals.set(i, d.s);
+      }
+      if (goals.size) {
+        const path = this.finder(g).find(g, here, (i) => goals.has(i), WORKERS.reach);
+        if (!path) {
+          w.flag = 'lost';
+          w.retry = FAR_RETRY;
+          return false;
+        }
+        const target = goals.get(path.length ? path[path.length - 1] : here)!;
+        w.task = { kind: 'deliver', x: target.x, y: target.y };
+        w.path = path;
+        w.flag = null;
+        return true;
+      }
+      // Plus personne n'attend ce qu'il porte (commande livrée entre-temps, phase terminée) : il le remet au coffre.
+      return this.planStore(w, g);
+    }
+    const wanted = this.demand(w, g);
+    if (!wanted.length) {
+      w.flag = null;
+      return false;
+    }
+    const goals = new Map<number, Structure>();
+    let stocked = false;
+    for (const s of g.structures.list)
+      if (s instanceof Storage && wanted.some((d) => (s.items[d.res] ?? 0) > 0)) {
+        stocked = true;
+        for (const i of around(g, s)) if (!goals.has(i)) goals.set(i, s);
+      }
+    if (!goals.size) {
+      // Soit aucun coffre n'a ce qu'on attend, soit un coffre l'a mais on ne peut pas s'en approcher.
+      w.flag = stocked ? 'lost' : 'nogoods';
+      if (stocked) w.retry = FAR_RETRY;
+      return false;
+    }
+    const path = this.finder(g).find(g, here, (i) => goals.has(i), WORKERS.reach);
+    if (!path) {
+      w.flag = 'lost';
+      w.retry = FAR_RETRY;
+      return false;
+    }
+    const target = goals.get(path.length ? path[path.length - 1] : here)!;
+    w.task = { kind: 'fetch', x: target.x, y: target.y };
+    w.path = path;
+    w.flag = null;
+    return true;
+  }
+
   // ---------------------------------------------------------------- gestes
 
   private arrive(w: Worker, g: GameState): void {
@@ -669,6 +766,10 @@ export class WorkerSystem {
         return this.doPlace(w, g, task.x, task.y);
       case 'collect':
         return this.doCollect(w, g, task.x, task.y);
+      case 'fetch':
+        return this.doFetch(w, g, task.x, task.y);
+      case 'deliver':
+        return this.doDeliver(w, g, task.x, task.y);
       case 'home':
         w.retry = WORKERS.idleWait;
     }
@@ -678,7 +779,7 @@ export class WorkerSystem {
     const d = g.drops.list.find((o) => o.id === dropId);
     // Sur la même case que le tas, on est toujours à portée (la diagonale d'une case fait 22,6 pixels).
     if (!d || hyp(d.x - w.x, d.y - 1 - w.y) > TILE * 1.5) return;
-    const room = Math.floor((WORKERS.capacity - cargoWeight(w.cargo)) / getResource(d.res).weight + 1e-6);
+    const room = Math.floor((capacityOf(w.job) - cargoWeight(w.cargo)) / getResource(d.res).weight + 1e-6);
     const k = Math.min(d.count, room);
     if (k <= 0) return;
     d.count -= k;
@@ -712,7 +813,7 @@ export class WorkerSystem {
     const fuelRes = needy[0]?.fuelWanted();
     if (!fuelRes) return;
     const wanted = needy.reduce((sum, m) => sum + (m.fuelMax - m.fuelUnits), 0);
-    const room = Math.floor((WORKERS.capacity - cargoWeight(w.cargo)) / getResource(fuelRes).weight + 1e-6);
+    const room = Math.floor((capacityOf(w.job) - cargoWeight(w.cargo)) / getResource(fuelRes).weight + 1e-6);
     const k = s.take(fuelRes, Math.min(room, wanted));
     if (k <= 0) return;
     w.cargo[fuelRes] = (w.cargo[fuelRes] ?? 0) + k;
@@ -731,6 +832,39 @@ export class WorkerSystem {
     if (w.cargo[res] <= 0) delete w.cargo[res];
     w.wait = WORKERS.actWait;
     g.emit({ t: 'worker', kind: 'fuel', x: w.x, y: w.y, res });
+  }
+
+  /** Livreur : prend dans le coffre ce qu'on attend (la commande la plus pressée d'abord), dans la limite de sa charge. */
+  private doFetch(w: Worker, g: GameState, x: number, y: number): void {
+    const s = g.structures.at(x, y);
+    if (!(s instanceof Storage)) return;
+    let moved = false;
+    for (const d of this.demand(w, g)) {
+      const room = Math.floor((capacityOf(w.job) - cargoWeight(w.cargo)) / getResource(d.res).weight + 1e-6);
+      const k = s.take(d.res, Math.min(d.qty, room));
+      if (k <= 0) continue;
+      w.cargo[d.res] = (w.cargo[d.res] ?? 0) + k;
+      moved = true;
+      g.emit({ t: 'worker', kind: 'pick', x: w.x, y: w.y, res: d.res });
+    }
+    if (moved) w.wait = WORKERS.actWait;
+  }
+
+  /** Livreur : remet au chantier ou aux commandes acceptées ce qu'ils attendent (le reste de la charge lui reste). */
+  private doDeliver(w: Worker, g: GameState, x: number, y: number): void {
+    const s = g.structures.at(x, y);
+    if (!s) return;
+    let moved = false;
+    for (const [res, n] of Object.entries(w.cargo)) {
+      if (n <= 0) continue;
+      const k = s.type === 'site' ? g.project.deliver(res, n) : s.type === 'board' ? g.contracts.deliver(res, n) : 0;
+      if (k <= 0) continue;
+      w.cargo[res] = n - k;
+      if (w.cargo[res] <= 0) delete w.cargo[res];
+      moved = true;
+      g.emit({ t: 'worker', kind: 'deliver', x: w.x, y: w.y, res });
+    }
+    if (moved) w.wait = WORKERS.actWait;
   }
 
   /** Foreuses posées par ce foreur et encore debout (celles d'avant cette règle ou posées par le joueur ne comptent pas). */
@@ -767,7 +901,7 @@ export class WorkerSystem {
       const r = getResource(res);
       if (r.groundLife !== undefined) continue;
       if (!g.structures.list.some((c) => c instanceof Storage && c.canAccept(res))) continue;
-      const room = Math.floor((WORKERS.capacity - cargoWeight(w.cargo)) / r.weight + 1e-6);
+      const room = Math.floor((capacityOf(w.job) - cargoWeight(w.cargo)) / r.weight + 1e-6);
       const k = takeHeld(s, res, Math.min(held[res], room));
       if (k <= 0) continue;
       w.cargo[res] = (w.cargo[res] ?? 0) + k;
@@ -800,7 +934,7 @@ export class WorkerSystem {
       }
       for (const [res, n] of Object.entries(s.cargo ?? {})) {
         const k = Math.floor(Number(n));
-        if (hasResource(res) && Number.isFinite(k) && k > 0 && cargoWeight(w.cargo) + getResource(res).weight * k <= WORKERS.capacity + 1e-6) w.cargo[res] = k;
+        if (hasResource(res) && Number.isFinite(k) && k > 0 && cargoWeight(w.cargo) + getResource(res).weight * k <= capacityOf(w.job) + 1e-6) w.cargo[res] = k;
       }
       const id = Math.floor(Number(s.id));
       if (Number.isInteger(id) && id >= 1 && !this.list.some((o) => o !== w && o.id === id)) w.id = id;
