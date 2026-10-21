@@ -133,9 +133,10 @@ graine) ; `dug`, le gaz, l'eau, les éboulements annoncés et la santé le sont.
 150 à 160 cases de roche creusées, parce qu'une poche de 2 à 4 cases se libérait une fois par case ; un escalier de
 marteau-piqueur ou une salle de 4 × 4 faisaient déjà craquer le plafond). Une poche (amas de cases voisines de même nature)
 s'ouvre maintenant d'un coup (`openPocket` : percer l'une de ses cases les vide toutes, une seule libération), il y en a 2,4
-fois moins (`perThousand` à 1) — soit une libération pour environ 870 cases de roche creusées — et le plafond ne craque qu'au-delà de
-16 cases creusées dans le carré de 5 × 5 (`CAVE_IN.maxDug`) : un tunnel de 3 cases de large n'en compte que 9, un escalier 11,
-une salle de 8 × 8 creusée rangée par rangée 13, une galerie de 6 cases de large 17. Au chargement, `rebuild` referme
+fois moins (`perThousand` à 1), puis encore deux fois moins (`perThousand` à 0,5) — soit une libération pour environ 1 700 cases de roche
+creusées — et le plafond ne craque qu'au-delà de 20 cases creusées dans le carré de 5 × 5 (`CAVE_IN.maxDug`, dès 80 m) : un tunnel de 3 cases
+de large n'en compte que 9, un escalier 11, une salle de 8 × 8 creusée rangée par rangée 13, une galerie de 6 cases de large 17 ; il faut presque
+remplir le carré. Les poches ont leur propre tirage : changer leur nombre ne bouge ni le minerai ni la carte. Au chargement, `rebuild` referme
 (`settlePockets`) toute poche dont une case n'est plus de la roche : comme les poches se recalculent depuis la graine,
 sans cela une poche déjà ouverte se serait réarmée par ses cases voisines non percées.
 
