@@ -768,7 +768,7 @@ export class UI {
         ? '<button class="btn" data-action="host2" title="Un ami rejoint votre mine avec un code">Inviter un ami</button>'
         : '';
     this.menuRoot.innerHTML = `<div class="menu pause-menu"><h2>Pause</h2>${note}<div class="menu-buttons">
-      <button class="btn primary big" data-action="resume">Reprendre</button>
+      <div class="btn-row"><button class="btn primary big" data-action="resume">Reprendre</button><button class="btn" data-action="recap" title="Ce que la partie a rapporté, et ce qui demande votre attention">Bilan</button></div>
       ${this.updateButton()}
       ${guest ? '' : '<button class="btn" data-action="save">Sauvegarder</button>'}
       ${net ? '' : '<button class="btn" data-action="load" title="Recharger la dernière sauvegarde automatique">Charger la sauvegarde</button>'}
@@ -776,7 +776,6 @@ export class UI {
       ${net ? '' : this.withAccount('<button class="btn" data-action="import" title="Reprendre une partie exportée dans un fichier">Importer…</button>')}
       <button class="btn" data-action="mute">Son : ${muted ? 'coupé' : 'activé'}</button>
       <button class="btn" data-action="quality" title="Élevée : tous les effets. Basse : pour les petits appareils.">Qualité : ${QUALITY_LABEL[quality]}</button>
-      <button class="btn" data-action="recap" title="Ce que la partie a rapporté, et ce qui demande votre attention">Bilan</button>
       <button class="btn" data-action="help">Commandes</button>
       <button class="btn" data-action="touch" title="Stick et boutons à l'écran, pour jouer au doigt">Tactile : ${this.host.touch?.() ? 'oui' : 'non'}</button>
       ${this.fullscreenButton()}

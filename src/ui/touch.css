@@ -329,6 +329,8 @@ body.touch .help-touch { grid-column: 1 / -1; padding: 8px 10px; border-radius: 
   .pause-menu .menu-buttons { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; min-width: min(580px, 92cqw); }
   .pause-menu .menu-buttons .btn { margin: 0; padding: 4px 6px; font-size: 14px; }
   .pause-menu .menu-buttons .btn.big { grid-column: 1 / -1; }
+  /* « Reprendre » et « Bilan » partagent la première rangée. */
+  .pause-menu .menu-buttons .btn-row .btn.big { grid-column: span 2; }
   .pause-menu .net-note { margin: 0 0 6px; text-align: center; }
 
   /* Jouer à deux : les deux cadres côte à côte. */
@@ -352,6 +354,7 @@ body.touch .help-touch { grid-column: 1 / -1; padding: 8px 10px; border-radius: 
 /* Très bas (Safari avec sa barre d'adresse et sa barre d'onglets) : la pause passe à quatre colonnes. */
 @container ui (max-height: 300px) {
   .pause-menu .menu-buttons { grid-template-columns: repeat(4, 1fr); min-width: min(700px, 94cqw); }
+  .pause-menu .menu-buttons .btn-row .btn.big { grid-column: span 3; }
   .pause-menu .net-note { margin: 0 0 4px; font-size: 12px; }
   .pause-menu .net-note br, .pause-menu .net-note .muted { display: none; }
   .main-menu .logo { width: min(30cqw, 260px); }
@@ -376,6 +379,7 @@ body.touch .help-touch { grid-column: 1 / -1; padding: 8px 10px; border-radius: 
   .pause-menu .menu-buttons { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
   .pause-menu .menu-buttons .btn { margin: 0; }
   .pause-menu .menu-buttons .btn.big { grid-column: 1 / -1; }
+  .pause-menu .menu-buttons .btn-row .btn.big { grid-column: auto; }
   .pause-menu .btn-row { display: contents; }
 }
 
