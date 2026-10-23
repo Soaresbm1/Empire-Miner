@@ -27,6 +27,7 @@ import { QUALITY_LABEL, type Quality } from '../render/quality';
 import { WORKSHOP_TABS, isWorkshopTab } from './workshop';
 import { hudMarket, BOARD_TABS, isBoardTab } from './market';
 import { hudOrders } from './orders';
+import { recapPanel } from './recap';
 import { sitePanel, siteTitle } from './site';
 import { boardPanel, borerPanel, counterPanel, crafterPanel, smelterPanel, drillPanel, helpPanel, installPanel, inventoryPanel, mapPanel, shippingPanel, sorterPanel, stationPanel, storagePanel, switchPanel, workshopPanel } from './panels';
 import { displayMode } from './fullscreen';
@@ -40,7 +41,7 @@ const ARROWS8 = ['→', '↘', '↓', '↙', '←', '↖', '↑', '↗'];
 /** Un doigt qui bouge de plus que cela (px CSS) entre l'appui et le relâchement ne fait pas un appui sur un bouton. */
 const TAP_SLOP = 10;
 
-export type PanelKind = 'counter' | 'workshop' | 'board' | 'site' | 'inventory' | 'storage' | 'drill' | 'borer' | 'furnace' | 'crafter' | 'shipping' | 'sorter' | 'station' | 'switch' | 'map' | 'help' | 'install';
+export type PanelKind = 'counter' | 'workshop' | 'board' | 'site' | 'inventory' | 'storage' | 'drill' | 'borer' | 'furnace' | 'crafter' | 'shipping' | 'sorter' | 'station' | 'switch' | 'map' | 'help' | 'install' | 'recap';
 
 export interface UIHost {
   onAction(action: string, arg: string): void;
@@ -667,6 +668,10 @@ export class UI {
         title = 'Jouer en plein écran';
         body = installPanel();
         break;
+      case 'recap':
+        title = 'Bilan';
+        body = recapPanel(g, tab);
+        break;
     }
     const money$ = kind === 'counter' || kind === 'workshop' || kind === 'site' ? `<span class="panel-money"><span class="coin"></span>${money(g.money)}</span>` : '';
     const inner = `<header><h2>${title}</h2>${money$}<button class="close" data-action="close" title="Fermer">✕</button></header><div class="panel-body">${body}</div>`;
@@ -771,6 +776,7 @@ export class UI {
       ${net ? '' : this.withAccount('<button class="btn" data-action="import" title="Reprendre une partie exportée dans un fichier">Importer…</button>')}
       <button class="btn" data-action="mute">Son : ${muted ? 'coupé' : 'activé'}</button>
       <button class="btn" data-action="quality" title="Élevée : tous les effets. Basse : pour les petits appareils.">Qualité : ${QUALITY_LABEL[quality]}</button>
+      <button class="btn" data-action="recap" title="Ce que la partie a rapporté, et ce qui demande votre attention">Bilan</button>
       <button class="btn" data-action="help">Commandes</button>
       <button class="btn" data-action="touch" title="Stick et boutons à l'écran, pour jouer au doigt">Tactile : ${this.host.touch?.() ? 'oui' : 'non'}</button>
       ${this.fullscreenButton()}

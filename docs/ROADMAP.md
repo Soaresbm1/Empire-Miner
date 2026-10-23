@@ -38,6 +38,7 @@ profondeur et roches plus dures, sauvegarde/chargement, première automatisation
 - ✅ Clients récurrents : réputation par client (cinq niveaux : plus de retours, de prime et de temps), commandes exclusives du client le plus
   fidèle à chaque nouveau rang, pénalités douces (un point par retard ou abandon, jamais sous zéro).
 - ✅ Acte II du chantier, le Grand Ascenseur : cinq phases de produits de la Manufacture, d'argent, de commandes et de clients fidèles ; l'équipe passe à 12 ouvriers.
+- ✅ Bilan de session (menu pause et reprise) et outil d'équilibrage (`npm run balance`, garde-fous sur la rareté du diamant).
 - ✅ Livreur : un quatrième métier d'ouvrier qui porte lui-même les marchandises des coffres au chantier et aux commandes acceptées.
 - ✅ Rendement des lignes : débit réel de chaque machine et convoyeur (infobulle, panneau), vue « goulots » (touche G), prévisions
   « au rythme actuel » au Grand Chevalement et sur les commandes.
@@ -51,7 +52,7 @@ profondeur et roches plus dures, sauvegarde/chargement, première automatisation
 ## Après le Grand Ascenseur (idées)
 - Un troisième chantier (une ville au camp, une gare souterraine) qui demande des clients « Partenaire » et des quantités encore plus grandes.
 - Clients aux goûts propres (un client qui ne demande que certaines marchandises), commandes « cadeau » quand on est Partenaire, contrats qui se renouvellent.
-- Objectifs quotidiens de commandes ; un livreur qui sait aussi vider les caisses d'expédition et les machines de fonte.
+- Objectifs quotidiens de commandes (le bilan de session est prêt à les accueillir) ; un livreur qui sait aussi vider les caisses d'expédition et les machines de fonte.
 
 ## Idées pour la suite du rendement
 - Copier-coller une ligne de machines et de convoyeurs, avec un « annuler » pour la dernière pose.
