@@ -26,6 +26,7 @@ import { Sorter } from '../sim/structures/Sorter';
 import { BOARD_TABS, marketNews } from '../ui/market';
 import { clientName, contractNews } from '../ui/orders';
 import { siteNews, workName } from '../ui/site';
+import { RECAP_MIN_SECONDS, hasNews, snapshot } from '../sim/Recap';
 import { WORKSHOP_TABS } from '../ui/workshop';
 import { Rail, RailStation, RailSwitch } from '../sim/structures/Rail';
 import { Splitter } from '../sim/structures/Splitter';
@@ -338,11 +339,22 @@ export class Game {
     // Première exploration immédiate.
     state.update(0, NO_INTENT);
     state.events.length = 0;
+    // Le bilan de cette session se mesure à partir d'ici.
+    state.sessionBase = snapshot(state);
+  }
+
+  /** À la reprise d'une partie : le bilan de la dernière session, s'il y a quelque chose à dire. */
+  private showResumeRecap(): void {
+    const s = this.state;
+    if (!s || this.mode !== 'playing' || this.ui.menu || !s.lastSession || s.lastSession.seconds < RECAP_MIN_SECONDS || !hasNews(s.lastSession)) return;
+    this.ui.openPanel('recap', null, 'resume');
+    this.ui.renderPanel(s, 0, true);
   }
 
   loadSave(data: SaveData): void {
     this.begin(deserialize(data));
     this.ui.toast('Partie chargée.', 'good');
+    this.showResumeRecap();
   }
 
   private autoSaveNow(): void {
@@ -447,6 +459,7 @@ export class Game {
       if (s) {
         this.begin(s);
         this.ui.toast('Bon retour à la mine !', 'good');
+        this.showResumeRecap();
       }
     } catch (e) {
       this.ui.toast(`Sauvegarde illisible : ${(e as Error).message}`, 'bad');
@@ -886,6 +899,10 @@ export class Game {
         this.ui.openPanel('help');
         if (this.state) this.ui.renderPanel(this.state, 0, true);
         else if (this.menuState) this.ui.renderPanel(this.menuState, 0, true);
+        return;
+      case 'recap':
+        this.ui.openPanel('recap', null, 'now');
+        if (this.state) this.ui.renderPanel(this.state, 0, true);
         return;
       case 'resume':
         this.ui.hideMenu();

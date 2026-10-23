@@ -769,6 +769,17 @@ kbd {
 .stat b.good { color: var(--good); } .stat b.warn { color: var(--warn); } .stat b.bad { color: var(--bad); }
 
 /* Panneau du chantier : frise des cinq phases, lignes d'avancement, écran de fin. */
+.recap-rows { list-style: none; margin: 0 0 6px; padding: 0; display: grid; grid-template-columns: 1fr 1fr; gap: 2px 18px; }
+.recap-rows li { display: flex; justify-content: space-between; gap: 8px; padding: 3px 6px; background: rgba(0, 0, 0, 0.2); font-size: 15px; }
+.recap-rows li span { color: var(--muted); }
+.recap-rows li b { color: var(--gold); white-space: nowrap; }
+.recap-crew { margin: 2px 0 10px; font-size: 15px; color: var(--muted); }
+.recap-crew b { color: #9ee09a; }
+.recap-watch { list-style: none; margin: 0 0 10px; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.recap-watch li { padding: 5px 8px; background: rgba(0, 0, 0, 0.2); box-shadow: inset 3px 0 0 #3a5a8a; font-size: 15px; }
+.recap-watch li.bad { box-shadow: inset 3px 0 0 #c0392b; }
+.recap-watch li.warn { box-shadow: inset 3px 0 0 #e8a02a; }
+@media (max-width: 640px) { .recap-rows { grid-template-columns: 1fr; } }
 .site-act { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; margin-bottom: 8px; padding: 6px 10px; background: rgba(163, 90, 216, 0.16); box-shadow: 0 0 0 2px #120e10, inset 0 0 0 1px #6b3f8c; }
 .site-act b { color: #d3a5f5; }
 .site-act span { color: var(--muted); font-size: 14px; flex: 1; min-width: 160px; }

@@ -118,7 +118,8 @@ export const PROJECT_TITLE = 'Empereur de la mine';
  * Acte II : le Grand Ascenseur. Une fois le Grand Chevalement achevé, le même chantier se poursuit : un ascenseur de puits
  * qui descend jusqu'au fond de la mine. Plus gros, il réclame les produits de la Manufacture en quantité, bien plus d'argent,
  * toujours plus de commandes honorées et, surtout, des clients qui vous font confiance (voir `REPUTATION` dans
- * `data/contracts.ts`). Ses avantages agrandissent l'équipe d'ouvriers (de 9 à 12) et les commandes.
+ * `data/contracts.ts`). Ses avantages agrandissent l'équipe d'ouvriers (de 9 à 12) et les commandes. Le diamant est rare (certaines
+ * mines n'en cachent qu'une vingtaine : voir `tests/balance.test.ts`) : l'acte II en demande peu, l'acte I déjà 12.
  */
 export const PHASES_II: readonly PhaseSpec[] = [
   {
@@ -169,7 +170,7 @@ export const PHASES_II: readonly PhaseSpec[] = [
     needs: [
       { res: 'gold_plate', qty: 150 },
       { res: 'silver_plate', qty: 100 },
-      { res: 'cut_diamond', qty: 8 },
+      { res: 'cut_diamond', qty: 2 },
     ],
     money: 120000,
     contracts: 40,
@@ -183,7 +184,7 @@ export const PHASES_II: readonly PhaseSpec[] = [
     needs: [
       { res: 'gold_plate', qty: 250 },
       { res: 'steel', qty: 150 },
-      { res: 'cut_diamond', qty: 20 },
+      { res: 'cut_diamond', qty: 4 },
     ],
     money: 200000,
     contracts: 52,

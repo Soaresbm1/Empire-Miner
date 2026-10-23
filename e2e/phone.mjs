@@ -549,6 +549,20 @@ for (const dev of DEVICES) {
         ([kind, finder]) => {
           const E = window.__EM;
           const g = E.state;
+          // Le bilan : une longue dernière session, une session en cours bien remplie, un ouvrier bloqué.
+          if (prep === 'recap') {
+            const keys = ['seconds', 'earned', 'spent', 'contracts', 'mined', 'collected', 'smelted', 'crafted', 'delivered', 'autoSold', 'built', 'crewStored', 'crewFueled', 'crewPlaced', 'crewDelivered', 'phases', 'faithful', 'depth'];
+            const r = (v) => Object.fromEntries(keys.map((k, i) => [k, v + i * 7]));
+            g.lastSession = r(300);
+            g.sessionBase = Object.fromEntries(keys.map((k) => [k, 0]));
+            g.stats.playTime += 2400;
+            g.stats.earned += 8200;
+            g.stats.tilesMined += 310;
+            g.stats.crewStored += 120;
+            g.stats.crewDelivered += 45;
+            const w = g.workers.list[0] ?? g.workers.add('courier', g);
+            w.flag = 'nogoods';
+          }
           // Le Grand Ascenseur achevé aussi : l'écran de fin de l'acte II.
           if (prep === 'end') {
             g.project.phase = 5;
@@ -666,6 +680,8 @@ for (const dev of DEVICES) {
       ['site', 'site', 'chantier-acte2', null, 'victory'],
       ['site', 'site', 'chantier-fin-acte1', 'victory'],
       ['site', 'site', 'chantier-fin', null, 'end'],
+      ['recap', null, 'bilan', 'resume', 'recap'],
+      ['recap', null, 'bilan-session', 'now'],
       ['install', null, 'ecran-accueil'],
     ];
     for (const [i, [kind, finder, label, tab, prep]] of PANELS.entries()) {

@@ -22,6 +22,7 @@ import type { ContractsSave } from '../sim/Contracts';
 import type { MarkerSave } from '../sim/Markers';
 import type { MarketSave } from '../sim/Market';
 import type { ProjectSave } from '../sim/Project';
+import { parseRecap, type Recap } from '../sim/Recap';
 import type { WorkerSave } from '../sim/Workers';
 import type { SlotSave } from '../sim/Production';
 
@@ -90,6 +91,8 @@ export interface SaveData extends PersonalSave {
   project?: ProjectSave;
   /** Acte II (le Grand Ascenseur) ; absent dans les parties d'avant. */
   project2?: ProjectSave;
+  /** Bilan de la dernière session (affiché à la reprise) ; jamais compté dans l'empreinte de synchronisation. */
+  recap?: Recap;
   /** Jeu à deux : les joueurs présents autres que le premier (identifiant d'invité compris), et les invités partis. */
   players?: (PersonalSave & { id: string })[];
   guests?: Record<string, PersonalSave>;
@@ -182,6 +185,7 @@ export function serialize(g: GameState, opts: SerializeOptions = {}): SaveData {
     project: g.project.serialize(),
     project2: g.project2.serialize(),
     workers: g.workers.serialize(),
+    ...(opts.world !== false && g.recapToSave() ? { recap: g.recapToSave()! } : {}),
     ...(others.length ? { players: others.map((i) => ({ id: g.guestIds[i] ?? '', ...g.withSlot(i, () => personalOf(g)) })) } : {}),
     ...(Object.keys(g.guestStash).length ? { guests: g.guestStash as Record<string, PersonalSave> } : {}),
     hazards: {
@@ -228,6 +232,7 @@ export function deserialize(data: SaveData): GameState {
   const refund = g.project.load(data.project);
   for (const [res, n] of Object.entries(g.project2.load(data.project2))) refund[res] = (refund[res] ?? 0) + n;
   g.money = data.money;
+  g.lastSession = parseRecap(data.recap);
   loadPersonal(g, data);
   g.inventory.kits = { ...data.kits };
   g.stats = {

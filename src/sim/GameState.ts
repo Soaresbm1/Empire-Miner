@@ -29,6 +29,7 @@ import { Market } from './Market';
 import { Player } from './Player';
 import { PHASES_II } from '../data/project';
 import { Project, type Perks } from './Project';
+import { RECAP_MIN_SECONDS, recapSince, type Recap, type Snap } from './Recap';
 import { StructureManager } from './StructureManager';
 import { Building, BuildingType } from './structures/Building';
 import { Conveyor } from './structures/Conveyor';
@@ -98,6 +99,11 @@ export interface Stats {
   /** Commandes honorées, et argent qu'elles ont rapporté (partielles comprises). */
   contracts: number;
   contractMoney: number;
+  /** Ce que les ouvriers ont fait : objets rangés dans les coffres, combustible apporté, foreuses posées, objets livrés. */
+  crewStored: number;
+  crewFueled: number;
+  crewPlaced: number;
+  crewDelivered: number;
 }
 
 export const PLAYER_SPEED = 72; // unités monde / s
@@ -253,7 +259,15 @@ export class GameState implements StructureContext {
     faints: 0,
     contracts: 0,
     contractMoney: 0,
+    crewStored: 0,
+    crewFueled: 0,
+    crewPlaced: 0,
+    crewDelivered: 0,
   };
+  /** Compteurs au début de la session (posés par le jeu à l'ouverture) : le bilan de la session en est la différence. Hors simulation. */
+  sessionBase: Snap | null = null;
+  /** Bilan de la session précédente, lu dans la sauvegarde. Hors simulation. */
+  lastSession: Recap | null = null;
   /** Santé du joueur (0 à HEALTH.max) ; à 0, il s'évanouit et se réveille au camp. */
   hp = HEALTH.max;
   private lastHurt = -99;
@@ -1361,6 +1375,20 @@ export class GameState implements StructureContext {
       p.advance(this.time);
       this.emit({ t: 'site', phase, last: p.done, act });
     }
+  }
+
+  /** Bilan de cette session jusqu'ici (null avant que le jeu ait pris les compteurs de départ). */
+  sessionRecap(): Recap | null {
+    return this.sessionBase ? recapSince(this.sessionBase, this) : null;
+  }
+
+  /**
+   * Ce que la sauvegarde garde comme « dernière session » : la session en cours si elle a duré assez, sinon la précédente (une
+   * ouverture de dix secondes n'efface pas le bilan d'une longue partie).
+   */
+  recapToSave(): Recap | null {
+    const now = this.sessionRecap();
+    return now && now.seconds >= RECAP_MIN_SECONDS ? now : this.lastSession;
   }
 
   /** Le chantier en cours : le Grand Chevalement, puis le Grand Ascenseur une fois celui-là achevé (le dernier, achevé, reste en place). */

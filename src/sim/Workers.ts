@@ -799,6 +799,7 @@ export class WorkerSystem {
       if (k > 0) {
         w.cargo[res] = n - k;
         moved = true;
+        g.stats.crewStored += k;
         g.emit({ t: 'worker', kind: 'store', x: w.x, y: w.y, res });
       }
       if (w.cargo[res] <= 0) delete w.cargo[res];
@@ -830,6 +831,7 @@ export class WorkerSystem {
     if (k <= 0) return;
     w.cargo[res] -= k;
     if (w.cargo[res] <= 0) delete w.cargo[res];
+    g.stats.crewFueled += k;
     w.wait = WORKERS.actWait;
     g.emit({ t: 'worker', kind: 'fuel', x: w.x, y: w.y, res });
   }
@@ -862,6 +864,7 @@ export class WorkerSystem {
       w.cargo[res] = n - k;
       if (w.cargo[res] <= 0) delete w.cargo[res];
       moved = true;
+      g.stats.crewDelivered += k;
       g.emit({ t: 'worker', kind: 'deliver', x: w.x, y: w.y, res });
     }
     if (moved) w.wait = WORKERS.actWait;
@@ -887,6 +890,7 @@ export class WorkerSystem {
     const placed = g.placeDrillFor(x, y, dir);
     if (!placed) return;
     placed.drill.placedBy = w.id;
+    g.stats.crewPlaced++;
     w.wait = drillerLevel(w.level).placeTime;
     g.emit({ t: 'worker', kind: 'place', x: (x + 0.5) * TILE, y: (y + 0.5) * TILE, res });
   }

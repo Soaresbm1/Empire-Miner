@@ -450,6 +450,26 @@ structures (avec leur contenu : objets sur convoyeurs, charbon, tampons, coffres
 kits, améliorations, statistiques, commandes et chantier. Stockage : `localStorage` (+ copie de secours), export/import de fichier JSON, et,
 si le joueur a un compte, une copie en ligne (voir « Compte » plus bas).
 
+**Bilan de session** (`sim/Recap.ts`, `ui/recap.ts`) : `GameState.sessionBase` (compteurs pris par `Game.begin` à l'ouverture) et
+`GameState.lastSession` (lue dans la sauvegarde) sont **hors simulation**. Le bilan d'une session est la différence des compteurs de
+`Stats` depuis `sessionBase` (`recapSince`), dont quatre compteurs d'ouvriers (`crewStored`, `crewFueled`, `crewPlaced`,
+`crewDelivered`, incrémentés par `Workers`, donc déterministes). `serialize` écrit le champ facultatif `recap` (`recapToSave`) : la session
+en cours si elle a duré `RECAP_MIN_SECONDS` (2 min), sinon la précédente, pour qu'une ouverture de dix secondes n'efface pas le bilan
+d'une longue partie ; **jamais** quand `world: false` (l'empreinte de synchronisation et la resynchronisation à deux ne le voient pas :
+chaque appareil a sa session). `deserialize` le lit (`parseRecap` écarte les valeurs absurdes). À la reprise (`continueGame`,
+`loadSave`), le jeu ouvre le panneau « Bilan » (`recap`, onglet `resume`) s'il y a quelque chose à dire ; le menu pause a un bouton « Bilan ».
+
+## Équilibrage
+
+`sim/Balance.ts` (outils, aucune règle du jeu ne les lit) : `rawNeeds` ramène les phases des chantiers à des minerais (lingots un pour
+un, recettes), `worldSupply` compte ce qu'une mine contient (filons + réserves des gisements), `ordersTimeline` mesure sur le vrai
+`Contracts` le temps minimal que les commandes et les clients fidèles imposent (un joueur qui prend d'abord les clients de confiance et
+livre après un délai donné). `tests/balance.test.ts` en tire des garde-fous : **la mine la plus pauvre de 60 doit contenir au moins 1,25 fois
+ce que les deux actes demandent** (le diamant est le point sensible : certaines mines n'en cachent que 14 à 26 unités ; c'est pourquoi
+l'acte II en demande peu), l'acte II dure plus d'une heure même sans attente de production et quelques heures à dix minutes par commande,
+et les clients fidèles ne retardent pas plus d'une heure un joueur qui choisit ses clients. `npm run balance` réécrit `docs/BALANCE.md`
+(coût de chaque phase, minerais, rythme des commandes, temps pour payer).
+
 ## Jeu à deux (lockstep)
 
 **Principe.** Les deux appareils partent du même état (la sauvegarde de l'hôte, rechargée des deux côtés) et font tourner la

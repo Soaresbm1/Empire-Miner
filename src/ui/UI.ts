@@ -27,6 +27,7 @@ import { QUALITY_LABEL, type Quality } from '../render/quality';
 import { WORKSHOP_TABS, isWorkshopTab } from './workshop';
 import { hudMarket, BOARD_TABS, isBoardTab } from './market';
 import { hudOrders } from './orders';
+import { recapPanel } from './recap';
 import { sitePanel, siteTitle } from './site';
 import { boardPanel, borerPanel, counterPanel, crafterPanel, smelterPanel, drillPanel, helpPanel, installPanel, inventoryPanel, mapPanel, shippingPanel, sorterPanel, stationPanel, storagePanel, switchPanel, workshopPanel } from './panels';
 import { displayMode } from './fullscreen';
@@ -40,7 +41,7 @@ const ARROWS8 = ['→', '↘', '↓', '↙', '←', '↖', '↑', '↗'];
 /** Un doigt qui bouge de plus que cela (px CSS) entre l'appui et le relâchement ne fait pas un appui sur un bouton. */
 const TAP_SLOP = 10;
 
-export type PanelKind = 'counter' | 'workshop' | 'board' | 'site' | 'inventory' | 'storage' | 'drill' | 'borer' | 'furnace' | 'crafter' | 'shipping' | 'sorter' | 'station' | 'switch' | 'map' | 'help' | 'install';
+export type PanelKind = 'counter' | 'workshop' | 'board' | 'site' | 'inventory' | 'storage' | 'drill' | 'borer' | 'furnace' | 'crafter' | 'shipping' | 'sorter' | 'station' | 'switch' | 'map' | 'help' | 'install' | 'recap';
 
 export interface UIHost {
   onAction(action: string, arg: string): void;
@@ -667,6 +668,10 @@ export class UI {
         title = 'Jouer en plein écran';
         body = installPanel();
         break;
+      case 'recap':
+        title = 'Bilan';
+        body = recapPanel(g, tab);
+        break;
     }
     const money$ = kind === 'counter' || kind === 'workshop' || kind === 'site' ? `<span class="panel-money"><span class="coin"></span>${money(g.money)}</span>` : '';
     const inner = `<header><h2>${title}</h2>${money$}<button class="close" data-action="close" title="Fermer">✕</button></header><div class="panel-body">${body}</div>`;
@@ -763,7 +768,7 @@ export class UI {
         ? '<button class="btn" data-action="host2" title="Un ami rejoint votre mine avec un code">Inviter un ami</button>'
         : '';
     this.menuRoot.innerHTML = `<div class="menu pause-menu"><h2>Pause</h2>${note}<div class="menu-buttons">
-      <button class="btn primary big" data-action="resume">Reprendre</button>
+      <div class="btn-row"><button class="btn primary big" data-action="resume">Reprendre</button><button class="btn" data-action="recap" title="Ce que la partie a rapporté, et ce qui demande votre attention">Bilan</button></div>
       ${this.updateButton()}
       ${guest ? '' : '<button class="btn" data-action="save">Sauvegarder</button>'}
       ${net ? '' : '<button class="btn" data-action="load" title="Recharger la dernière sauvegarde automatique">Charger la sauvegarde</button>'}
